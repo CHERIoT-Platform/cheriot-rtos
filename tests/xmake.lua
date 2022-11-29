@@ -42,6 +42,8 @@ compartment("ccompile_test")
 
 -- Test MMIO access
 test("mmio")
+-- Test the hardware
+test('isa')
 -- Test the allocator and the revoker.
 test("allocator")
 -- Test the thread pool
@@ -106,6 +108,7 @@ firmware("test-suite")
     -- Tests
     add_deps("mmio_test")
     add_deps("eventgroup_test")
+    add_deps("isa_test")
     add_deps("allocator_test")
     add_deps("thread_pool_test")
     add_deps("futex_test")
