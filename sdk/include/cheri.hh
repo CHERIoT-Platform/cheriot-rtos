@@ -864,6 +864,14 @@ namespace CHERI
 		}
 
 		/**
+		 * Clears the tag bit indicating whether this is a valid capability.
+		 */
+		void invalidate()
+		{
+			ptr = __builtin_cheri_tag_clear(ptr);
+		}
+
+		/**
 		 * Return whether this is a sealed capability.
 		 */
 		[[nodiscard]] bool is_sealed() const
