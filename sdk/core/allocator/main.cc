@@ -69,10 +69,10 @@ namespace
 		MChunk    *msp = tbase.cast<MChunk>();
 		Capability m{chunk2mem(msp).cast<MState>()};
 
-		m.bounds() = sizeof(*m);
-		m->init_bins();
+		m.bounds()            = sizeof(*m);
 		m->heapStart          = tbase;
 		m->heapStart.bounds() = tsize;
+		m->init_bins();
 		msp->in_use_chunk_set(msize);
 
 		MChunk *mn = msp->chunk_next();
