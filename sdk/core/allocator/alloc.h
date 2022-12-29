@@ -9,6 +9,7 @@
 #include <cdefs.h>
 #include <cheri.hh>
 #include <ds/bits.h>
+#include <ds/linked_list.h>
 #include <ds/pointer.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -196,6 +197,10 @@ static inline size_t small_index2size(BIndex i)
  * is of course much better.
  */
 
+static constexpr ptrdiff_t MChunkFreeRingOffset = 8;
+using ChunkFreeLink =
+  ds::linked_list::cell::OffsetPtrAddr<MChunkFreeRingOffset>;
+
 /**
  * Class of an allocator chunk, including the header.
  *
@@ -203,11 +208,20 @@ static inline size_t small_index2size(BIndex i)
  * class of TChunk). Header fields should never be accessed directly since the
  * format is subject to change (hence private). The public wrappers also take
  * care of converting chunks and sizes into internal compressed formats.
+ *
+ * Several methods in this file are said to "initialize the linkages" of a
+ * MChunk.  This means that these functions assume the MChunk header to be
+ * set up appropriately (that is, present and linked to adjacent headers), but
+ * the MChunk::ring link node and any tree state (in a TChunk) is undefined on
+ * the way in and paved over by initialization.  Use of these functions can
+ * relax the usual invariants of data structures; it is, for example, OK to
+ * feed an unsafe_remove'd MChunk to such a function or to simply build a new
+ * MChunk header in the heap.
  */
 class __packed __aligned(MallocAlignment)
 MChunk
 {
-	private:
+	protected:
 	// compressed size of the previous chunk
 	SmallSize sprev;
 	// compressed size of this chunk
@@ -232,12 +246,20 @@ MChunk
 	 *   - Large chunks not directly included in the tree again use this
 	 *     link as the link for the above ring.
 	 *
+	 * This is no_subobject_bounds so that from_ring() below will work even if
+	 * subobject bounds are turned on.
 	 */
+	ChunkFreeLink ring __attribute__((__cheri_no_subobject_bounds__)) = {};
 
-	// internal ptr representation of the previous chunk in free list
-	SmallPtr bk;
-	// internal ptr representation of the next chunk in free list
-	SmallPtr fd;
+	/**
+	 * Container-of for the above field.
+	 */
+	__always_inline static MChunk *from_ring(ChunkFreeLink * c)
+	{
+		static_assert(offsetof(MChunk, ring) == MChunkFreeRingOffset);
+		return reinterpret_cast<MChunk *>(reinterpret_cast<uintptr_t>(c) -
+		                                  offsetof(MChunk, ring));
+	}
 
 	// the internal small pointer representation of this chunk
 	SmallPtr ptr()
@@ -352,35 +374,16 @@ MChunk
 		shead       = size2head(sz);
 	}
 
-	// Set the internal back pointer to point to bkchunk.
-	void bk_assign(MChunk * bkchunk)
-	{
-		bk = bkchunk->ptr();
-	}
 	// Is the bk field pointing to p?
 	bool bk_equals(MChunk * p)
 	{
-		return bk == p->ptr();
+		return ring.cell_prev() == &p->ring;
 	}
-	// Returns the address of the bk chunk.
-	size_t bk_addr()
-	{
-		return bk;
-	}
-	// Returns the address of the fd chunk.
-	size_t fd_addr()
-	{
-		return fd;
-	}
-	// Set the internal forward pointer to point to fdchunk.
-	void fd_assign(MChunk * fdchunk)
-	{
-		fd = fdchunk->ptr();
-	}
+
 	// Is the fd field pointing to p?
 	bool fd_equals(MChunk * p)
 	{
-		return fd == p->ptr();
+		return ring.cell_next() == &p->ring;
 	}
 
 #ifdef NDEBUG
@@ -507,6 +510,31 @@ TChunk : public MChunk
 	{
 		parent = reinterpret_cast<TChunk *>(RingParent);
 	}
+
+	/**
+	 * TChunk's `ring` fields are sentinels for their rings of equal-sized
+	 * nodes.
+	 */
+	template<typename F>
+	bool ring_search(F f)
+	{
+		return ds::linked_list::search(
+		  &ring, [&](ChunkFreeLink *&p) { return f(MChunk::from_ring(p)); });
+	}
+
+	__always_inline static TChunk *from_ring(ChunkFreeLink * c)
+	{
+		return static_cast<TChunk *>(MChunk::from_ring(c));
+	}
+
+	/**
+	 * Insert t on the same free ring as this and initialize its linkages.
+	 */
+	__always_inline void ring_emplace(TChunk * t)
+	{
+		ds::linked_list::emplace_before(&ring, &t->ring);
+		t->mark_tree_ring();
+	}
 };
 
 class MState
@@ -514,17 +542,22 @@ class MState
 	public:
 	CHERI::Capability<void> heapStart;
 
-	/**
-	 * This is not an array of MChunk* but is actually an array of {bk, fd}
-	 * fields. Each smallbin has a fake head and we only need bk and fd for
-	 * link lists against real chunks. Also see smallbin_at().
+	/*
+	 * Rings for each small bin size.  Use smallbin_at() for access to
+	 * ensure proper CHERI bounds!
 	 */
-	MChunk *smallbins[(NSmallBins + 1)];
-	// The head for each tree bin. Unlike smallbin, no magic is involved.
+	ChunkFreeLink smallbins[NSmallBins];
+	/* Tree root nodes for each large bin */
 	TChunk *treebins[NTreeBins];
-	// Same with smallbin, we only need bk and fd for the quarantine fake head.
-	SmallPtr quarantineBinBk;
-	SmallPtr quarantineBinFd;
+
+	ChunkFreeLink quarantineSentinel;
+
+	auto quarantine_get()
+	{
+		return rederive<ChunkFreeLink>(
+		  CHERI::Capability{&quarantineSentinel}.address());
+	}
+
 	// bitmap telling which bins are empty which are not
 	Binmap smallmap;
 	Binmap treemap;
@@ -547,40 +580,11 @@ class MState
 		return cap;
 	}
 
-	// Rederive an internal pointer into a chunk in this heap segment.
-	MChunk *ptr2chunk(SmallPtr ptr)
-	{
-		return rederive<MChunk>(ptr);
-	}
-	// Rederive an internal pointer into a tree chunk in this heap segment.
-	TChunk *ptr2tchunk(SmallPtr ptr)
-	{
-		return rederive<TChunk>(ptr);
-	}
-
 	// Returns the smallbin head for index i.
-	MChunk *smallbin_at(BIndex i)
+	auto smallbin_at(BIndex i)
 	{
-		/**
-		 * Here we use the "repositioning" trick which is beyond evil. Initially
-		 * when a smallbin is empty it has a fake head node which has bk and fd
-		 * pointing to itself. When small chunks get added, they will form a
-		 * doubly-linked list starting from head. Note that we only use the bk
-		 * and fd fields of this fake head so each smallbins[i] is not an
-		 * MChunk* but is actually bk and fd for (MChunk*)&smallbin[i - 1]. This
-		 * is also why we need smallbin[NSmallBins + 1].
-		 *
-		 * This also means an MChunk* must be able to contain bk and fd.
-		 */
-		static_assert(sizeof(MChunk *) >= sizeof(SmallPtr) * 2);
-		return reinterpret_cast<MChunk *>(&smallbins[i]);
-	}
-	// Returns the quarantine bin. Same evil repositioning trick as smallbin[].
-	MChunk *qtbin()
-	{
-		CHERI::Capability<void> cap{&quarantineBinBk};
-		cap.address() -= ChunkOverhead;
-		return cap.cast<MChunk>();
+		return rederive<ChunkFreeLink>(
+		  CHERI::Capability{&smallbins[i]}.address());
 	}
 	// Returns a pointer to the pointer to the root chunk of a tree.
 	TChunk **treebin_at(BIndex i)
@@ -624,17 +628,14 @@ class MState
 	void init_bins()
 	{
 		// Establish circular links for smallbins.
-		BIndex i;
-		for (i = 0; i < NSmallBins; ++i)
+		for (BIndex i = 0; i < NSmallBins; ++i)
 		{
-			MChunk *bin = smallbin_at(i);
-			bin->fd_assign(bin);
-			bin->bk_assign(bin);
+			smallbin_at(i)->cell_reset();
 		}
 		// The treebins should be all nullptrs due to memset earlier.
-		// Initialise quarantine bin.
-		qtbin()->fd_assign(qtbin());
-		qtbin()->bk_assign(qtbin());
+
+		// Initialise quarantine
+		quarantineSentinel.cell_reset();
 	}
 
 	/**
@@ -775,13 +776,12 @@ class MState
 		 * so, tag-cleared) when we return from this compartment.
 		 */
 		p->epoch_write();
+
 		// Place it on the quarantine list after writing epoch.
-		MChunk *head = qtbin();
-		MChunk *back = ptr2chunk(head->bk);
-		head->bk_assign(p);
-		back->fd_assign(p);
-		p->fd_assign(head);
-		p->bk_assign(back);
+		auto quarantine = quarantine_get();
+
+		ds::linked_list::emplace_before(quarantine, &p->ring);
+
 		heapQuarantineSize += p->size_get();
 		// Dequeue 3 times. 3 is chosen randomly. 2 is at least needed.
 		mspace_qtbin_deqn(3);
@@ -910,13 +910,16 @@ class MState
 	void ok_free_chunk(MChunk *p)
 	{
 		size_t  sz   = p->size_get();
-		MChunk *next = p->chunk_plus_offset(sz);
+		MChunk *next = p->chunk_next();
 		ok_any_chunk(p);
 		Debug::Assert(!p->is_in_use(), "Free chunk {} is marked as in use", p);
 		Debug::Assert(
 		  !p->chunk_next()->is_prev_in_use(),
 		  "Free chunk {} is in list with chunk that expects it to be in use",
 		  p);
+		Debug::Assert(ds::linked_list::is_well_formed(&p->ring),
+		              "Chunk {} cons cell is not well formed",
+		              p);
 		if (sz >= MinChunkSize)
 		{
 			Debug::Assert((sz & MallocAlignMask) == 0,
@@ -938,11 +941,7 @@ class MState
 			              "Free chunk {} should be followed by an in-use chunk",
 			              next);
 			Debug::Assert(
-			  ptr2chunk(p->fd)->bk_equals(p),
-			  "Forward and backwards chunk pointers are inconsistent for {}",
-			  p);
-			Debug::Assert(
-			  ptr2chunk(p->bk)->fd_equals(p),
+			  ds::linked_list::is_well_formed(&p->ring),
 			  "Forward and backwards chunk pointers are inconsistent for {}",
 			  p);
 		}
@@ -1062,10 +1061,8 @@ class MState
 		              t);
 
 		/* Equal-sized chunks */
-		TChunk *u = ptr2tchunk(t->fd);
-
-		while (u != t)
-		{ // Traverse through chain of same-sized nodes.
+		t->ring_search([this, tsize](MChunk *uMchunk) {
+			auto u = static_cast<TChunk *>(uMchunk);
 			ok_any_chunk(u);
 			ok_free_chunk(u);
 			Debug::Assert(
@@ -1080,8 +1077,8 @@ class MState
 			              "Chunk {} has no parent but has a child {}",
 			              u,
 			              u->child[1]);
-			u = ptr2tchunk(u->fd);
-		};
+			return false;
+		});
 
 		auto checkChild = [&](int childIndex) {
 			if (t->child[childIndex] != nullptr)
@@ -1134,32 +1131,28 @@ class MState
 	// Sanity check smallbin[i].
 	void ok_smallbin(BIndex i)
 	{
-		MChunk *b     = smallbin_at(i);
-		MChunk *p     = ptr2chunk(b->bk);
-		bool    empty = (smallmap & (1U << i)) == 0;
-		if (p == b)
-		{
-			Debug::Assert(empty, "Small bin should be empty");
-		}
-		if (!empty)
-		{
-			for (; p != b; p = ptr2chunk(p->bk))
-			{
-				size_t  size = p->size_get();
-				MChunk *q;
-				// Each chunk claims to be free.
-				ok_free_chunk(p);
-				// Chunk belongs in this bin.
-				Debug::Assert(
-				  small_index(size) == i,
-				  "Chunk is in bin with index {} but should be in {}",
-				  i,
-				  small_index(size));
-				Debug::Assert(p->bk_equals(b) ||
-				                ptr2chunk(p->bk)->size_get() == p->size_get(),
-				              "Back pointers do not match on size");
-			}
-		}
+		auto b     = smallbin_at(i);
+		bool empty = (smallmap & (1U << i)) == 0;
+
+		Debug::Assert(empty == ds::linked_list::is_singleton(b),
+		              "Small bin {} empty flag and list disagree",
+		              i);
+
+		ds::linked_list::search(b, [this, i](auto pRing) {
+			auto p = MChunk::from_ring(pRing);
+
+			// Each chunk claims to be free.
+			ok_free_chunk(p);
+
+			// Chunk belongs in this bin.
+			size_t size = p->size_get();
+			Debug::Assert(small_index(size) == i,
+			              "Chunk is in bin with index {} but should be in {}",
+			              i,
+			              small_index(size));
+
+			return false;
+		});
 	}
 	// Sanity check the entire malloc state in this MState.
 	void ok_malloc_state()
@@ -1179,58 +1172,56 @@ class MState
 #endif
 
 	private:
-	// Link a free chunk into a smallbin.
+	/*
+	 * Link a free chunk into a smallbin.
+	 *
+	 * Initializes the linkages of p.
+	 */
 	void insert_small_chunk(MChunk *p, size_t size)
 	{
-		BIndex  i    = small_index(size);
-		MChunk *head = smallbin_at(i);
-		MChunk *back = head;
+		BIndex         i  = small_index(size);
+		ChunkFreeLink *hc = smallbin_at(i);
 		Debug::Assert(
 		  size >= MinChunkSize, "Size {} is not a small chunk size", size);
 		if (!is_smallmap_marked(i))
 		{
 			smallmap_mark(i);
 		}
-		else if (RTCHECK(ok_address(head->bk)))
-		{
-			back = ptr2chunk(head->bk);
-		}
-		else
+		else if (!RTCHECK(ok_address(hc->cell_prev())))
 		{
 			corruption_error_action();
 		}
-		head->bk_assign(p);
-		back->fd_assign(p);
-		p->fd_assign(head);
-		p->bk_assign(back);
+		ds::linked_list::emplace_before(hc, &p->ring);
 	}
 
 	/// Unlink a chunk from a smallbin.
 	void unlink_small_chunk(MChunk *p, size_t s)
 	{
-		MChunk *f = ptr2chunk(p->fd);
-		MChunk *b = ptr2chunk(p->bk);
+		MChunk *f = MChunk::from_ring(p->ring.cell_next());
+		MChunk *b = MChunk::from_ring(p->ring.cell_prev());
 		BIndex  i = small_index(s);
-		Debug::Assert(p != b, "Chunk {} is circularly referenced", p);
-		Debug::Assert(p != f, "Chunk {} is circularly referenced", p);
+		Debug::Assert(!ds::linked_list::is_singleton(&p->ring),
+		              "Chunk {} is circularly referenced",
+		              p);
 		Debug::Assert(p->size_get() == small_index2size(i),
 		              "Chunk {} is has size {} but is in bin for size {}",
 		              p,
 		              p->size_get(),
 		              small_index2size(i));
-		if (RTCHECK(f == smallbin_at(i) ||
+
+		if (RTCHECK(&f->ring == smallbin_at(i) ||
 		            (ok_address(f->ptr()) && f->bk_equals(p))))
 		{
 			if (b == f)
 			{
 				// This is the last chunk in this bin.
 				smallmap_clear(i);
+				ds::linked_list::unsafe_remove(&p->ring);
 			}
-			else if (RTCHECK(b == smallbin_at(i) ||
+			else if (RTCHECK(&b->ring == smallbin_at(i) ||
 			                 (ok_address(b->ptr()) && b->fd_equals(p))))
 			{
-				f->bk_assign(b);
-				b->fd_assign(f);
+				ds::linked_list::unsafe_remove(&p->ring);
 			}
 			else
 			{
@@ -1247,25 +1238,27 @@ class MState
 	MChunk *unlink_first_small_chunk(BIndex i)
 	{
 		auto b = smallbin_at(i);
-		auto p = ptr2chunk(b->fd);
+		auto p = MChunk::from_ring(b->cell_next());
+		auto f = MChunk::from_ring(p->ring.cell_next());
 
-		auto f = ptr2chunk(p->fd);
-
-		Debug::Assert(p != b, "Chunk {} is circularly referenced", p);
-		Debug::Assert(p != f, "Chunk {} is circularly referenced", p);
+		Debug::Assert(
+		  !ds::linked_list::is_singleton(&p->ring), "Chunk {} is self-loop", p);
+		Debug::Assert(!ds::linked_list::is_singleton(b),
+		              "Small bin {} is empty but flagged as having nodes",
+		              p);
 		Debug::Assert(p->size_get() == small_index2size(i),
 		              "Chunk {} is has size {} but is in bin for size {}",
 		              p,
 		              p->size_get(),
 		              small_index2size(i));
-		if (b == f)
+		if (b->cell_prev() == &p->ring)
 		{
 			smallmap_clear(i);
+			ds::linked_list::unsafe_remove(&p->ring);
 		}
 		else if (RTCHECK(ok_address(f->ptr()) && f->bk_equals(p)))
 		{
-			f->bk_assign(b);
-			b->fd_assign(f);
+			ds::linked_list::unsafe_remove(&p->ring);
 		}
 		else
 		{
@@ -1275,7 +1268,11 @@ class MState
 		return p;
 	}
 
-	// Insert chunk into tree.
+	/**
+	 * Insert chunk into tree.
+	 *
+	 * Initializes the linkages of x.
+	 */
 	void insert_large_chunk(TChunk *x, size_t s)
 	{
 		TChunk **head;
@@ -1288,8 +1285,7 @@ class MState
 			treemap_mark(i);
 			*head = x;
 			x->mark_root();
-			x->fd_assign(x);
-			x->bk_assign(x);
+			x->ring.cell_reset();
 		}
 		else
 		{
@@ -1310,8 +1306,7 @@ class MState
 					{
 						*c        = x;
 						x->parent = t;
-						x->fd_assign(x);
-						x->bk_assign(x);
+						x->ring.cell_reset();
 						break;
 					}
 					else
@@ -1322,15 +1317,11 @@ class MState
 				}
 				else
 				{
-					TChunk *back = ptr2tchunk(t->bk);
+					TChunk *back = TChunk::from_ring(t->ring.cell_prev());
 					if (RTCHECK(ok_address(t->ptr()) &&
 					            ok_address(back->ptr())))
 					{
-						t->bk_assign(x);
-						back->fd_assign(x);
-						x->fd_assign(t);
-						x->bk_assign(back);
-						x->mark_tree_ring();
+						t->ring_emplace(x);
 						break;
 					}
 
@@ -1361,15 +1352,14 @@ class MState
 	{
 		TChunk *xp = x->parent;
 		TChunk *r;
-		if (!x->bk_equals(x))
+		if (!ds::linked_list::is_singleton(&x->ring))
 		{
-			TChunk *f = ptr2tchunk(x->fd);
-			r         = ptr2tchunk(x->bk);
+			TChunk *f = TChunk::from_ring(x->ring.cell_next());
+			r         = TChunk::from_ring(x->ring.cell_prev());
 			if (RTCHECK(ok_address(f->ptr()) && f->bk_equals(x) &&
 			            r->fd_equals(x)))
 			{
-				f->bk_assign(r);
-				r->fd_assign(f);
+				ds::linked_list::unsafe_remove(&x->ring);
 			}
 			else
 			{
@@ -1462,7 +1452,9 @@ class MState
 		}
 	}
 
-	// Throw p into the correct bin based on s.
+	/**
+	 * Throw p into the correct bin based on s.  Initializes the linkages of p.
+	 */
 	void insert_chunk(MChunk *p, size_t s)
 	{
 		if (is_small(s))
@@ -1633,6 +1625,8 @@ class MState
 	 *
 	 * Note that this chunk does not have to come from quarantine, because it
 	 * can come from initialisation or splitting a free chunk.
+	 *
+	 * Initializes the linkages of p.
 	 */
 	void mspace_free_internal(MChunk *p)
 	{
@@ -1727,12 +1721,15 @@ class MState
 	 */
 	int mspace_qtbin_deqn(size_t loops)
 	{
-		int     dequeued = 0;
-		MChunk *head     = qtbin();
+		int  dequeued   = 0;
+		auto quarantine = quarantine_get();
+
 		for (size_t i = 0; i < loops; i++)
 		{
-			MChunk *fore = ptr2chunk(head->fd);
-			MChunk *next;
+			if (ds::linked_list::is_singleton(quarantine))
+				break;
+
+			MChunk *fore = MChunk::from_ring(quarantine->cell_next());
 
 			/*
 			 * We organise the quarantine list in a way that places young chunks
@@ -1740,13 +1737,14 @@ class MState
 			 * when starting from the front, then we know no remaining chunks
 			 * can be dequeued because they can only be younger.
 			 */
-			if (fore == head || !fore->is_revocation_done())
+			if (!fore->is_revocation_done())
 			{
 				break;
 			}
-			next = ptr2chunk(fore->fd);
-			head->fd_assign(next);
-			next->bk_assign(head);
+
+			/* mspace_free_internal will rebuild the ring as a singleton */
+			ds::linked_list::unsafe_remove(&fore->ring);
+
 			heapQuarantineSize -= fore->size_get();
 			mspace_free_internal(fore);
 			dequeued++;
