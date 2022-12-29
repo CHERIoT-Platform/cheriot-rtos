@@ -542,19 +542,20 @@ class MState
 	public:
 	CHERI::Capability<void> heapStart;
 
+	using RingSentinel = ds::linked_list::Sentinel<ChunkFreeLink>;
 	/*
 	 * Rings for each small bin size.  Use smallbin_at() for access to
 	 * ensure proper CHERI bounds!
 	 */
-	ChunkFreeLink smallbins[NSmallBins];
+	RingSentinel smallbins[NSmallBins];
 	/* Tree root nodes for each large bin */
 	TChunk *treebins[NTreeBins];
 
-	ChunkFreeLink quarantineSentinel;
+	RingSentinel quarantineSentinel;
 
 	auto quarantine_get()
 	{
-		return rederive<ChunkFreeLink>(
+		return rederive<RingSentinel>(
 		  CHERI::Capability{&quarantineSentinel}.address());
 	}
 
@@ -583,7 +584,7 @@ class MState
 	// Returns the smallbin head for index i.
 	auto smallbin_at(BIndex i)
 	{
-		return rederive<ChunkFreeLink>(
+		return rederive<RingSentinel>(
 		  CHERI::Capability{&smallbins[i]}.address());
 	}
 	// Returns a pointer to the pointer to the root chunk of a tree.
@@ -630,12 +631,12 @@ class MState
 		// Establish circular links for smallbins.
 		for (BIndex i = 0; i < NSmallBins; ++i)
 		{
-			smallbin_at(i)->cell_reset();
+			smallbin_at(i)->reset();
 		}
 		// The treebins should be all nullptrs due to memset earlier.
 
 		// Initialise quarantine
-		quarantineSentinel.cell_reset();
+		quarantineSentinel.reset();
 	}
 
 	/**
@@ -780,7 +781,7 @@ class MState
 		// Place it on the quarantine list after writing epoch.
 		auto quarantine = quarantine_get();
 
-		ds::linked_list::emplace_before(quarantine, &p->ring);
+		quarantine->append_emplace(&p->ring);
 
 		heapQuarantineSize += p->size_get();
 		// Dequeue 3 times. 3 is chosen randomly. 2 is at least needed.
@@ -1134,11 +1135,11 @@ class MState
 		auto b     = smallbin_at(i);
 		bool empty = (smallmap & (1U << i)) == 0;
 
-		Debug::Assert(empty == ds::linked_list::is_singleton(b),
+		Debug::Assert(empty == b->is_empty(),
 		              "Small bin {} empty flag and list disagree",
 		              i);
 
-		ds::linked_list::search(b, [this, i](auto pRing) {
+		b->search([this, i](auto pRing) {
 			auto p = MChunk::from_ring(pRing);
 
 			// Each chunk claims to be free.
@@ -1179,19 +1180,19 @@ class MState
 	 */
 	void insert_small_chunk(MChunk *p, size_t size)
 	{
-		BIndex         i  = small_index(size);
-		ChunkFreeLink *hc = smallbin_at(i);
+		BIndex i   = small_index(size);
+		auto   bin = smallbin_at(i);
 		Debug::Assert(
 		  size >= MinChunkSize, "Size {} is not a small chunk size", size);
 		if (!is_smallmap_marked(i))
 		{
 			smallmap_mark(i);
 		}
-		else if (!RTCHECK(ok_address(hc->cell_prev())))
+		else if (!RTCHECK(ok_address(bin)))
 		{
 			corruption_error_action();
 		}
-		ds::linked_list::emplace_before(hc, &p->ring);
+		bin->append_emplace(&p->ring);
 	}
 
 	/// Unlink a chunk from a smallbin.
@@ -1209,7 +1210,7 @@ class MState
 		              p->size_get(),
 		              small_index2size(i));
 
-		if (RTCHECK(&f->ring == smallbin_at(i) ||
+		if (RTCHECK(&p->ring == smallbin_at(i)->last() ||
 		            (ok_address(f->ptr()) && f->bk_equals(p))))
 		{
 			if (b == f)
@@ -1218,7 +1219,7 @@ class MState
 				smallmap_clear(i);
 				ds::linked_list::unsafe_remove(&p->ring);
 			}
-			else if (RTCHECK(&b->ring == smallbin_at(i) ||
+			else if (RTCHECK(&p->ring == smallbin_at(i)->first() ||
 			                 (ok_address(b->ptr()) && b->fd_equals(p))))
 			{
 				ds::linked_list::unsafe_remove(&p->ring);
@@ -1238,12 +1239,12 @@ class MState
 	MChunk *unlink_first_small_chunk(BIndex i)
 	{
 		auto b = smallbin_at(i);
-		auto p = MChunk::from_ring(b->cell_next());
+		auto p = MChunk::from_ring(b->first());
 		auto f = MChunk::from_ring(p->ring.cell_next());
 
 		Debug::Assert(
 		  !ds::linked_list::is_singleton(&p->ring), "Chunk {} is self-loop", p);
-		Debug::Assert(!ds::linked_list::is_singleton(b),
+		Debug::Assert(!b->is_empty(),
 		              "Small bin {} is empty but flagged as having nodes",
 		              p);
 		Debug::Assert(p->size_get() == small_index2size(i),
@@ -1251,7 +1252,7 @@ class MState
 		              p,
 		              p->size_get(),
 		              small_index2size(i));
-		if (b->cell_prev() == &p->ring)
+		if (b->last() == &p->ring)
 		{
 			smallmap_clear(i);
 			ds::linked_list::unsafe_remove(&p->ring);
@@ -1726,10 +1727,10 @@ class MState
 
 		for (size_t i = 0; i < loops; i++)
 		{
-			if (ds::linked_list::is_singleton(quarantine))
+			if (quarantine->is_empty())
 				break;
 
-			MChunk *fore = MChunk::from_ring(quarantine->cell_next());
+			MChunk *fore = MChunk::from_ring(quarantine->first());
 
 			/*
 			 * We organise the quarantine list in a way that places young chunks
