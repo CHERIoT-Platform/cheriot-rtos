@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cheri.hh>
+#include <concepts>
 
 namespace ds::pointer
 {
@@ -37,5 +38,160 @@ namespace ds::pointer
 		return static_cast<size_t>(reinterpret_cast<const char *>(cursor) -
 		                           reinterpret_cast<const char *>(base));
 	}
+
+	namespace proxy
+	{
+
+		/**
+		 * Proxies<P,T> if P is a proxy object for T*-s.
+		 */
+		template<typename P, typename T>
+		concept Proxies = std::same_as<T, typename P::Type> &&
+		  requires(P &proxy, P &proxy2, T *ptr)
+		{
+			/* Probe for operator=(T*) */
+			{
+				proxy = ptr
+				} -> std::same_as<P &>;
+
+			/* Probe for operator T*() */
+			{
+				ptr == proxy
+				} -> std::same_as<bool>;
+
+			/* TODO: How to probe for operator-> ? */
+
+			/* Probe for operator==(T*) */
+			{
+				proxy == ptr
+				} -> std::same_as<bool>;
+
+			/* Probe for operator==(P&) */
+			{
+				proxy == proxy2
+				} -> std::same_as<bool>;
+
+			/* Probe for operator<=>(T*) */
+			{
+				proxy <=> ptr
+				} -> std::same_as<std::strong_ordering>;
+
+			/* Probe for operator<=>(P) */
+			{
+				proxy <=> proxy2
+				} -> std::same_as<std::strong_ordering>;
+		};
+
+		/**
+		 * Pointer references are pointer proxies, shockingly enough.
+		 */
+		template<typename T>
+		class Pointer
+		{
+			T *&ref;
+
+			public:
+			using Type = T;
+
+			__always_inline Pointer(T *&r) : ref(r) {}
+
+			__always_inline operator T *()
+			{
+				return ref;
+			}
+
+			__always_inline T *operator->()
+			{
+				return *this;
+			}
+
+			__always_inline Pointer<T> &operator=(T *t)
+			{
+				ref = t;
+				return *this;
+			}
+
+			__always_inline Pointer<T> &operator=(Pointer const &p)
+			{
+				ref = *p.ref;
+				return *this;
+			}
+
+			__always_inline bool operator==(Pointer &p)
+			{
+				return this->ref == p.ref;
+			}
+
+			__always_inline auto operator<=>(Pointer &p)
+			{
+				return this->ref <=> p.ref;
+			}
+		};
+		static_assert(Proxies<Pointer<void>, void>);
+
+		/**
+		 * Equipped with a context for bounds, an address reference can be a
+		 * proxy for a pointer.
+		 */
+		template<typename T>
+		class PtrAddr
+		{
+			CHERI::Capability<void> ctx;
+			ptraddr_t              &ref;
+
+			public:
+			using Type = T;
+
+			__always_inline PtrAddr(void *c, ptraddr_t &r) : ctx(c), ref(r) {}
+
+			__always_inline operator T *()
+			{
+				auto c      = ctx;
+				c.address() = ref;
+				return c.cast<T>().get();
+			}
+
+			__always_inline T *operator->()
+			{
+				return *this;
+			}
+
+			__always_inline PtrAddr &operator=(T *p)
+			{
+				ref = CHERI::Capability{p}.address();
+				return *this;
+			}
+
+			__always_inline PtrAddr &operator=(PtrAddr const &p)
+			{
+				ref = p.ref;
+				return *this;
+			}
+
+			/*
+			 * Since the context is used only for bounds, don't bother
+			 * implicitly converting both proxies up to T*
+			 */
+
+			__always_inline bool operator==(PtrAddr &p)
+			{
+				return ref == p.ref;
+			}
+
+			__always_inline auto operator<=>(PtrAddr &p)
+			{
+				return ref <=> p.ref;
+			}
+		};
+		static_assert(Proxies<PtrAddr<void>, void>);
+
+		/**
+		 * Deduction gude for the common enough case where the context
+		 * type and the represented type are equal.
+		 */
+		template<typename T>
+		PtrAddr(T *, ptraddr_t) -> PtrAddr<T>;
+
+	} // namespace proxy
 
 } // namespace ds::pointer
