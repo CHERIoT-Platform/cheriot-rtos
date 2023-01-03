@@ -313,13 +313,6 @@ MChunkHeader
 		return isPrevInUse;
 	}
 
-	MChunkHeader *chunk_plus_offset(size_t s)
-	{
-		CHERI::Capability<void> ptr{this};
-		ptr.address() += s;
-		return ptr.cast<MChunkHeader>();
-	}
-
 	// size of the previous chunk
 	size_t prevsize_get()
 	{
@@ -517,13 +510,6 @@ MChunk
 		return header.is_prev_in_use();
 	}
 
-	// Treat the thing at thischunk + s as a chunk.
-	MChunk *chunk_plus_offset(size_t s)
-	{
-		CHERI::Capability<void> ptr{this};
-		ptr.address() += s;
-		return ptr.cast<MChunk>();
-	}
 	// Returns the next adjacent chunk.
 	MChunk *chunk_next()
 	{
@@ -620,7 +606,7 @@ MChunk
 		return ring.cell_next() == &p->ring;
 	}
 
-	MChunk *split(size_t offset)
+	__always_inline MChunk *split(size_t offset)
 	{
 		return MChunk::from_header(header.split(offset));
 	}
@@ -1773,7 +1759,6 @@ class MState
 
 		if (RTCHECK(ok_address(v->ptr())))
 		{
-			MChunk *r = v->chunk_plus_offset(nb);
 			Debug::Assert(v->size_get() == rsize + nb,
 			              "Chunk {} size is {}, should be {}",
 			              v,
@@ -1782,25 +1767,25 @@ class MState
 			Debug::Assert(v->is_prev_in_use(),
 			              "Free chunk {} follows another free chunk",
 			              v);
-			if (RTCHECK(v->ok_next(r)))
+
+			unlink_large_chunk(v);
+
+			if (rsize >= MinChunkSize)
 			{
-				unlink_large_chunk(v);
-				if (rsize < MinChunkSize)
-				{
-					v->in_use_chunk_set(rsize + nb);
-				}
-				else
-				{
-					v->in_use_chunk_set(nb);
-					/*
-					 * The remainder is big enough to to used by another
-					 * allocation, place it into the free list.
-					 */
-					r->free_chunk_set(rsize);
-					insert_chunk(r, rsize);
-				}
-				return chunk2mem(v);
+				/*
+				 * The remainder is big enough to to used by another
+				 * allocation, place it into the free list.
+				 */
+				auto r = v->split(nb);
+				insert_chunk(r, rsize);
 			}
+
+			/*
+			 * Having split off any residual, mark this chunk in use.
+			 */
+			v->in_use_set();
+
+			return chunk2mem(v);
 		}
 
 		corruption_error_action();
@@ -2096,17 +2081,12 @@ class MState
 				auto   p        = unlink_first_small_chunk(i);
 				size_t rsize    = small_index2size(i) - nb;
 
-				if (rsize < MinChunkSize)
+				if (rsize >= MinChunkSize)
 				{
-					p->in_use_set();
-				}
-				else
-				{
-					p->in_use_chunk_set(nb);
-					auto r = p->chunk_plus_offset(nb);
-					r->free_chunk_set(rsize);
+					auto r = p->split(nb);
 					insert_small_chunk(r, rsize);
 				}
+				p->in_use_set();
 				p->metadata_clear();
 				mem = chunk2mem(p);
 
@@ -2145,15 +2125,14 @@ class MState
 	// Allocate memory with specific alignment.
 	void *mspace_memalign(size_t bytes, size_t alignment)
 	{
-		size_t                  nb;      // padded request size
-		CHERI::Capability<void> m;       // memory returned by malloc call
-		MChunk                 *p;       // corresponding chunk
-		char                   *brk;     // alignment point within p
-		MChunk                 *newp;    // chunk to return
-		size_t                  newsize; // its size
-		size_t  leadsize;                // leading space before alignment point
-		MChunk *remainder;               // spare room at end to split off
-		size_t  remainderSize;           // its size
+		size_t                  nb;   // padded request size
+		CHERI::Capability<void> m;    // memory returned by malloc call
+		MChunk                 *p;    // corresponding chunk
+		char                   *brk;  // alignment point within p
+		MChunk                 *newp; // chunk to return
+		size_t  leadsize;             // leading space before alignment point
+		MChunk *remainder;            // spare room at end to split off
+		size_t  remainderSize;        // its size
 		size_t  size;
 
 		nb = pad_request(bytes);
@@ -2189,47 +2168,34 @@ class MState
 			 * leader, we can move to the next aligned spot -- we've
 			 * allocated enough total room so that this is always possible.
 			 */
-			auto alignedAddress{m};
-			alignedAddress.address() =
-			  (m.address() + alignment - 1) & -static_cast<ssize_t>(alignment);
-			brk = reinterpret_cast<char *>(mem2chunk(alignedAddress));
-			if (ds::pointer::diff(p, brk) < MinChunkSize)
+			size_t alignpad =
+			  alignment - (m.address() & static_cast<ssize_t>(alignment - 1));
+			if (alignpad < MinChunkSize)
 			{
-				brk += alignment;
+				alignpad += alignment;
 			}
 
-			newp     = reinterpret_cast<MChunk *>(brk);
-			leadsize = ds::pointer::diff(p, brk);
-			newsize  = p->size_get() - leadsize;
-
-			// Give back leader, use the rest.
-			newp->in_use_chunk_set(newsize);
-			p->in_use_chunk_set(leadsize);
+			auto r = p->split(alignpad);
 			/*
-			 * This pointer is entirely internal. No need to go through
-			 * quarantine. Same for another call below.
+			 * XXX This is excessive, but because r is marked as in-use, thanks
+			 * to coming out of malloc, it makes some amount of sense to go back
+			 * through the free path.  But we know, for example, that the
+			 * contents are zeroed, the revocation bitmap is not set, that
+			 * coalescing is not possible (because p is the predecessor and is
+			 * in use and because if the successor were free, it would have been
+			 * following another free chunk.
 			 */
 			mspace_free_internal(p);
-			p = newp;
-
-			Debug::Assert(newsize >= nb &&
-			                (chunk2mem(p).address() % alignment) == 0,
-			              "Chunk {} does not meet the size ({}) or alignment "
-			              "({}) requirements",
-			              p,
-			              nb,
-			              alignment);
+			p = r;
 		}
 
 		// Also give back spare room at the end.
 		size = p->size_get();
 		if (size > nb + MinChunkSize)
 		{
-			remainderSize = size - nb;
-			remainder     = p->chunk_plus_offset(nb);
-			remainder->in_use_chunk_set(remainderSize);
-			p->in_use_chunk_set(nb);
-			mspace_free_internal(remainder);
+			auto r = p->split(nb);
+			/* XXX see above */
+			mspace_free_internal(r);
 		}
 
 		ok_in_use_chunk(p);
