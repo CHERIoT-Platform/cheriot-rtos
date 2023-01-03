@@ -256,7 +256,8 @@ namespace displacement_proxy
  * "BIBOP"-inspired design.
  *
  * This header uses relative displacements to refer to the address-order prior
- * and next adjacent headers.
+ * and next adjacent headers.  The details of encoding are encapsulated using
+ * the displacement_proxy::Proxy above.
  */
 struct __packed __aligned(MallocAlignment)
 MChunkHeader
@@ -273,6 +274,21 @@ MChunkHeader
 	// TODO: handle overflow, especially when we add other fields which reduce
 	// the bit width of the epoch in the future.
 	size_t epochEnq : 30;
+
+	public:
+	__always_inline auto cell_prev()
+	{
+		return displacement_proxy::
+		  Proxy<MChunkHeader, SmallSize, false, head2size, size2head>(this,
+		                                                              sprev);
+	}
+
+	__always_inline auto cell_next()
+	{
+		return displacement_proxy::
+		  Proxy<MChunkHeader, SmallSize, true, head2size, size2head>(this,
+		                                                             shead);
+	}
 
 	/**
 	 * Erase the header fields
@@ -318,18 +334,50 @@ MChunkHeader
 
 	void mark_in_use()
 	{
-		isCurrInUse                                = true;
-		chunk_plus_offset(size_get())->isPrevInUse = true;
+		isCurrInUse              = true;
+		cell_next()->isPrevInUse = true;
 	}
 
 	void mark_free()
 	{
-		isCurrInUse                                = false;
-		chunk_plus_offset(size_get())->isPrevInUse = false;
+		isCurrInUse              = false;
+		cell_next()->isPrevInUse = false;
+	}
+
+	/**
+	 * Land a new header somewhere within an existing chunk.
+	 *
+	 * The resulting header inherits its in-use status from this one, which
+	 * leaves consistent the "previous in use" bits of both this new header and
+	 * the successor header, but this can violate other invariants of the
+	 * system.  In particular, if this is a free chunk, then the result will be
+	 * two free chunks in a row; the caller is expected to fix this by marking
+	 * at least one of the two split chunks as in-use.
+	 */
+	MChunkHeader *split(size_t offset)
+	{
+		auto newloc = ds::pointer::offset<void>(this, offset);
+
+		auto newnext = new (newloc) MChunkHeader();
+		newnext->clear();
+
+		ds::linked_list::emplace_after(this, newnext);
+		newnext->isCurrInUse = newnext->isPrevInUse = isCurrInUse;
+
+		return newnext;
 	}
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
+
+/*
+ * Chunk headers are also, sort of, a linked list encoding.  They're not a ring
+ * and not exactly a typical list, in that the first and last nodes rely on "out
+ * of band" bits (the InUse flags) to prevent any traversals past those nodes.
+ * But, since we never try to insert before the first or after the last, it all
+ * basically works out.
+ */
+static_assert(ds::linked_list::cell::HasCellOperations<MChunkHeader>);
 
 /**
  * When chunks are not in use, they are treated as nodes of either
@@ -479,12 +527,12 @@ MChunk
 	// Returns the next adjacent chunk.
 	MChunk *chunk_next()
 	{
-		return chunk_plus_offset(size_get());
+		return MChunk::from_header(header.cell_next());
 	}
 	// Returns the previous adjacent chunk.
 	MChunk *chunk_prev()
 	{
-		return chunk_plus_offset(-prevsize_get());
+		return MChunk::from_header(header.cell_prev());
 	}
 
 	// size of the previous chunk
@@ -503,8 +551,8 @@ MChunk
 	 */
 	void size_set(size_t sz)
 	{
-		header.shead               = size2head(sz);
-		chunk_next()->header.sprev = size2head(sz);
+		header.shead              = size2head(sz);
+		header.cell_next()->sprev = size2head(sz);
 	}
 
 	/**
@@ -514,8 +562,8 @@ MChunk
 	 */
 	void in_use_set()
 	{
-		header.isCurrInUse               = true;
-		chunk_next()->header.isPrevInUse = true;
+		header.isCurrInUse              = true;
+		header.cell_next()->isPrevInUse = true;
 	}
 	/**
 	 * Clear the in-use bit of this chunk and the previous-in-use bit of the
@@ -523,8 +571,8 @@ MChunk
 	 */
 	void in_use_clear()
 	{
-		header.isCurrInUse               = false;
-		chunk_next()->header.isPrevInUse = false;
+		header.isCurrInUse              = false;
+		header.cell_next()->isPrevInUse = false;
 	}
 	/**
 	 * @brief Set this chunk as an in-use chunk with a given size, which takes
@@ -570,6 +618,11 @@ MChunk
 	bool fd_equals(MChunk * p)
 	{
 		return ring.cell_next() == &p->ring;
+	}
+
+	MChunk *split(size_t offset)
+	{
+		return MChunk::from_header(header.split(offset));
 	}
 
 #ifdef NDEBUG
