@@ -151,6 +151,46 @@ static inline size_t small_index2size(BIndex i)
 }
 
 /**
+ * Every chunk, in use or not, includes a minimal header.  That is, this is a
+ * classic malloc, not something like a slab or sizeclass allocator or a
+ * "BIBOP"-inspired design.
+ *
+ * This header uses relative displacements to refer to the address-order prior
+ * and next adjacent headers.
+ */
+struct __packed __aligned(MallocAlignment)
+MChunkHeader
+{
+	// compressed size of the previous chunk
+	SmallSize sprev;
+	// compressed size of this chunk
+	SmallSize shead;
+
+	bool isPrevInUse : 1;
+	bool isCurrInUse : 1;
+
+	// the revocation epoch when this chunk is quarantined.
+	// TODO: handle overflow, especially when we add other fields which reduce
+	// the bit width of the epoch in the future.
+	size_t epochEnq : 30;
+
+	/**
+	 * Erase the header fields
+	 */
+	__always_inline void clear()
+	{
+		/*
+		 * This is spelled slightly oddly as using memset results in a call
+		 * rather than a single store instruction.
+		 */
+		static_assert(sizeof(*this) == sizeof(uintptr_t));
+		*reinterpret_cast<uintptr_t *>(this) = 0;
+	}
+};
+static_assert(sizeof(MChunkHeader) == 8);
+static_assert(std::is_standard_layout_v<MChunkHeader>);
+
+/**
  * When chunks are not in use, they are treated as nodes of either
  * lists or trees.
  *
@@ -202,7 +242,7 @@ using ChunkFreeLink =
   ds::linked_list::cell::OffsetPtrAddr<MChunkFreeRingOffset>;
 
 /**
- * Class of an allocator chunk, including the header.
+ * Class of a free allocator chunk, including its header.
  *
  * This class can reference either a smallbin chunk or a TChunk (and is the base
  * class of TChunk). Header fields should never be accessed directly since the
@@ -221,17 +261,22 @@ using ChunkFreeLink =
 class __packed __aligned(MallocAlignment)
 MChunk
 {
+	friend class MChunkAssertions;
+
 	protected:
-	// compressed size of the previous chunk
-	SmallSize sprev;
-	// compressed size of this chunk
-	SmallSize shead;
-	bool      isPrevInUse : 1;
-	bool      isCurrInUse : 1;
-	// the revocation epoch when this chunk is quarantined.
-	// TODO: handle overflow, especially when we add other fields which reduce
-	// the bit width of the epoch in the future.
-	size_t epochEnq : 30;
+	/*
+	 * Header is included as a member rather than a parent class to retain
+	 * C++ standard layout
+	 */
+	MChunkHeader header;
+	/**
+	 * Container-of for the above field.
+	 */
+	__always_inline static MChunk *from_header(MChunkHeader * p)
+	{
+		return reinterpret_cast<MChunk *>(reinterpret_cast<uintptr_t>(p) -
+		                                  offsetof(MChunk, header));
+	}
 
 	/**
 	 * Each MChunk participates in a circular doubly-linked list.  The
@@ -276,11 +321,11 @@ MChunk
 	public:
 	bool is_in_use()
 	{
-		return isCurrInUse;
+		return header.isCurrInUse;
 	}
 	bool is_prev_in_use()
 	{
-		return isPrevInUse;
+		return header.isPrevInUse;
 	}
 
 	// Treat the thing at thischunk + s as a chunk.
@@ -304,12 +349,12 @@ MChunk
 	// size of the previous chunk
 	size_t prevsize_get()
 	{
-		return head2size(sprev);
+		return head2size(header.sprev);
 	}
 	// size of this chunk
 	size_t size_get()
 	{
-		return head2size(shead);
+		return head2size(header.shead);
 	}
 	/**
 	 * Set the size of this chunk, which also takes care of converting sz into
@@ -317,8 +362,8 @@ MChunk
 	 */
 	void size_set(size_t sz)
 	{
-		shead               = size2head(sz);
-		chunk_next()->sprev = size2head(sz);
+		header.shead               = size2head(sz);
+		chunk_next()->header.sprev = size2head(sz);
 	}
 
 	/**
@@ -328,8 +373,8 @@ MChunk
 	 */
 	void in_use_set()
 	{
-		isCurrInUse               = true;
-		chunk_next()->isPrevInUse = true;
+		header.isCurrInUse               = true;
+		chunk_next()->header.isPrevInUse = true;
 	}
 	/**
 	 * Clear the in-use bit of this chunk and the previous-in-use bit of the
@@ -337,8 +382,8 @@ MChunk
 	 */
 	void in_use_clear()
 	{
-		isCurrInUse               = false;
-		chunk_next()->isPrevInUse = false;
+		header.isCurrInUse               = false;
+		chunk_next()->header.isPrevInUse = false;
 	}
 	/**
 	 * @brief Set this chunk as an in-use chunk with a given size, which takes
@@ -370,8 +415,8 @@ MChunk
 	 */
 	void footchunk_set(size_t sz)
 	{
-		isCurrInUse = true;
-		shead       = size2head(sz);
+		header.isCurrInUse = true;
+		header.shead       = size2head(sz);
 	}
 
 	// Is the bk field pointing to p?
@@ -418,23 +463,13 @@ MChunk
 	// Write the revocation epoch into the header.
 	void epoch_write()
 	{
-		epochEnq = revoker.system_epoch_get();
+		header.epochEnq = revoker.system_epoch_get();
 	}
 
 	// Has this chunk gone through a full revocation pass?
 	bool is_revocation_done()
 	{
-		return revoker.has_revocation_finished_for_epoch(epochEnq);
-	}
-
-	/**
-	 * Erase the header fields
-	 */
-	void header_clear()
-	{
-		sprev = shead = 0;
-		isCurrInUse = isPrevInUse = 0;
-		epochEnq                  = 0;
+		return revoker.has_revocation_finished_for_epoch(header.epochEnq);
 	}
 
 	/**
@@ -443,6 +478,7 @@ MChunk
 	 */
 	__always_inline void metadata_clear()
 	{
+		static_assert(sizeof(*this) == sizeof(MChunkHeader) + sizeof(ring));
 		/*
 		 * This is spelled slightly oddly as using memset results in a call
 		 * rather than a single store instruction.
@@ -451,7 +487,14 @@ MChunk
 		*reinterpret_cast<uintptr_t *>(&this->ring) = 0;
 	}
 };
-static_assert(sizeof(MChunk) == 16);
+
+class MChunkAssertions
+{
+	static_assert(sizeof(MChunk) == 16);
+	static_assert(std::is_standard_layout_v<MChunk>);
+	static_assert(offsetof(MChunk, header) == 0);
+};
+
 // the minimum size of a chunk (including the header)
 constexpr size_t MinChunkSize =
   (sizeof(MChunk) + MallocAlignMask) & ~MallocAlignMask;
@@ -1688,7 +1731,7 @@ class MState
 				if (RTCHECK(ok_address(prev->ptr())))
 				{ // Consolidate backward.
 					unlink_chunk(p, prevsize);
-					current->header_clear();
+					current->header.clear();
 				}
 				else
 				{
@@ -1703,7 +1746,7 @@ class MState
 					size_t nsize = next->size_get();
 					psize += nsize;
 					unlink_chunk(next, nsize);
-					next->header_clear();
+					next->header.clear();
 				}
 				p->free_chunk_set(psize);
 
