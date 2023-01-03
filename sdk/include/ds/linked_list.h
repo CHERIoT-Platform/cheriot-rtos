@@ -442,4 +442,87 @@ namespace ds::linked_list
 		}
 	};
 
+	namespace cell
+	{
+
+		/** Cons cell using two pointers */
+		class Pointer
+		{
+			Pointer *prev, *next;
+
+			public:
+			Pointer()
+			{
+				this->cell_reset();
+			}
+
+			__always_inline void cell_reset()
+			{
+				prev = next = this;
+			}
+
+			__always_inline auto cell_next()
+			{
+				return ds::pointer::proxy::Pointer(next);
+			}
+
+			__always_inline auto cell_prev()
+			{
+				return ds::pointer::proxy::Pointer(prev);
+			}
+		};
+		static_assert(HasCellOperationsReset<Pointer>);
+
+		/**
+		 * Encode a linked list cons cell as a pair of addresses (but present an
+		 * interface in terms of pointers).  CHERI bounds on the returned
+		 * pointers are inherited from the pointer to `this` cons cell.
+		 */
+		class PtrAddr
+		{
+			ptraddr_t prev, next;
+
+			public:
+			PtrAddr()
+			{
+				this->cell_reset();
+			}
+			/* Primops */
+
+			__always_inline void cell_reset()
+			{
+				prev = next = CHERI::Capability{this}.address();
+			}
+
+			__always_inline auto cell_next()
+			{
+				return ds::pointer::proxy::PtrAddr(this, next);
+			}
+
+			__always_inline auto cell_prev()
+			{
+				return ds::pointer::proxy::PtrAddr(this, prev);
+			}
+
+			/*
+			 * Specialized implementations that may be slightly fewer
+			 * instructions than the generic approaches in terms of the primops.
+			 */
+
+			__always_inline bool cell_is_singleton()
+			{
+				return prev == CHERI::Capability{this}.address();
+			}
+
+			__always_inline bool cell_is_doubleton()
+			{
+				return prev == next;
+			}
+		};
+		static_assert(HasCellOperationsReset<PtrAddr>);
+		static_assert(HasIsSingleton<PtrAddr>);
+		static_assert(HasIsDoubleton<PtrAddr>);
+
+	} // namespace cell
+
 } // namespace ds::linked_list
