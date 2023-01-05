@@ -1243,32 +1243,27 @@ class MState
 	MChunk *unlink_first_small_chunk(BIndex i)
 	{
 		auto b = smallbin_at(i);
-		auto p = MChunk::from_ring(b->first());
-		auto f = MChunk::from_ring(p->ring.cell_next());
+
+		Debug::Assert(ds::linked_list::is_well_formed(&b->sentinel),
+		              "Smallbin {} sentinel (at {}) is not well formed",
+		              i,
+		              b);
+
+		MChunk *p = MChunk::from_ring(b->unsafe_take_first());
 
 		Debug::Assert(
-		  !ds::linked_list::is_singleton(&p->ring), "Chunk {} is self-loop", p);
-		Debug::Assert(!b->is_empty(),
-		              "Small bin {} is empty but flagged as having nodes",
-		              p);
+		  ok_address(p->ptr()), "Removed chunk {} has bad address", p);
+
+		if (b->is_empty())
+		{
+			smallmap_clear(i);
+		}
+
 		Debug::Assert(p->size_get() == small_index2size(i),
 		              "Chunk {} is has size {} but is in bin for size {}",
 		              p,
 		              p->size_get(),
 		              small_index2size(i));
-		if (b->last() == &p->ring)
-		{
-			smallmap_clear(i);
-			ds::linked_list::unsafe_remove(&p->ring);
-		}
-		else if (RTCHECK(ok_address(f->ptr()) && f->bk_equals(p)))
-		{
-			ds::linked_list::unsafe_remove(&p->ring);
-		}
-		else
-		{
-			corruption_error_action();
-		}
 
 		return p;
 	}
