@@ -192,6 +192,72 @@ namespace ds::pointer
 		template<typename T>
 		PtrAddr(T *, ptraddr_t) -> PtrAddr<T>;
 
+		/**
+		 * Like the above, but with a constant offset on the interpretation of
+		 * its addresss fields.  This is useful for building points-to-container
+		 * data structures (rather than points-to-member as with the above two).
+		 * The container_of and address-taking operations that move back and
+		 * forth between container and link member should fuse away with the
+		 * offsetting operations herein.  You may prefer this if your common or
+		 * fast-paths involve lots of container_of operations.
+		 */
+		template<ptrdiff_t Offset, typename T>
+		class OffsetPtrAddr
+		{
+			CHERI::Capability<void> ctx;
+			ptraddr_t              &ref;
+
+			public:
+			using Type = T;
+
+			__always_inline OffsetPtrAddr(void *c, ptraddr_t &r)
+			  : ctx(c), ref(r)
+			{
+			}
+
+			__always_inline operator T *()
+			{
+				auto c      = ctx;
+				c.address() = ref + Offset;
+				return c.cast<T>().get();
+			}
+
+			__always_inline T *operator->()
+			{
+				return *this;
+			}
+
+			__always_inline OffsetPtrAddr &operator=(T *p)
+			{
+				ref = CHERI::Capability{p}.address() - Offset;
+				return *this;
+			}
+
+			__always_inline OffsetPtrAddr &operator=(OffsetPtrAddr const &p)
+			{
+				ref = p.ref;
+				return *this;
+			}
+
+			/*
+			 * Since the context is used only for bounds, don't bother
+			 * implicitly converting both proxies up to T*.  This also probably
+			 * saves the optimizer the effort of cancelling the Offset
+			 * arithmetic on either side of the comparison.
+			 */
+
+			__always_inline bool operator==(OffsetPtrAddr &p)
+			{
+				return ref == p.ref;
+			}
+
+			__always_inline auto operator<=>(OffsetPtrAddr &p)
+			{
+				return ref <=> p.ref;
+			}
+		};
+		static_assert(Proxies<OffsetPtrAddr<8, void>, void>);
+
 	} // namespace proxy
 
 } // namespace ds::pointer
