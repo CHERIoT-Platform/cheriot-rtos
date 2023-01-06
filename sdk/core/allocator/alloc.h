@@ -1184,9 +1184,13 @@ class MState
 	}
 
 	// Unlink the first chunk from a smallbin.
-	void unlink_first_small_chunk(MChunk *b, MChunk *p, BIndex i)
+	MChunk *unlink_first_small_chunk(BIndex i)
 	{
-		MChunk *f = ptr2chunk(p->fd);
+		auto b = smallbin_at(i);
+		auto p = ptr2chunk(b->fd);
+
+		auto f = ptr2chunk(p->fd);
+
 		Debug::Assert(p != b, "Chunk {} is circularly referenced", p);
 		Debug::Assert(p != f, "Chunk {} is circularly referenced", p);
 		Debug::Assert(p->size_get() == small_index2size(i),
@@ -1207,6 +1211,8 @@ class MState
 		{
 			corruption_error_action();
 		}
+
+		return p;
 	}
 
 	// Insert chunk into tree.
@@ -1731,15 +1737,7 @@ class MState
 
 			if (smallbits & 0x1U)
 			{ // exact match
-				MChunk *b, *p;
-				b = smallbin_at(idx);
-				p = ptr2chunk(b->fd);
-				Debug::Assert(p->size_get() == small_index2size(idx),
-				              "Chunk {} has size {}, expected {}",
-				              p,
-				              p->size_get(),
-				              small_index2size(idx));
-				unlink_first_small_chunk(b, p, idx);
+				auto p = unlink_first_small_chunk(idx);
 				p->in_use_set();
 				mem = chunk2mem(p);
 
@@ -1748,22 +1746,12 @@ class MState
 
 			if (smallbits != 0)
 			{ // Use chunk in next nonempty smallbin.
-				MChunk *b, *p, *r;
-				size_t  rsize;
-				BIndex  i;
-				Binmap  leftbits =
+				Binmap leftbits =
 				  (smallbits << idx) & ds::bits::above_least(idx2bit(idx));
 				Binmap leastbit = ds::bits::isolate_least(leftbits);
-				i               = bit2idx(leastbit);
-				b               = smallbin_at(i);
-				p               = ptr2chunk(b->fd);
-				Debug::Assert(p->size_get() == small_index2size(i),
-				              "Chunk {} has size {}, expected {}",
-				              p,
-				              p->size_get(),
-				              small_index2size(i));
-				unlink_first_small_chunk(b, p, i);
-				rsize = small_index2size(i) - nb;
+				BIndex i        = bit2idx(leastbit);
+				auto   p        = unlink_first_small_chunk(i);
+				size_t rsize    = small_index2size(i) - nb;
 
 				if (rsize < MinChunkSize)
 				{
@@ -1772,7 +1760,7 @@ class MState
 				else
 				{
 					p->in_use_chunk_set(nb);
-					r = p->chunk_plus_offset(nb);
+					auto r = p->chunk_plus_offset(nb);
 					r->free_chunk_set(rsize);
 					insert_small_chunk(r, rsize);
 				}
