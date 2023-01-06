@@ -523,6 +523,60 @@ namespace ds::linked_list
 		static_assert(HasIsSingleton<PtrAddr>);
 		static_assert(HasIsDoubleton<PtrAddr>);
 
+		/**
+		 * Encode a linked list cons cell as a pair of addresses (but present an
+		 * interface in terms of pointers).  CHERI bounds on the returned
+		 * pointers are inherited from the pointer to `this` cons cell.
+		 */
+		template<ptrdiff_t Offset>
+		class OffsetPtrAddr
+		{
+			ptraddr_t prev, next;
+
+			public:
+			OffsetPtrAddr()
+			{
+				this->cell_reset();
+			}
+
+			/* Primops */
+
+			__always_inline void cell_reset()
+			{
+				prev = next = CHERI::Capability{this}.address() - Offset;
+			}
+
+			__always_inline auto cell_next()
+			{
+				return ds::pointer::proxy::OffsetPtrAddr<Offset, OffsetPtrAddr>(
+				  this, next);
+			}
+
+			__always_inline auto cell_prev()
+			{
+				return ds::pointer::proxy::OffsetPtrAddr<Offset, OffsetPtrAddr>(
+				  this, prev);
+			}
+
+			/*
+			 * Specialized implementations that may be slightly fewer
+			 * instructions than the generic approaches in terms of the primops.
+			 */
+
+			__always_inline bool cell_is_singleton()
+			{
+				return prev == CHERI::Capability{this}.address() - Offset;
+			}
+
+			__always_inline bool cell_is_doubleton()
+			{
+				return prev == next;
+			}
+		};
+		static_assert(HasCellOperationsReset<OffsetPtrAddr<0>>);
+		static_assert(HasIsSingleton<OffsetPtrAddr<0>>);
+		static_assert(HasIsDoubleton<OffsetPtrAddr<0>>);
+
 	} // namespace cell
 
 } // namespace ds::linked_list
