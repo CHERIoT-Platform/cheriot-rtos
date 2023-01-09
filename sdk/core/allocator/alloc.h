@@ -486,6 +486,27 @@ TChunk : public MChunk
 			return child[0];
 		return child[1];
 	}
+
+	static constexpr uintptr_t RingParent = 0;
+	static constexpr uintptr_t RootParent = 1;
+
+	bool is_root()
+	{
+		return reinterpret_cast<uintptr_t>(parent) == RootParent;
+	}
+	void mark_root()
+	{
+		parent = reinterpret_cast<TChunk *>(RootParent);
+	}
+
+	bool is_tree_ring()
+	{
+		return parent == reinterpret_cast<TChunk *>(RingParent);
+	}
+	void mark_tree_ring()
+	{
+		parent = reinterpret_cast<TChunk *>(RingParent);
+	}
 };
 
 class MState
@@ -997,11 +1018,11 @@ class MState
 		              t->size_get(),
 		              tsize);
 		Debug::Assert(
-		  t->parent != NULL, "Tree node {} has null parent poitner", t);
+		  !t->is_tree_ring(), "Tree node {} marked as tree ring node", t);
 		Debug::Assert(t->parent != t, "Chunk {} is its own parent", t);
-		Debug::Assert(t->parent->child[0] == t || t->parent->child[1] == t ||
-		                *reinterpret_cast<TChunk **>(t->parent) == t,
-		              "Chunk {} is not a child of its parent");
+		Debug::Assert(t->is_root() || t->parent->child[0] == t ||
+		                t->parent->child[1] == t,
+		              "Chunk {} is neither root nor a child of its parent");
 
 		/* Equal-sized chunks */
 		TChunk *u = ptr2tchunk(t->fd);
@@ -1012,9 +1033,8 @@ class MState
 			ok_free_chunk(u);
 			Debug::Assert(
 			  u->size_get() == tsize, "Large chunk {} has wrong size", u);
-			Debug::Assert(u->parent == nullptr,
-			              "Chunk {} is not in tree but has parent",
-			              u);
+			Debug::Assert(
+			  u->is_tree_ring(), "Chunk {} is not in tree but has parent", u);
 			Debug::Assert(u->child[0] == nullptr,
 			              "Chunk {} has no parent but has a child {}",
 			              u,
@@ -1226,8 +1246,8 @@ class MState
 		if (!is_treemap_marked(i))
 		{
 			treemap_mark(i);
-			*head     = x;
-			x->parent = reinterpret_cast<TChunk *>(head);
+			*head = x;
+			x->mark_root();
 			x->fd_assign(x);
 			x->bk_assign(x);
 		}
@@ -1270,7 +1290,7 @@ class MState
 						back->fd_assign(x);
 						x->fd_assign(t);
 						x->bk_assign(back);
-						x->parent = nullptr;
+						x->mark_tree_ring();
 						break;
 					}
 
@@ -1338,7 +1358,7 @@ class MState
 				}
 			}
 		}
-		if (xp != nullptr)
+		if (!x->is_tree_ring())
 		{
 			TChunk **h = treebin_at(x->index);
 			if (x == *h)
