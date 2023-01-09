@@ -58,7 +58,7 @@ namespace Revocation
 		 *
 		 * @param fill true to set, false to clear the bit
 		 */
-		void shadow_paint_single(size_t addr, bool fill)
+		void shadow_paint_single(ptraddr_t addr, bool fill)
 		{
 			Debug::Assert(addr > TCMBaseAddr,
 			              "Address {} is below the TCM base {}",
@@ -85,18 +85,19 @@ namespace Revocation
 		 *
 		 * @param fill true to set, false to clear the bits
 		 */
-		void shadow_paint_range(size_t base, size_t top, bool fill)
+		void shadow_paint_range(ptraddr_t base, ptraddr_t top, bool fill)
 		{
 			constexpr size_t ShadowWordAddrMask =
 			  (1U << (ShadowWordShift + MallocAlignShift)) - 1;
-			size_t baseUp  = (base + ShadowWordAddrMask) & ~ShadowWordAddrMask;
-			size_t topDown = top & ~ShadowWordAddrMask;
+			ptraddr_t baseUp =
+			  (base + ShadowWordAddrMask) & ~ShadowWordAddrMask;
+			ptraddr_t topDown = top & ~ShadowWordAddrMask;
 
 			// There isn't a single aligned shadow word for this range, so paint
 			// one bit at a time.
 			if (baseUp >= topDown)
 			{
-				for (size_t ptr = base; ptr < top; ptr += MallocAlignment)
+				for (ptraddr_t ptr = base; ptr < top; ptr += MallocAlignment)
 				{
 					shadow_paint_single(ptr, fill);
 				}
@@ -104,12 +105,12 @@ namespace Revocation
 			}
 
 			// First, paint the individual bits at the beginning.
-			for (size_t ptr = base; ptr < baseUp; ptr += MallocAlignment)
+			for (ptraddr_t ptr = base; ptr < baseUp; ptr += MallocAlignment)
 			{
 				shadow_paint_single(ptr, fill);
 			}
 			// Then, paint the aligned shadow words using word instructions.
-			for (size_t ptr = baseUp; ptr < topDown;
+			for (ptraddr_t ptr = baseUp; ptr < topDown;
 			     ptr += ShadowWordSizeBits * MallocAlignment)
 			{
 				size_t capoffset  = (ptr - TCMBaseAddr) >> MallocAlignShift;
@@ -118,7 +119,7 @@ namespace Revocation
 				shadowCap[capoffset >> ShadowWordShift] = shadowWord;
 			}
 			// Finally, paint individual bits at the end.
-			for (size_t ptr = topDown; ptr < top; ptr += MallocAlignment)
+			for (ptraddr_t ptr = topDown; ptr < top; ptr += MallocAlignment)
 			{
 				shadow_paint_single(ptr, fill);
 			}
