@@ -1198,9 +1198,13 @@ class MState
 	/// Unlink a chunk from a smallbin.
 	void unlink_small_chunk(MChunk *p, size_t s)
 	{
-		MChunk *f = MChunk::from_ring(p->ring.cell_next());
-		MChunk *b = MChunk::from_ring(p->ring.cell_prev());
-		BIndex  i = small_index(s);
+		auto   fr  = p->ring.cell_next();
+		auto  *f   = MChunk::from_ring(fr);
+		auto   br  = p->ring.cell_prev();
+		auto  *b   = MChunk::from_ring(br);
+		BIndex i   = small_index(s);
+		auto   bin = smallbin_at(i);
+
 		Debug::Assert(!ds::linked_list::is_singleton(&p->ring),
 		              "Chunk {} is circularly referenced",
 		              p);
@@ -1210,14 +1214,14 @@ class MState
 		              p->size_get(),
 		              small_index2size(i));
 
-		if (RTCHECK(&p->ring == smallbin_at(i)->last() ||
+		if (RTCHECK(&p->ring == bin->last() ||
 		            (ok_address(f->ptr()) && f->bk_equals(p))))
 		{
-			if (b == f)
+			if (br == fr)
 			{
 				// This is the last chunk in this bin.
 				smallmap_clear(i);
-				ds::linked_list::unsafe_remove(&p->ring);
+				bin->reset();
 			}
 			else if (RTCHECK(&p->ring == smallbin_at(i)->first() ||
 			                 (ok_address(b->ptr()) && b->fd_equals(p))))
