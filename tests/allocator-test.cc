@@ -4,6 +4,7 @@
 #define TEST_NAME "Allocator"
 #include "tests.hh"
 #include <debug.hh>
+#include <ds/xoroshiro.h>
 #include <futex.h>
 #include <global_constructors.hh>
 #include <thread.h>
@@ -159,6 +160,83 @@ namespace
 		futex_wait(&freeStart, 1);
 		allocations.clear();
 	}
+
+	/**
+	 * This test aims to exercise as many possibilities in the allocator as
+	 * possible.
+	 */
+	void test_fuzz()
+	{
+		static constexpr size_t MaxAllocs    = 256;
+		static constexpr size_t AllocSizes[] = {
+		  16, 64, 72, 96, 128, 256, 348, 1024};
+		static constexpr size_t NAllocSizes = std::size(AllocSizes);
+
+		ds::xoroshiro::P32R16 rand = {};
+		auto                  t    = Timeout(0); /* don't sleep */
+
+		auto doAlloc = [&](size_t sz) {
+			auto p = heap_allocate(sz, &t);
+
+			if (p != nullptr)
+			{
+				TEST(CHERI::Capability{p}.length() == sz, "Bad return length");
+				memset(p, 0xCA, sz);
+				allocations.push_back(p);
+			}
+		};
+
+		auto doFree = [&]() {
+			size_t ix       = rand.next() % allocations.size();
+			void  *p        = allocations[ix];
+			allocations[ix] = allocations.back();
+			allocations.pop_back();
+
+			TEST(CHERI::Capability{p}.is_valid(), "Double free {}", p);
+
+			free(p);
+		};
+
+		allocations.clear();
+		allocations.reserve(MaxAllocs);
+
+		for (size_t i = 0; i < 8 * TestIterations; ++i)
+		{
+			if ((i & 0x7) == 0)
+			{
+				/*
+				 * Some notion of progress on the console is useful, but don't
+				 * be too chatty.
+				 */
+				debug_log("fuzz i={}", i);
+			}
+
+			for (size_t j = rand.next() & 0xF; j > 0; j--)
+			{
+				if (allocations.size() < MaxAllocs)
+				{
+					size_t szix = rand.next() % NAllocSizes;
+					size_t sz   = AllocSizes[szix];
+					doAlloc(sz);
+				}
+			}
+
+			for (size_t j = rand.next() & 0xF; j > 0; j--)
+			{
+				if (allocations.size() > 0)
+				{
+					doFree();
+				}
+			}
+		}
+
+		for (auto allocation : allocations)
+		{
+			free(allocation);
+		}
+		allocations.clear();
+	}
+
 } // namespace
 
 /**
@@ -169,4 +247,5 @@ void test_allocator()
 	GlobalConstructors::run();
 	test_blocking_allocator();
 	test_revoke();
+	test_fuzz();
 }
