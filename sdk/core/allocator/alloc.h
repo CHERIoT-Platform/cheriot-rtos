@@ -873,7 +873,6 @@ class MState
 	void ok_in_use_chunk(MChunk *p) {}
 	void ok_free_chunk(MChunk *p) {}
 	void ok_malloced_chunk(void *mem, size_t s) {}
-	void ok_tree(TChunk *t) {}
 	void ok_treebin(BIndex i) {}
 	void ok_smallbin(BIndex i) {}
 	void ok_malloc_state() {}
@@ -983,12 +982,47 @@ class MState
 			              s);
 		}
 	}
+
+	/**
+	 * @brief Advance to the next tree chunk.
+	 */
+	void ok_tree_next(TChunk *from, TChunk *t)
+	{
+		if (from == t->parent)
+		{
+			/* Came from parent; descend as leftwards as we can */
+			if (t->child[0])
+			{
+				[[clang::musttail]] return ok_tree(t, t->child[0]);
+			}
+			if (t->child[1])
+			{
+				[[clang::musttail]] return ok_tree(t, t->child[1]);
+			}
+
+			/* Leaf nodes fall through */
+		}
+		else if (from == t->child[0] && t->child[1])
+		{
+			/* Came from left child; descend right if there is one */
+			[[clang::musttail]] return ok_tree(t, t->child[1]);
+		}
+
+		if (!t->is_root())
+		{
+			/* Leaf node or came from rightmost child; ascend */
+			[[clang::musttail]] return ok_tree_next(t, t->parent);
+		}
+
+		/* Otherwise, we are the root node and we have nowhere to go, so stop */
+	}
 	/**
 	 * @brief Sanity check all the chunks in a tree.
 	 *
+	 * @param from the previously visited node or TChunk::RootParent
 	 * @param t the root of a whole tree or a subtree
 	 */
-	void ok_tree(TChunk *t)
+	void ok_tree(TChunk *from, TChunk *t)
 	{
 		BIndex tindex = t->index;
 		size_t tsize  = t->size_get();
@@ -1064,7 +1098,6 @@ class MState
 				              t,
 				              t->child[childIndex],
 				              tsize);
-				ok_tree(t->child[childIndex]);
 			}
 		};
 		checkChild(0);
@@ -1075,6 +1108,8 @@ class MState
 			              "Chunk {}'s children are not sorted by size",
 			              t);
 		}
+
+		[[clang::musttail]] return ok_tree_next(from, t);
 	}
 	// Sanity check the tree at treebin[i].
 	void ok_treebin(BIndex i)
@@ -1088,7 +1123,9 @@ class MState
 		}
 		if (!empty)
 		{
-			ok_tree(t);
+			Debug::Assert(
+			  t->is_root(), "Non-empty bin has non-root tree node {}", t);
+			ok_tree(t->parent, t);
 		}
 	}
 	// Sanity check smallbin[i].
