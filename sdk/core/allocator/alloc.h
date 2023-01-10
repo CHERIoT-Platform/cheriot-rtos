@@ -186,6 +186,47 @@ MChunkHeader
 		static_assert(sizeof(*this) == sizeof(uintptr_t));
 		*reinterpret_cast<uintptr_t *>(this) = 0;
 	}
+
+	bool is_in_use()
+	{
+		return isCurrInUse;
+	}
+
+	bool is_prev_in_use()
+	{
+		return isPrevInUse;
+	}
+
+	MChunkHeader *chunk_plus_offset(size_t s)
+	{
+		CHERI::Capability<void> ptr{this};
+		ptr.address() += s;
+		return ptr.cast<MChunkHeader>();
+	}
+
+	// size of the previous chunk
+	size_t prevsize_get()
+	{
+		return head2size(sprev);
+	}
+
+	// size of this chunk
+	size_t size_get()
+	{
+		return head2size(shead);
+	}
+
+	void mark_in_use()
+	{
+		isCurrInUse                                = true;
+		chunk_plus_offset(size_get())->isPrevInUse = true;
+	}
+
+	void mark_free()
+	{
+		isCurrInUse                                = false;
+		chunk_plus_offset(size_get())->isPrevInUse = false;
+	}
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
@@ -321,11 +362,11 @@ MChunk
 	public:
 	bool is_in_use()
 	{
-		return header.isCurrInUse;
+		return header.is_in_use();
 	}
 	bool is_prev_in_use()
 	{
-		return header.isPrevInUse;
+		return header.is_prev_in_use();
 	}
 
 	// Treat the thing at thischunk + s as a chunk.
@@ -349,12 +390,12 @@ MChunk
 	// size of the previous chunk
 	size_t prevsize_get()
 	{
-		return head2size(header.sprev);
+		return header.prevsize_get();
 	}
 	// size of this chunk
 	size_t size_get()
 	{
-		return head2size(header.shead);
+		return header.size_get();
 	}
 	/**
 	 * Set the size of this chunk, which also takes care of converting sz into
