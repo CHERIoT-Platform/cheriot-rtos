@@ -426,6 +426,30 @@ MChunk
 	{
 		return revoker.has_revocation_finished_for_epoch(epochEnq);
 	}
+
+	/**
+	 * Erase the header fields
+	 */
+	void header_clear()
+	{
+		sprev = shead = 0;
+		isCurrInUse = isPrevInUse = 0;
+		epochEnq                  = 0;
+	}
+
+	/**
+	 * Erase the MChunk-specific metadata of this chunk (specifically, ring)
+	 * without changing its header.
+	 */
+	__always_inline void metadata_clear()
+	{
+		/*
+		 * This is spelled slightly oddly as using memset results in a call
+		 * rather than a single store instruction.
+		 */
+		static_assert(sizeof(ring) == sizeof(uintptr_t));
+		*reinterpret_cast<uintptr_t *>(&this->ring) = 0;
+	}
 };
 static_assert(sizeof(MChunk) == 16);
 // the minimum size of a chunk (including the header)
@@ -482,6 +506,14 @@ TChunk : public MChunk
 	TChunk *parent;
 	// the tree index this chunk is in
 	BIndex index;
+	/*
+	 * There's padding to alignment here, so if we needed more metadata, it
+	 * could be "free", in spatial terms.
+	 *
+	 * This padding doesn't break our targeted zeroing in metadata_clear()
+	 * because said padding will be zeroed before we view the chunk as a TChunk
+	 * and we won't store to it.
+	 */
 
 	TChunk *leftmost_child()
 	{
@@ -534,6 +566,13 @@ TChunk : public MChunk
 	{
 		ds::linked_list::emplace_before(&ring, &t->ring);
 		t->mark_tree_ring();
+	}
+
+	__always_inline void metadata_clear()
+	{
+		static_cast<MChunk *>(this)->metadata_clear();
+		child[0] = child[1] = parent = nullptr;
+		index                        = 0;
 	}
 };
 
@@ -832,29 +871,6 @@ class MState
 			word = nullptr;
 			return false;
 		});
-	}
-
-	/// Zero all metadata fields.
-	template<bool IncludeHeader>
-	static void metadata_zero(MChunk *chunk)
-	{
-		// Sadly, we cannot just treat an MChunk as an MChunk, because it's
-		// possible it used to be a TChunk. So, we always have to zero as much
-		// as possible, up to how much a TChunk uses for metadata.
-		size_t sz = std::min(chunk->size_get(), sizeof(TChunk));
-		void  *start;
-		if constexpr (IncludeHeader)
-		{
-			start = chunk;
-		}
-		else
-		{
-			start = chunk2mem(chunk);
-			sz -= ChunkOverhead;
-		}
-		// We can use memset(), but we know things are nicely aligned so just
-		// use the helper for zeroing.
-		capaligned_zero(start, sz);
 	}
 
 	/**
@@ -1237,6 +1253,8 @@ class MState
 		{
 			corruption_error_action();
 		}
+
+		p->metadata_clear();
 	}
 
 	// Unlink the first chunk from a smallbin.
@@ -1264,6 +1282,8 @@ class MState
 		              p,
 		              p->size_get(),
 		              small_index2size(i));
+
+		p->metadata_clear();
 
 		return p;
 	}
@@ -1347,6 +1367,8 @@ class MState
 	 *     because on average a node in a tree is near the bottom.
 	 * 3. If x is the base of a chain (i.e., has parent links) relink
 	 *     x's parent and children to x's replacement (or null if none).
+	 *
+	 * Always zeros the chunk linkages.
 	 */
 	void unlink_large_chunk(TChunk *x)
 	{
@@ -1450,6 +1472,8 @@ class MState
 				}
 			}
 		}
+
+		x->metadata_clear();
 	}
 
 	/**
@@ -1484,7 +1508,8 @@ class MState
 	 * @brief Find the smallest chunk in t and allocate nb bytes from it.
 	 *
 	 * @return Should always succeed because we made sure this tree has chunks
-	 * and all chunks in this tree are larger than nb.
+	 * and all chunks in this tree are larger than nb.  The chunk holding the
+	 * returned memory has had its linkages cleared.
 	 */
 	void *tmalloc_smallest(TChunk *t, size_t nb)
 	{
@@ -1545,7 +1570,11 @@ class MState
 		return nullptr;
 	}
 
-	// Allocate a large request from the best fitting chunk in a treebin.
+	/**
+	 * Allocate a large request from the best fitting chunk in a treebin.
+	 *
+	 * The chunk holding the returned memory has had its linkages cleared.
+	 */
 	void *tmalloc_large(size_t nb)
 	{
 		TChunk *v     = nullptr;
@@ -1614,6 +1643,8 @@ class MState
 	 * @brief Allocate a small request from a tree bin. It should return a valid
 	 * chunk successfully as long as one tree exists, because all tree chunks
 	 * are larger than a small request.
+	 *
+	 * The chunk holding the returned memory has had its linkages cleared.
 	 */
 	void *tmalloc_small(size_t nb)
 	{
@@ -1657,7 +1688,7 @@ class MState
 				if (RTCHECK(ok_address(prev->ptr())))
 				{ // Consolidate backward.
 					unlink_chunk(p, prevsize);
-					metadata_zero<true>(current);
+					current->header_clear();
 				}
 				else
 				{
@@ -1672,7 +1703,7 @@ class MState
 					size_t nsize = next->size_get();
 					psize += nsize;
 					unlink_chunk(next, nsize);
-					metadata_zero<true>(next);
+					next->header_clear();
 				}
 				p->free_chunk_set(psize);
 
@@ -1749,8 +1780,17 @@ class MState
 				break;
 			}
 
-			/* mspace_free_internal will rebuild the ring as a singleton */
+			/*
+			 * Detach from quarantine and zero the ring linkage; the rest of
+			 * this chunk, apart from its header, is also zero, thanks to the
+			 * capaligned_zero() done in mspace_free() before the chunk was
+			 * put into quarantine.  mspace_free_internal() will either rebuild
+			 * this cons cell, if it cannot consolidate backwards, or it will
+			 * discard the idea that this is a link cell at all by detaching
+			 * and clearing fore's header.
+			 */
 			ds::linked_list::unsafe_remove(&fore->ring);
+			fore->metadata_clear();
 
 			heapQuarantineSize -= fore->size_get();
 			mspace_free_internal(fore);
@@ -1770,7 +1810,6 @@ class MState
 		// list without errors. Zero the user portion metadata.
 		MChunk *finalChunk = mem2chunk(mem);
 		size_t  finalSz    = finalChunk->size_get();
-		metadata_zero<false>(finalChunk);
 		// We sanity check that things off the free list are indeed zeroed out.
 		Debug::Assert(capaligned_range_do(mem,
 		                                  finalSz - ChunkOverhead,
@@ -1805,6 +1844,7 @@ class MState
 			{ // exact match
 				auto p = unlink_first_small_chunk(idx);
 				p->in_use_set();
+				p->metadata_clear();
 				mem = chunk2mem(p);
 
 				return mspace_malloc_success(mem, nb);
@@ -1830,6 +1870,7 @@ class MState
 					r->free_chunk_set(rsize);
 					insert_small_chunk(r, rsize);
 				}
+				p->metadata_clear();
 				mem = chunk2mem(p);
 
 				return mspace_malloc_success(mem, nb);
