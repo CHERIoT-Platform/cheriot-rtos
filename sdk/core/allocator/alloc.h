@@ -793,7 +793,7 @@ class MState
 	 *
 	 * Returns true if any objects were dequeued, false otherwise.
 	 */
-	bool quarantine_dequeue()
+	__always_inline bool quarantine_dequeue()
 	{
 		// 4 chosen by fair die roll.
 		return mspace_qtbin_deqn(4) > 0;
