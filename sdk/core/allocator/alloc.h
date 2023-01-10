@@ -928,13 +928,15 @@ class MState
 			Debug::Assert(
 			  next->prevsize_get() == sz,
 			  "Chunk {} has size {}, next node expects its size to be {}",
+			  next,
 			  sz,
 			  next->prevsize_get());
 			Debug::Assert(p->is_prev_in_use(),
-			              "Free chunk {} should follow an in-use chunk");
-			Debug::Assert(
-			  next->is_in_use(),
-			  "Free chunk {} should be followed by an in-use chunk");
+			              "Free chunk {} should follow an in-use chunk",
+			              p);
+			Debug::Assert(next->is_in_use(),
+			              "Free chunk {} should be followed by an in-use chunk",
+			              next);
 			Debug::Assert(
 			  ptr2chunk(p->fd)->bk_equals(p),
 			  "Forward and backwards chunk pointers are inconsistent for {}",
@@ -1056,7 +1058,8 @@ class MState
 		Debug::Assert(t->parent != t, "Chunk {} is its own parent", t);
 		Debug::Assert(t->is_root() || t->parent->child[0] == t ||
 		                t->parent->child[1] == t,
-		              "Chunk {} is neither root nor a child of its parent");
+		              "Chunk {} is neither root nor a child of its parent",
+		              t);
 
 		/* Equal-sized chunks */
 		TChunk *u = ptr2tchunk(t->fd);
@@ -1516,7 +1519,8 @@ class MState
 			              v->size_get(),
 			              rsize + nb);
 			Debug::Assert(v->is_prev_in_use(),
-			              "Free chunk {} follows another free chunk");
+			              "Free chunk {} follows another free chunk",
+			              v);
 			if (RTCHECK(v->ok_next(r)))
 			{
 				unlink_large_chunk(v);
