@@ -63,35 +63,17 @@ namespace
 			return nullptr;
 		}
 
-		// At this point, the entire heap should be zeroed.
-		size_t firstchunksize = tsize - msize - ChunkOverhead;
-
-		MChunk    *msp = tbase.cast<MChunk>();
-		Capability m{chunk2mem(msp).cast<MState>()};
+		Capability m{tbase.cast<MState>()};
 
 		m.bounds()            = sizeof(*m);
 		m->heapStart          = tbase;
 		m->heapStart.bounds() = tsize;
+		m->heapStart.address() += msize;
 		m->init_bins();
-		msp->in_use_chunk_set(msize);
 
-		MChunk *mn = msp->chunk_next();
-		mn->in_use_chunk_set(firstchunksize);
+		m->mspace_firstchunk_add(ds::pointer::offset<void>(tbase.get(), msize),
+		                         tsize - msize);
 
-		MChunk *footer = mn->chunk_next();
-		// The footer is a fake chunk with only the header.
-		footer->footchunk_set(ChunkOverhead);
-		// The footer should be at the very end of this region.
-		Debug::Assert(chunk2mem(footer).address() == (tbase.address() + tsize),
-		              "Footer ({}) is not at the end of the region {} + {}",
-		              chunk2mem(footer),
-		              tbase,
-		              tsize);
-		/*
-		 * Treat the chunk between the MState and the footer as a free chunk,
-		 * and add it to the free lists.
-		 */
-		m->mspace_firstchunk_add(mn);
 		return m;
 	}
 
