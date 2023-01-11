@@ -359,6 +359,43 @@ MChunkHeader
 
 		return newnext;
 	}
+
+	/**
+	 * Build an initial pair of chunk headers.  The returned header is at the
+	 * indicated base and is suitable for installation into a free list (or
+	 * tree).  The other header is a sentinel of sorts, at the end of the
+	 * indicated span of memory.  To prevent the system from attempting to walk
+	 * beyond these bounds, ficitious "in use" bits are set true: the first
+	 * chunk claims that its predecessor is in use and the second claims that
+	 * it itself is.
+	 *
+	 * This function is marked always-inlined as it is called exactly once.
+	 */
+	__always_inline static MChunkHeader *make(void *base, size_t size)
+	{
+		size -= sizeof(MChunkHeader);
+
+		auto first = static_cast<MChunkHeader *>(base);
+		first->clear();
+		first->shead       = size2head(size);
+		first->isPrevInUse = true;
+		first->isCurrInUse = false;
+
+		/*
+		 * The first header is now set up, but the link to the footer is not
+		 * well formed!  Despite that, we can still find our footer via the
+		 * next operator...
+		 */
+
+		auto footer = first->cell_next();
+		footer->clear();
+		footer->sprev       = size;
+		footer->shead       = size2head(sizeof(MChunkHeader));
+		footer->isPrevInUse = false;
+		footer->isCurrInUse = true;
+
+		return first;
+	}
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
@@ -560,17 +597,7 @@ MChunk
 		header.isCurrInUse              = false;
 		header.cell_next()->isPrevInUse = false;
 	}
-	/**
-	 * @brief Set this chunk as an in-use chunk with a given size, which takes
-	 * care of setting fields in the next chunk as well.
-	 *
-	 * @param sz the size of this chunk
-	 */
-	void in_use_chunk_set(size_t sz)
-	{
-		size_set(sz);
-		in_use_set();
-	}
+
 	/**
 	 * @brief Set this chunk as a free chunk with a given size, which takes care
 	 * of setting fields in the next chunk as well.
@@ -581,17 +608,6 @@ MChunk
 	{
 		size_set(sz);
 		in_use_clear();
-	}
-	/**
-	 * Set this chunk as the footer chunk of a region.
-	 *
-	 * The reason why we can't use the above functions is that this is the very
-	 * end of a region and there's no next chunk to play with.
-	 */
-	void footchunk_set(size_t sz)
-	{
-		header.isCurrInUse = true;
-		header.shead       = size2head(sz);
 	}
 
 	// Is the bk field pointing to p?
@@ -910,7 +926,7 @@ class MState
 	 * free() from coalescing below and above, unless you really know what you
 	 * are doing.
 	 */
-	void mspace_firstchunk_add(MChunk *p)
+	void mspace_firstchunk_add(void *base, size_t size)
 	{
 		// Should only be called once during mstate_init() for now.
 		Debug::Assert((heapTotalSize == 0) && (heapFreeSize == 0),
@@ -918,8 +934,12 @@ class MState
 		              "free size {} should both be 0",
 		              heapTotalSize,
 		              heapFreeSize);
-		heapTotalSize += p->size_get();
-		mspace_free_internal(p);
+
+		auto p = MChunkHeader::make(base, size);
+
+		heapTotalSize += size;
+		heapFreeSize += p->size_get();
+		insert_chunk(MChunk::from_header(p), p->size_get());
 	}
 
 	/**
@@ -1119,7 +1139,7 @@ class MState
 #else
 	bool ok_address(ptraddr_t a)
 	{
-		return a >= heapStart.address();
+		return a >= heapStart.base();
 	}
 	bool ok_address(void *p)
 	{
