@@ -1503,6 +1503,13 @@ class MState
 			}
 		}
 
+		/*
+		 * Prefer to unlink a ring node rather than a tree node, as this
+		 * simplifies the work in unlink_large_chunk() below, leaving the
+		 * tree structure unmodified.
+		 */
+		v = TChunk::from_ring(v->ring.cell_next());
+
 		if (RTCHECK(ok_address(v->ptr())))
 		{
 			MChunk *r = v->chunk_plus_offset(nb);
