@@ -55,12 +55,12 @@ static_assert(NSmallBins < utils::bytes2bits(sizeof(Binmap)));
 static_assert(NTreeBins < utils::bytes2bits(sizeof(Binmap)));
 
 // Convert small size header into the actual size in bytes.
-static inline size_t head2size(SmallSize h)
+static inline constexpr size_t head2size(SmallSize h)
 {
 	return static_cast<size_t>(h) << MallocAlignShift;
 }
 // Convert byte size into small size header.
-static inline SmallSize size2head(size_t s)
+static inline constexpr SmallSize size2head(size_t s)
 {
 	return s >> MallocAlignShift;
 }
