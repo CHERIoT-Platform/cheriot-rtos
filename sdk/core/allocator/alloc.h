@@ -255,16 +255,36 @@ namespace displacement_proxy
  * classic malloc, not something like a slab or sizeclass allocator or a
  * "BIBOP"-inspired design.
  *
- * This header uses relative displacements to refer to the address-order prior
- * and next adjacent headers.  The details of encoding are encapsulated using
- * the displacement_proxy::Proxy above.
+ * This header uses relative displacements to refer to the address-order
+ * predecessor and successor adjacent headers.  The details of encoding are
+ * encapsulated using the displacement_proxy::Proxy above and the
+ * cell_{next,prev} methods herein.
+ *
+ * Chunks are in one of three states:
+ *
+ *   - Allocated / "In Use" by the application
+ *
+ *       - Not indexed by any other structures in the MState
+ *
+ *   - Quarantined (until revocation scrubs inward pointers from the system)
+ *
+ *       - Collected in a quarantine ring using the MChunk::ring linkages
+ *
+ *   - Free for allocation
+ *
+ *       - Collected in a smallbin ring (using MChunk::ring) or in a treebin
+ *       ring (using either/both the TChunk and MChunk::ring links).
  */
 struct __packed __aligned(MallocAlignment)
 MChunkHeader
 {
-	// compressed size of the previous chunk
+	/**
+	 * Compressed size of the predecessor chunk.  See cell_prev().
+	 */
 	SmallSize sprev;
-	// compressed size of this chunk
+	/**
+	 * Compressed size of this chunk.  See cell_next().
+	 */
 	SmallSize shead;
 
 	bool isPrevInUse : 1;
@@ -410,21 +430,25 @@ static_assert(std::is_standard_layout_v<MChunkHeader>);
 static_assert(ds::linked_list::cell::HasCellOperations<MChunkHeader>);
 
 /**
- * When chunks are not in use, they are treated as nodes of either
+ * When chunks are not allocated, they are treated as nodes of either
  * lists or trees.
  *
- * Larger chunks are kept in a form of bitwise digital trees (aka
- * tries) keyed on chunksizes.  Because TChunk are only for
+ * Free small chunks are stored as MChunk-s on a ring threaded through
+ * one of the smallbin[] sentinels.
+ *
+ * Larger free chunks are indexed in a form of bitwise digital trees
+ * (aka tries) keyed on chunksizes.  Because TChunk are only for
  * free chunks greater than 64 bytes, their size doesn't impose any
  * constraints on user chunk sizes.
  *
  * Each tree holding treenodes is a tree of unique chunk sizes.  Chunks
- * of the same size are arranged in a circularly-linked list, with only
- * the oldest chunk (the next to be used, in our FIFO ordering)
- * actually in the tree.  (Tree members are distinguished by a non-null
- * parent pointer.)  If a chunk with the same size an an existing node
- * is inserted, it is linked off the existing node using pointers that
- * work in the same way as fd/bk pointers of small chunks.
+ * of the same size are arranged in a circularly-linked list (a "tree
+ * ring"), with only one chunk per size actually in the tree, whose
+ * ring link field serves as the tree ring's sentinel.  (Large nodes
+ * are distinguished by their parent pointer, with tree roots and
+ * tree ring nodes having designated values.)  If a chunk with the same
+ * size an an existing node is inserted, it is linked off the existing
+ * node using the MChunk::ring field.
  *
  * Each tree contains a power of 2 sized range of chunk sizes (the
  * smallest is 0x100 <= x < 0x180), which is is divided in half at each
@@ -1825,7 +1849,7 @@ class MState
 		BIndex  idx = compute_tree_index(nb);
 		if ((t = *treebin_at(idx)) != nullptr)
 		{
-			// Traverse tree for this bin looking for node with size == nb.
+			// Traverse tree for this bin looking for node with size >= nb.
 			size_t  sizebits = nb << leftshift_for_tree_index(idx);
 			TChunk *rst      = nullptr; // the deepest untaken right subtree
 			for (;;)
