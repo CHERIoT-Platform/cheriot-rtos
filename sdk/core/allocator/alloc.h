@@ -1935,50 +1935,35 @@ class MState
 	void mspace_free_internal(MChunk *p)
 	{
 		ok_in_use_chunk(p);
-		size_t psize = 0, psizeold = 0;
-		if (RTCHECK(ok_address(p->ptr()) && p->ok_in_use()))
+
+		// Clear the shadow bits.
+		revoker.shadow_paint_range(
+		  chunk2mem(p).address(), p->chunk_next()->ptr(), false);
+
+		heapFreeSize += p->size_get();
+
+		if (!p->is_prev_in_use())
 		{
-			// Clear the shadow bits.
-			revoker.shadow_paint_range(
-			  chunk2mem(p).address(), p->chunk_next()->ptr(), false);
-			psize           = p->size_get();
-			psizeold        = psize;
-			MChunk *current = p;
-			MChunk *next    = p->chunk_next();
-			if (!p->is_prev_in_use())
-			{
-				size_t  prevsize = p->prevsize_get();
-				MChunk *prev     = p->chunk_prev();
-				psize += prevsize;
-				p = prev;
-				if (RTCHECK(ok_address(prev->ptr())))
-				{ // Consolidate backward.
-					unlink_chunk(p, prevsize);
-					current->header.clear();
-				}
-				else
-				{
-					corruption_error_action();
-				}
-			}
-
-			if (RTCHECK(p->ok_next(next) && next->ok_prev_in_use()))
-			{
-				if (!next->is_in_use()) // Consolidate forward.
-				{
-					size_t nsize = next->size_get();
-					psize += nsize;
-					unlink_chunk(next, nsize);
-					next->header.clear();
-				}
-				p->free_chunk_set(psize);
-
-				insert_chunk(p, psize);
-				ok_free_chunk(p);
-			}
+			// Consolidate backward
+			MChunk *prev = p->chunk_prev();
+			unlink_chunk(prev, prev->size_get());
+			ds::linked_list::unsafe_remove_link(&prev->header, &p->header);
+			p->header.clear();
+			p = prev;
 		}
 
-		heapFreeSize += psizeold;
+		MChunk *next = p->chunk_next();
+		if (!next->is_in_use())
+		{
+			// Consolidate forward
+			unlink_chunk(next, next->size_get());
+			ds::linked_list::unsafe_remove_link(&p->header, &next->header);
+			next->header.clear();
+		}
+
+		p->in_use_clear();
+		insert_chunk(p, p->size_get());
+		ok_free_chunk(p);
 	}
 
 	/**
