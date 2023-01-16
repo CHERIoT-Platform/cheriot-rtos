@@ -2054,6 +2054,9 @@ class MState
 		void  *mem;
 		size_t nb;
 
+		/* Move O(1) nodes from quarantine, if any are available */
+		quarantine_dequeue();
+
 		if (bytes <= MaxSmallRequest)
 		{
 			BIndex idx;
@@ -2109,16 +2112,9 @@ class MState
 
 		/*
 		 * Exhausted all allocation options. Force start a revocation or
-		 * continue with synchronous revocation. If kick returns 0, then there's
-		 * nothing in the quarantine and we run out of memory for real.
-		 *
-		 * If we do have leftovers in the quarantine, dequeue the entire
-		 * quarantine and punt to the caller to retry.
+		 * continue with synchronous revocation.
 		 */
-		if (mspace_bg_revoker_kick<true>())
-		{
-			mspace_qtbin_deqn(UINT32_MAX);
-		}
+		mspace_bg_revoker_kick<true>();
 		return nullptr;
 	}
 
