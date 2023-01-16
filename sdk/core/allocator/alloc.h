@@ -11,6 +11,7 @@
 #include <ds/bits.h>
 #include <ds/linked_list.h>
 #include <ds/pointer.h>
+#include <ds/ring_buffer.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -290,10 +291,7 @@ MChunkHeader
 	bool isPrevInUse : 1;
 	bool isCurrInUse : 1;
 
-	// the revocation epoch when this chunk is quarantined.
-	// TODO: handle overflow, especially when we add other fields which reduce
-	// the bit width of the epoch in the future.
-	size_t epochEnq : 30;
+	/* There are 30 bits free in the header here for future use */
 
 	public:
 	__always_inline auto cell_prev()
@@ -432,6 +430,9 @@ static_assert(ds::linked_list::cell::HasCellOperations<MChunkHeader>);
 /**
  * When chunks are not allocated, they are treated as nodes of either
  * lists or trees.
+ *
+ * Quarantined chunks of any size are stored as MChunk-s on a ring
+ * threaded through one of the quarantine sentinels.
  *
  * Free small chunks are stored as MChunk-s on a ring threaded through
  * one of the smallbin[] sentinels.
@@ -651,18 +652,6 @@ MChunk
 		return MChunk::from_header(header.split(offset));
 	}
 
-	// Write the revocation epoch into the header.
-	void epoch_write()
-	{
-		header.epochEnq = revoker.system_epoch_get();
-	}
-
-	// Has this chunk gone through a full revocation pass?
-	bool is_revocation_done()
-	{
-		return revoker.has_revocation_finished_for_epoch(header.epochEnq);
-	}
-
 	/**
 	 * Erase the MChunk-specific metadata of this chunk (specifically, ring)
 	 * without changing its header.
@@ -824,12 +813,41 @@ class MState
 	/* Tree root nodes for each large bin */
 	TChunk *treebins[NTreeBins];
 
-	RingSentinel quarantineSentinel;
+	/*
+	 * Chunks may be enqueued into quarantine in at most three different epochs.
+	 * The opening of a fourth epoch necessarily implies that the eldest of the
+	 * three being tracked is finished.
+	 *
+	 * Each pending quarantine ring has a sentinel and an epoch.  The rings are
+	 * threaded through MChunk::ring-s.  We don't struct-ure these together to
+	 * avoid some padding.  We use a small ring buffer Cursors object to tell us
+	 * which one to use.  There's some redundancy in this aggregate encoding,
+	 * but it's small.
+	 */
+	static constexpr size_t QuarantineRings = 3;
+	RingSentinel            quarantinePendingChunks[QuarantineRings];
+	size_t                  quarantinePendingEpoch[QuarantineRings];
+	ds::ring_buffer::Cursors<Debug, QuarantineRings, uint8_t>
+	  quarantinePendingRing;
 
-	auto quarantine_get()
+	RingSentinel *quarantine_pending_get(size_t ix)
 	{
 		return rederive<RingSentinel>(
-		  CHERI::Capability{&quarantineSentinel}.address());
+		  CHERI::Capability{&quarantinePendingChunks[ix]}.address());
+	}
+
+	/*
+	 * Chunks that have progressed through quarantine completely are moved onto
+	 * this ring to be dequeued into the free bins above.  Entire _pending rings
+	 * can move in O(1) onto this ring, but each chunk needs individual
+	 * attention to be pushed into bins.
+	 */
+	RingSentinel quarantineFinishedSentinel;
+
+	auto quarantine_finished_get()
+	{
+		return rederive<RingSentinel>(
+		  CHERI::Capability{&quarantineFinishedSentinel}.address());
 	}
 
 	// bitmap telling which bins are empty which are not
@@ -909,7 +927,13 @@ class MState
 		// The treebins should be all nullptrs due to memset earlier.
 
 		// Initialise quarantine
-		quarantineSentinel.reset();
+		for (auto &quarantinePendingChunk : quarantinePendingChunks)
+		{
+			quarantinePendingChunk.reset();
+		}
+		quarantinePendingRing.reset();
+		quarantineFinishedSentinel.reset();
+		heapQuarantineSize = 0;
 	}
 
 	/**
@@ -1053,12 +1077,21 @@ class MState
 		 * are already there will be addressed (either zeroed or reloaded and,
 		 * so, tag-cleared) when we return from this compartment.
 		 */
-		p->epoch_write();
 
-		// Place it on the quarantine list after writing epoch.
-		auto quarantine = quarantine_get();
+		auto epoch = revoker.system_epoch_get();
 
-		quarantine->append_emplace(&p->ring);
+		/*
+		 * We may need to insert onto a new epoch's ring in quarantine.  If it
+		 * happens that all the pending rings are full, we might need to also
+		 * pull one out first.
+		 */
+		quarantine_pending_to_finished();
+
+		/*
+		 * Enqueue this chunk to quarantine.  Its header is still marked as
+		 * being allocated.
+		 */
+		quarantine_pending_push(epoch, p);
 
 		heapQuarantineSize += p->size_get();
 		// Dequeue 3 times. 3 is chosen randomly. 2 is at least needed.
@@ -1073,6 +1106,8 @@ class MState
 	 */
 	__always_inline bool quarantine_dequeue()
 	{
+		quarantine_pending_to_finished();
+
 		// 4 chosen by fair die roll.
 		return mspace_qtbin_deqn(4) > 0;
 	}
@@ -1938,6 +1973,71 @@ class MState
 	}
 
 	/**
+	 * Move a pending quarantine ring whose epoch is now past onto the finished
+	 * quarantine ring.
+	 */
+	void quarantine_pending_to_finished()
+	{
+		if (quarantinePendingRing.is_empty())
+		{
+			for (size_t ix = 0; ix < QuarantineRings; ix++)
+			{
+				Debug::Assert(quarantine_pending_get(ix)->is_empty(),
+				              "Empty quarantine with non-empty ring!");
+			}
+		}
+
+		decltype(quarantinePendingRing)::Ix oldestPendingIx;
+		if (!quarantinePendingRing.head_get(oldestPendingIx))
+		{
+			return;
+		}
+
+		if (!revoker.has_revocation_finished_for_epoch(
+		      quarantinePendingEpoch[oldestPendingIx]))
+		{
+			return;
+		}
+
+		auto qring = quarantine_pending_get(oldestPendingIx);
+
+		/*
+		 * If and when we support consolidation in quarantine, it may happen
+		 * that this ring is empty, because everything that was here got
+		 * consolidated with younger chunks.  Until then, this is_empty()
+		 * check is somewhat redundant, but take_all() behaves poorly on
+		 * empty rings, so best to have it.
+		 */
+		if (!qring->is_empty())
+		{
+			quarantine_finished_get()->append(qring->take_all());
+		}
+
+		quarantinePendingRing.head_advance();
+	}
+
+	/**
+	 * Push a chunk to a pending quarantine ring, possibly opening a new one
+	 */
+	void quarantine_pending_push(size_t epoch, MChunk *chunk)
+	{
+		decltype(quarantinePendingRing)::Ix youngestPendingIx;
+
+		if (!quarantinePendingRing.tail_get(youngestPendingIx) ||
+		    quarantinePendingEpoch[youngestPendingIx] != epoch)
+		{
+			/* Open a new pending ring */
+			auto opened = quarantinePendingRing.tail_next(youngestPendingIx);
+			quarantinePendingRing.tail_advance();
+			Debug::Assert(opened, "Failed to open epoch ring");
+
+			quarantinePendingEpoch[youngestPendingIx] = epoch;
+		}
+
+		quarantine_pending_get(youngestPendingIx)->append_emplace(&chunk->ring);
+	}
+
+	/**
 	 * @brief Start revocation if this MState has accumulated enough things in
 	 * quarantine or the free space is too low.
 	 * @param Force force start a revocation regardless of heuristics
@@ -1982,7 +2082,7 @@ class MState
 	int mspace_qtbin_deqn(size_t loops)
 	{
 		int  dequeued   = 0;
-		auto quarantine = quarantine_get();
+		auto quarantine = quarantine_finished_get();
 
 		for (size_t i = 0; i < loops; i++)
 		{
@@ -1990,17 +2090,6 @@ class MState
 				break;
 
 			MChunk *fore = MChunk::from_ring(quarantine->first());
-
-			/*
-			 * We organise the quarantine list in a way that places young chunks
-			 * at the tail. If we see a chunk that is too young to be dequeued
-			 * when starting from the front, then we know no remaining chunks
-			 * can be dequeued because they can only be younger.
-			 */
-			if (!fore->is_revocation_done())
-			{
-				break;
-			}
 
 			/*
 			 * Detach from quarantine and zero the ring linkage; the rest of
