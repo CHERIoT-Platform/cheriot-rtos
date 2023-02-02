@@ -64,7 +64,7 @@ namespace Revocation
 			              "Address {} is below the TCM base {}",
 			              addr,
 			              TCMBaseAddr);
-			size_t   capoffset  = (addr - TCMBaseAddr) >> MALLOC_ALIGNSHIFT;
+			size_t   capoffset  = (addr - TCMBaseAddr) >> MallocAlignShift;
 			WordT    shadowWord = shadowCap[capoffset >> ShadowWordShift];
 			uint32_t mask       = (1U << (capoffset & ShadowWordMask));
 
@@ -88,7 +88,7 @@ namespace Revocation
 		void shadow_paint_range(size_t base, size_t top, bool fill)
 		{
 			constexpr size_t ShadowWordAddrMask =
-			  (1U << (ShadowWordShift + MALLOC_ALIGNSHIFT)) - 1;
+			  (1U << (ShadowWordShift + MallocAlignShift)) - 1;
 			size_t baseUp  = (base + ShadowWordAddrMask) & ~ShadowWordAddrMask;
 			size_t topDown = top & ~ShadowWordAddrMask;
 
@@ -96,7 +96,7 @@ namespace Revocation
 			// one bit at a time.
 			if (baseUp >= topDown)
 			{
-				for (size_t ptr = base; ptr < top; ptr += MALLOC_ALIGNMENT)
+				for (size_t ptr = base; ptr < top; ptr += MallocAlignment)
 				{
 					shadow_paint_single(ptr, fill);
 				}
@@ -104,21 +104,21 @@ namespace Revocation
 			}
 
 			// First, paint the individual bits at the beginning.
-			for (size_t ptr = base; ptr < baseUp; ptr += MALLOC_ALIGNMENT)
+			for (size_t ptr = base; ptr < baseUp; ptr += MallocAlignment)
 			{
 				shadow_paint_single(ptr, fill);
 			}
 			// Then, paint the aligned shadow words using word instructions.
 			for (size_t ptr = baseUp; ptr < topDown;
-			     ptr += ShadowWordSizeBits * MALLOC_ALIGNMENT)
+			     ptr += ShadowWordSizeBits * MallocAlignment)
 			{
-				size_t capoffset  = (ptr - TCMBaseAddr) >> MALLOC_ALIGNSHIFT;
+				size_t capoffset  = (ptr - TCMBaseAddr) >> MallocAlignShift;
 				WordT  shadowWord = fill ? -1 : 0;
 
 				shadowCap[capoffset >> ShadowWordShift] = shadowWord;
 			}
 			// Finally, paint individual bits at the end.
-			for (size_t ptr = topDown; ptr < top; ptr += MALLOC_ALIGNMENT)
+			for (size_t ptr = topDown; ptr < top; ptr += MallocAlignment)
 			{
 				shadow_paint_single(ptr, fill);
 			}
@@ -127,7 +127,7 @@ namespace Revocation
 		// Return the shadow bit at address addr.
 		bool shadow_bit_get(size_t addr)
 		{
-			size_t   capoffset  = (addr - TCMBaseAddr) >> MALLOC_ALIGNSHIFT;
+			size_t   capoffset  = (addr - TCMBaseAddr) >> MallocAlignShift;
 			WordT    shadowWord = shadowCap[capoffset >> ShadowWordShift];
 			uint32_t mask       = (1U << (capoffset & ShadowWordMask));
 
@@ -145,8 +145,8 @@ namespace Revocation
 		{
 			ptraddr_t base = cap.base();
 
-			return cap.is_valid() && (base & MALLOC_ALIGNMASK) == 0 &&
-			       shadow_bit_get(base - MALLOC_ALIGNMENT) == 1 &&
+			return cap.is_valid() && (base & MallocAlignMask) == 0 &&
+			       shadow_bit_get(base - MallocAlignment) == 1 &&
 			       shadow_bit_get(base) == 0;
 		}
 	};

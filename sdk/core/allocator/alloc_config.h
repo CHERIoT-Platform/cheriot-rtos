@@ -3,9 +3,9 @@
 
 #pragma once
 
+#include <compartment.h>
 #include <debug.hh>
 #include <stdlib.h>
-#include <compartment.h>
 
 using Debug = ConditionalDebug<DEBUG_ALLOCATOR, "Allocator">;
 
@@ -16,9 +16,10 @@ using Debug = ConditionalDebug<DEBUG_ALLOCATOR, "Allocator">;
 #	define RTCHECK(e) (1)
 #else
 #	define RTCHECK(e) (e)
-constexpr size_t MSTATE_SANITY_INTERVAL = 128;
+constexpr size_t MStateSanityInterval = 128;
 #endif
 
-constexpr size_t MALLOC_ALIGNSHIFT = 3;
-constexpr size_t MALLOC_ALIGNMENT  = 1U << MALLOC_ALIGNSHIFT;
-constexpr size_t MALLOC_ALIGNMASK  = MALLOC_ALIGNMENT - 1;
+constexpr size_t MallocAlignShift = 3;
+
+constexpr size_t MallocAlignment = 1U << MallocAlignShift;
+constexpr size_t MallocAlignMask = MallocAlignment - 1;

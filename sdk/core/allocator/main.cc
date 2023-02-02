@@ -57,14 +57,14 @@ namespace
 		 * but not too big that overflows what the compressed header can
 		 * support.
 		 */
-		if (tsize < msize + MIN_CHUNK_SIZE + CHUNK_OVERHEAD ||
-		    tsize > MAX_CHUNK_SIZE)
+		if (tsize < msize + MinChunkSize + ChunkOverhead ||
+		    tsize > MaxChunkSize)
 		{
 			return nullptr;
 		}
 
 		// At this point, the entire heap should be zeroed.
-		size_t firstchunksize = tsize - msize - CHUNK_OVERHEAD;
+		size_t firstchunksize = tsize - msize - ChunkOverhead;
 
 		MChunk    *msp = tbase.cast<MChunk>();
 		Capability m{chunk2mem(msp).cast<MState>()};
@@ -80,7 +80,7 @@ namespace
 
 		MChunk *footer = mn->chunk_next();
 		// The footer is a fake chunk with only the header.
-		footer->footchunk_set(CHUNK_OVERHEAD);
+		footer->footchunk_set(ChunkOverhead);
 		// The footer should be at the very end of this region.
 		Debug::Assert(chunk2mem(footer).address() == (tbase.address() + tsize),
 		              "Footer ({}) is not at the end of the region {} + {}",
@@ -238,7 +238,7 @@ namespace
 	 * free(). Now the bit has served its purpose, clear it. This is also to
 	 * detect double free.
 	 */
-	revoker.shadow_paint_single(mem.address() - MALLOC_ALIGNMENT, false);
+	revoker.shadow_paint_single(mem.address() - MallocAlignment, false);
 	gm->mspace_free(mem);
 
 	// If there are any threads blocked allocating memory, wake them up.
