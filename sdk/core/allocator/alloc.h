@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cdefs.h>
 #include <cheri.hh>
+#include <ds/bits.h>
+#include <ds/pointer.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -16,57 +18,51 @@
 
 extern Revocation::Revoker revoker;
 
-// The maximum possible size_t value has all bits set.
-constexpr size_t MAX_SIZE_T = ~0U;
-
 // the byte and bit size of a size_t
-constexpr size_t SIZE_T_SIZE    = sizeof(size_t);
-constexpr size_t SIZE_T_BITSIZE = utils::bytes2bits(sizeof(size_t));
-constexpr size_t CHUNK_OVERHEAD = MALLOC_ALIGNMENT;
+constexpr size_t BitsInSizeT   = utils::bytes2bits(sizeof(size_t));
+constexpr size_t ChunkOverhead = MallocAlignment;
 // Pad request bytes into a usable size.
 static inline size_t pad_request(size_t req)
 {
-	return ((req) + CHUNK_OVERHEAD + MALLOC_ALIGNMASK) & ~MALLOC_ALIGNMASK;
+	return ((req) + ChunkOverhead + MallocAlignMask) & ~MallocAlignMask;
 }
 
-constexpr size_t NSMALLBIN_SHIFT = 3U;
+constexpr size_t NSmallBinsShift = 3U;
 // number of small bins
-constexpr size_t NSMALLBINS = 1U << NSMALLBIN_SHIFT;
+constexpr size_t NSmallBins = 1U << NSmallBinsShift;
 // number of large (tree) bins
-constexpr size_t NTREEBINS = 12U;
+constexpr size_t NTreeBins = 12U;
 // shift needed to get the index of small bin
-constexpr size_t SMALLBIN_SHIFT = MALLOC_ALIGNSHIFT;
+constexpr size_t SmallBinShift = MallocAlignShift;
 // shift needed to get the index of tree bin
-constexpr size_t TREEBIN_SHIFT = MALLOC_ALIGNSHIFT + NSMALLBIN_SHIFT;
+constexpr size_t TreeBinShift = MallocAlignShift + NSmallBinsShift;
 // the max size (including header) that still falls in small bins
-constexpr size_t MAX_SMALL_SIZE = 1U << TREEBIN_SHIFT;
-// the min size that starts to be considered as large bin allocations
-constexpr size_t MIN_LARGE_SIZE = MAX_SMALL_SIZE + 1;
+constexpr size_t MaxSmallSize = 1U << TreeBinShift;
 // the maximum requested size that is still categorised as a small bin
-constexpr size_t MAX_SMALL_REQUEST = MAX_SMALL_SIZE - CHUNK_OVERHEAD;
+constexpr size_t MaxSmallRequest = MaxSmallSize - ChunkOverhead;
 
-// the compressed size. The actual size is SmallSize * MALLOC_ALIGNMENT.
-using SmallSize                 = uint16_t;
-constexpr size_t MAX_CHUNK_SIZE = (1U << utils::bytes2bits(sizeof(SmallSize)))
-                                  << MALLOC_ALIGNSHIFT;
+// the compressed size. The actual size is SmallSize * MallocAlignment.
+using SmallSize               = uint16_t;
+constexpr size_t MaxChunkSize = (1U << utils::bytes2bits(sizeof(SmallSize)))
+                                << MallocAlignShift;
 // the compressed pointer. Used to point to prev and next in free lists.
 using SmallPtr = size_t;
 // the index to one of the bins
 using BIndex = uint32_t;
 // the bit map of all the bins. 1 for in-use and 0 for empty.
 using Binmap = uint32_t;
-static_assert(NSMALLBINS < utils::bytes2bits(sizeof(Binmap)));
-static_assert(NTREEBINS < utils::bytes2bits(sizeof(Binmap)));
+static_assert(NSmallBins < utils::bytes2bits(sizeof(Binmap)));
+static_assert(NTreeBins < utils::bytes2bits(sizeof(Binmap)));
 
 // Convert small size header into the actual size in bytes.
 static inline size_t head2size(SmallSize h)
 {
-	return static_cast<size_t>(h) << MALLOC_ALIGNSHIFT;
+	return static_cast<size_t>(h) << MallocAlignShift;
 }
 // Convert byte size into small size header.
 static inline SmallSize size2head(size_t s)
 {
-	return s >> MALLOC_ALIGNSHIFT;
+	return s >> MallocAlignShift;
 }
 
 // Generate a bit mask for a single index.
@@ -81,38 +77,37 @@ static inline BIndex bit2idx(Binmap x)
 	return ctz(x);
 }
 
-/**
- * The upper bits of the size after TREEBIN_SHIFT, if larger than this, must
- * be thrown into the largest bin. Every two tree bins handle one
- * power-of-two.
- */
-constexpr size_t MAX_TREE_COMPUTE_MASK = (1U << (NTREEBINS >> 1)) - 1;
-
 // Return treebin index for size s.
 static inline BIndex compute_tree_index(size_t s)
 {
-	size_t x = s >> TREEBIN_SHIFT, k;
+	/*
+	 * The upper bits of the size after TreeBinShift, if larger than this, must
+	 * be thrown into the largest bin. Every two tree bins handle one
+	 * power-of-two.
+	 */
+	constexpr size_t MaxTreeComputeMask = (1U << (NTreeBins >> 1)) - 1;
+
+	size_t x = s >> TreeBinShift, k;
 	if (x == 0)
 	{
 		return 0;
 	}
-	if (x > MAX_TREE_COMPUTE_MASK)
+	if (x > MaxTreeComputeMask)
 	{
-		return NTREEBINS - 1;
+		return NTreeBins - 1;
 	}
 	k          = utils::bytes2bits(sizeof(x)) - 1 - clz(x);
-	BIndex ret = (k << 1) + ((s >> (k + (TREEBIN_SHIFT - 1)) & 1));
+	BIndex ret = (k << 1) + ((s >> (k + (TreeBinShift - 1)) & 1));
 	Debug::Assert(
-	  ret < NTREEBINS, "Return value {} is out of range 0-{}", ret, NTREEBINS);
+	  ret < NTreeBins, "Return value {} is out of range 0-{}", ret, NTreeBins);
 	return ret;
 }
 
 // shift placing maximum resolved bit in a treebin at i as sign bit
 static inline size_t leftshift_for_tree_index(BIndex i)
 {
-	return i == NTREEBINS - 1
-	         ? 0
-	         : (SIZE_T_BITSIZE - ((i >> 1) + TREEBIN_SHIFT - 1U));
+	return i == NTreeBins - 1 ? 0
+	                          : (BitsInSizeT - ((i >> 1) + TreeBinShift - 1U));
 }
 
 /**
@@ -130,35 +125,28 @@ static inline size_t leftshifted_val_msb(size_t val)
 // the size of the smallest chunk held in bin with index i
 static inline size_t minsize_for_tree_index(BIndex i)
 {
-	return (1U << ((i >> 1) + TREEBIN_SHIFT)) |
-	       ((1U & i) << ((i >> 1) + TREEBIN_SHIFT - 1));
+	return (1U << ((i >> 1) + TreeBinShift)) |
+	       ((1U & i) << ((i >> 1) + TreeBinShift - 1));
 }
-
-// Isolate the least set bit of a bitmap.
-#define least_bit(x) ((x) & -(x))
-// mask with all bits to left of least bit of x on
-#define left_bits(x) ((x << 1) | -(x << 1))
-// mask with all bits to left of or equal to least bit of x on
-#define same_or_left_bits(x) ((x) | -(x))
 
 /**
  * The index of the small bin this size should live in.
- * Size 1 to MALLOC_ALIGNMENT live in bin 0, MALLOC_ALIGNMENT + 1 to
- * 2 * MALLOC_ALIGNMENT live in bin 1, etc.
+ * Size 1 to MallocAlignment live in bin 0, MallocAlignment + 1 to
+ * 2 * MallocAlignment live in bin 1, etc.
  */
 static inline BIndex small_index(size_t s)
 {
-	return (s - 1) >> SMALLBIN_SHIFT;
+	return (s - 1) >> SmallBinShift;
 }
 // Is this a smallbin size?
 static inline bool is_small(size_t s)
 {
-	return small_index(s) < NSMALLBINS;
+	return small_index(s) < NSmallBins;
 }
 // Convert smallbin index to the size it contains.
 static inline size_t small_index2size(BIndex i)
 {
-	return (static_cast<size_t>(i) + 1) << SMALLBIN_SHIFT;
+	return (static_cast<size_t>(i) + 1) << SmallBinShift;
 }
 
 /**
@@ -216,7 +204,8 @@ static inline size_t small_index2size(BIndex i)
  * format is subject to change (hence private). The public wrappers also take
  * care of converting chunks and sizes into internal compressed formats.
  */
-class __packed __aligned(MALLOC_ALIGNMENT) MChunk
+class __packed __aligned(MallocAlignment)
+MChunk
 {
 	private:
 	// compressed size of the previous chunk
@@ -228,7 +217,7 @@ class __packed __aligned(MALLOC_ALIGNMENT) MChunk
 	// the revocation epoch when this chunk is quarantined.
 	// TODO: handle overflow, especially when we add other fields which reduce
 	// the bit width of the epoch in the future.
-	size_t epoch_enq : 30;
+	size_t epochEnq : 30;
 
 	/**
 	 * Each MChunk participates in a circular doubly-linked list.  The
@@ -426,50 +415,50 @@ class __packed __aligned(MALLOC_ALIGNMENT) MChunk
 	// Write the revocation epoch into the header.
 	void epoch_write()
 	{
-		epoch_enq = revoker.system_epoch_get();
+		epochEnq = revoker.system_epoch_get();
 	}
 
 	// Has this chunk gone through a full revocation pass?
 	bool is_revocation_done()
 	{
-		return revoker.has_revocation_finished_for_epoch(epoch_enq);
+		return revoker.has_revocation_finished_for_epoch(epochEnq);
 	}
 };
 static_assert(sizeof(MChunk) == 16);
 // the minimum size of a chunk (including the header)
-constexpr size_t MIN_CHUNK_SIZE =
-  (sizeof(MChunk) + MALLOC_ALIGNMASK) & ~MALLOC_ALIGNMASK;
+constexpr size_t MinChunkSize =
+  (sizeof(MChunk) + MallocAlignMask) & ~MallocAlignMask;
 // the minimum size of a chunk (excluding the header)
-constexpr size_t MIN_REQUEST = MIN_CHUNK_SIZE - CHUNK_OVERHEAD;
+constexpr size_t MinRequest = MinChunkSize - ChunkOverhead;
 
 // Convert a chunk to a user pointer.
 static inline CHERI::Capability<void> chunk2mem(CHERI::Capability<MChunk> p)
 {
-	p.address() += MALLOC_ALIGNMENT;
+	p.address() += MallocAlignment;
 	return p.cast<void>();
 }
 // Convert a user pointer back to the chunk.
 static inline MChunk *mem2chunk(CHERI::Capability<void> p)
 {
-	p.address() -= MALLOC_ALIGNMENT;
+	p.address() -= MallocAlignment;
 	return p.cast<MChunk>();
 }
 
 // true if cap address a has acceptable alignment
 static inline bool is_aligned(CHERI::Capability<void> a)
 {
-	return (a.address() & MALLOC_ALIGNMASK) == 0;
+	return (a.address() & MallocAlignMask) == 0;
 }
 // true if the size has acceptable alignment
 static inline bool is_aligned(size_t s)
 {
-	return (s & MALLOC_ALIGNMASK) == 0;
+	return (s & MallocAlignMask) == 0;
 }
 // the number of bytes to offset an address to align it
 static inline size_t align_offset(CHERI::Capability<void> a)
 {
 	return is_aligned(a) ? 0
-	                     : MALLOC_ALIGNMENT - (a.address() & MALLOC_ALIGNMASK);
+	                     : MallocAlignment - (a.address() & MallocAlignMask);
 }
 
 /**
@@ -480,7 +469,8 @@ static inline size_t align_offset(CHERI::Capability<void> a)
  * Since we have enough room (large/tree chunks are at least 65 bytes), we just
  * put full capabilities here, and the format probably won't change, ever.
  */
-class __packed __aligned(MALLOC_ALIGNMENT) TChunk : public MChunk
+class __packed __aligned(MallocAlignment)
+TChunk : public MChunk
 {
 	public:
 	// pointers to left and right children in the tree
@@ -489,6 +479,13 @@ class __packed __aligned(MALLOC_ALIGNMENT) TChunk : public MChunk
 	TChunk *parent;
 	// the tree index this chunk is in
 	BIndex index;
+
+	TChunk *leftmost_child()
+	{
+		if (child[0] != nullptr)
+			return child[0];
+		return child[1];
+	}
 };
 
 class MState
@@ -501,9 +498,9 @@ class MState
 	 * fields. Each smallbin has a fake head and we only need bk and fd for
 	 * link lists against real chunks. Also see smallbin_at().
 	 */
-	MChunk *smallbins[(NSMALLBINS + 1)];
+	MChunk *smallbins[(NSmallBins + 1)];
 	// The head for each tree bin. Unlike smallbin, no magic is involved.
-	TChunk *treebins[NTREEBINS];
+	TChunk *treebins[NTreeBins];
 	// Same with smallbin, we only need bk and fd for the quarantine fake head.
 	SmallPtr quarantineBinBk;
 	SmallPtr quarantineBinFd;
@@ -550,7 +547,7 @@ class MState
 		 * doubly-linked list starting from head. Note that we only use the bk
 		 * and fd fields of this fake head so each smallbins[i] is not an
 		 * MChunk* but is actually bk and fd for (MChunk*)&smallbin[i - 1]. This
-		 * is also why we need smallbin[NSMALLBINS + 1].
+		 * is also why we need smallbin[NSmallBins + 1].
 		 *
 		 * This also means an MChunk* must be able to contain bk and fd.
 		 */
@@ -561,7 +558,7 @@ class MState
 	MChunk *qtbin()
 	{
 		CHERI::Capability<void> cap{&quarantineBinBk};
-		cap.address() -= CHUNK_OVERHEAD;
+		cap.address() -= ChunkOverhead;
 		return cap.cast<MChunk>();
 	}
 	// Returns a pointer to the pointer to the root chunk of a tree.
@@ -603,11 +600,11 @@ class MState
 	}
 
 	// Initialize bins for a new MState.
-	void init_bins(void)
+	void init_bins()
 	{
 		// Establish circular links for smallbins.
 		BIndex i;
-		for (i = 0; i < NSMALLBINS; ++i)
+		for (i = 0; i < NSmallBins; ++i)
 		{
 			MChunk *bin = smallbin_at(i);
 			bin->fd_assign(bin);
@@ -692,7 +689,7 @@ class MState
 		  alignSize, -CHERI::representable_alignment_mask(bytes))};
 		if (ret == nullptr)
 		{
-			auto neededSize = alignSize + CHUNK_OVERHEAD;
+			auto neededSize = alignSize + ChunkOverhead;
 			if (heapQuarantineSize > 0 &&
 			    (heapQuarantineSize + heapFreeSize) >= neededSize)
 			{
@@ -708,7 +705,7 @@ class MState
 #ifndef NDEBUG
 		// Periodically sanity check the entire state for this mspace.
 		static size_t sanityCounter = 0;
-		if (sanityCounter % MSTATE_SANITY_INTERVAL == 0)
+		if (sanityCounter % MStateSanityInterval == 0)
 		{
 			ok_malloc_state();
 		}
@@ -720,7 +717,7 @@ class MState
 		 * should have the shadow bit set, which means this is a valid thing for
 		 * free();
 		 */
-		revoker.shadow_paint_single(ret.address() - MALLOC_ALIGNMENT, true);
+		revoker.shadow_paint_single(ret.address() - MallocAlignment, true);
 
 		ret.bounds() = alignSize;
 		return ret;
@@ -748,7 +745,7 @@ class MState
 		 */
 		MChunk *p = mem2chunk(mem);
 		// At this point, we know mem is capability aligned.
-		capaligned_zero(mem, p->size_get() - CHUNK_OVERHEAD);
+		capaligned_zero(mem, p->size_get() - ChunkOverhead);
 		revoker.shadow_paint_range(mem.address(), p->chunk_next()->ptr(), true);
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk
@@ -831,7 +828,7 @@ class MState
 		else
 		{
 			start = chunk2mem(chunk);
-			sz -= CHUNK_OVERHEAD;
+			sz -= ChunkOverhead;
 		}
 		// We can use memset(), but we know things are nicely aligned so just
 		// use the helper for zeroing.
@@ -900,9 +897,9 @@ class MState
 		  !p->chunk_next()->is_prev_in_use(),
 		  "Free chunk {} is in list with chunk that expects it to be in use",
 		  p);
-		if (sz >= MIN_CHUNK_SIZE)
+		if (sz >= MinChunkSize)
 		{
-			Debug::Assert((sz & MALLOC_ALIGNMASK) == 0,
+			Debug::Assert((sz & MallocAlignMask) == 0,
 			              "Chunk size {} is incorrectly aligned",
 			              sz);
 			Debug::Assert(is_aligned(chunk2mem(p)),
@@ -927,38 +924,38 @@ class MState
 			  "Forward and backwards chunk pointers are inconsistent for {}",
 			  p);
 		}
-		else // Markers are always of size CHUNK_OVERHEAD.
+		else // Markers are always of size ChunkOverhead.
 		{
-			Debug::Assert(sz == CHUNK_OVERHEAD,
+			Debug::Assert(sz == ChunkOverhead,
 			              "Marker chunk size is {}, should always be {}",
 			              sz,
-			              CHUNK_OVERHEAD);
+			              ChunkOverhead);
 		}
 	}
 	// Sanity check a chunk that was just malloced.
 	void ok_malloced_chunk(void *mem, size_t s)
 	{
-		if (mem != 0)
+		if (mem != nullptr)
 		{
 			MChunk *p  = mem2chunk(mem);
 			size_t  sz = p->size_get();
 			ok_in_use_chunk(p);
-			Debug::Assert((sz & MALLOC_ALIGNMASK) == 0,
+			Debug::Assert((sz & MallocAlignMask) == 0,
 			              "Chunk size {} is insufficiently aligned",
 			              sz);
-			Debug::Assert(sz >= MIN_CHUNK_SIZE,
+			Debug::Assert(sz >= MinChunkSize,
 			              "Chunk size {} is smaller than minimum size {}",
 			              sz,
-			              MIN_CHUNK_SIZE);
+			              MinChunkSize);
 			Debug::Assert(sz >= s,
 			              "Chunk size {} is smaller that requested size {}",
 			              sz,
 			              s);
 			/*
-			 * Size is less than MIN_CHUNK_SIZE more than request. If this does
+			 * Size is less than MinChunkSize more than request. If this does
 			 * not hold, then it should have been split into two mallocs.
 			 */
-			Debug::Assert(sz < (s + MIN_CHUNK_SIZE),
+			Debug::Assert(sz < (s + MinChunkSize),
 			              "Chunk of size {} returned for requested size {}, "
 			              "should have been split",
 			              sz,
@@ -977,14 +974,14 @@ class MState
 		BIndex idx    = compute_tree_index(tsize);
 		Debug::Assert(
 		  tindex == idx, "Chunk index {}, expected {}", tindex, idx);
-		Debug::Assert(tsize >= MIN_LARGE_SIZE,
+		Debug::Assert(tsize > MaxSmallSize,
 		              "Size {} is smaller than the minimum size",
 		              tsize);
 		Debug::Assert(tsize >= minsize_for_tree_index(idx),
 		              "Size {} is smaller than the minimum size for tree {}",
 		              tsize,
 		              idx);
-		Debug::Assert((idx == NTREEBINS - 1) ||
+		Debug::Assert((idx == NTreeBins - 1) ||
 		                (tsize < minsize_for_tree_index((idx + 1))),
 		              "Tree shape is invalid");
 
@@ -1131,12 +1128,12 @@ class MState
 			{
 				TChunk *t        = *treebin_at(tidx);
 				size_t  sizebits = size << leftshift_for_tree_index(tidx);
-				while (t != 0 && t->size_get() != size)
+				while (t != nullptr && t->size_get() != size)
 				{
 					t = t->child[leftshifted_val_msb(sizebits)];
 					sizebits <<= 1;
 				}
-				if (t != 0)
+				if (t != nullptr)
 				{
 					TChunk *u = t;
 					do
@@ -1157,11 +1154,11 @@ class MState
 		BIndex i;
 		size_t total;
 		// Check all the bins.
-		for (i = 0; i < NSMALLBINS; ++i)
+		for (i = 0; i < NSmallBins; ++i)
 		{
 			ok_smallbin(i);
 		}
-		for (i = 0; i < NTREEBINS; ++i)
+		for (i = 0; i < NTreeBins; ++i)
 		{
 			ok_treebin(i);
 		}
@@ -1176,7 +1173,7 @@ class MState
 		MChunk *head = smallbin_at(i);
 		MChunk *back = head;
 		Debug::Assert(
-		  size >= MIN_CHUNK_SIZE, "Size {} is not a small chunk size", size);
+		  size >= MinChunkSize, "Size {} is not a small chunk size", size);
 		if (!is_smallmap_marked(i))
 		{
 			smallmap_mark(i);
@@ -1363,12 +1360,12 @@ class MState
 		else
 		{
 			CHERI::Capability<TChunk *> rp;
-			if (((r = *(rp = &(x->child[1]))) != 0) ||
-			    ((r = *(rp = &(x->child[0]))) != 0))
+			if (((r = *(rp = &(x->child[1]))) != nullptr) ||
+			    ((r = *(rp = &(x->child[0]))) != nullptr))
 			{
 				TChunk **cp;
-				while ((*(cp = &(r->child[1])) != 0) ||
-				       (*(cp = &(r->child[0])) != 0))
+				while ((*(cp = &(r->child[1])) != nullptr) ||
+				       (*(cp = &(r->child[0])) != nullptr))
 				{
 					r = *(rp = cp);
 				}
@@ -1382,12 +1379,12 @@ class MState
 				}
 			}
 		}
-		if (xp != 0)
+		if (xp != nullptr)
 		{
 			TChunk **h = treebin_at(x->index);
 			if (x == *h)
 			{
-				if ((*h = r) == 0)
+				if ((*h = r) == nullptr)
 				{
 					treemap_clear(x->index);
 				}
@@ -1407,13 +1404,13 @@ class MState
 			{
 				corruption_error_action();
 			}
-			if (r != 0)
+			if (r != nullptr)
 			{
 				if (RTCHECK(ok_address(r->ptr())))
 				{
 					TChunk *c0, *c1;
 					r->parent = xp;
-					if ((c0 = x->child[0]) != 0)
+					if ((c0 = x->child[0]) != nullptr)
 					{
 						if (RTCHECK(ok_address(c0->ptr())))
 						{
@@ -1425,7 +1422,7 @@ class MState
 							corruption_error_action();
 						}
 					}
-					if ((c1 = x->child[1]) != 0)
+					if ((c1 = x->child[1]) != nullptr)
 					{
 						if (RTCHECK(ok_address(c1->ptr())))
 						{
@@ -1480,13 +1477,11 @@ class MState
 	 */
 	void *tmalloc_smallest(TChunk *t, size_t nb)
 	{
-#define leftmost_child(t) ((t)->child[0] != 0 ? (t)->child[0] : (t)->child[1])
-
 		size_t  rsize = t->size_get() - nb;
 		TChunk *v     = t;
 
 		Debug::Assert(t != nullptr, "Chunk must not be null");
-		while ((t = leftmost_child(t)) != 0)
+		while ((t = t->leftmost_child()) != nullptr)
 		{
 			size_t trem = t->size_get() - nb;
 			if (trem < rsize)
@@ -1509,7 +1504,7 @@ class MState
 			if (RTCHECK(v->ok_next(r)))
 			{
 				unlink_large_chunk(v);
-				if (rsize < MIN_CHUNK_SIZE)
+				if (rsize < MinChunkSize)
 				{
 					v->in_use_chunk_set(rsize + nb);
 				}
@@ -1538,7 +1533,7 @@ class MState
 		size_t  rsize = -nb; // unsigned negation
 		TChunk *t;
 		BIndex  idx = compute_tree_index(nb);
-		if ((t = *treebin_at(idx)) != 0)
+		if ((t = *treebin_at(idx)) != nullptr)
 		{
 			// Traverse tree for this bin looking for node with size == nb.
 			size_t  sizebits = nb << leftshift_for_tree_index(idx);
@@ -1557,11 +1552,11 @@ class MState
 				}
 				rt = t->child[1];
 				t  = t->child[leftshifted_val_msb(sizebits)];
-				if (rt != 0 && rt != t)
+				if (rt != nullptr && rt != t)
 				{
 					rst = rt;
 				}
-				if (t == 0)
+				if (t == nullptr)
 				{
 					t = rst; // Set t to least subtree holding sizes > nb.
 					break;
@@ -1569,17 +1564,17 @@ class MState
 				sizebits <<= 1;
 			}
 		}
-		if (t == 0 && v == 0)
+		if (t == nullptr && v == nullptr)
 		{
 			/*
 			 * We didn't find anything usable in the tree, so use the next tree
 			 * if there is one. Set t to root of next non-empty treebin.
 			 */
-			Binmap leftbits = left_bits(idx2bit(idx)) & treemap;
+			Binmap leftbits = ds::bits::above_least(idx2bit(idx)) & treemap;
 			if (leftbits != 0)
 			{
 				BIndex i;
-				Binmap leastbit = least_bit(leftbits);
+				Binmap leastbit = ds::bits::isolate_least(leftbits);
 				i               = bit2idx(leastbit);
 				t               = *treebin_at(i);
 			}
@@ -1603,12 +1598,12 @@ class MState
 	 */
 	void *tmalloc_small(size_t nb)
 	{
-		TChunk *t, *v;
+		TChunk *t;
 		size_t  rsize;
 		BIndex  i;
-		Binmap  leastbit = least_bit(treemap);
+		Binmap  leastbit = ds::bits::isolate_least(treemap);
 		i                = bit2idx(leastbit);
-		v = t = *treebin_at(i);
+		t                = *treebin_at(i);
 
 		return tmalloc_smallest(t, nb);
 	}
@@ -1645,7 +1640,7 @@ class MState
 				}
 				else
 				{
-					goto erroraction;
+					corruption_error_action();
 				}
 			}
 
@@ -1662,12 +1657,9 @@ class MState
 
 				insert_chunk(p, psize);
 				ok_free_chunk(p);
-				goto postaction;
 			}
 		}
-	erroraction:
-		corruption_error_action();
-	postaction:
+
 		heapFreeSize += psizeold;
 	}
 
@@ -1743,6 +1735,31 @@ class MState
 	}
 
 	/**
+	 * Successful end to mspace_malloc()
+	 */
+	void *mspace_malloc_success(void *mem, size_t nb)
+	{
+		ok_malloced_chunk(mem, nb);
+
+		// If we reached here, then it means we took a real chunk off the free
+		// list without errors. Zero the user portion metadata.
+		MChunk *finalChunk = mem2chunk(mem);
+		size_t  finalSz    = finalChunk->size_get();
+		metadata_zero<false>(finalChunk);
+		// We sanity check that things off the free list are indeed zeroed out.
+		Debug::Assert(capaligned_range_do(mem,
+		                                  finalSz - ChunkOverhead,
+		                                  [](void *&word) {
+			                                  return CHERI::Capability<void>(
+			                                           word) != nullptr;
+		                                  }) == false,
+		              "Memory from free list is not entirely zeroed, size {}",
+		              finalSz);
+		heapFreeSize -= finalSz;
+		return mem;
+	}
+
+	/**
 	 * This is the only function that takes memory from the free list. All other
 	 * wrappers that take memory must call this in the end.
 	 */
@@ -1751,11 +1768,11 @@ class MState
 		void  *mem;
 		size_t nb;
 
-		if (bytes <= MAX_SMALL_REQUEST)
+		if (bytes <= MaxSmallRequest)
 		{
 			BIndex idx;
 			Binmap smallbits;
-			nb  = (bytes < MIN_REQUEST) ? MIN_CHUNK_SIZE : pad_request(bytes);
+			nb  = (bytes < MinRequest) ? MinChunkSize : pad_request(bytes);
 			idx = small_index(nb);
 			smallbits = smallmap >> idx;
 
@@ -1772,50 +1789,48 @@ class MState
 				unlink_first_small_chunk(b, p, idx);
 				p->in_use_set();
 				mem = chunk2mem(p);
-				ok_malloced_chunk(mem, nb);
-				goto postaction;
-			}
-			else
-			{
-				if (smallbits != 0)
-				{ // Use chunk in next nonempty smallbin.
-					MChunk *b, *p, *r;
-					size_t  rsize;
-					BIndex  i;
-					Binmap  leftbits =
-					  (smallbits << idx) & left_bits(idx2bit(idx));
-					Binmap leastbit = least_bit(leftbits);
-					i               = bit2idx(leastbit);
-					b               = smallbin_at(i);
-					p               = ptr2chunk(b->fd);
-					Debug::Assert(p->size_get() == small_index2size(i),
-					              "Chunk {} has size {}, expected {}",
-					              p,
-					              p->size_get(),
-					              small_index2size(i));
-					unlink_first_small_chunk(b, p, i);
-					rsize = small_index2size(i) - nb;
 
-					if (rsize < MIN_CHUNK_SIZE)
-					{
-						p->in_use_set();
-					}
-					else
-					{
-						p->in_use_chunk_set(nb);
-						r = p->chunk_plus_offset(nb);
-						r->free_chunk_set(rsize);
-						insert_small_chunk(r, rsize);
-					}
-					mem = chunk2mem(p);
-					ok_malloced_chunk(mem, nb);
-					goto postaction;
-				}
-				else if (treemap != 0 && (mem = tmalloc_small(nb)) != nullptr)
+				return mspace_malloc_success(mem, nb);
+			}
+
+			if (smallbits != 0)
+			{ // Use chunk in next nonempty smallbin.
+				MChunk *b, *p, *r;
+				size_t  rsize;
+				BIndex  i;
+				Binmap  leftbits =
+				  (smallbits << idx) & ds::bits::above_least(idx2bit(idx));
+				Binmap leastbit = ds::bits::isolate_least(leftbits);
+				i               = bit2idx(leastbit);
+				b               = smallbin_at(i);
+				p               = ptr2chunk(b->fd);
+				Debug::Assert(p->size_get() == small_index2size(i),
+				              "Chunk {} has size {}, expected {}",
+				              p,
+				              p->size_get(),
+				              small_index2size(i));
+				unlink_first_small_chunk(b, p, i);
+				rsize = small_index2size(i) - nb;
+
+				if (rsize < MinChunkSize)
 				{
-					ok_malloced_chunk(mem, nb);
-					goto postaction;
+					p->in_use_set();
 				}
+				else
+				{
+					p->in_use_chunk_set(nb);
+					r = p->chunk_plus_offset(nb);
+					r->free_chunk_set(rsize);
+					insert_small_chunk(r, rsize);
+				}
+				mem = chunk2mem(p);
+
+				return mspace_malloc_success(mem, nb);
+			}
+
+			if (treemap != 0 && (mem = tmalloc_small(nb)) != nullptr)
+			{
+				return mspace_malloc_success(mem, nb);
 			}
 		}
 		else
@@ -1823,8 +1838,7 @@ class MState
 			nb = pad_request(bytes);
 			if (treemap != 0 && (mem = tmalloc_large(nb)) != nullptr)
 			{
-				ok_malloced_chunk(mem, nb);
-				goto postaction;
+				return mspace_malloc_success(mem, nb);
 			}
 		}
 
@@ -1841,24 +1855,6 @@ class MState
 			mspace_qtbin_deqn(UINT32_MAX);
 		}
 		return nullptr;
-
-	postaction:
-		// If we reached here, then it means we took a real chunk off the free
-		// list without errors. Zero the user portion metadata.
-		MChunk *finalChunk = mem2chunk(mem);
-		size_t  finalSz    = finalChunk->size_get();
-		metadata_zero<false>(finalChunk);
-		// We sanity check that things off the free list are indeed zeroed out.
-		Debug::Assert(capaligned_range_do(mem,
-		                                  finalSz - CHUNK_OVERHEAD,
-		                                  [](void *&word) {
-			                                  return CHERI::Capability<void>(
-			                                           word) != nullptr;
-		                                  }) == false,
-		              "Memory from free list is not entirely zeroed, size {}",
-		              finalSz);
-		heapFreeSize -= finalSz;
-		return mem;
 	}
 
 	// Allocate memory with specific alignment.
@@ -1872,7 +1868,7 @@ class MState
 		size_t                  newsize; // its size
 		size_t  leadsize;                // leading space before alignment point
 		MChunk *remainder;               // spare room at end to split off
-		size_t  remainder_size;          // its size
+		size_t  remainderSize;           // its size
 		size_t  size;
 
 		nb = pad_request(bytes);
@@ -1882,7 +1878,7 @@ class MState
 		              alignment);
 
 		// fast path for not-too-big objects
-		if (alignment <= MALLOC_ALIGNMENT)
+		if (alignment <= MallocAlignment)
 		{
 			return mspace_malloc(bytes);
 		}
@@ -1892,7 +1888,7 @@ class MState
 		 * request, and then possibly free the leading and trailing space.
 		 * Call malloc with worst case padding to hit alignment.
 		 */
-		m = mspace_malloc(nb + alignment + MIN_CHUNK_SIZE);
+		m = mspace_malloc(nb + alignment + MinChunkSize);
 		if (m == nullptr)
 		{
 			return m;
@@ -1910,15 +1906,15 @@ class MState
 			 */
 			auto alignedAddress{m};
 			alignedAddress.address() =
-			  (m.address() + alignment - 1) & -(ssize_t)alignment;
-			brk = (char *)mem2chunk(alignedAddress);
-			if (brk - (char *)p < MIN_CHUNK_SIZE)
+			  (m.address() + alignment - 1) & -static_cast<ssize_t>(alignment);
+			brk = reinterpret_cast<char *>(mem2chunk(alignedAddress));
+			if (ds::pointer::diff(p, brk) < MinChunkSize)
 			{
 				brk += alignment;
 			}
 
-			newp     = (MChunk *)brk;
-			leadsize = brk - (char *)(p);
+			newp     = reinterpret_cast<MChunk *>(brk);
+			leadsize = ds::pointer::diff(p, brk);
 			newsize  = p->size_get() - leadsize;
 
 			// Give back leader, use the rest.
@@ -1942,11 +1938,11 @@ class MState
 
 		// Also give back spare room at the end.
 		size = p->size_get();
-		if (size > nb + MIN_CHUNK_SIZE)
+		if (size > nb + MinChunkSize)
 		{
-			remainder_size = size - nb;
-			remainder      = p->chunk_plus_offset(nb);
-			remainder->in_use_chunk_set(remainder_size);
+			remainderSize = size - nb;
+			remainder     = p->chunk_plus_offset(nb);
+			remainder->in_use_chunk_set(remainderSize);
 			p->in_use_chunk_set(nb);
 			mspace_free_internal(remainder);
 		}
