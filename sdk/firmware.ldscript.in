@@ -1,0 +1,217 @@
+# Copyright Microsoft and CHERIoT Contributors.
+# SPDX-License-Identifier: MIT
+
+@mmio@
+
+SECTIONS
+{
+	. = @code_start@;
+	_start = .;
+
+	.loader_start :
+	{
+		*(.loader_start);
+	}
+
+	.thread_stacks (NOLOAD) :  ALIGN(0x10)
+	{
+		*(.thread_stacks);
+	}
+
+	.compartment_export_tables : ALIGN(8)
+	{
+		__compart_exports = .;
+
+		# The scheduler and allocator's export tables are at the start.
+		.scheduler_export_table = .;
+		*.scheduler.compartment(.compartment_export_table);
+		.scheduler_export_table_end = .;
+
+		.allocator_export_table = ALIGN(8);
+		*/cherimcu.allocator.compartment(.compartment_export_table);
+		.allocator_export_table_end = .;
+
+		@compartment_exports@
+	}
+
+
+	__compart_pccs = .;
+
+	compartment_switcher_code : CAPALIGN
+	{
+		.compartment_switcher_start = .;
+		*/switcher/*.o(.text);
+	}
+	.compartment_switcher_end = .;
+
+	scheduler_code : CAPALIGN
+	{
+		.scheduler_start = .;
+		*.scheduler.compartment(.compartment_import_table);
+		.scheduler_import_end = .;
+		*.scheduler.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+	}
+	.scheduler_end = .;
+
+	allocator_code : CAPALIGN
+	{
+		.allocator_start = .;
+		*/cherimcu.allocator.compartment(.compartment_import_table);
+		.allocator_import_end = .;
+		allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/cherimcu.allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+	}
+	.allocator_end = .;
+
+	@software_revoker_code@
+
+	######################################################################
+	# Begin CMake-generated section
+	######################################################################
+	@pcc_ld@
+	######################################################################
+	# End CMake-generated section
+	######################################################################
+
+	__compart_pccs_end = .;
+
+	__compart_cgps = ALIGN(64);
+
+	.scheduler_globals : CAPALIGN
+	{
+		.scheduler_globals = .;
+		*.scheduler.compartment(.data .data.* .sdata .sdata.*);
+		.scheduler_bss_start = .;
+		*.scheduler.compartment(.sbss .sbss.* .bss .bss.*)
+	}
+	.scheduler_globals_end = .;
+
+	.allocator_globals : CAPALIGN
+	{
+		.allocator_globals = .;
+		*/cherimcu.allocator.compartment(.data .data.* .sdata .sdata.*);
+		.allocator_bss_start = .;
+		*/cherimcu.allocator.compartment(.sbss .sbss.* .bss .bss.*)
+	}
+	.allocator_globals_end = .;
+
+	@software_revoker_globals@
+
+	######################################################################
+	# Begin CMake-generated section
+	######################################################################
+	@gdc_ld@
+	######################################################################
+	# End CMake-generated section
+	######################################################################
+
+	__compart_cgps_end = ALIGN(64);
+
+	# Everything after this point can be discarded after the loader has
+	# finished.
+	. = ALIGN(512);
+	__export_mem_heap = @heap_start@;
+
+	__cap_relocs :
+	{
+		__cap_relocs = .;
+		# FIXME: This currently doesn't do anything.  The linker creates this
+		# entire section.  The linker script needs to be modified to create
+		# separate caprelocs sections for each section.
+		@cap_relocs@
+	}
+	__cap_relocs_end = .;
+
+	# Collect all compartment headers
+	.compartment_headers : ALIGN(4)
+	{
+		__compart_headers = .;
+		# Loader code start
+		LONG(.loader_code_start);
+		# Loader code length
+		SHORT(.loader_code_end - .loader_code_start);
+		# Loader data start
+		LONG(.loader_data_start);
+		# Loader data length
+		SHORT(.loader_data_end - .loader_data_start);
+
+		# Compartment switcher start address
+		LONG(.compartment_switcher_start);
+		# Compartment switcher end
+		SHORT(.compartment_switcher_end - .compartment_switcher_start);
+		# Compartment switcher entry point offset
+		SHORT(compartment_switcher_entry - .compartment_switcher_start);
+		# Compartment switcher sealing key
+		SHORT(compartment_switcher_sealing_key - .compartment_switcher_start);
+		# Switcher's copy of the scheduler's PCC.
+		SHORT(switcher_scheduler_entry_pcc - .compartment_switcher_start);
+		# Switcher's copy of the scheduler's CGP
+		SHORT(switcher_scheduler_entry_cgp - .compartment_switcher_start);
+		# Switcher's copy of the scheduler's CSP
+		SHORT(switcher_scheduler_entry_csp - .compartment_switcher_start);
+
+		# Scheduler code start address
+		LONG(.scheduler_start);
+		# Scheduler code end
+		SHORT(.scheduler_end - .scheduler_start);
+		# Scheduler globals start address
+		LONG(.scheduler_globals);
+		# Scheduler globals end size
+		SHORT(SIZEOF(.scheduler_globals));
+		# Size of the scheduler import table
+		SHORT(.scheduler_import_end - .scheduler_start);
+		# Address of scheduler export table
+		LONG(.scheduler_export_table);
+		# Size of the scheduler export table
+		SHORT(.scheduler_export_table_end - .scheduler_export_table);
+
+		# Allocator code start address
+		LONG(.allocator_start);
+		# Allocator code end
+		SHORT(.allocator_end - .allocator_start);
+		# Allocator globals start address
+		LONG(.allocator_globals);
+		# Allocator globals end
+		SHORT(SIZEOF(.allocator_globals));
+		# Size of the allocator import table
+		SHORT(.allocator_import_end - .allocator_start);
+		# Address of allocator export table
+		LONG(.allocator_export_table);
+		# Size of the allocator export table
+		SHORT(.allocator_export_table_end - .allocator_export_table);
+
+		@software_revoker_header@
+
+		# Magic number
+		LONG(0xedfcaccf);
+		# Number of library headers.
+		SHORT(@library_count@);
+		# Number of compartment headers.
+		SHORT(@compartment_count@);
+
+		@compartment_headers@
+
+		__compart_headers_end = .;
+	}
+
+	.loader_code : CAPALIGN
+	{
+		.loader_code_start = .;
+		*/loader/boot.cc.o(.text .text.* .rodata .rodata.* .data.rel.ro);
+	}
+	.loader_code_end = .;
+
+	.loader_data : CAPALIGN
+	{
+		.loader_data_start = .;
+		*/loader/boot.cc.o(.data .data.* .sdata .sdata.* .sbss .sbss.* .bss .bss.*);
+	}
+	.loader_data_end = .;
+
+}
+# No symbols should be exported
+VERSION {
+	VERSION_1 {
+		local: *;
+	};
+};

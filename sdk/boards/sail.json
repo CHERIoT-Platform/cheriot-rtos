@@ -1,0 +1,28 @@
+{
+    "devices": {
+        "clint": {
+            "start": 0x2000000,
+            "length": 0x10000
+        },
+        "uart": {
+            "start": 0x10000000,
+            "end":   0x10000100
+        },
+        "shadow" : {
+            "start" : 0x83000000,
+            "end"   : 0x83001000
+        }
+    },
+    "instruction_memory": {
+        "start": 0x80000000,
+        "end": 0x80040000
+    },
+    "heap": {
+        "end": 0x80040000
+    },
+    "defines" : "SAIL",
+    "timer_hz" : 2000,
+    "tickrate_hz" : 10,
+    "revoker" : "software",
+    "simulation": true
+}

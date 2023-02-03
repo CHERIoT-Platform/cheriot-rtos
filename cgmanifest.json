@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/component-detection-manifest.json",
+  "Registrations": [
+    {
+      "component": {
+        "type": "git",
+        "git": {
+          "repositoryUrl": "https://github.com/CTSRD-CHERI/llvm-project.git",
+          "commitHash": "7245208df70403e1f7189f3be7b57ca934b1cbb2"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "git",
+        "git": {
+          "repositoryUrl": "https://github.com/Neargye/magic_enum.git",
+          "commitHash": "8f9f4afee78aa291b769be61e9ea622939bb983c"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "git",
+        "git": {
+          "repositoryUrl": "https://github.com/coder-mike/microvium.git",
+          "commitHash": "cedba29e662b74615e48d7e25ae74753afd712ae"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "git",
+        "git": {
+          "repositoryUrl": "https://github.com/CTSRD-CHERI/cheribsd.git",
+          "commitHash": "8993e1c3bba52a2610f863d206b319904c22e121"
+        }
+      }
+    }
+  ],
+  "Version": 1
+}

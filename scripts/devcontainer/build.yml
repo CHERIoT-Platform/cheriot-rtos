@@ -1,0 +1,32 @@
+trigger: none
+
+resources:
+  pipelines:
+  - pipeline: LLVM
+    project: CHERI-MCU
+    source: LLVM
+  - pipeline: sail-cheri-mcu
+    project: CHERI-MCU
+    source: sail-cheri-mcu
+
+jobs:
+- job:
+  displayName: Build DevContainer
+  pool:
+    vmImage: ubuntu-20.04
+  timeoutInMinutes: 10
+  steps:
+  - checkout: self
+    submodules: recursive
+  - download: LLVM
+  - download: sail-cheri-mcu
+  - script: |
+      mv $(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM scripts/devcontainer/
+      mv $(Pipeline.Workspace)/$(resources.triggeringAlias)/sail-cheri-mcu/SailSimulator scripts/devcontainer/
+      docker build --build-arg LLVM_PATH=LLVM/LLVM --build-arg SAIL_PATH=SailSimulator scripts/devcontainer -t cheriot.azurecr.io/cheriot/devcontainer
+  - script: |
+      docker login -u ci-push-token -p $ACR_CI_PUSH_TOKEN_PASSWORD cheriot.azurecr.io
+    env:
+      ACR_CI_PUSH_TOKEN_PASSWORD: $(ACR_CI_PUSH_TOKEN_PASSWORD)
+  - script: |
+      docker push cheriot.azurecr.io/cheriot/devcontainer 

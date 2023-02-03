@@ -1,0 +1,167 @@
+#pragma once
+/**
+ * This file contains concrete implementations of the C++ replaceable new and
+ * delete functions, as thin wrappers around calls to the allocator
+ * compartment.
+ *
+ * These are intended to be small and inlined for normal use but have blocking
+ * behaviour that may be inappropriate for some uses.  Individual compartments
+ * can opt out of these definitions by defining `CHERIOT_NO_NEW_DELETE`.
+ */
+#include_next <new>
+#include <stdlib.h>
+
+#ifndef CHERIOT_NO_NEW_DELETE
+namespace std
+{
+	/**
+	 * Implementation details.
+	 */
+	namespace __new_detail
+	{
+		/**
+		 * Class for managing the handler for new and delete.
+		 */
+		class NewHelper
+		{
+			/**
+			 * Pointer to the handler for allocation failures.
+			 */
+			static inline std::new_handler newHandler;
+
+			/// The standard getter is allowed to access the new handler
+			friend std::new_handler std::get_new_handler() _NOEXCEPT;
+			/// The standard setter is allowed to modify the new handler
+			friend std::new_handler std::set_new_handler(new_handler) _NOEXCEPT;
+
+			public:
+			/**
+			 * Helper to call the allocator and raise an error if allocation fails.
+			 */
+			static inline void *allocate(size_t size)
+			{
+				void *ptr = malloc(size);
+				while (ptr == nullptr)
+				{
+					if (newHandler)
+					{
+						newHandler();
+					}
+					else
+					{
+						break;
+					}
+				}
+				return ptr;
+			}
+		};
+	} // namespace __new_detail
+
+	/**
+	 * Return the handler for allocation failure.
+	 */
+	inline new_handler get_new_handler() noexcept
+	{
+		return __new_detail::NewHelper::newHandler;
+	}
+
+	/**
+	 * Set the handler for allocation failure and return the old one.
+	 *
+	 * Note: This implementation is *not* thread safe!
+	 */
+	inline new_handler set_new_handler(new_handler new_p) noexcept
+	{
+		auto old = __new_detail::NewHelper::newHandler;
+		__new_detail::NewHelper::newHandler = new_p;
+		return old;
+	}
+
+} // namespace std
+
+#	pragma clang diagnostic push
+#	pragma clang diagnostic ignored "-Winline-new-delete"
+
+_LIBCPP_NODISCARD_AFTER_CXX17
+  __always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void *
+  operator new(std::size_t size)
+{
+	return std::__new_detail::NewHelper::allocate(size);
+}
+
+_LIBCPP_NODISCARD_AFTER_CXX17
+  __always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void *
+  operator new(std::size_t size, const std::nothrow_t &) noexcept
+{
+	return std::__new_detail::NewHelper::allocate(size);
+}
+
+_LIBCPP_NODISCARD_AFTER_CXX17
+  __always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void *
+  operator new[](std::size_t size)
+{
+	return std::__new_detail::NewHelper::allocate(size);
+}
+_LIBCPP_NODISCARD_AFTER_CXX17
+  __always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void *
+  operator new[](std::size_t size, const std::nothrow_t &) noexcept
+{
+	return std::__new_detail::NewHelper::allocate(size);
+}
+__always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void
+operator delete(void *ptr) noexcept
+{
+	::free(ptr);
+}
+__always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void
+operator delete(void *ptr, std::size_t size) noexcept
+{
+	::free(ptr);
+}
+
+__always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void
+operator delete[](void *ptr) noexcept
+{
+	::free(ptr);
+}
+__always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void
+operator delete[](void *ptr, std::size_t size) noexcept
+{
+	::free(ptr);
+}
+__always_inline _LIBCPP_OVERRIDABLE_FUNC_VIS inline void
+operator delete[](void *ptr, const std::nothrow_t &) noexcept
+{
+	::free(ptr);
+}
+
+#	if 0
+// Until the allocator exposes a memalign interface, we don't support aligned allocation.
+[[nodiscard]] void* operator new(std::size_t size, std::align_val_t alignment);
+[[nodiscard]] void* operator new(std::size_t size, std::align_val_t alignment,
+                                 const std::nothrow_t&) noexcept;
+
+void operator delete(void *ptr, std::align_val_t alignment) noexcept;
+void operator delete(void            *ptr,
+                     std::size_t      size,
+                     std::align_val_t alignment) noexcept;
+void operator delete(void *ptr, const std::nothrow_t &) noexcept;
+void operator delete(void            *ptr,
+                     std::align_val_t alignment,
+                     const std::nothrow_t &) noexcept;
+[[nodiscard]] void *operator new[](std::size_t      size,
+                                   std::align_val_t alignment);
+[[nodiscard]] void *operator new[](std::size_t      size,
+                                   std::align_val_t alignment,
+                                   const std::nothrow_t &) noexcept;
+void operator delete[](void *ptr, std::align_val_t alignment) noexcept;
+void operator delete[](void            *ptr,
+                       std::size_t      size,
+                       std::align_val_t alignment) noexcept;
+void operator delete[](void            *ptr,
+                       std::align_val_t alignment,
+                       const std::nothrow_t &) noexcept;
+
+#	endif
+#	pragma clang diagnostic pop
+#endif

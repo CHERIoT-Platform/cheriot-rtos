@@ -1,0 +1,41 @@
+Checks:          'clang-diagnostic-*,-clang-diagnostic-error,google-readability-casting,readability-else-after-return,performance-unnecessary-copy-initialization,bugprone-use-after-move,modernize-use-nullptr,modernize-redundant-void-arg,modernize-return-braced-init-list,modernize-use-default-member-init,modernize-use-equals-default,modernize-use-equals-delete,modernize-use-nodiscard,modernize-use-override,cppcoreguidelines-avoid-goto,misc-unconventional-assign-operator,cppcoreguidelines-narrowing-conversions,bugprone-assert-side-effect,bugprone-bool-pointer-implicit-conversion,bugprone-copy-constructor-init,bugprone-forwarding-reference-overload,bugprone-macro-repeated-side-effects,bugprone-move-forwarding-reference,bugprone-misplaced-widening-cast,bugprone-swapped-arguments,bugprone-undelegated-constructor,bugprone-unused-raii,cert-dcl21-cpp,llvm-namespace-comment,misc-static-assert,misc-redundant-expression,modernize-loop-convert,readability-non-const-parameter,readability-identifier-naming'
+FormatStyle: file
+UseColor: true
+WarningsAsErrors: false
+CheckOptions:
+    - key: readability-identifier-naming.StructCase
+      value: CamelCase
+    - key: readability-identifier-naming.ClassCase
+      value: CamelCase
+    - key: readability-identifier-naming.TypedefCase
+      value: CamelCase
+    - key: readability-identifier-naming.TypeAliasCase
+      value: CamelCase
+    - key: readability-identifier-naming.ClassConstantCase
+      value: CamelCase
+    - key: readability-identifier-naming.EnumConstantCase
+      value: CamelCase
+    - key: readability-identifier-naming.FunctionCase
+      value: lower_case
+    - key: readability-identifier-naming.ClassMethodCase
+      value: lower_case
+    - key: readability-identifier-naming.MemberCase
+      value: camelBack
+    - key: readability-identifier-naming.ClassMemberCase
+      value: camelBack
+    - key: readability-identifier-naming.ConstantCase
+      value: CamelCase
+    - key: readability-identifier-naming.ConstantIgnoredRegexp
+      value: '__.*'
+    - key: readability-identifier-naming.ParameterCase
+      value: camelBack
+    - key: readability-identifier-naming.VariableCase
+      value: camelBack
+    - key: readability-identifier-naming.VariableIgnoredRegexp
+      value: '__.*'
+    - key: readability-identifier-naming.MacroDefinitionCase
+      value: UPPER_CASE
+    - key: readability-identifier-naming.MacroDefinitionIgnoredRegexp
+      value: '__.*'
+    - key: cppcoreguidelines-narrowing-conversions.WarnOnEquivalentBitWidth
+      value: false

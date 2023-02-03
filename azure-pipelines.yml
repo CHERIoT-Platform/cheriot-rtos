@@ -1,0 +1,149 @@
+trigger:
+- core
+
+resources:
+  pipelines:
+  - pipeline: LLVM
+    project: CHERI-MCU
+    source: LLVM
+  - pipeline: Flute-TCM
+    project: CHERI-MCU
+    source: Flute-TCM
+  - pipeline: sail-cheri-mcu
+    project: CHERI-MCU
+    source: sail-cheri-mcu
+
+jobs:
+############################################## Linux Builds
+- job:
+  displayName: RTOS tests
+  pool:
+    vmImage: ubuntu-20.04
+  timeoutInMinutes: 300
+  strategy:
+    matrix:
+      HardwareRevokerRelease:
+        board: flute
+        flags:  --debug-loader=n --debug-scheduler=n --debug-allocator=n
+        mode: release
+      SoftwareRevokerRelease:
+        board: flute-software-revoker
+        flags:  --debug-loader=n --debug-scheduler=n --debug-allocator=n
+        mode: release
+      SailRelease:
+        board: sail
+        flags:  --debug-loader=n --debug-scheduler=n --debug-allocator=n
+        mode: release
+      HardwareRevokerDebug:
+        board: flute
+        flags:  --debug-loader=y --debug-scheduler=y --debug-allocator=y
+        mode: debug
+      SoftwareRevokerDebug:
+        board: flute-software-revoker
+        flags:  --debug-loader=y --debug-scheduler=y --debug-allocator=y
+        mode: debug
+      SailDebug:
+        board: sail
+        flags: --debug-loader=y --debug-scheduler=y --debug-allocator=y
+        mode: debug
+  steps:
+  - checkout: self
+    submodules: recursive
+  - download: LLVM
+  - download: Flute-TCM
+  - download: sail-cheri-mcu
+  - script: |
+      set -eo pipefail
+      sudo add-apt-repository ppa:xmake-io/xmake
+      sudo apt update
+      sudo apt install xmake
+    displayName: 'Installing dependencies'
+  - script: |
+      chmod +x $(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM/LLVM/bin/* \
+        $(Pipeline.Workspace)/$(resources.triggeringAlias)/Flute-TCM/FluteSimulator/* \
+        $(Pipeline.Workspace)/$(resources.triggeringAlias)/sail-cheri-mcu/SailSimulator/*
+      echo $(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM
+      echo $(Pipeline.Workspace)
+      ls -R $(Pipeline.Workspace)
+    displayName: 'See where anything is installed'
+  - script: |
+      ls $(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM/LLVM/bin/
+      echo xmake f -P . --board=$(board) --sdk=$(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM/LLVM/ $(flags) -m $(mode)
+      xmake f -P . --board=$(board) --sdk=$(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM/LLVM/ $(flags) -m $(mode)
+    workingDirectory: 'tests'
+    displayName: 'Configure the build'
+  - script: |
+      xmake -P . -v
+    workingDirectory: 'tests'
+    displayName: 'Building the test suite'
+  - script: |
+      $(Pipeline.Workspace)/$(resources.triggeringAlias)/sail-cheri-mcu/SailSimulator/cheriot_sim -p --no-trace build/cheriot/cheriot/$(mode)/test-suite
+    condition: startsWith(variables['board'],'sail')
+    workingDirectory: 'tests'
+    displayName: 'Running the test suite on Sail'
+  - script: |
+      export PATH=$(Pipeline.Workspace)/$(resources.triggeringAlias)/Flute-TCM/FluteSimulator:$PATH
+      for I in `seq 32768` ; do echo 00000000 >> tail.hex ; done
+      elf_to_hex build/cheriot/cheriot/$(mode)/test-suite Mem.hex
+      hex_to_tcm_hex.sh
+      cp tail.hex Mem-TCM-tags-0.hex
+      exe_HW_sim +tohost | tee sim.log
+      EXIT_CODE=$(expr $(printf '%d' $(grep -E -e 'tohost_value is 0x[0-9a-zA-Z]+' -o  sim.log  | awk '{print $3}')) / 2)
+      echo "Exit code: $EXIT_CODE"
+      exit $EXIT_CODE
+    condition: startsWith(variables['board'],'flute')
+    workingDirectory: 'tests'
+    displayName: 'Running the test suite on Flute'
+  - script: |
+      set -eo pipefail
+      for example_dir in $PWD/examples/*/; do
+        cd $example_dir
+        echo Building $example_dir
+        xmake f --board=$(board) --sdk=$(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM/LLVM/ $(flags) -m $(mode)
+        xmake
+      done
+    displayName: 'Building the examples'
+  - script: |
+      set -eo pipefail
+      for example_dir in $PWD/examples/*/; do
+        cd $example_dir
+        echo Running $example_dir
+        example_name=$(basename ${example_dir#*.})
+        $(Pipeline.Workspace)/$(resources.triggeringAlias)/sail-cheri-mcu/SailSimulator/cheriot_sim \
+          build/cheriot/cheriot/$(mode)/${example_name}
+      done
+    condition: startsWith(variables['board'],'sail')
+    displayName: 'Running the examples'
+
+- job:
+  displayName: Check coding style
+  pool:
+    vmImage: ubuntu-20.04
+  timeoutInMinutes: 300
+  steps:
+  - checkout: self
+    submodules: recursive
+  - download: LLVM
+  - script: |
+      chmod +x $(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM/LLVM/bin/*
+      echo $(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM
+      echo $(Pipeline.Workspace)
+      ls -R $(Pipeline.Workspace)
+    displayName: 'See where anything is installed'
+  - script: |
+      ./scripts/run_clang_tidy_format.sh $(Pipeline.Workspace)/$(resources.triggeringAlias)/LLVM/LLVM/bin/
+    displayName: 'Running clang-tidy and clang-format'
+
+- job:
+  displayName: Compliance checks
+  pool:
+    vmImage: windows-latest
+  steps:
+  - task: securedevelopmentteam.vss-secure-development-tools.build-task-credscan.CredScan@2
+    displayName: 'Run CredScan'
+    inputs:
+      debugMode: false
+  - task: ms.vss-governance-buildtask.governance-build-task-component-detection.ComponentGovernanceComponentDetection@0
+    displayName: 'Component Detection'
+  - task: securedevelopmentteam.vss-secure-development-tools.build-task-publishsecurityanalysislogs.PublishSecurityAnalysisLogs@3
+    displayName: 'Publish Security Analysis Logs'

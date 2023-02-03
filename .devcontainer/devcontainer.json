@@ -1,0 +1,22 @@
+{
+  "image": "cheriot.azurecr.io/cheriot/devcontainer",
+  "remoteUser": "cheriot",
+  "containerUser": "cheriot",
+  "settings": {
+    "clangd.path": "/cheriot-tools/bin/clangd",
+    "xmake.compileCommandsDirectory": "${workspaceRoot}",
+    "xmake.workingDirectory": "${workspaceRoot}/tests",
+    "xmake.additionalConfigArguments": "--sdk=/cheriot-tools/"
+  },
+  "postAttachCommand": "git submodule init && git submodule update && cd tests && xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands .. && cd .. && for I in examples/[[:digit:]]* ; do echo $I ; cd $I ; xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands . && cd ../.. ; done",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+          "llvm-vs-code-extensions.vscode-clangd",
+          "tboox.xmake-vscode",
+          "hnw.vscode-auto-open-markdown-preview"
+      ]
+    }
+  }
+}
+

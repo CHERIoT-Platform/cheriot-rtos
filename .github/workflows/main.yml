@@ -1,0 +1,78 @@
+name: CHERIoT RTOS Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  run-tests:
+    strategy:
+      matrix: 
+        build-type: [ debug, release ]
+        board: [ sail ]
+        include:
+          - build-type: debug
+            build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=y -m debug
+          - build-type: release
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=n -m release
+      fail-fast: false
+    runs-on: ubuntu-latest
+    container:
+      image: cheriot.azurecr.io/cheriot/devcontainer
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Build tests
+      run: |
+        cd tests
+        xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
+        xmake
+    - name: Run tests
+      run: |
+        cd tests
+        /cheriot-tools/bin/cheriot_sim -p --no-trace build/cheriot/cheriot/${{ matrix.build-type }}/test-suite
+    - name: Build examples
+      run: |
+        set -e
+        for example_dir in $PWD/examples/*/; do
+          cd $example_dir
+          echo Building $example_dir
+          xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
+          xmake
+        done
+    - name: Run tests
+      run: |
+        set -e
+        for example_dir in $PWD/examples/*/; do
+          cd $example_dir
+          echo Running $example_dir
+          example_name=$(basename ${example_dir#*.})
+          /cheriot-tools/bin/cheriot_sim -p --no-trace build/cheriot/cheriot/${{ matrix.build-type }}/${example_name}
+        done
+
+  check-format:
+    name: Check coding conventions
+    runs-on: ubuntu-latest
+    container:
+      image: cheriot.azurecr.io/cheriot/devcontainer
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Run clang-format and clang-tidy
+      run: ./scripts/run_clang_tidy_format.sh /cheriot-tools/bin
+
+  all-checks:
+    needs: [run-tests, check-format]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Dummy step
+      run: true

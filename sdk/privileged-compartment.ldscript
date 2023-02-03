@@ -1,0 +1,65 @@
+# Copyright Microsoft and CHERIoT Contributors.
+# SPDX-License-Identifier: MIT
+
+SECTIONS
+{
+	. = 0;
+	.compartment_export_table : ALIGN(8)
+	{
+		# Space for the compartment's PCC and GDC
+		. = . + 16;
+		# The compartment error handler, if it is defined.
+		# The linker will process this relocation now, so we need to make it a
+		# delta.  The final layout will be the compartment import table
+		# followed by the text segment.  There won't be any padding, because
+		# the compartment import table is more strongly aligned than text.
+		LONG(DEFINED(compartment_error_handler) ? compartment_error_handler - __compartment_code_start + SIZEOF(.compartment_import_table) : -1);
+		# Array of compartment exports
+		*(.compartment_exports);
+	}
+	# Lay out the compartment imports section.  This will end up on PCC.
+	.compartment_import_table : ALIGN(8)
+	{
+		# Array of compartment imports 
+		HIDDEN(__compartment_pcc_start = .);
+		# The sealing key for this compartment is before the import table.
+		HIDDEN(__sealingkey = .);
+		. = . + 8;
+		# Space for a second sealing key, used only by the allocator.
+		HIDDEN(__sealingkey2 = .);
+		. = . + 8;
+		# The first import table entry is the compartment switcher.
+		HIDDEN(.compartment_switcher = .);
+		. = . + 8;
+		*(.compartment_imports .compartment_imports.*);
+	}
+	# Lay out the code
+	.text :
+	{
+		# HIDDEN(__compartment_code_start = .);
+		*(.text .text.*);
+	}
+	# Read-only data that will end up in the compartment's PCC.
+	.rodata :
+	{
+		*(.data.rel.ro .data.rel.ro.*);
+		*(.rodata .rodata.*);
+	}
+	# Lay out all of the globals.
+	.data :
+	{
+		*(.data .data.*);
+		*(.sdata .sdata.*);
+	}
+	# BSS remains in a separate section so that we can find it later.
+	.bss :
+	{
+		*(.bss .bss.*);
+		*(.sbss .sbss.*);
+	}
+	# Throw some stuff away that we don't need.
+	/DISCARD/ :
+	{
+		*(.comment);
+	}
+}

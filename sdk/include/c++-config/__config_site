@@ -1,0 +1,36 @@
+#pragma once
+/**
+ * This file provides configuration macros for our use of libc++.
+ */
+
+/// The ABI namespace for C++ ABI functions.  This is currently unused: we
+/// don't provide a C++ runtime (yet?).
+#define _LIBCPP_ABI_VERSION 1
+/// Our allocator does not yet support alignment greater than capability
+/// alignment.
+#define _LIBCPP_HAS_NO_LIBRARY_ALIGNED_ALLOCATION 1
+/// We use the Itanium C++ ABI
+#define _LIBCPP_ABI_FORCE_ITANIUM
+/// Build implementations in the compartments that use them.
+#define _LIBCPP_DISABLE_EXTERN_TEMPLATE 1
+/// There is no global filesystem on the microcontroller.
+#define _LIBCPP_HAS_NO_GLOBAL_FILESYSTEM_NAMESPACE
+/// We do not yet expose threading APIs.  We will eventually provide everything
+/// except thread creation.
+#define _LIBCPP_HAS_NO_THREADS
+// Uncomment when we have wrappers for mutex, condition variable, and friends,
+// and remove _LIBCPP_HAS_NO_THREADS.
+//#define _LIBCPP_HAS_THREAD_API_EXTERNAL
+/// Standard in doesn't make sense for the microcontroller.
+#define _LIBCPP_HAS_NO_STDIN
+/// Standard out doesn't make sense for the microcontroller.
+#define _LIBCPP_HAS_NO_STDOUT
+/// We have no filesystem, so no filesystem library.
+#define _LIBCPP_HAS_NO_FILESYSTEM_LIBRARY
+/// We have a single core, so no parallel algorithms.
+#define _LIBCPP_HAS_NO_PARALLEL_ALGORITHMS
+/// We are not yet using availability annotations.
+#define _LIBCPP_HAS_NO_VENDOR_AVAILABILITY_ANNOTATIONS
+/// We don't want locales, any localisation should happen on a different
+/// device.
+#define _LIBCPP_HAS_NO_LOCALIZATION

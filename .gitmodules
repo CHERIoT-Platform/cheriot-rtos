@@ -1,0 +1,6 @@
+[submodule "third_party/magic_enum"]
+	path = sdk/third_party/magic_enum
+	url = https://github.com/Neargye/magic_enum.git
+[submodule "sdk/third_party/microvium"]
+	path = sdk/third_party/microvium
+	url = https://github.com/coder-mike/microvium

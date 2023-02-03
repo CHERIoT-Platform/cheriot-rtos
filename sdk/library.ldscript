@@ -1,0 +1,59 @@
+# Copyright Microsoft and CHERIoT Contributors.
+# SPDX-License-Identifier: MIT
+
+SECTIONS
+{
+	. = 0;
+	.compartment_export_table : ALIGN(8)
+	{
+		# Space for the compartment's PCC and GDC
+		. = . + 16;
+		# Space for the compartment's ID
+		. = . + 2;
+		# Array of compartment exports
+		*(.compartment_exports);
+	}
+	# Lay out the compartment imports section.  This will end up on PCC.
+	.compartment_import_table : ALIGN(8)
+	{
+		# Array of compartment imports.
+		HIDDEN(__compartment_pcc_start = .);
+		# The first import table entry is the compartment switcher.
+		HIDDEN(.compartment_switcher = .);
+		. = . + 8;
+		*(.compartment_imports .compartment_imports.*);
+	}
+	# Lay out the code
+	.text :
+	{
+		# HIDDEN(__compartment_code_start = .);
+		*(.text .text.*);
+	}
+	# Read-only data that will end up in the compartment's PCC.
+	.rodata :
+	{
+		*(.rodata .rodata.*);
+		*(.data.rel.ro);
+	}
+	# BSS remains in a separate section so that we can find it later.
+	.bss :
+	{
+		*(.sbss .sbss.*);
+		*(.bss .bss.*);
+	}
+	# Throw some stuff away that we don't need.
+	/DISCARD/ :
+	{
+		*(.comment);
+		# Libraries may not have data sections.
+		*(.data .data.*);
+		*(.sdata .sdata.*);
+	}
+}
+# Export the exported function table.
+VERSION {
+	VERSION_1 {
+		global: __export_*;
+		local: *;
+	};
+};

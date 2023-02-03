@@ -1,0 +1,34 @@
+{
+	"devices" :
+	{
+		"clint" : {
+			"start"  : 0x2000000,
+			"length" : 0x10000
+		},
+		"plic" : {
+			"start"  : 0xc000000,
+			"length" : 0x400000
+		},
+		"uart" : {
+			"start" : 0x10000000,
+			"end"   : 0x10000100
+		},
+		"shadow" : {
+			"start" : 0x40000000,
+			"end"   : 0x40001000
+		}
+	},
+	"instruction_memory" : {
+		"start" : 0x80000000,
+		"end"   : 0x80040000
+	},
+	"heap" : {
+		"end"   : 0x80040000
+	},
+	"defines" : "FLUTE",
+	"timer_hz" : 40000,
+	"tickrate_hz" : 10,
+	"revoker" : "software",
+	"simulation" : true
+}
+
