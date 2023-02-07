@@ -25,6 +25,14 @@ CheckOptions:
       value: camelBack
     - key: readability-identifier-naming.ConstantCase
       value: CamelCase
+    - key: readability-identifier-naming.TemplateParameterCase
+      value: CamelCase
+    - key: readability-identifier-naming.TemplateTemplateParameterCase
+      value: CamelCase
+    - key: readability-identifier-naming.TypeTemplateParameterCase
+      value: CamelCase
+    - key: readability-identifier-naming.ValueTemplateParameterCase
+      value: CamelCase
     - key: readability-identifier-naming.ConstantIgnoredRegexp
       value: '__.*'
     - key: readability-identifier-naming.ParameterCase
