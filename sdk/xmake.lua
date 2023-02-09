@@ -200,7 +200,7 @@ rule("firmware")
 		print("loading board description from ", boardfile)
 		local board = json.loadfile(boardfile)
 		local add_defines = function (defines)
-			for _, d in pairs(target:deps()) do
+			for _, d in table.orderpairs(target:deps()) do
 				d:add('defines', defines)
 			end
 		end
@@ -232,7 +232,7 @@ rule("firmware")
 		local mmio_start = 0xffffffff
 		local mmio_end = 0
 		-- Add start and end markers for all MMIO devices.
-		for name, range in pairs(board.devices) do
+		for name, range in table.orderpairs(board.devices) do
 			local start = range.start
 			local stop = range["end"]
 			if not stop then
@@ -445,7 +445,7 @@ rule("firmware")
 		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
 		batchcmds:mkdir(target:targetdir())
 		local objects = target:objectfiles()
-		for name, dep in pairs(target:deps()) do
+		for name, dep in table.orderpairs(target:deps()) do
 			if (dep:get("cherimcu.type") == "library") or
 				(dep:get("cherimcu.type") == "compartment") or
 				(dep:get("cherimcu.type") == "privileged compartment") then
