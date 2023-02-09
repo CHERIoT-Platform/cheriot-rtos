@@ -361,7 +361,7 @@ rule("firmware")
 			local substitute = function (str)
 				return string.gsub(str, "${(%w*)}", { obj=obj, compartment=name })
 			end
-			for key, template in pairs(templates) do
+			for key, template in table.orderpairs(templates) do
 				ldscript_substitutions[key] = ldscript_substitutions[key] .. substitute(template)
 			end
 		end
@@ -409,7 +409,7 @@ rule("firmware")
 
 		-- Process all of the library dependencies.
 		local library_count = 0
-		for name, dep in pairs(target:deps()) do
+		for name, dep in table.orderpairs(target:deps()) do
 			if dep:get("cherimcu.type") == "library" then
 				library_count = library_count + 1
 				add_dependency(name, dep, library_templates)
@@ -418,7 +418,7 @@ rule("firmware")
 
 		-- Process all of the compartment dependencies.
 		local compartment_count = 0
-		for name, dep in pairs(target:deps()) do
+		for name, dep in table.orderpairs(target:deps()) do
 			if dep:get("cherimcu.type") == "compartment" then
 				compartment_count = compartment_count + 1
 				add_dependency(name, dep, compartment_templates)
