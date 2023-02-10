@@ -9,7 +9,7 @@ RUN apt update \
     && add-apt-repository ppa:xmake-io/xmake \
     && apt update \
     && apt install -y xmake git clang \
-    && xmake update dev
+    && xmake update dev --root
 
 # Create the user
 RUN useradd -m $USERNAME \
