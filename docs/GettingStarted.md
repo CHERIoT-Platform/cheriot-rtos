@@ -31,7 +31,7 @@ The build system requires a configure step and a build step:
 ```sh
 $ cd tests
 $ xmake config --sdk=/cheriot-tools/
-$ xmake -v
+$ xmake
 ```
 
 To get more verbose output, you can try adding `--debug-{loader,allocator,scheduler}=y` to the `xmake config` flags.

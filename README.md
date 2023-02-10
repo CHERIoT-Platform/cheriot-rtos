@@ -90,8 +90,6 @@ $ xmake
 
 This will create the output in `build/cheriot/cheriot/{release,debug}/{name of firmware target}.
 It will also create a `.dump` file in the same location giving the objdump output of the same target.
-*NOTE:* There appears to be an xmake bug where this doesn't always get generated, running `xmake -v` once appears to ensure that it is generated on all subsequent runs.
-
 
 ## Contributing
 
