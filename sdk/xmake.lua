@@ -454,7 +454,7 @@ rule("firmware")
 		end
 		batchcmds:vrunv(target:tool("ld"), table.join({"--script=" .. linkerscript, "--relax", "-o", target:targetfile()}, objects), opt)
 		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
-		batchcmds:vrunv(target:tool("objdump"), {"-glxsdrS", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
+		batchcmds:vexecv(target:tool("objdump"), {"-glxsdrS", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
 		batchcmds:add_depfiles(linkerscript)
 		batchcmds:add_depfiles(objects)
 	end)
