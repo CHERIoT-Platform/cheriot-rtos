@@ -8,7 +8,8 @@ RUN apt update \
     && apt install -y software-properties-common \
     && add-apt-repository ppa:xmake-io/xmake \
     && apt update \
-    && apt install -y xmake git clang
+    && apt install -y xmake git clang \
+    && xmake update dev
 
 # Create the user
 RUN useradd -m $USERNAME \
