@@ -9,7 +9,7 @@
 
 using namespace CHERI;
 
-void test_compartment_call()
+void test_number_of_arguments()
 {
 	debug_log(
 	  "Test argument calls with different number and type of arguments");
@@ -39,4 +39,10 @@ void test_compartment_call()
 	ret =
 	  compartment_call_inner(value, value, &value, value, &value, value, value);
 	TEST(ret == 0, "compartment_call_inner returend {}", ret);
+}
+
+void test_compartment_call()
+{
+	test_number_of_arguments();
+	test_incorrect_export_table(NULL);
 }

@@ -137,8 +137,12 @@ compartment_switcher_entry:
 	LoadCapPCC		cs0, compartment_switcher_sealing_key
 	li				gp, 9
 	csetaddr		cs0, cs0, gp
-	// The target capability is in ct1. Unseal and load the entry point offset.
+	// The target capability is in ct1. Unseal, check tag and load the entry point offset.
 	cunseal			ct1, ct1, cs0
+	// Make sure the export table is valid
+	cgettag			s0, ct1
+	beqz			s0, .Lforce_unwind_with_return_values
+	// Load the entry point offset.
 	clhu			s0, ExportEntry_offset_functionStart(ct1)
 	// At this point, we known that the cunseal has succeeded (we didn't trap
 	// on the load) and so it's safe to store the unsealed value of the export
@@ -311,6 +315,9 @@ exception_entry_asm:
 	reloadRegisters c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, csp
 	mret
 
+.Lforce_unwind_with_return_values:
+	li		a0, -1
+	li		a1, 0
 // We are starting a forced unwind.  This is reached either when we are unable
 // to run an error handler, or when we do run an error handler and it instructs
 // us to return.  This treats all register values as undefined on entry.
