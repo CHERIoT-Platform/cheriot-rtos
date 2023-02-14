@@ -349,10 +349,10 @@ exception_entry_asm:
 	LoadCapPCC     cs0, compartment_switcher_sealing_key
 	// ca2 at this point was loaded by .Lpop_trusted_stack_frame from the pcc
 	// in the trusted stack and so should always be sealed as a sentry type.
-	cgettype       gp, ca2
+	cgettype       gp, cra
 	csetaddr       cs0, cs0, gp
-	cunseal        ca2, ca2, cs0
-	csc            ca2, TrustedStack_offset_mepcc(csp)
+	cunseal        cra, cra, cs0
+	csc            cra, TrustedStack_offset_mepcc(csp)
 	clw            t0, TrustedStack_offset_mstatus(csp)
 	// If gp==2 then the we need to disable interrupts on return, otherwise we
 	// need to enable them.  The interrupt enable bit is bit 7.  We want to set
