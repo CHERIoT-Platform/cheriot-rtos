@@ -137,8 +137,12 @@ compartment_switcher_entry:
 	LoadCapPCC		cs0, compartment_switcher_sealing_key
 	li				gp, 9
 	csetaddr		cs0, cs0, gp
-	// The target capability is in ct1. Unseal and load the entry point offset.
+	// The target capability is in ct1. Unseal, check tag and load the entry point offset.
 	cunseal			ct1, ct1, cs0
+	// Make sure the export table is valid
+	cgettag			s0, ct1
+	beqz			s0, .Linvalid_entry
+	// Load the entry point offset.
 	clhu			s0, ExportEntry_offset_functionStart(ct1)
 	// At this point, we known that the cunseal has succeeded (we didn't trap
 	// on the load) and so it's safe to store the unsealed value of the export
@@ -311,6 +315,18 @@ exception_entry_asm:
 	reloadRegisters c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, csp
 	mret
 
+// If we detect an invalud entry and there is no error handler installed, we want
+// to resume rather than unwind.
+.Linvalid_entry:
+// Mark this threads as in the middle of a forced unwind.
+	li             a0, 1
+	csb            a0, TrustedStack_offset_inForcedUnwind(ctp)
+// Make sure we don't leak anything to the compartment.
+// Registers might been used by the call and therefore need zeroing.
+	zeroAllRegistersExcept a0, s0, s1, sp, a2, gp
+// Store an error value in return registers, which will be passed to the
+// caller on unwind. a0 is zeroed by zeroAllRegistersExcept 
+	li          a0, -1
 // We are starting a forced unwind.  This is reached either when we are unable
 // to run an error handler, or when we do run an error handler and it instructs
 // us to return.  This treats all register values as undefined on entry.
@@ -318,9 +334,6 @@ exception_entry_asm:
 	// Pop the trusted stack frame.
 	cjal           .Lpop_trusted_stack_frame
 	cmove          cra, ca2
-// At this point, cra should contain the return address, ca0 and ca1 to contain
-// the return values, cs0, cs1, cgp and csp to contain the values from the
-// caller.  All other registers will be cleared before return.
 .Lout_of_trusted_stack:
 	cmove          ct0, csp
 	// Fetch the trusted stack pointer.
