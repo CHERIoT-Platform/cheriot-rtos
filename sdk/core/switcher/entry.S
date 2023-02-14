@@ -318,6 +318,9 @@ exception_entry_asm:
 	// Pop the trusted stack frame.
 	cjal           .Lpop_trusted_stack_frame
 	cmove          cra, ca2
+// At this point, cra should contain the return address, ca0 and ca1 to contain
+// the return values, cs0, cs1, cgp and csp to contain the values from the
+// caller.  All other registers will be cleared before return.
 .Lout_of_trusted_stack:
 	cmove          ct0, csp
 	// Fetch the trusted stack pointer.
@@ -333,10 +336,10 @@ exception_entry_asm:
 	LoadCapPCC     cs0, compartment_switcher_sealing_key
 	// ca2 at this point was loaded by .Lpop_trusted_stack_frame from the pcc
 	// in the trusted stack and so should always be sealed as a sentry type.
-	cgettype       gp, ca2
+	cgettype       gp, cra
 	csetaddr       cs0, cs0, gp
-	cunseal        ca2, ca2, cs0
-	csc            ca2, TrustedStack_offset_mepcc(csp)
+	cunseal        cra, cra, cs0
+	csc            cra, TrustedStack_offset_mepcc(csp)
 	clw            t0, TrustedStack_offset_mstatus(csp)
 	// If gp==2 then the we need to disable interrupts on return, otherwise we
 	// need to enable them.  The interrupt enable bit is bit 7.  We want to set
