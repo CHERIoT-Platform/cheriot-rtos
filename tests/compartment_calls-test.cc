@@ -44,7 +44,7 @@ void test_number_of_arguments()
 void test_compartment_call()
 {
 	bool outTestFailed = false;
-	int ret = 0;
+	int  ret           = 0;
 
 	test_number_of_arguments();
 	ret = test_incorrect_export_table_with_handler(nullptr);
