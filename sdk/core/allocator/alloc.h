@@ -1934,17 +1934,14 @@ class MState
 	 * Move a chunk back onto free lists.
 	 *
 	 * Note that this chunk does not have to come from quarantine, because it
-	 * can come from initialisation or splitting a free chunk.
+	 * can come from initialisation or splitting a free chunk.  Assumes that the
+	 * revocation shadow bits are clear in either case.
 	 *
 	 * Initializes the linkages of p.
 	 */
 	void mspace_free_internal(MChunk *p)
 	{
 		ok_in_use_chunk(p);
-
-		// Clear the shadow bits.
-		revoker.shadow_paint_range(
-		  chunk2mem(p).address(), p->chunk_next()->ptr(), false);
 
 		heapFreeSize += p->size_get();
 
@@ -2104,6 +2101,11 @@ class MState
 			fore->metadata_clear();
 
 			heapQuarantineSize -= fore->size_get();
+
+			/* Clear the shadow bits that marked this region as quarantined */
+			revoker.shadow_paint_range(
+			  chunk2mem(fore).address(), fore->chunk_next()->ptr(), false);
+
 			mspace_free_internal(fore);
 			dequeued++;
 		}
@@ -2243,8 +2245,9 @@ class MState
 			return m;
 		}
 
-		p = mem2chunk(m);
-		if ((m.address() % alignment) != 0) // misaligned
+		p                    = mem2chunk(m);
+		ptraddr_t memAddress = m.address();
+		if ((memAddress % alignment) != 0)
 		{
 			/*
 			 * Find an aligned spot inside chunk. Since we need to give back
@@ -2254,7 +2257,7 @@ class MState
 			 * allocated enough total room so that this is always possible.
 			 */
 			size_t alignpad =
-			  alignment - (m.address() & static_cast<ssize_t>(alignment - 1));
+			  alignment - (memAddress & static_cast<ssize_t>(alignment - 1));
 			if (alignpad < MinChunkSize)
 			{
 				alignpad += alignment;
@@ -2262,13 +2265,16 @@ class MState
 
 			auto r = p->split(alignpad);
 			/*
-			 * XXX This is excessive, but because r is marked as in-use, thanks
-			 * to coming out of malloc, it makes some amount of sense to go back
-			 * through the free path.  But we know, for example, that the
-			 * contents are zeroed, the revocation bitmap is not set, that
-			 * coalescing is not possible (because p is the predecessor and is
-			 * in use and because if the successor were free, it would have been
-			 * following another free chunk.
+			 * XXX Were we to not use the general mspace_malloc above, but
+			 * have a raw, free MChunk* from the free pool here, we could
+			 * avoid a futile test and a presently useless test:
+			 *
+			 * - consolidation forward (with r) won't happen (ever), as that's
+			 *   the (start of the) chunk we're about to return.
+			 *
+			 * - consolidation backward won't happen either, at present, as
+			 *   mspace_malloc does not displace into the chunk it finds from
+			 *   the free pool, but, in principle, it could.
 			 */
 			mspace_free_internal(p);
 			p = r;
@@ -2279,7 +2285,19 @@ class MState
 		if (size > nb + MinChunkSize)
 		{
 			auto r = p->split(nb);
-			/* XXX see above */
+			/*
+			 * XXX Were we to not use the general mspace_malloc above, but
+			 * have a raw, free MChunk* from the free pool here, we could
+			 * avoid a futile test and some duplicated work.
+			 *
+			 * - consolidation backward won't happen (ever), as that's the
+			 *   (tail of the) chunk we're about to return.
+			 *
+			 * - consolidation forward *can* happen right now, because the
+			 *   generic mspace_malloc doesn't know that we're also poised
+			 *   to trim our tail, so it may well have trimmed the chunk
+			 *   it used to satisfy our request.
+			 */
 			mspace_free_internal(r);
 		}
 
