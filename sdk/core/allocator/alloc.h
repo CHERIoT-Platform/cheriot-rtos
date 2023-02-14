@@ -282,11 +282,11 @@ MChunkHeader
 	/**
 	 * Compressed size of the predecessor chunk.  See cell_prev().
 	 */
-	SmallSize sprev;
+	SmallSize prevSize;
 	/**
 	 * Compressed size of this chunk.  See cell_next().
 	 */
-	SmallSize shead;
+	SmallSize currSize;
 
 	bool isPrevInUse : 1;
 	bool isCurrInUse : 1;
@@ -298,14 +298,14 @@ MChunkHeader
 	{
 		return displacement_proxy::
 		  Proxy<MChunkHeader, SmallSize, false, head2size, size2head>(this,
-		                                                              sprev);
+		                                                              prevSize);
 	}
 
 	__always_inline auto cell_next()
 	{
 		return displacement_proxy::
 		  Proxy<MChunkHeader, SmallSize, true, head2size, size2head>(this,
-		                                                             shead);
+		                                                             currSize);
 	}
 
 	/**
@@ -334,13 +334,13 @@ MChunkHeader
 	// size of the previous chunk
 	size_t prevsize_get()
 	{
-		return head2size(sprev);
+		return head2size(prevSize);
 	}
 
 	// size of this chunk
 	size_t size_get()
 	{
-		return head2size(shead);
+		return head2size(currSize);
 	}
 
 	void mark_in_use()
@@ -393,22 +393,17 @@ MChunkHeader
 	{
 		size -= sizeof(MChunkHeader);
 
-		auto first = static_cast<MChunkHeader *>(base);
+		auto first = new (base) MChunkHeader();
 		first->clear();
-		first->shead       = size2head(size);
+		first->currSize    = size2head(size);
 		first->isPrevInUse = true;
 		first->isCurrInUse = false;
 
-		/*
-		 * The first header is now set up, but the link to the footer is not
-		 * well formed!  Despite that, we can still find our footer via the
-		 * next operator...
-		 */
-
-		auto footer = first->cell_next();
+		auto footer =
+		  new (ds::pointer::offset<void>(base, size)) MChunkHeader();
 		footer->clear();
-		footer->sprev       = size;
-		footer->shead       = size2head(sizeof(MChunkHeader));
+		footer->prevSize    = size;
+		footer->currSize    = size2head(sizeof(MChunkHeader));
 		footer->isPrevInUse = false;
 		footer->isCurrInUse = true;
 
@@ -593,15 +588,6 @@ MChunk
 	{
 		return header.size_get();
 	}
-	/**
-	 * Set the size of this chunk, which also takes care of converting sz into
-	 * the internal header format and setting the prev field in the next chunk.
-	 */
-	void size_set(size_t sz)
-	{
-		header.shead              = size2head(sz);
-		header.cell_next()->sprev = size2head(sz);
-	}
 
 	/**
 	 * Set the in-use bit of this chunk, which takes care of setting the
@@ -610,8 +596,7 @@ MChunk
 	 */
 	void in_use_set()
 	{
-		header.isCurrInUse              = true;
-		header.cell_next()->isPrevInUse = true;
+		header.mark_in_use();
 	}
 	/**
 	 * Clear the in-use bit of this chunk and the previous-in-use bit of the
@@ -619,20 +604,7 @@ MChunk
 	 */
 	void in_use_clear()
 	{
-		header.isCurrInUse              = false;
-		header.cell_next()->isPrevInUse = false;
-	}
-
-	/**
-	 * @brief Set this chunk as a free chunk with a given size, which takes care
-	 * of setting fields in the next chunk as well.
-	 *
-	 * @param sz the size of this free chunk
-	 */
-	void free_chunk_set(size_t sz)
-	{
-		size_set(sz);
-		in_use_clear();
+		header.mark_free();
 	}
 
 	// Is the bk field pointing to p?
