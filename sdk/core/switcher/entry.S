@@ -325,7 +325,7 @@ exception_entry_asm:
 // Registers might been used by the call and therefore need zeroing.
 	zeroAllRegistersExcept a0, s0, s1, sp, a2, gp
 // Store an error value in return registers, which will be passed to the
-// caller on unwind. a0 is zeroed by zeroAllRegistersExcept 
+// caller on unwind. a1 is zeroed by zeroAllRegistersExcept.
 	li          a0, -1
 // We are starting a forced unwind.  This is reached either when we are unable
 // to run an error handler, or when we do run an error handler and it instructs
