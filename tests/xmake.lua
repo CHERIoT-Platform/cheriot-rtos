@@ -50,6 +50,8 @@ compartment("stack_exhaustion_thread")
 test("stack_exhaustion")
 compartment("compartment_calls_inner")
     add_files("compartment_calls_inner.cc")
+compartment("compartment_calls_inner_with_handler")
+    add_files("compartment_calls_inner_with_handler.cc")
 test("compartment_calls")
 
 includes(path.join(sdkdir, "lib/atomic"),
@@ -79,7 +81,7 @@ firmware("test-suite")
     add_deps("multiwaiter_test")
     add_deps("ccompile_test")
     add_deps("stack_exhaustion_test", "stack_exhaustion_trusted", "stack_exhaustion_thread")
-    add_deps("compartment_calls_test", "compartment_calls_inner")
+    add_deps("compartment_calls_test", "compartment_calls_inner", "compartment_calls_inner_with_handler")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
         target:values_set("board", "$(board)")

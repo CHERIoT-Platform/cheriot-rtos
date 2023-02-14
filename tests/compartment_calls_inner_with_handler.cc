@@ -16,7 +16,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
 
-void test_incorrect_export_table_with_handler(__cheri_callback void (*fn)())
+int test_incorrect_export_table_with_handler(__cheri_callback void (*fn)())
 {
 	/*
 	 * Trigger a cross-compartment call with an invalid export entry.
@@ -28,4 +28,6 @@ void test_incorrect_export_table_with_handler(__cheri_callback void (*fn)())
 	fn();
 
 	TEST(false, "Should be unreachable");
+
+	return 0;
 }

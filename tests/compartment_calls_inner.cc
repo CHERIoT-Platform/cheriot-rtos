@@ -10,12 +10,6 @@
 
 using namespace CHERI;
 
-extern "C" ErrorRecoveryBehaviour
-compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
-{
-	return ErrorRecoveryBehaviour::ForceUnwind;
-}
-
 std::tuple expectedArguments = {ConstantValue,
                                 ConstantValue,
                                 ConstantValue,
@@ -103,7 +97,8 @@ int compartment_call_inner(int        x0,
 	return 0;
 }
 
-void test_incorrect_export_table(__cheri_callback void (*fn)())
+int test_incorrect_export_table(__cheri_callback void (*fn)(),
+                                 bool *outTestFailed)
 {
 	/*
 	 * Trigger a cross-compartment call with an invalid export entry.
@@ -111,7 +106,10 @@ void test_incorrect_export_table(__cheri_callback void (*fn)())
 
 	debug_log("test an incorrect export table entry");
 
+	*outTestFailed = true;
+
 	fn();
 
-	TEST(false, "Should be unreachable");
+	*outTestFailed = false;
+	return 0;
 }

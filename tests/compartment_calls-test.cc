@@ -43,6 +43,14 @@ void test_number_of_arguments()
 
 void test_compartment_call()
 {
+	bool outTestFailed = false;
+	int ret = 0;
+
 	test_number_of_arguments();
-	test_incorrect_export_table(NULL);
+	ret = test_incorrect_export_table_with_handler(nullptr);
+	TEST(ret == -1, "Test incorrect entry point with error handler failed");
+
+	ret = test_incorrect_export_table(nullptr, &outTestFailed);
+	TEST(outTestFailed == false,
+	     "Test incorrect entry point without error handler failed");
 }
