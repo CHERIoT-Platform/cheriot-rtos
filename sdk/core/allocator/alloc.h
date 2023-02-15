@@ -1081,13 +1081,6 @@ class MState
 		auto epoch = revoker.system_epoch_get();
 
 		/*
-		 * We may need to insert onto a new epoch's ring in quarantine.  If it
-		 * happens that all the pending rings are full, we might need to also
-		 * pull one out first.
-		 */
-		quarantine_pending_to_finished();
-
-		/*
 		 * Enqueue this chunk to quarantine.  Its header is still marked as
 		 * being allocated.
 		 */
@@ -1106,8 +1099,6 @@ class MState
 	 */
 	__always_inline bool quarantine_dequeue()
 	{
-		quarantine_pending_to_finished();
-
 		// 4 chosen by fair die roll.
 		return mspace_qtbin_deqn(4) > 0;
 	}
@@ -2023,7 +2014,15 @@ class MState
 		if (!quarantinePendingRing.tail_get(youngestPendingIx) ||
 		    quarantinePendingEpoch[youngestPendingIx] != epoch)
 		{
-			/* Open a new pending ring */
+			/*
+			 * We need to insert this object onto a new pending ring for the
+			 * new epoch.  Ensure that we have room by transferring a pending
+			 * ring whose epoch is past onto the finished ring, if any.  We
+			 * can be waiting for at most three epochs to age out, and have
+			 * room for four in our pending ring buffer.
+			 */
+			quarantine_pending_to_finished();
+
 			auto opened = quarantinePendingRing.tail_next(youngestPendingIx);
 			quarantinePendingRing.tail_advance();
 			Debug::Assert(opened, "Failed to open epoch ring");
@@ -2083,8 +2082,18 @@ class MState
 
 		for (size_t i = 0; i < loops; i++)
 		{
+			/*
+			 * If we're out of nodes on the finished ring, try grabbing some
+			 * from the pending rings.
+			 */
 			if (quarantine->is_empty())
-				break;
+			{
+				quarantine_pending_to_finished();
+				if (quarantine->is_empty())
+				{
+					break;
+				}
+			}
 
 			MChunk *fore = MChunk::from_ring(quarantine->first());
 
