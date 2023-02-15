@@ -1101,53 +1101,6 @@ class MState
 			}
 		}
 	}
-	// Can this chunk can be found in a bin?
-	bool bin_find(MChunk *x)
-	{
-		size_t size = x->size_get();
-		if (is_small(size))
-		{
-			BIndex  sidx = small_index(size);
-			MChunk *b    = smallbin_at(sidx);
-			if (is_smallmap_marked(sidx))
-			{
-				MChunk *p = b;
-				do
-				{
-					if (p == x)
-					{
-						return true;
-					}
-				} while ((p = ptr2chunk(p->fd)) != b);
-			}
-		}
-		else
-		{
-			BIndex tidx = compute_tree_index(size);
-			if (is_treemap_marked(tidx))
-			{
-				TChunk *t        = *treebin_at(tidx);
-				size_t  sizebits = size << leftshift_for_tree_index(tidx);
-				while (t != nullptr && t->size_get() != size)
-				{
-					t = t->child[leftshifted_val_msb(sizebits)];
-					sizebits <<= 1;
-				}
-				if (t != nullptr)
-				{
-					TChunk *u = t;
-					do
-					{
-						if (u == static_cast<TChunk *>(x))
-						{
-							return true;
-						}
-					} while ((u = ptr2tchunk(u->fd)) != t);
-				}
-			}
-		}
-		return false;
-	}
 	// Sanity check the entire malloc state in this MState.
 	void ok_malloc_state()
 	{
