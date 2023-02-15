@@ -97,6 +97,23 @@ switcher_scheduler_entry_csp:
 	bnez               t2, .Lforce_unwind
 .endm
 
+/**
+ * This macro sets the interrupt status.  If reg is non-zero, interrupts are
+ * disabled, if it is zero then they are enabled.
+ */
+.macro set_interrupt_state reg
+	// Set the register to 1 on any non-zero value
+	snez               \reg, \reg
+	// Set the register to 8 if reg is 1, 0 if it is 0
+	slli               \reg, \reg, 0x3
+	// Clear the interrupt-enable bit if reg started as 1
+	csrc               mstatus, \reg
+	// If reg is 8, set to 0, if 0, set to 8
+	xori               \reg, \reg, 0x8
+	// Set the interrupt-enable bit if reg started as 0
+	csrs               mstatus, \reg
+.endm
+
 	.section .text, "ax", @progbits
 	.globl compartment_switcher_entry
 	.p2align 2
@@ -204,10 +221,9 @@ compartment_switcher_entry:
 	cjr                cs0
 .Lzero_arguments_start:
 	zeroRegisters      a0, a1, a2, a3, a4, a5, t0
-	// Enable interrupts of the interrupt-disable bit is not set in flags
-	bnez               t1, .Lskip_interrupt_disable
-	csrsi              mstatus, 0x8
-.Lskip_interrupt_disable:
+	// Disable interrupts if the interrupt-disable bit is  set in flags
+	set_interrupt_state t1
+.Lskip_interrupt_enable:
 	// Registers passed to the callee are:
 	// c1 (ra), c2 (csp), and c3 (cgp) are passed unconditionally.
 	// ca0-ca5 (c10-c15) and ct0 (c5) are either passed as arguments or cleared
@@ -632,6 +648,14 @@ exception_entry_asm:
 	clc                cs1, TrustedStackFrame_offset_cs1(ct1)
 	// Update the current frame offset.
 	csw                t2, TrustedStack_offset_frameoffset(ctp)
+	cgettype           a4, ca2
+	// Set a2 to 1 if this is an interrupt-disabled sentry type.
+	addi               a4, a4, -2
+	seqz               a4, a4
+	cgettag            a3, cra
+	// Clear the a4 if cra is untagged
+	and                a4, a4, a3
+	set_interrupt_state a4
 #ifndef CONFIG_NO_SWITCHER_SAFETY
 	cgetbase           tp, csp
 	cgetaddr           t1, csp

@@ -1044,7 +1044,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	  imgHdr.switcher.code);
 	Debug::log("Setting compartment switcher");
 	switcherPCC.address() = imgHdr.switcher.entry_point();
-	switcherPCC           = seal_entry(switcherPCC, InterruptStatus::Disabled);
+	switcherPCC           = seal_entry(switcherPCC, InterruptStatus::Inherited);
 
 	auto setSealingKey = [](const auto &compartment,
 	                        SealingType lower,
