@@ -617,13 +617,6 @@ constexpr size_t MinChunkSize =
 // the minimum size of a chunk (excluding the header)
 constexpr size_t MinRequest = MinChunkSize - sizeof(MChunkHeader);
 
-// Convert a user pointer back to the chunk.
-static inline MChunkHeader *mem2chunk(CHERI::Capability<void> p)
-{
-	p.address() -= MallocAlignment;
-	return p.cast<MChunkHeader>();
-}
-
 // true if cap address a has acceptable alignment
 static inline bool is_aligned(CHERI::Capability<void> a)
 {
@@ -997,7 +990,7 @@ class MState
 		 * Rederived into allocator capability. From now on faults on this
 		 * pointer are internal.
 		 */
-		MChunkHeader *p = mem2chunk(mem);
+		auto p = MChunkHeader::from_body(mem);
 		// At this point, we know mem is capability aligned.
 		capaligned_zero(mem, p->size_get() - sizeof(MChunkHeader));
 		revoker.shadow_paint_range(mem.address(), p->cell_next(), true);
