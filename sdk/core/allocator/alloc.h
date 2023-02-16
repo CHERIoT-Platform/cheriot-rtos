@@ -519,8 +519,8 @@ class __packed __aligned(MallocAlignment)
 MChunk
 {
 	friend class MChunkAssertions;
+	friend class TChunk;
 
-	protected:
 	/*
 	 * Header is included as a member rather than a parent class to retain
 	 * C++ standard layout
@@ -643,9 +643,25 @@ static inline size_t align_offset(CHERI::Capability<void> a)
  * put full capabilities here, and the format probably won't change, ever.
  */
 class __packed __aligned(MallocAlignment)
-TChunk : public MChunk
+TChunk
 {
-	public:
+	friend class TChunkAssertions;
+	friend class MState;
+
+	/**
+	 * TChunk-s also have MChunk rings up front, making it safe to interpret
+	 * any free chunk as a MChunk.
+	 */
+	MChunk mchunk = {};
+
+	/**
+	 * Container-of for the above field.
+	 */
+	__always_inline static TChunk *from_mchunk(MChunk * p)
+	{
+		return ds::pointer::offset<TChunk>(p, offsetof(TChunk, mchunk));
+	}
+
 	// pointers to left and right children in the tree
 	TChunk *child[2];
 	// pointer to parent
@@ -696,13 +712,14 @@ TChunk : public MChunk
 	template<typename F>
 	bool ring_search(F f)
 	{
-		return ds::linked_list::search(
-		  &ring, [&](ChunkFreeLink *&p) { return f(MChunk::from_ring(p)); });
+		return ds::linked_list::search(&mchunk.ring, [&](ChunkFreeLink *&p) {
+			return f(MChunk::from_ring(p));
+		});
 	}
 
 	__always_inline static TChunk *from_ring(ChunkFreeLink * c)
 	{
-		return static_cast<TChunk *>(MChunk::from_ring(c));
+		return TChunk::from_mchunk(MChunk::from_ring(c));
 	}
 
 	/**
@@ -710,16 +727,22 @@ TChunk : public MChunk
 	 */
 	__always_inline void ring_emplace(TChunk * t)
 	{
-		ds::linked_list::emplace_before(&ring, &t->ring);
+		ds::linked_list::emplace_before(&mchunk.ring, &t->mchunk.ring);
 		t->mark_tree_ring();
 	}
 
 	__always_inline void metadata_clear()
 	{
-		static_cast<MChunk *>(this)->metadata_clear();
+		mchunk.metadata_clear();
 		child[0] = child[1] = parent = nullptr;
 		index                        = 0;
 	}
+};
+
+class TChunkAssertions
+{
+	static_assert(std::is_standard_layout_v<TChunk>);
+	static_assert(offsetof(TChunk, mchunk) == 0);
 };
 
 class MState
@@ -1230,7 +1253,7 @@ class MState
 	 */
 	void ok_tree(TChunk *from, TChunk *t)
 	{
-		auto   tHeader = &t->header;
+		auto   tHeader = &t->mchunk.header;
 		BIndex tindex  = t->index;
 		size_t tsize   = tHeader->size_get();
 		BIndex idx     = compute_tree_index(tsize);
@@ -1268,8 +1291,8 @@ class MState
 
 		/* Equal-sized chunks */
 		t->ring_search([this, tsize](MChunk *uMchunk) {
-			auto u       = static_cast<TChunk *>(uMchunk);
-			auto uHeader = &u->header;
+			auto u       = TChunk::from_mchunk(uMchunk);
+			auto uHeader = &uMchunk->header;
 			ok_any_chunk(uHeader);
 			ok_free_chunk(uHeader);
 			Debug::Assert(
@@ -1301,7 +1324,7 @@ class MState
 				              "Chunk {} is its its own child ({})",
 				              t,
 				              childIndex);
-				Debug::Assert(child->header.size_get() != tsize,
+				Debug::Assert(child->mchunk.header.size_get() != tsize,
 				              "Chunk {} has child {} with equal size {}",
 				              t,
 				              child,
@@ -1312,8 +1335,8 @@ class MState
 		checkChild(1);
 		if ((t->child[0] != nullptr) && (t->child[1] != nullptr))
 		{
-			Debug::Assert(t->child[0]->header.size_get() <
-			                t->child[1]->header.size_get(),
+			Debug::Assert(t->child[0]->mchunk.header.size_get() <
+			                t->child[1]->mchunk.header.size_get(),
 			              "Chunk {}'s children are not sorted by size",
 			              tHeader);
 		}
@@ -1500,7 +1523,7 @@ class MState
 			treemap_mark(i);
 			*head = x;
 			x->mark_root();
-			x->ring.cell_reset();
+			x->mchunk.ring.cell_reset();
 		}
 		else
 		{
@@ -1508,7 +1531,7 @@ class MState
 			size_t  k = s << leftshift_for_tree_index(i);
 			for (;;)
 			{
-				if (t->header.size_get() != s)
+				if (t->mchunk.header.size_get() != s)
 				{
 					CHERI::Capability<TChunk *> c =
 					  &(t->child[leftshifted_val_msb(k)]);
@@ -1521,7 +1544,7 @@ class MState
 					{
 						*c        = x;
 						x->parent = t;
-						x->ring.cell_reset();
+						x->mchunk.ring.cell_reset();
 						break;
 					}
 					else
@@ -1532,9 +1555,10 @@ class MState
 				}
 				else
 				{
-					TChunk *back = TChunk::from_ring(t->ring.cell_prev());
-					if (RTCHECK(ok_address(t->ptr()) &&
-					            ok_address(back->ptr())))
+					TChunk *back =
+					  TChunk::from_ring(t->mchunk.ring.cell_prev());
+					if (RTCHECK(ok_address(t->mchunk.ptr()) &&
+					            ok_address(back->mchunk.ptr())))
 					{
 						t->ring_emplace(x);
 						break;
@@ -1569,14 +1593,15 @@ class MState
 	{
 		TChunk *xp = x->parent;
 		TChunk *r;
-		if (!ds::linked_list::is_singleton(&x->ring))
+		if (!ds::linked_list::is_singleton(&x->mchunk.ring))
 		{
-			TChunk *f = TChunk::from_ring(x->ring.cell_next());
-			r         = TChunk::from_ring(x->ring.cell_prev());
-			if (RTCHECK(ok_address(f->ptr()) && f->bk_equals(x) &&
-			            r->fd_equals(x)))
+			TChunk *f = TChunk::from_ring(x->mchunk.ring.cell_next());
+			r         = TChunk::from_ring(x->mchunk.ring.cell_prev());
+			if (RTCHECK(ok_address(f->mchunk.ptr()) &&
+			            f->mchunk.bk_equals(&x->mchunk) &&
+			            r->mchunk.fd_equals(&x->mchunk)))
 			{
-				ds::linked_list::unsafe_remove(&x->ring);
+				ds::linked_list::unsafe_remove(&x->mchunk.ring);
 			}
 			else
 			{
@@ -1615,7 +1640,7 @@ class MState
 					treemap_clear(x->index);
 				}
 			}
-			else if (RTCHECK(ok_address(xp->ptr())))
+			else if (RTCHECK(ok_address(xp->mchunk.ptr())))
 			{
 				if (xp->child[0] == x)
 				{
@@ -1632,13 +1657,13 @@ class MState
 			}
 			if (r != nullptr)
 			{
-				if (RTCHECK(ok_address(r->ptr())))
+				if (RTCHECK(ok_address(r->mchunk.ptr())))
 				{
 					TChunk *c0, *c1;
 					r->parent = xp;
 					if ((c0 = x->child[0]) != nullptr)
 					{
-						if (RTCHECK(ok_address(c0->ptr())))
+						if (RTCHECK(ok_address(c0->mchunk.ptr())))
 						{
 							r->child[0] = c0;
 							c0->parent  = r;
@@ -1650,7 +1675,7 @@ class MState
 					}
 					if ((c1 = x->child[1]) != nullptr)
 					{
-						if (RTCHECK(ok_address(c1->ptr())))
+						if (RTCHECK(ok_address(c1->mchunk.ptr())))
 						{
 							r->child[1] = c1;
 							c1->parent  = r;
@@ -1682,7 +1707,7 @@ class MState
 		}
 		else
 		{
-			insert_large_chunk(static_cast<TChunk *>(p), s);
+			insert_large_chunk(TChunk::from_mchunk(p), s);
 		}
 	}
 
@@ -1695,7 +1720,7 @@ class MState
 		}
 		else
 		{
-			unlink_large_chunk(static_cast<TChunk *>(p));
+			unlink_large_chunk(TChunk::from_mchunk(p));
 		}
 	}
 
@@ -1708,14 +1733,14 @@ class MState
 	 */
 	MChunkHeader *tmalloc_smallest(TChunk *t, size_t nb)
 	{
-		auto    tHeader = &t->header;
+		auto    tHeader = &t->mchunk.header;
 		size_t  rsize   = tHeader->size_get() - nb;
 		TChunk *v       = t;
 
 		Debug::Assert(t != nullptr, "Chunk must not be null");
 		while ((t = t->leftmost_child()) != nullptr)
 		{
-			tHeader     = &t->header;
+			tHeader     = &t->mchunk.header;
 			size_t trem = tHeader->size_get() - nb;
 			if (trem < rsize)
 			{
@@ -1729,11 +1754,11 @@ class MState
 		 * simplifies the work in unlink_large_chunk() below, leaving the
 		 * tree structure unmodified.
 		 */
-		v = TChunk::from_ring(v->ring.cell_next());
+		v = TChunk::from_ring(v->mchunk.ring.cell_next());
 
-		if (RTCHECK(ok_address(v->ptr())))
+		if (RTCHECK(ok_address(v->mchunk.ptr())))
 		{
-			auto vHeader = &v->header;
+			auto vHeader = &v->mchunk.header;
 
 			Debug::Assert(vHeader->size_get() == rsize + nb,
 			              "Chunk {} size is {}, should be {}",
@@ -1787,7 +1812,7 @@ class MState
 			for (;;)
 			{
 				TChunk *rt;
-				auto    tHeader = &t->header;
+				auto    tHeader = &t->mchunk.header;
 				size_t  trem    = tHeader->size_get() - nb;
 				if (trem < rsize)
 				{
