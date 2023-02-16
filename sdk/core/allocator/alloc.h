@@ -674,7 +674,7 @@ TChunk
 	}
 
 	// pointers to left and right children in the tree
-	TChunk *child[2];
+	TChunk *child[2] = {nullptr, nullptr};
 	// pointer to parent
 	TChunk *parent;
 	// the tree index this chunk is in
@@ -702,18 +702,10 @@ TChunk
 	{
 		return reinterpret_cast<uintptr_t>(parent) == RootParent;
 	}
-	void mark_root()
-	{
-		parent = reinterpret_cast<TChunk *>(RootParent);
-	}
 
 	bool is_tree_ring()
 	{
 		return parent == reinterpret_cast<TChunk *>(RingParent);
-	}
-	void mark_tree_ring()
-	{
-		parent = reinterpret_cast<TChunk *>(RingParent);
 	}
 
 	/**
@@ -736,10 +728,13 @@ TChunk
 	/**
 	 * Insert t on the same free ring as this and initialize its linkages.
 	 */
-	__always_inline void ring_emplace(TChunk * t)
+	__always_inline void ring_emplace(BIndex ix, MChunkHeader * tHeader)
 	{
-		ds::linked_list::emplace_before(&mchunk.ring, &t->mchunk.ring);
-		t->mark_tree_ring();
+		ds::linked_list::emplace_before(
+		  &mchunk.ring,
+		  &(new (tHeader->body())
+		      TChunk(ix, reinterpret_cast<TChunk *>(RingParent)))
+		     ->mchunk.ring);
 	}
 
 	/**
@@ -756,6 +751,16 @@ TChunk
 		uintptr_t *body = reinterpret_cast<uintptr_t *>(this);
 		body[0] = body[1] = body[2] = body[3] = body[4] = 0;
 	}
+
+	TChunk(BIndex ix)
+	  : index(ix), parent(reinterpret_cast<TChunk *>(RootParent))
+	{
+	}
+
+	TChunk(BIndex ix, TChunk * p) : index(ix), parent(p) {}
+
+	public:
+	TChunk() = delete;
 };
 
 class TChunkAssertions
@@ -1532,19 +1537,16 @@ class MState
 	 *
 	 * Initializes the linkages of x.
 	 */
-	void insert_large_chunk(TChunk *x, size_t s)
+	void insert_large_chunk(MChunkHeader *xHeader, size_t s)
 	{
 		TChunk **head;
-		BIndex   i  = compute_tree_index(s);
-		head        = treebin_at(i);
-		x->index    = i;
-		x->child[0] = x->child[1] = nullptr;
+		BIndex   i = compute_tree_index(s);
+		head       = treebin_at(i);
+
 		if (!is_treemap_marked(i))
 		{
 			treemap_mark(i);
-			*head = x;
-			x->mark_root();
-			x->mchunk.ring.cell_reset();
+			*head = new (xHeader->body()) TChunk(i);
 		}
 		else
 		{
@@ -1563,9 +1565,7 @@ class MState
 					}
 					else if (RTCHECK(ok_address(c.address())))
 					{
-						*c        = x;
-						x->parent = t;
-						x->mchunk.ring.cell_reset();
+						*c = new (xHeader->body()) TChunk(i, t);
 						break;
 					}
 					else
@@ -1581,7 +1581,7 @@ class MState
 					if (RTCHECK(ok_address(t->mchunk.ptr()) &&
 					            ok_address(back->mchunk.ptr())))
 					{
-						t->ring_emplace(x);
+						t->ring_emplace(i, xHeader);
 						break;
 					}
 
@@ -1728,7 +1728,7 @@ class MState
 		}
 		else
 		{
-			insert_large_chunk(new (p->body()) TChunk(), s);
+			insert_large_chunk(p, s);
 		}
 	}
 
