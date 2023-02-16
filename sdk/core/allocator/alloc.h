@@ -1054,7 +1054,7 @@ class MState
 		 * Enqueue this chunk to quarantine.  Its header is still marked as
 		 * being allocated.
 		 */
-		quarantine_pending_push(epoch, new (p->body()) MChunk());
+		quarantine_pending_push(epoch, p);
 
 		heapQuarantineSize += p->size_get();
 		// Dequeue 3 times. 3 is chosen randomly. 2 is at least needed.
@@ -1436,7 +1436,7 @@ class MState
 	 *
 	 * Initializes the linkages of p.
 	 */
-	void insert_small_chunk(MChunk *p, size_t size)
+	void insert_small_chunk(MChunkHeader *p, size_t size)
 	{
 		BIndex i   = small_index(size);
 		auto   bin = smallbin_at(i);
@@ -1450,7 +1450,11 @@ class MState
 		{
 			corruption_error_action();
 		}
-		bin->append_emplace(&p->ring);
+		/*
+		 * The constructor and emplacement are expected to inline and not
+		 * generate redundant stores.
+		 */
+		bin->append_emplace(&(new (p->body()) MChunk())->ring);
 	}
 
 	/// Unlink a chunk from a smallbin.
@@ -1724,7 +1728,7 @@ class MState
 	{
 		if (is_small(s))
 		{
-			insert_small_chunk(new (p->body()) MChunk(), s);
+			insert_small_chunk(p, s);
 		}
 		else
 		{
@@ -1997,7 +2001,7 @@ class MState
 	/**
 	 * Push a chunk to a pending quarantine ring, possibly opening a new one
 	 */
-	void quarantine_pending_push(size_t epoch, MChunk *chunk)
+	void quarantine_pending_push(size_t epoch, MChunkHeader *header)
 	{
 		decltype(quarantinePendingRing)::Ix youngestPendingIx;
 
@@ -2020,7 +2024,8 @@ class MState
 			quarantinePendingEpoch[youngestPendingIx] = epoch;
 		}
 
-		quarantine_pending_get(youngestPendingIx)->append_emplace(&chunk->ring);
+		quarantine_pending_get(youngestPendingIx)
+		  ->append_emplace(&(new (header->body()) MChunk())->ring);
 	}
 
 	/**
@@ -2172,7 +2177,7 @@ class MState
 				if (rsize >= MinChunkSize)
 				{
 					auto r = p->split(nb);
-					insert_small_chunk(new (r->body()) MChunk(), rsize);
+					insert_small_chunk(r, rsize);
 				}
 				p->mark_in_use();
 				ok_malloced_chunk(p, nb);
