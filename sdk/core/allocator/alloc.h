@@ -695,22 +695,37 @@ TChunk
 		return child[1];
 	}
 
+	/**
+	 * Fictitious root for ring-linked nodes
+	 */
 	static constexpr uintptr_t RingParent = 0;
+
+	/**
+	 * Fictitious root for roots of tree bins.
+	 */
 	static constexpr uintptr_t RootParent = 1;
 
+	/**
+	 * Is this the root of a tree bin?
+	 */
 	bool is_root()
 	{
 		return reinterpret_cast<uintptr_t>(parent) == RootParent;
 	}
 
+	/**
+	 * Is this TChunk linked by its mchunk.ring to the tree, rather than its
+	 * parent/child nodes?  That is, is there an equal-size node already in
+	 * the tree?
+	 */
 	bool is_tree_ring()
 	{
 		return parent == reinterpret_cast<TChunk *>(RingParent);
 	}
 
 	/**
-	 * TChunk's `ring` fields are sentinels for their rings of equal-sized
-	 * nodes.
+	 * TChunk's `mchunk.ring` fields are sentinels for their rings of
+	 * equal-sized nodes.
 	 */
 	template<typename F>
 	bool ring_search(F f)
@@ -720,13 +735,18 @@ TChunk
 		});
 	}
 
+	/**
+	 * Convenience composition of two container-of operations to get us from
+	 * a TChunk's ring node back to the TChunk.
+	 */
 	__always_inline static TChunk *from_ring(ChunkFreeLink * c)
 	{
 		return TChunk::from_mchunk(MChunk::from_ring(c));
 	}
 
 	/**
-	 * Insert t on the same free ring as this and initialize its linkages.
+	 * Construct a TChunk in `tHeader`, place it on the same free ring as
+	 * `this`, and initialize its linkages.
 	 */
 	__always_inline void ring_emplace(BIndex ix, MChunkHeader * tHeader)
 	{
@@ -752,14 +772,24 @@ TChunk
 		body[0] = body[1] = body[2] = body[3] = body[4] = 0;
 	}
 
+	/**
+	 * Construct a root leaf node for the given trie index.
+	 */
 	TChunk(BIndex ix)
 	  : index(ix), parent(reinterpret_cast<TChunk *>(RootParent))
 	{
 	}
 
+	/**
+	 * Construct a non-root leaf node for the given trie index with indicated
+	 * parent.
+	 */
 	TChunk(BIndex ix, TChunk * p) : index(ix), parent(p) {}
 
 	public:
+	/**
+	 * Remove default constructor
+	 */
 	TChunk() = delete;
 };
 
