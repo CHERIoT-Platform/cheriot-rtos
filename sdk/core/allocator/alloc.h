@@ -656,10 +656,10 @@ static inline CHERI::Capability<void> chunk2mem(CHERI::Capability<MChunk> p)
 	return p.cast<void>();
 }
 // Convert a user pointer back to the chunk.
-static inline MChunk *mem2chunk(CHERI::Capability<void> p)
+static inline MChunkHeader *mem2chunk(CHERI::Capability<void> p)
 {
 	p.address() -= MallocAlignment;
-	return p.cast<MChunk>();
+	return p.cast<MChunkHeader>();
 }
 
 // true if cap address a has acceptable alignment
@@ -1035,10 +1035,10 @@ class MState
 		 * Rederived into allocator capability. From now on faults on this
 		 * pointer are internal.
 		 */
-		MChunk *p = mem2chunk(mem);
+		MChunkHeader *p = mem2chunk(mem);
 		// At this point, we know mem is capability aligned.
 		capaligned_zero(mem, p->size_get() - sizeof(MChunkHeader));
-		revoker.shadow_paint_range(mem.address(), p->chunk_next()->ptr(), true);
+		revoker.shadow_paint_range(mem.address(), p->cell_next(), true);
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk
 		 * will not come to exist in registers due to load barrier.  Any that
@@ -1052,7 +1052,7 @@ class MState
 		 * Enqueue this chunk to quarantine.  Its header is still marked as
 		 * being allocated.
 		 */
-		quarantine_pending_push(epoch, p);
+		quarantine_pending_push(epoch, MChunk::from_header(p));
 
 		heapQuarantineSize += p->size_get();
 		// Dequeue 3 times. 3 is chosen randomly. 2 is at least needed.
@@ -1553,7 +1553,7 @@ class MState
 			size_t  k = s << leftshift_for_tree_index(i);
 			for (;;)
 			{
-				if (t->size_get() != s)
+				if (t->header.size_get() != s)
 				{
 					CHERI::Capability<TChunk *> c =
 					  &(t->child[leftshifted_val_msb(k)]);
@@ -1911,34 +1911,35 @@ class MState
 	 *
 	 * Initializes the linkages of p.
 	 */
-	void mspace_free_internal(MChunk *p)
+	void mspace_free_internal(MChunkHeader *p)
 	{
-		ok_in_use_chunk(&p->header);
+		ok_in_use_chunk(p);
 
 		heapFreeSize += p->size_get();
 
 		if (!p->is_prev_in_use())
 		{
 			// Consolidate backward
-			MChunk *prev = p->chunk_prev();
-			unlink_chunk(prev, prev->size_get());
-			ds::linked_list::unsafe_remove_link(&prev->header, &p->header);
-			p->header.clear();
+			MChunkHeader *prev = p->cell_prev();
+			unlink_chunk(MChunk::from_header(prev), prev->size_get());
+			ds::linked_list::unsafe_remove_link(prev, p);
+			p->clear();
 			p = prev;
 		}
 
-		MChunk *next = p->chunk_next();
+		MChunkHeader *next = p->cell_next();
 		if (!next->is_in_use())
 		{
 			// Consolidate forward
-			unlink_chunk(next, next->size_get());
-			ds::linked_list::unsafe_remove_link(&p->header, &next->header);
-			next->header.clear();
+			unlink_chunk(MChunk::from_header(next), next->size_get());
+			ds::linked_list::unsafe_remove_link(p, next);
+			next->clear();
 		}
 
-		p->in_use_clear();
-		insert_chunk(p, p->size_get());
-		ok_free_chunk(&p->header);
+		p->mark_free();
+
+		insert_chunk(MChunk::from_header(p), p->size_get());
+		ok_free_chunk(p);
 	}
 
 	/**
@@ -2076,7 +2077,8 @@ class MState
 				}
 			}
 
-			MChunk *fore = MChunk::from_ring(quarantine->first());
+			MChunk       *fore       = MChunk::from_ring(quarantine->first());
+			MChunkHeader *foreHeader = &fore->header;
 
 			/*
 			 * Detach from quarantine and zero the ring linkage; the rest of
@@ -2090,13 +2092,13 @@ class MState
 			ds::linked_list::unsafe_remove(&fore->ring);
 			fore->metadata_clear();
 
-			heapQuarantineSize -= fore->size_get();
+			heapQuarantineSize -= foreHeader->size_get();
 
 			/* Clear the shadow bits that marked this region as quarantined */
 			revoker.shadow_paint_range(
-			  chunk2mem(fore).address(), fore->chunk_next()->ptr(), false);
+			  chunk2mem(fore).address(), foreHeader->cell_next(), false);
 
-			mspace_free_internal(fore);
+			mspace_free_internal(foreHeader);
 			dequeued++;
 		}
 		return dequeued;
@@ -2261,7 +2263,7 @@ class MState
 			 *   mspace_malloc does not displace into the chunk it finds from
 			 *   the free pool, but, in principle, it could.
 			 */
-			mspace_free_internal(MChunk::from_header(p));
+			mspace_free_internal(p);
 			p = r;
 		}
 
@@ -2283,7 +2285,7 @@ class MState
 			 *   to trim our tail, so it may well have trimmed the chunk
 			 *   it used to satisfy our request.
 			 */
-			mspace_free_internal(MChunk::from_header(r));
+			mspace_free_internal(r);
 		}
 
 		ok_malloced_chunk(p, nb);
