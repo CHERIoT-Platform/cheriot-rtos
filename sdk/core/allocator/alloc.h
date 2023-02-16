@@ -559,55 +559,6 @@ MChunk
 	friend class MState;
 
 	public:
-	bool is_in_use()
-	{
-		return header.is_in_use();
-	}
-	bool is_prev_in_use()
-	{
-		return header.is_prev_in_use();
-	}
-
-	// Returns the next adjacent chunk.
-	MChunk *chunk_next()
-	{
-		return MChunk::from_header(header.cell_next());
-	}
-	// Returns the previous adjacent chunk.
-	MChunk *chunk_prev()
-	{
-		return MChunk::from_header(header.cell_prev());
-	}
-
-	// size of the previous chunk
-	size_t prevsize_get()
-	{
-		return header.prevsize_get();
-	}
-	// size of this chunk
-	size_t size_get()
-	{
-		return header.size_get();
-	}
-
-	/**
-	 * Set the in-use bit of this chunk, which takes care of setting the
-	 * previous-in-use bit in the next chunk as well. Should only be called when
-	 * size has been populated, otherwise it will not find the next chunk.
-	 */
-	void in_use_set()
-	{
-		header.mark_in_use();
-	}
-	/**
-	 * Clear the in-use bit of this chunk and the previous-in-use bit of the
-	 * next chunk.  Size of this chunk must have been set.
-	 */
-	void in_use_clear()
-	{
-		header.mark_free();
-	}
-
 	// Is the bk field pointing to p?
 	bool bk_equals(MChunk * p)
 	{
