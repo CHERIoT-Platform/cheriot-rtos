@@ -1123,10 +1123,10 @@ class MState
 	{
 		return true;
 	}
-	void ok_any_chunk(MChunk *p) {}
-	void ok_in_use_chunk(MChunk *p) {}
-	void ok_free_chunk(MChunk *p) {}
-	void ok_malloced_chunk(void *mem, size_t s) {}
+	void ok_any_chunk(MChunkHeader *p) {}
+	void ok_in_use_chunk(MChunkHeader *p) {}
+	void ok_free_chunk(MChunkHeader *p) {}
+	void ok_malloced_chunk(MChunkHeader *p, size_t s) {}
 	void ok_treebin(BIndex i) {}
 	void ok_smallbin(BIndex i) {}
 	void ok_malloc_state() {}
@@ -1139,36 +1139,38 @@ class MState
 	{
 		return ok_address(CHERI::Capability{p}.address());
 	}
-	void ok_any_chunk(MChunk *p)
+	void ok_any_chunk(MChunkHeader *p)
 	{
+		void *mem = chunk2mem(MChunk::from_header(p));
 		Debug::Assert(
-		  is_aligned(chunk2mem(p)), "Chunk is not correctly aligned: {}", p);
-		Debug::Assert(
-		  ok_address(p->ptr()), "Invalid address {} for chunk", p->ptr());
+		  is_aligned(mem), "Chunk is not correctly aligned: {}", mem);
+		Debug::Assert(ok_address(mem), "Invalid address {} for chunk", mem);
 	}
 	// Sanity check an in-use chunk.
-	void ok_in_use_chunk(MChunk *p)
+	void ok_in_use_chunk(MChunkHeader *p)
 	{
 		ok_any_chunk(p);
 		Debug::Assert(p->is_in_use(), "In use chunk {} is not in use", p);
-		Debug::Assert(p->chunk_next()->is_prev_in_use(),
+		Debug::Assert(p->cell_next()->is_prev_in_use(),
 		              "In use chunk {} is in a list with chunk that expects it "
 		              "to not be in use",
 		              p);
-		Debug::Assert(p->is_prev_in_use() || p->chunk_prev()->chunk_next() == p,
+		Debug::Assert(p->is_prev_in_use() || p->cell_prev()->cell_next() == p,
 		              "Previous chunk is not in use or the chunk list is "
 		              "corrupt for chunk {}",
 		              p);
 	}
 	// Sanity check a free chunk.
-	void ok_free_chunk(MChunk *p)
+	void ok_free_chunk(MChunkHeader *pHeader)
 	{
-		size_t  sz   = p->size_get();
-		MChunk *next = p->chunk_next();
-		ok_any_chunk(p);
-		Debug::Assert(!p->is_in_use(), "Free chunk {} is marked as in use", p);
+		auto   p          = MChunk::from_header(pHeader);
+		size_t sz         = pHeader->size_get();
+		auto   nextHeader = pHeader->cell_next();
+		ok_any_chunk(pHeader);
 		Debug::Assert(
-		  !p->chunk_next()->is_prev_in_use(),
+		  !pHeader->is_in_use(), "Free chunk {} is marked as in use", p);
+		Debug::Assert(
+		  !nextHeader->is_prev_in_use(),
 		  "Free chunk {} is in list with chunk that expects it to be in use",
 		  p);
 		Debug::Assert(ds::linked_list::is_well_formed(&p->ring),
@@ -1181,19 +1183,19 @@ class MState
 			              sz);
 			Debug::Assert(is_aligned(chunk2mem(p)),
 			              "Chunk {} is insufficiently aligned",
-			              p);
+			              pHeader);
 			Debug::Assert(
-			  next->prevsize_get() == sz,
+			  nextHeader->prevsize_get() == sz,
 			  "Chunk {} has size {}, next node expects its size to be {}",
-			  next,
+			  pHeader,
 			  sz,
-			  next->prevsize_get());
-			Debug::Assert(p->is_prev_in_use(),
+			  nextHeader->prevsize_get());
+			Debug::Assert(pHeader->is_prev_in_use(),
 			              "Free chunk {} should follow an in-use chunk",
-			              p);
-			Debug::Assert(next->is_in_use(),
+			              pHeader);
+			Debug::Assert(nextHeader->is_in_use(),
 			              "Free chunk {} should be followed by an in-use chunk",
-			              next);
+			              pHeader);
 			Debug::Assert(
 			  ds::linked_list::is_well_formed(&p->ring),
 			  "Forward and backwards chunk pointers are inconsistent for {}",
@@ -1208,12 +1210,11 @@ class MState
 		}
 	}
 	// Sanity check a chunk that was just malloced.
-	void ok_malloced_chunk(void *mem, size_t s)
+	void ok_malloced_chunk(MChunkHeader *p, size_t s)
 	{
-		if (mem != nullptr)
+		if (p != nullptr)
 		{
-			MChunk *p  = mem2chunk(mem);
-			size_t  sz = p->size_get();
+			size_t sz = p->size_get();
 			ok_in_use_chunk(p);
 			Debug::Assert((sz & MallocAlignMask) == 0,
 			              "Chunk size {} is insufficiently aligned",
@@ -1279,9 +1280,10 @@ class MState
 	 */
 	void ok_tree(TChunk *from, TChunk *t)
 	{
-		BIndex tindex = t->index;
-		size_t tsize  = t->size_get();
-		BIndex idx    = compute_tree_index(tsize);
+		auto   tHeader = &t->header;
+		BIndex tindex  = t->index;
+		size_t tsize   = tHeader->size_get();
+		BIndex idx     = compute_tree_index(tsize);
 		Debug::Assert(
 		  tindex == idx, "Chunk index {}, expected {}", tindex, idx);
 		Debug::Assert(tsize > MaxSmallSize,
@@ -1296,61 +1298,63 @@ class MState
 		              "Tree shape is invalid");
 
 		/* Properties of this tree node */
-		ok_any_chunk(t);
-		ok_free_chunk(t);
+		ok_any_chunk(tHeader);
+		ok_free_chunk(tHeader);
 		Debug::Assert(t->index == tindex,
 		              "Chunk has index {}, expected {}",
 		              t->index,
 		              tindex);
-		Debug::Assert(t->size_get() == tsize,
+		Debug::Assert(tHeader->size_get() == tsize,
 		              "Chunk has size {}, expected {}",
-		              t->size_get(),
+		              tHeader->size_get(),
 		              tsize);
 		Debug::Assert(
-		  !t->is_tree_ring(), "Tree node {} marked as tree ring node", t);
-		Debug::Assert(t->parent != t, "Chunk {} is its own parent", t);
+		  !t->is_tree_ring(), "Tree node {} marked as tree ring node", tHeader);
+		Debug::Assert(t->parent != t, "Chunk {} is its own parent", tHeader);
 		Debug::Assert(t->is_root() || t->parent->child[0] == t ||
 		                t->parent->child[1] == t,
 		              "Chunk {} is neither root nor a child of its parent",
-		              t);
+		              tHeader);
 
 		/* Equal-sized chunks */
 		t->ring_search([this, tsize](MChunk *uMchunk) {
-			auto u = static_cast<TChunk *>(uMchunk);
-			ok_any_chunk(u);
-			ok_free_chunk(u);
+			auto u       = static_cast<TChunk *>(uMchunk);
+			auto uHeader = &u->header;
+			ok_any_chunk(uHeader);
+			ok_free_chunk(uHeader);
 			Debug::Assert(
-			  u->size_get() == tsize, "Large chunk {} has wrong size", u);
+			  uHeader->size_get() == tsize, "Large chunk {} has wrong size", u);
 			Debug::Assert(
 			  u->is_tree_ring(), "Chunk {} is not in tree but has parent", u);
 			Debug::Assert(u->child[0] == nullptr,
 			              "Chunk {} has no parent but has a child {}",
-			              u,
+			              uHeader,
 			              u->child[0]);
 			Debug::Assert(u->child[1] == nullptr,
 			              "Chunk {} has no parent but has a child {}",
-			              u,
+			              uHeader,
 			              u->child[1]);
 			return false;
 		});
 
 		auto checkChild = [&](int childIndex) {
-			if (t->child[childIndex] != nullptr)
+			auto child = t->child[childIndex];
+			if (child != nullptr)
 			{
-				Debug::Assert(t->child[childIndex]->parent == t,
+				Debug::Assert(child->parent == t,
 				              "Chunk {} has child {} ({}) that has parent {}",
 				              t,
 				              childIndex,
-				              t->child[childIndex],
-				              t->child[childIndex]->parent);
-				Debug::Assert(t->child[childIndex] != t,
+				              child,
+				              child->parent);
+				Debug::Assert(child != t,
 				              "Chunk {} is its its own child ({})",
 				              t,
 				              childIndex);
-				Debug::Assert(t->child[childIndex]->size_get() != tsize,
+				Debug::Assert(child->header.size_get() != tsize,
 				              "Chunk {} has child {} with equal size {}",
 				              t,
-				              t->child[childIndex],
+				              child,
 				              tsize);
 			}
 		};
@@ -1358,9 +1362,10 @@ class MState
 		checkChild(1);
 		if ((t->child[0] != nullptr) && (t->child[1] != nullptr))
 		{
-			Debug::Assert(t->child[0]->size_get() < t->child[1]->size_get(),
+			Debug::Assert(t->child[0]->header.size_get() <
+			                t->child[1]->header.size_get(),
 			              "Chunk {}'s children are not sorted by size",
-			              t);
+			              tHeader);
 		}
 
 		[[clang::musttail]] return ok_tree_next(from, t);
@@ -1393,13 +1398,14 @@ class MState
 		              i);
 
 		b->search([this, i](auto pRing) {
-			auto p = MChunk::from_ring(pRing);
+			auto p       = MChunk::from_ring(pRing);
+			auto pHeader = &p->header;
 
 			// Each chunk claims to be free.
-			ok_free_chunk(p);
+			ok_free_chunk(pHeader);
 
 			// Chunk belongs in this bin.
-			size_t size = p->size_get();
+			size_t size = pHeader->size_get();
 			Debug::Assert(small_index(size) == i,
 			              "Chunk is in bin with index {} but should be in {}",
 			              i,
@@ -1451,20 +1457,21 @@ class MState
 	/// Unlink a chunk from a smallbin.
 	void unlink_small_chunk(MChunk *p, size_t s)
 	{
-		auto   fr  = p->ring.cell_next();
-		auto  *f   = MChunk::from_ring(fr);
-		auto   br  = p->ring.cell_prev();
-		auto  *b   = MChunk::from_ring(br);
-		BIndex i   = small_index(s);
-		auto   bin = smallbin_at(i);
+		auto   fr      = p->ring.cell_next();
+		auto  *f       = MChunk::from_ring(fr);
+		auto   br      = p->ring.cell_prev();
+		auto  *b       = MChunk::from_ring(br);
+		auto   pHeader = &p->header;
+		BIndex i       = small_index(s);
+		auto   bin     = smallbin_at(i);
 
 		Debug::Assert(!ds::linked_list::is_singleton(&p->ring),
 		              "Chunk {} is circularly referenced",
 		              p);
-		Debug::Assert(p->size_get() == small_index2size(i),
+		Debug::Assert(pHeader->size_get() == small_index2size(i),
 		              "Chunk {} is has size {} but is in bin for size {}",
-		              p,
-		              p->size_get(),
+		              pHeader,
+		              pHeader->size_get(),
 		              small_index2size(i));
 
 		if (RTCHECK(&p->ring == bin->last() ||
@@ -1905,7 +1912,7 @@ class MState
 	 */
 	void mspace_free_internal(MChunk *p)
 	{
-		ok_in_use_chunk(p);
+		ok_in_use_chunk(&p->header);
 
 		heapFreeSize += p->size_get();
 
@@ -1930,7 +1937,7 @@ class MState
 
 		p->in_use_clear();
 		insert_chunk(p, p->size_get());
-		ok_free_chunk(p);
+		ok_free_chunk(&p->header);
 	}
 
 	/**
@@ -2099,12 +2106,13 @@ class MState
 	 */
 	void *mspace_malloc_success(void *mem, size_t nb)
 	{
-		ok_malloced_chunk(mem, nb);
-
 		// If we reached here, then it means we took a real chunk off the free
 		// list without errors. Zero the user portion metadata.
 		MChunk *finalChunk = mem2chunk(mem);
-		size_t  finalSz    = finalChunk->size_get();
+
+		ok_malloced_chunk(&finalChunk->header, nb);
+
+		size_t finalSz = finalChunk->size_get();
 		// We sanity check that things off the free list are indeed zeroed out.
 		Debug::Assert(capaligned_range_do(mem,
 		                                  finalSz - sizeof(MChunkHeader),
@@ -2283,7 +2291,7 @@ class MState
 			mspace_free_internal(r);
 		}
 
-		ok_in_use_chunk(p);
+		ok_in_use_chunk(&p->header);
 		return chunk2mem(p);
 	}
 
