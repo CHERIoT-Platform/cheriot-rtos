@@ -620,11 +620,6 @@ MChunk
 		return ring.cell_next() == &p->ring;
 	}
 
-	__always_inline MChunk *split(size_t offset)
-	{
-		return MChunk::from_header(header.split(offset));
-	}
-
 	/**
 	 * Erase the MChunk-specific metadata of this chunk (specifically, ring)
 	 * without changing its header.
@@ -1502,7 +1497,7 @@ class MState
 	}
 
 	// Unlink the first chunk from a smallbin.
-	MChunk *unlink_first_small_chunk(BIndex i)
+	MChunkHeader *unlink_first_small_chunk(BIndex i)
 	{
 		auto b = smallbin_at(i);
 
@@ -1521,15 +1516,16 @@ class MState
 			smallmap_clear(i);
 		}
 
-		Debug::Assert(p->size_get() == small_index2size(i),
-		              "Chunk {} is has size {} but is in bin for size {}",
-		              p,
-		              p->size_get(),
-		              small_index2size(i));
-
 		p->metadata_clear();
 
-		return p;
+		MChunkHeader *pHeader = &p->header;
+		Debug::Assert(pHeader->size_get() == small_index2size(i),
+		              "Chunk {} is has size {} but is in bin for size {}",
+		              pHeader,
+		              pHeader->size_get(),
+		              small_index2size(i));
+
+		return pHeader;
 	}
 
 	/**
@@ -1755,15 +1751,17 @@ class MState
 	 * and all chunks in this tree are larger than nb.  The chunk holding the
 	 * returned memory has had its linkages cleared.
 	 */
-	void *tmalloc_smallest(TChunk *t, size_t nb)
+	MChunkHeader *tmalloc_smallest(TChunk *t, size_t nb)
 	{
-		size_t  rsize = t->size_get() - nb;
-		TChunk *v     = t;
+		auto    tHeader = &t->header;
+		size_t  rsize   = tHeader->size_get() - nb;
+		TChunk *v       = t;
 
 		Debug::Assert(t != nullptr, "Chunk must not be null");
 		while ((t = t->leftmost_child()) != nullptr)
 		{
-			size_t trem = t->size_get() - nb;
+			tHeader     = &t->header;
+			size_t trem = tHeader->size_get() - nb;
 			if (trem < rsize)
 			{
 				rsize = trem;
@@ -1780,12 +1778,14 @@ class MState
 
 		if (RTCHECK(ok_address(v->ptr())))
 		{
-			Debug::Assert(v->size_get() == rsize + nb,
+			auto vHeader = &v->header;
+
+			Debug::Assert(vHeader->size_get() == rsize + nb,
 			              "Chunk {} size is {}, should be {}",
 			              v,
-			              v->size_get(),
+			              vHeader->size_get(),
 			              rsize + nb);
-			Debug::Assert(v->is_prev_in_use(),
+			Debug::Assert(vHeader->is_prev_in_use(),
 			              "Free chunk {} follows another free chunk",
 			              v);
 
@@ -1797,16 +1797,16 @@ class MState
 				 * The remainder is big enough to to used by another
 				 * allocation, place it into the free list.
 				 */
-				auto r = v->split(nb);
-				insert_chunk(r, rsize);
+				auto r = vHeader->split(nb);
+				insert_chunk(MChunk::from_header(r), rsize);
 			}
 
 			/*
 			 * Having split off any residual, mark this chunk in use.
 			 */
-			v->in_use_set();
+			vHeader->mark_in_use();
 
-			return chunk2mem(v);
+			return vHeader;
 		}
 
 		corruption_error_action();
@@ -1818,7 +1818,7 @@ class MState
 	 *
 	 * The chunk holding the returned memory has had its linkages cleared.
 	 */
-	void *tmalloc_large(size_t nb)
+	MChunkHeader *tmalloc_large(size_t nb)
 	{
 		TChunk *v     = nullptr;
 		size_t  rsize = -nb; // unsigned negation
@@ -1832,7 +1832,8 @@ class MState
 			for (;;)
 			{
 				TChunk *rt;
-				size_t  trem = t->size_get() - nb;
+				auto    tHeader = &t->header;
+				size_t  trem    = tHeader->size_get() - nb;
 				if (trem < rsize)
 				{
 					v = t;
@@ -1889,7 +1890,7 @@ class MState
 	 *
 	 * The chunk holding the returned memory has had its linkages cleared.
 	 */
-	void *tmalloc_small(size_t nb)
+	MChunkHeader *tmalloc_small(size_t nb)
 	{
 		TChunk *t;
 		size_t  rsize;
@@ -2104,35 +2105,30 @@ class MState
 	/**
 	 * Successful end to mspace_malloc()
 	 */
-	void *mspace_malloc_success(void *mem, size_t nb)
+	void *mspace_malloc_success(MChunkHeader *p)
 	{
 		// If we reached here, then it means we took a real chunk off the free
 		// list without errors. Zero the user portion metadata.
-		MChunk *finalChunk = mem2chunk(mem);
-
-		ok_malloced_chunk(&finalChunk->header, nb);
-
-		size_t finalSz = finalChunk->size_get();
+		size_t size = p->size_get();
 		// We sanity check that things off the free list are indeed zeroed out.
-		Debug::Assert(capaligned_range_do(mem,
-		                                  finalSz - sizeof(MChunkHeader),
+		Debug::Assert(capaligned_range_do(chunk2mem(MChunk::from_header(p)),
+		                                  size - sizeof(MChunkHeader),
 		                                  [](void *&word) {
 			                                  return CHERI::Capability<void>(
 			                                           word) != nullptr;
 		                                  }) == false,
 		              "Memory from free list is not entirely zeroed, size {}",
-		              finalSz);
-		heapFreeSize -= finalSz;
-		return mem;
+		              size);
+		heapFreeSize -= size;
+		return chunk2mem(MChunk::from_header(p));
 	}
 
 	/**
 	 * This is the only function that takes memory from the free list. All other
 	 * wrappers that take memory must call this in the end.
 	 */
-	void *mspace_malloc(size_t bytes)
+	MChunkHeader *mspace_malloc_internal(size_t bytes)
 	{
-		void  *mem;
 		size_t nb;
 
 		/* Move O(1) nodes from quarantine, if any are available */
@@ -2149,11 +2145,9 @@ class MState
 			if (smallbits & 0x1U)
 			{ // exact match
 				auto p = unlink_first_small_chunk(idx);
-				p->in_use_set();
-				p->metadata_clear();
-				mem = chunk2mem(p);
-
-				return mspace_malloc_success(mem, nb);
+				p->mark_in_use();
+				ok_malloced_chunk(p, nb);
+				return p;
 			}
 
 			if (smallbits != 0)
@@ -2168,26 +2162,28 @@ class MState
 				if (rsize >= MinChunkSize)
 				{
 					auto r = p->split(nb);
-					insert_small_chunk(r, rsize);
+					insert_small_chunk(MChunk::from_header(r), rsize);
 				}
-				p->in_use_set();
-				p->metadata_clear();
-				mem = chunk2mem(p);
-
-				return mspace_malloc_success(mem, nb);
+				p->mark_in_use();
+				ok_malloced_chunk(p, nb);
+				return p;
 			}
 
-			if (treemap != 0 && (mem = tmalloc_small(nb)) != nullptr)
+			MChunkHeader *p;
+			if (treemap != 0 && (p = tmalloc_small(nb)) != nullptr)
 			{
-				return mspace_malloc_success(mem, nb);
+				ok_malloced_chunk(p, nb);
+				return p;
 			}
 		}
 		else
 		{
+			MChunkHeader *p;
 			nb = pad_request(bytes);
-			if (treemap != 0 && (mem = tmalloc_large(nb)) != nullptr)
+			if (treemap != 0 && (p = tmalloc_large(nb)) != nullptr)
 			{
-				return mspace_malloc_success(mem, nb);
+				ok_malloced_chunk(p, nb);
+				return p;
 			}
 		}
 
@@ -2199,20 +2195,20 @@ class MState
 		return nullptr;
 	}
 
+	__always_inline void *mspace_malloc(size_t bytes)
+	{
+		auto p = mspace_malloc_internal(bytes);
+		if (p != nullptr)
+		{
+			return mspace_malloc_success(p);
+		}
+		return nullptr;
+	}
+
 	// Allocate memory with specific alignment.
 	void *mspace_memalign(size_t bytes, size_t alignment)
 	{
-		size_t                  nb;   // padded request size
-		CHERI::Capability<void> m;    // memory returned by malloc call
-		MChunk                 *p;    // corresponding chunk
-		char                   *brk;  // alignment point within p
-		MChunk                 *newp; // chunk to return
-		size_t  leadsize;             // leading space before alignment point
-		MChunk *remainder;            // spare room at end to split off
-		size_t  remainderSize;        // its size
-		size_t  size;
-
-		nb = pad_request(bytes);
+		auto nb = pad_request(bytes);
 		// Make sure alignment is power of 2 (in case MINSIZE is not).
 		Debug::Assert((alignment & (alignment - 1)) == 0,
 		              "Alignment {} is not a power of two",
@@ -2229,14 +2225,13 @@ class MState
 		 * request, and then possibly free the leading and trailing space.
 		 * Call malloc with worst case padding to hit alignment.
 		 */
-		m = mspace_malloc(nb + alignment + MinChunkSize);
-		if (m == nullptr)
+		auto p = mspace_malloc_internal(nb + alignment + MinChunkSize);
+		if (p == nullptr)
 		{
-			return m;
+			return p;
 		}
 
-		p                    = mem2chunk(m);
-		ptraddr_t memAddress = m.address();
+		ptraddr_t memAddress = chunk2mem(MChunk::from_header(p)).address();
 		if ((memAddress % alignment) != 0)
 		{
 			/*
@@ -2266,12 +2261,12 @@ class MState
 			 *   mspace_malloc does not displace into the chunk it finds from
 			 *   the free pool, but, in principle, it could.
 			 */
-			mspace_free_internal(p);
+			mspace_free_internal(MChunk::from_header(p));
 			p = r;
 		}
 
 		// Also give back spare room at the end.
-		size = p->size_get();
+		auto size = p->size_get();
 		if (size > nb + MinChunkSize)
 		{
 			auto r = p->split(nb);
@@ -2288,11 +2283,11 @@ class MState
 			 *   to trim our tail, so it may well have trimmed the chunk
 			 *   it used to satisfy our request.
 			 */
-			mspace_free_internal(r);
+			mspace_free_internal(MChunk::from_header(r));
 		}
 
-		ok_in_use_chunk(&p->header);
-		return chunk2mem(p);
+		ok_malloced_chunk(p, nb);
+		return mspace_malloc_success(p);
 	}
 
 	void corruption_error_action()
