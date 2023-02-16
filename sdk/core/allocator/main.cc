@@ -57,7 +57,7 @@ namespace
 		 * but not too big that overflows what the compressed header can
 		 * support.
 		 */
-		if (tsize < msize + MinChunkSize + ChunkOverhead ||
+		if (tsize < msize + MinChunkSize + sizeof(MChunkHeader) ||
 		    tsize > MaxChunkSize)
 		{
 			return nullptr;
