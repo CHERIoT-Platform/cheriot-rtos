@@ -348,6 +348,23 @@ MChunkHeader
 	}
 
 	/**
+	 * Obtain a pointer to the body of this chunk.
+	 *
+	 * This relies on the CHERI bounds of `this` being (at least) to the
+	 * entire object.  In practice, they will be to the entire heap.
+	 */
+	template<typename T = void>
+	__always_inline CHERI::Capability<T> body()
+	{
+		return ds::pointer::offset<T>(this, sizeof(MChunkHeader));
+	}
+
+	static MChunkHeader *from_body(void *body)
+	{
+		return ds::pointer::offset<MChunkHeader>(body, -sizeof(MChunkHeader));
+	}
+
+	/**
 	 * Land a new header somewhere within an existing chunk.
 	 *
 	 * The resulting header inherits its in-use status from this one, which
