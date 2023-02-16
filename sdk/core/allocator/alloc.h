@@ -21,13 +21,7 @@
 extern Revocation::Revoker revoker;
 
 // the byte and bit size of a size_t
-constexpr size_t BitsInSizeT   = utils::bytes2bits(sizeof(size_t));
-constexpr size_t ChunkOverhead = MallocAlignment;
-// Pad request bytes into a usable size.
-static inline size_t pad_request(size_t req)
-{
-	return ((req) + ChunkOverhead + MallocAlignMask) & ~MallocAlignMask;
-}
+constexpr size_t BitsInSizeT = utils::bytes2bits(sizeof(size_t));
 
 constexpr size_t NSmallBinsShift = 3U;
 // number of small bins
@@ -40,8 +34,6 @@ constexpr size_t SmallBinShift = MallocAlignShift;
 constexpr size_t TreeBinShift = MallocAlignShift + NSmallBinsShift;
 // the max size (including header) that still falls in small bins
 constexpr size_t MaxSmallSize = 1U << TreeBinShift;
-// the maximum requested size that is still categorised as a small bin
-constexpr size_t MaxSmallRequest = MaxSmallSize - ChunkOverhead;
 
 // the compressed size. The actual size is SmallSize * MallocAlignment.
 using SmallSize               = uint16_t;
@@ -413,6 +405,15 @@ MChunkHeader
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
 
+// the maximum requested size that is still categorised as a small bin
+constexpr size_t MaxSmallRequest = MaxSmallSize - sizeof(MChunkHeader);
+
+// Pad request bytes into a usable size.
+static inline size_t pad_request(size_t req)
+{
+	return ((req) + sizeof(MChunkHeader) + MallocAlignMask) & ~MallocAlignMask;
+}
+
 /*
  * Chunk headers are also, sort of, a linked list encoding.  They're not a ring
  * and not exactly a typical list, in that the first and last nodes rely on "out
@@ -651,7 +652,7 @@ class MChunkAssertions
 constexpr size_t MinChunkSize =
   (sizeof(MChunk) + MallocAlignMask) & ~MallocAlignMask;
 // the minimum size of a chunk (excluding the header)
-constexpr size_t MinRequest = MinChunkSize - ChunkOverhead;
+constexpr size_t MinRequest = MinChunkSize - sizeof(MChunkHeader);
 
 // Convert a chunk to a user pointer.
 static inline CHERI::Capability<void> chunk2mem(CHERI::Capability<MChunk> p)
@@ -985,7 +986,7 @@ class MState
 		  alignSize, -CHERI::representable_alignment_mask(bytes))};
 		if (ret == nullptr)
 		{
-			auto neededSize = alignSize + ChunkOverhead;
+			auto neededSize = alignSize + sizeof(MChunkHeader);
 			if (heapQuarantineSize > 0 &&
 			    (heapQuarantineSize + heapFreeSize) >= neededSize)
 			{
@@ -1041,7 +1042,7 @@ class MState
 		 */
 		MChunk *p = mem2chunk(mem);
 		// At this point, we know mem is capability aligned.
-		capaligned_zero(mem, p->size_get() - ChunkOverhead);
+		capaligned_zero(mem, p->size_get() - sizeof(MChunkHeader));
 		revoker.shadow_paint_range(mem.address(), p->chunk_next()->ptr(), true);
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk
@@ -1198,12 +1199,12 @@ class MState
 			  "Forward and backwards chunk pointers are inconsistent for {}",
 			  p);
 		}
-		else // Markers are always of size ChunkOverhead.
+		else // Markers are just the MChunkHeader.
 		{
-			Debug::Assert(sz == ChunkOverhead,
+			Debug::Assert(sz == sizeof(MChunkHeader),
 			              "Marker chunk size is {}, should always be {}",
 			              sz,
-			              ChunkOverhead);
+			              sizeof(MChunkHeader));
 		}
 	}
 	// Sanity check a chunk that was just malloced.
@@ -2106,7 +2107,7 @@ class MState
 		size_t  finalSz    = finalChunk->size_get();
 		// We sanity check that things off the free list are indeed zeroed out.
 		Debug::Assert(capaligned_range_do(mem,
-		                                  finalSz - ChunkOverhead,
+		                                  finalSz - sizeof(MChunkHeader),
 		                                  [](void *&word) {
 			                                  return CHERI::Capability<void>(
 			                                           word) != nullptr;
