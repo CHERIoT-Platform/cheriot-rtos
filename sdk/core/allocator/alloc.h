@@ -617,12 +617,6 @@ constexpr size_t MinChunkSize =
 // the minimum size of a chunk (excluding the header)
 constexpr size_t MinRequest = MinChunkSize - sizeof(MChunkHeader);
 
-// Convert a chunk to a user pointer.
-static inline CHERI::Capability<void> chunk2mem(CHERI::Capability<MChunk> p)
-{
-	p.address() += MallocAlignment;
-	return p.cast<void>();
-}
 // Convert a user pointer back to the chunk.
 static inline MChunkHeader *mem2chunk(CHERI::Capability<void> p)
 {
@@ -1104,10 +1098,10 @@ class MState
 	}
 	void ok_any_chunk(MChunkHeader *p)
 	{
-		void *mem = chunk2mem(MChunk::from_header(p));
 		Debug::Assert(
-		  is_aligned(mem), "Chunk is not correctly aligned: {}", mem);
-		Debug::Assert(ok_address(mem), "Invalid address {} for chunk", mem);
+		  is_aligned(p->body()), "Chunk is not correctly aligned: {}", p);
+		Debug::Assert(
+		  ok_address(p->body()), "Invalid address {} for chunk", p->body());
 	}
 	// Sanity check an in-use chunk.
 	void ok_in_use_chunk(MChunkHeader *p)
@@ -1144,7 +1138,7 @@ class MState
 			Debug::Assert((sz & MallocAlignMask) == 0,
 			              "Chunk size {} is incorrectly aligned",
 			              sz);
-			Debug::Assert(is_aligned(chunk2mem(p)),
+			Debug::Assert(is_aligned(pHeader->body()),
 			              "Chunk {} is insufficiently aligned",
 			              pHeader);
 			Debug::Assert(
@@ -2064,7 +2058,7 @@ class MState
 
 			/* Clear the shadow bits that marked this region as quarantined */
 			revoker.shadow_paint_range(
-			  chunk2mem(fore).address(), foreHeader->cell_next(), false);
+			  foreHeader->body().address(), foreHeader->cell_next(), false);
 
 			mspace_free_internal(foreHeader);
 			dequeued++;
@@ -2081,7 +2075,7 @@ class MState
 		// list without errors. Zero the user portion metadata.
 		size_t size = p->size_get();
 		// We sanity check that things off the free list are indeed zeroed out.
-		Debug::Assert(capaligned_range_do(chunk2mem(MChunk::from_header(p)),
+		Debug::Assert(capaligned_range_do(p->body(),
 		                                  size - sizeof(MChunkHeader),
 		                                  [](void *&word) {
 			                                  return CHERI::Capability<void>(
@@ -2090,7 +2084,7 @@ class MState
 		              "Memory from free list is not entirely zeroed, size {}",
 		              size);
 		heapFreeSize -= size;
-		return chunk2mem(MChunk::from_header(p));
+		return p->body();
 	}
 
 	/**
@@ -2201,7 +2195,7 @@ class MState
 			return p;
 		}
 
-		ptraddr_t memAddress = chunk2mem(MChunk::from_header(p)).address();
+		ptraddr_t memAddress = p->body().address();
 		if ((memAddress % alignment) != 0)
 		{
 			/*
