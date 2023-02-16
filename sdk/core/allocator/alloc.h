@@ -515,9 +515,7 @@ static_assert(ds::linked_list::cell::HasCellOperations<MChunkHeader>);
  * is of course much better.
  */
 
-static constexpr ptrdiff_t MChunkFreeRingOffset = 8;
-using ChunkFreeLink =
-  ds::linked_list::cell::OffsetPtrAddr<MChunkFreeRingOffset>;
+using ChunkFreeLink = ds::linked_list::cell::PtrAddr;
 
 /**
  * Class of a free allocator chunk's metadata.
