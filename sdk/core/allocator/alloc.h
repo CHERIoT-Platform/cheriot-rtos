@@ -651,35 +651,6 @@ MChunk
 		return MChunk::from_header(header.split(offset));
 	}
 
-#ifdef NDEBUG
-	bool ok_in_use()
-	{
-		return true;
-	}
-	bool ok_prev_in_use()
-	{
-		return true;
-	}
-	bool ok_next(MChunk * n)
-	{
-		return true;
-	}
-#else
-	bool ok_in_use()
-	{
-		return is_in_use();
-	}
-	bool ok_prev_in_use()
-	{
-		return is_prev_in_use();
-	}
-	// Sanity check that the next chunk is indeed higher than this one.
-	bool ok_next(MChunk * n)
-	{
-		return ptr() < n->ptr();
-	}
-#endif
-
 	// Write the revocation epoch into the header.
 	void epoch_write()
 	{
