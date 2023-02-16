@@ -253,20 +253,34 @@ namespace displacement_proxy
  * encapsulated using the displacement_proxy::Proxy above and the
  * cell_{next,prev} methods herein.
  *
- * Chunks are in one of three states:
+ * Chunks are in one of four states:
  *
  *   - Allocated / "In Use" by the application
+ *
+ *       - body() is untyped memory.
  *
  *       - Not indexed by any other structures in the MState
  *
  *   - Quarantined (until revocation scrubs inward pointers from the system)
  *
- *       - Collected in a quarantine ring using the MChunk::ring linkages
+ *       - body() is the non-header bits of MChunk and should not be downcast
+ *         to TChunk
  *
- *   - Free for allocation
+ *       - Collected in a quarantine ring using body()'s MChunk::ring linkages
  *
- *       - Collected in a smallbin ring (using MChunk::ring) or in a treebin
- *       ring (using either/both the TChunk and MChunk::ring links).
+ *   - Free for allocation and small
+ *
+ *       - body() is the non-header bits of MChunk and should not be downcast
+ *         to TChunk
+ *
+ *       - Collected in a smallbin ring using body()'s MChunk::ring
+ *
+ *   - Free for allocation and large
+ *
+ *       - body() is the non-header bits of TChunk
+ *
+ *       - Collected in a treebin ring, using either/both the TChunk linkages
+ *         or/and the MChunk::ring links present in body().
  */
 struct __packed __aligned(MallocAlignment)
 MChunkHeader
@@ -499,7 +513,7 @@ using ChunkFreeLink =
   ds::linked_list::cell::OffsetPtrAddr<MChunkFreeRingOffset>;
 
 /**
- * Class of a free allocator chunk, including its header.
+ * Class of a free allocator chunk's metadata.
  *
  * This class can reference either a smallbin chunk or a TChunk (and is the base
  * class of TChunk). Header fields should never be accessed directly since the
@@ -507,7 +521,7 @@ using ChunkFreeLink =
  * care of converting chunks and sizes into internal compressed formats.
  *
  * Several methods in this file are said to "initialize the linkages" of a
- * MChunk.  This means that these functions assume the MChunk header to be
+ * MChunk.  This means that these functions assume the adjacent MChunkHeader is
  * set up appropriately (that is, present and linked to adjacent headers), but
  * the MChunk::ring link node and any tree state (in a TChunk) is undefined on
  * the way in and paved over by initialization.  Use of these functions can
@@ -521,18 +535,13 @@ MChunk
 	friend class MChunkAssertions;
 	friend class TChunk;
 
-	/*
-	 * Header is included as a member rather than a parent class to retain
-	 * C++ standard layout
-	 */
-	MChunkHeader header;
 	/**
-	 * Container-of for the above field.
+	 * Given a MChunkHeader, interpret its body as a MChunk.  This may be
+	 * the MChunk at the start of a TChunk, too; see TChunk::from_mchunk().
 	 */
 	__always_inline static MChunk *from_header(MChunkHeader * p)
 	{
-		return reinterpret_cast<MChunk *>(reinterpret_cast<uintptr_t>(p) -
-		                                  offsetof(MChunk, header));
+		return p->body<MChunk>();
 	}
 
 	/**
@@ -558,7 +567,6 @@ MChunk
 	 */
 	__always_inline static MChunk *from_ring(ChunkFreeLink * c)
 	{
-		static_assert(offsetof(MChunk, ring) == MChunkFreeRingOffset);
 		return reinterpret_cast<MChunk *>(reinterpret_cast<uintptr_t>(c) -
 		                                  offsetof(MChunk, ring));
 	}
@@ -589,12 +597,11 @@ MChunk
 	}
 
 	/**
-	 * Erase the MChunk-specific metadata of this chunk (specifically, ring)
-	 * without changing its header.
+	 * Erase the MChunk-specific metadata of this chunk (specifically, ring).
 	 */
 	__always_inline void metadata_clear()
 	{
-		static_assert(sizeof(*this) == sizeof(MChunkHeader) + sizeof(ring));
+		static_assert(sizeof(*this) == sizeof(ring));
 		/*
 		 * This is spelled slightly oddly as using memset results in a call
 		 * rather than a single store instruction.
@@ -606,14 +613,13 @@ MChunk
 
 class MChunkAssertions
 {
-	static_assert(sizeof(MChunk) == 16);
+	static_assert(sizeof(MChunk) == 8);
 	static_assert(std::is_standard_layout_v<MChunk>);
-	static_assert(offsetof(MChunk, header) == 0);
 };
 
 // the minimum size of a chunk (including the header)
 constexpr size_t MinChunkSize =
-  (sizeof(MChunk) + MallocAlignMask) & ~MallocAlignMask;
+  (sizeof(MChunkHeader) + sizeof(MChunk) + MallocAlignMask) & ~MallocAlignMask;
 // the minimum size of a chunk (excluding the header)
 constexpr size_t MinRequest = MinChunkSize - sizeof(MChunkHeader);
 
@@ -904,7 +910,7 @@ class MState
 
 		heapTotalSize += size;
 		heapFreeSize += p->size_get();
-		insert_chunk(MChunk::from_header(p), p->size_get());
+		insert_chunk(p, p->size_get());
 	}
 
 	/**
@@ -1030,7 +1036,7 @@ class MState
 		 * Enqueue this chunk to quarantine.  Its header is still marked as
 		 * being allocated.
 		 */
-		quarantine_pending_push(epoch, MChunk::from_header(p));
+		quarantine_pending_push(epoch, new (p->body()) MChunk());
 
 		heapQuarantineSize += p->size_get();
 		// Dequeue 3 times. 3 is chosen randomly. 2 is at least needed.
@@ -1253,7 +1259,7 @@ class MState
 	 */
 	void ok_tree(TChunk *from, TChunk *t)
 	{
-		auto   tHeader = &t->mchunk.header;
+		auto   tHeader = MChunkHeader::from_body(t);
 		BIndex tindex  = t->index;
 		size_t tsize   = tHeader->size_get();
 		BIndex idx     = compute_tree_index(tsize);
@@ -1292,7 +1298,7 @@ class MState
 		/* Equal-sized chunks */
 		t->ring_search([this, tsize](MChunk *uMchunk) {
 			auto u       = TChunk::from_mchunk(uMchunk);
-			auto uHeader = &uMchunk->header;
+			auto uHeader = MChunkHeader::from_body(uMchunk);
 			ok_any_chunk(uHeader);
 			ok_free_chunk(uHeader);
 			Debug::Assert(
@@ -1324,7 +1330,8 @@ class MState
 				              "Chunk {} is its its own child ({})",
 				              t,
 				              childIndex);
-				Debug::Assert(child->mchunk.header.size_get() != tsize,
+				Debug::Assert(MChunkHeader::from_body(child)->size_get() !=
+				                tsize,
 				              "Chunk {} has child {} with equal size {}",
 				              t,
 				              child,
@@ -1335,8 +1342,10 @@ class MState
 		checkChild(1);
 		if ((t->child[0] != nullptr) && (t->child[1] != nullptr))
 		{
-			Debug::Assert(t->child[0]->mchunk.header.size_get() <
-			                t->child[1]->mchunk.header.size_get(),
+			auto childHeaderSize = [&](int ix) {
+				return MChunkHeader::from_body(t->child[ix])->size_get();
+			};
+			Debug::Assert(childHeaderSize(0) < childHeaderSize(1),
 			              "Chunk {}'s children are not sorted by size",
 			              tHeader);
 		}
@@ -1371,8 +1380,7 @@ class MState
 		              i);
 
 		b->search([this, i](auto pRing) {
-			auto p       = MChunk::from_ring(pRing);
-			auto pHeader = &p->header;
+			auto pHeader = MChunkHeader::from_body(MChunk::from_ring(pRing));
 
 			// Each chunk claims to be free.
 			ok_free_chunk(pHeader);
@@ -1434,7 +1442,7 @@ class MState
 		auto  *f       = MChunk::from_ring(fr);
 		auto   br      = p->ring.cell_prev();
 		auto  *b       = MChunk::from_ring(br);
-		auto   pHeader = &p->header;
+		auto   pHeader = MChunkHeader::from_body(p);
 		BIndex i       = small_index(s);
 		auto   bin     = smallbin_at(i);
 
@@ -1496,7 +1504,7 @@ class MState
 
 		p->metadata_clear();
 
-		MChunkHeader *pHeader = &p->header;
+		MChunkHeader *pHeader = MChunkHeader::from_body(p);
 		Debug::Assert(pHeader->size_get() == small_index2size(i),
 		              "Chunk {} is has size {} but is in bin for size {}",
 		              pHeader,
@@ -1531,7 +1539,7 @@ class MState
 			size_t  k = s << leftshift_for_tree_index(i);
 			for (;;)
 			{
-				if (t->mchunk.header.size_get() != s)
+				if (MChunkHeader::from_body(t)->size_get() != s)
 				{
 					CHERI::Capability<TChunk *> c =
 					  &(t->child[leftshifted_val_msb(k)]);
@@ -1699,15 +1707,15 @@ class MState
 	/**
 	 * Throw p into the correct bin based on s.  Initializes the linkages of p.
 	 */
-	void insert_chunk(MChunk *p, size_t s)
+	void insert_chunk(MChunkHeader *p, size_t s)
 	{
 		if (is_small(s))
 		{
-			insert_small_chunk(p, s);
+			insert_small_chunk(new (p->body()) MChunk(), s);
 		}
 		else
 		{
-			insert_large_chunk(TChunk::from_mchunk(p), s);
+			insert_large_chunk(new (p->body()) TChunk(), s);
 		}
 	}
 
@@ -1733,14 +1741,21 @@ class MState
 	 */
 	MChunkHeader *tmalloc_smallest(TChunk *t, size_t nb)
 	{
-		auto    tHeader = &t->mchunk.header;
+		auto    tHeader = MChunkHeader::from_body(t);
 		size_t  rsize   = tHeader->size_get() - nb;
 		TChunk *v       = t;
 
 		Debug::Assert(t != nullptr, "Chunk must not be null");
+		/*
+		 * Clang analyser isn't quite clever enough and so concludes that we
+		 * might get here with a null `t` through tmalloc_small() and a
+		 * non-zero treemap, but a non-zero treemap means that tmalloc_small()
+		 * will certainly find a TChunk for us.
+		 */
+		// NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
 		while ((t = t->leftmost_child()) != nullptr)
 		{
-			tHeader     = &t->mchunk.header;
+			tHeader     = MChunkHeader::from_body(t);
 			size_t trem = tHeader->size_get() - nb;
 			if (trem < rsize)
 			{
@@ -1758,7 +1773,7 @@ class MState
 
 		if (RTCHECK(ok_address(v->mchunk.ptr())))
 		{
-			auto vHeader = &v->mchunk.header;
+			auto vHeader = MChunkHeader::from_body(v);
 
 			Debug::Assert(vHeader->size_get() == rsize + nb,
 			              "Chunk {} size is {}, should be {}",
@@ -1778,7 +1793,7 @@ class MState
 				 * allocation, place it into the free list.
 				 */
 				auto r = vHeader->split(nb);
-				insert_chunk(MChunk::from_header(r), rsize);
+				insert_chunk(r, rsize);
 			}
 
 			/*
@@ -1812,7 +1827,7 @@ class MState
 			for (;;)
 			{
 				TChunk *rt;
-				auto    tHeader = &t->mchunk.header;
+				auto    tHeader = MChunkHeader::from_body(t);
 				size_t  trem    = tHeader->size_get() - nb;
 				if (trem < rsize)
 				{
@@ -1918,7 +1933,7 @@ class MState
 
 		p->mark_free();
 
-		insert_chunk(MChunk::from_header(p), p->size_get());
+		insert_chunk(p, p->size_get());
 		ok_free_chunk(p);
 	}
 
@@ -2058,7 +2073,7 @@ class MState
 			}
 
 			MChunk       *fore       = MChunk::from_ring(quarantine->first());
-			MChunkHeader *foreHeader = &fore->header;
+			MChunkHeader *foreHeader = MChunkHeader::from_body(fore);
 
 			/*
 			 * Detach from quarantine and zero the ring linkage; the rest of
@@ -2144,7 +2159,7 @@ class MState
 				if (rsize >= MinChunkSize)
 				{
 					auto r = p->split(nb);
-					insert_small_chunk(MChunk::from_header(r), rsize);
+					insert_small_chunk(new (r->body()) MChunk(), rsize);
 				}
 				p->mark_in_use();
 				ok_malloced_chunk(p, nb);
