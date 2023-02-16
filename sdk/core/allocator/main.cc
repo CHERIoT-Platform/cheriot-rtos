@@ -133,13 +133,21 @@ namespace
 			if (std::holds_alternative<
 			      MState::AllocationFailureRevocationNeeded>(ret))
 			{
-				Debug::log("Quarantine has enough memory to satisfy "
-				           "allocation, kicking revoker");
-				revoker.system_bg_revoker_kick();
 				// If we are able to dequeue some objects from quarantine then
 				// retry immediately, otherwise yield.
+				//
+				// It may take us several rounds through here to succeed or
+				// discover fragmentation-induced futility, since we do not,
+				// presently, consolidate chunks in quarantine and each chunk
+				// requires individual attention to merge back into the free
+				// pool (and consolidate with neighbors), and each round here
+				// moves at most O(1) chunks out of quarantine.
 				if (!gm->quarantine_dequeue())
 				{
+					Debug::log("Quarantine has enough memory to satisfy "
+					           "allocation, kicking revoker");
+					revoker.system_bg_revoker_kick();
+
 					Timeout smallSleep{1};
 					thread_sleep(&smallSleep);
 					// It's possible that, while we slept, `*timeout` was
