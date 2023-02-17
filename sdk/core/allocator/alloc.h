@@ -744,11 +744,19 @@ TChunk
 		t->mark_tree_ring();
 	}
 
+	/**
+	 * Wipe the TChunk metadata.
+	 */
 	__always_inline void metadata_clear()
 	{
-		mchunk.metadata_clear();
-		child[0] = child[1] = parent = nullptr;
-		index                        = 0;
+		/*
+		 * This is spelled slightly oddly as using memset results in a call
+		 * rather than a few store instructions.  Even a loop with constant
+		 * limits lowers to an actual loop.
+		 */
+		static_assert(sizeof(*this) == 5 * sizeof(uintptr_t));
+		uintptr_t *body = reinterpret_cast<uintptr_t *>(this);
+		body[0] = body[1] = body[2] = body[3] = body[4] = 0;
 	}
 };
 
