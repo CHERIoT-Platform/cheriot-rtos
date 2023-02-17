@@ -432,6 +432,13 @@ MChunkHeader
 
 		return first;
 	}
+
+	private:
+	/*
+	 * Hide a no-op constructor; the only calls should be make() and split()
+	 * above, which carry out initialization.
+	 */
+	MChunkHeader() = default;
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
