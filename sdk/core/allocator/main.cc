@@ -215,9 +215,15 @@ namespace
 [[cheri::interrupt_state(disabled)]] int heap_free(void *rawPointer)
 {
 	Capability<void> mem{rawPointer};
-	if (!mem.is_valid())
+	/*
+	 * It's obvious why we check is_valid(), but checking 0 length must be done
+	 * as well. Notice that an allocation with base increased to top survives
+	 * revocation. Although memory can't be dereferenced, it can still be used
+	 * as a token for free() here to corrupt heap. Exclude this special case.
+	 */
+	if (!mem.is_valid() || mem.length() == 0 || mem.address() != mem.base())
 	{
-		return 0;
+		return -EINVAL;
 	}
 	// Use the default memory space.
 	check_gm();
