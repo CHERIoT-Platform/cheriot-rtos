@@ -32,6 +32,10 @@ test("futex")
 test("queue")
 -- Test queues
 test("locks")
+-- Test the static sealing types
+test("static_sealing")
+compartment("static_sealing_inner")
+	add_files("static_sealing_inner.cc")
 -- Test crash recovery.
 compartment("crash_recovery_inner")
 	add_files("crash_recovery_inner.cc")
@@ -77,6 +81,7 @@ firmware("test-suite")
     add_deps("futex_test")
     add_deps("queue_test")
     add_deps("locks_test")
+    add_deps("static_sealing_test", "static_sealing_inner")
     add_deps("crash_recovery_test", "crash_recovery_inner", "crash_recovery_outer")
     add_deps("multiwaiter_test")
     add_deps("ccompile_test")

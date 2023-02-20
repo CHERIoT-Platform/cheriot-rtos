@@ -587,7 +587,7 @@ namespace loader
 			// This is a random 32-bit number and should be changed whenever
 			// the compartment header layout changes to provide some sanity
 			// checking.
-			return magic == 0xedfcaccf;
+			return magic == 0x43f6af90;
 		}
 
 		/**
@@ -695,6 +695,12 @@ namespace loader
 			 * The range of the cap relocs for this section.
 			 */
 			AddressRange capRelocs;
+
+			/**
+			 * The range of statically allocated sealed objects for this
+			 * compartment.
+			 */
+			AddressRange sealedObjects;
 
 			/**
 			 * The range of initialised data for this compartment.
@@ -863,8 +869,23 @@ namespace loader
 		                                               << InterruptStatusShift;
 
 		/**
+		 * The flag indicating that this is a fake entry used to identify
+		 * sealing types.  No import table entries should refer to this other
+		 * than from the same compartment, which will be populated with a
+		 * sealing capability. Statically sealed objects will have their first
+		 * word initialised to point to this, the loader will set them up to
+		 * instead hold the value of the sealing key.
+		 */
+		static constexpr uint8_t SealingTypeEntry = uint8_t(0b100000);
+
+		static_assert((InterruptStatusMask & SealingTypeEntry) == 0);
+
+		/**
 		 * The offset from the start of this compartment's PCC of the called
 		 * function.
+		 *
+		 * If this is a sealing key, then this will be filled in by the loader
+		 * to indicate the sealing type.
 		 */
 		uint16_t functionStart;
 
@@ -889,6 +910,14 @@ namespace loader
 			uint8_t status =
 			  (flags & InterruptStatusMask) >> InterruptStatusShift;
 			return InterruptStatus(status);
+		}
+
+		/**
+		 * Returns true if this export table entry is a static sealing type.
+		 */
+		bool is_sealing_type()
+		{
+			return (flags & SealingTypeEntry);
 		}
 	};
 

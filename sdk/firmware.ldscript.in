@@ -101,6 +101,11 @@ SECTIONS
 	# Begin CMake-generated section
 	######################################################################
 	@gdc_ld@
+
+	.sealed_objects :
+	{
+		@sealed_objects@
+	}
 	######################################################################
 	# End CMake-generated section
 	######################################################################
@@ -183,7 +188,7 @@ SECTIONS
 		@software_revoker_header@
 
 		# Magic number
-		LONG(0xedfcaccf);
+		LONG(0x43f6af90);
 		# Number of library headers.
 		SHORT(@library_count@);
 		# Number of compartment headers.
