@@ -15,7 +15,7 @@ SECTIONS
 		# the compartment import table is more strongly aligned than text.
 		LONG(DEFINED(compartment_error_handler) ? compartment_error_handler - __compartment_code_start + SIZEOF(.compartment_import_table) : -1);
 		# Array of compartment exports
-		*(.compartment_exports);
+		*(.compartment_exports .compartment_exports.*);
 	}
 	# Lay out the compartment imports section.  This will end up on PCC.
 	.compartment_import_table : ALIGN(8)
@@ -60,6 +60,10 @@ SECTIONS
 	{
 		*(.sbss .sbss.*);
 		*(.bss .bss.*);
+	}
+	.sealed_objects :
+	{
+		*(.sealed_objects .sealed_objects.*);
 	}
 	# Throw some stuff away that we don't need.
 	/DISCARD/ :

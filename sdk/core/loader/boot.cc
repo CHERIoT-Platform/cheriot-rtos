@@ -123,11 +123,24 @@ namespace
 		 */
 		Allocator,
 
+		/**
+		 * The first sealing key that is reserved for use by the allocator's
+		 * software sealing mechanism and used for static sealing types,
+		 */
+		FirstStaticSoftware = 16,
+
+		/**
+		 * The first sealing key in the space that the allocator will
+		 * dynamically allocate for sealing types.
+		 */
+		FirstDynamicSoftware = 0x1000000,
 	};
 
-	// We currently have a 4-bit otype, but we'd like to reduce it to 3.
-	// Assert that we're not using more than we need.
-	static_assert(magic_enum::enum_count<SealingType>() <= 8,
+	// We currently have a 3-bit hardware otype, with different sealing spaces
+	// for code and data capabilities, giving the range 0-0xf reserved for
+	// hardware use. Assert that we're not using more than we need (two in the
+	// enum are outside of the hardware space).
+	static_assert(magic_enum::enum_count<SealingType>() <= 10,
 	              "Too many sealing types reserved for a 3-bit otype field");
 
 	constexpr auto StoreLPerm = Root::Permissions<Root::Type::RWStoreL>;
@@ -245,6 +258,50 @@ namespace
 		return cgp;
 	}
 
+	/**
+	 * Returns a sealing capability to use for statically allocated sealing
+	 * keys.
+	 */
+	uint16_t allocate_static_sealing_key()
+	{
+		static uint16_t nextValue = FirstStaticSoftware;
+		// We currently stash the allocated key value in the export table.  We
+		// could expand this a bit if we were a bit more clever in how we used
+		// that space, but 2^16 static sealing keys will require over 768 KiB
+		// of SRAM to store in the firmware, which seems excessive.
+		Debug::Invariant(nextValue < std::numeric_limits<uint16_t>::max(),
+		                 "Out of static sealing keys");
+		return nextValue++;
+	}
+
+	/**
+	 * Returns a sealing capability in the sealing space with the specified
+	 * type.
+	 */
+	void *build_static_sealing_key(uint16_t type)
+	{
+		static void *staticSealingRoot;
+		Debug::Invariant(type >= FirstStaticSoftware,
+		                 "{} is not a valid software sealing key",
+		                 type);
+		if (staticSealingRoot == nullptr)
+		{
+			staticSealingRoot =
+			  build<void,
+			        Root::Type::Seal,
+			        PermissionSet{Permission::Global,
+			                      Permission::Seal,
+			                      Permission::Unseal,
+			                      Permission::User0}>(0, FirstDynamicSoftware);
+		}
+		Capability next = staticSealingRoot;
+		next.address()  = type;
+		next.bounds()   = 1;
+		Debug::Invariant(
+		  next.is_valid(), "Invalid static sealing key {}", next);
+		return next;
+	}
+
 	template<typename T>
 	T *seal_entry(Capability<T> ptr, InterruptStatus status)
 	{
@@ -263,6 +320,18 @@ namespace
 	}
 
 	/**
+	 * Helper to determine whether an object, given by a start address and size,
+	 * is completely contained within a specified range.
+	 */
+	bool contains(const auto &range,
+	              ptraddr_t   addr,
+	              size_t      size) requires(RawAddressRange<decltype(range)>)
+	{
+		return (range.start() <= addr) &&
+		       (range.start() + range.size() >= addr + size);
+	}
+
+	/**
 	 * Helper to determine whether an address is within a range.  The template
 	 * parameter specifies the type that the object is expected to be.  The
 	 * object must be completely contained within the range.
@@ -271,8 +340,7 @@ namespace
 	bool contains(const auto &range,
 	              ptraddr_t   addr) requires(RawAddressRange<decltype(range)>)
 	{
-		return (range.start() <= addr) &&
-		       (range.start() + range.size() >= addr + sizeof(T));
+		return contains(range, addr, sizeof(T));
 	}
 
 	/**
@@ -435,6 +503,53 @@ namespace
 			return buildMMIO();
 		}
 
+		// Privileged compartments don't have sealed objects.
+		if constexpr (!std::is_same_v<
+		                std::remove_cvref_t<decltype(sourceCompartment)>,
+		                ImgHdr::PrivilegedCompartment>)
+		{
+			if (contains(sourceCompartment.sealedObjects, target, size))
+			{
+				auto sealingType =
+				  build<uint32_t,
+				        Root::Type::RWGlobal,
+				        PermissionSet{Permission::Load, Permission::Store}>(
+				    target);
+				// TODO: This currently places a restriction that data memory
+				// can't be in the low 64 KiB of the address space.  That may be
+				// too restrictive. If we haven't visited this sealed object
+				// yet, then we should update its first word to point to the
+				// sealing type.
+				if (*sealingType >
+				    std::numeric_limits<
+				      decltype(ExportEntry::functionStart)>::max())
+				{
+					auto typeAddress = *sealingType;
+					for (auto &compartment : image.compartments())
+					{
+						if (contains<ExportEntry>(compartment.exportTable,
+						                          typeAddress))
+						{
+							auto exportEntry = build<ExportEntry>(
+							  compartment.exportTable, typeAddress);
+							Debug::Invariant(
+							  exportEntry->is_sealing_type(),
+							  "Sealed object points to invalid sealing type");
+							*sealingType = exportEntry->functionStart;
+							break;
+						}
+					}
+					Debug::Invariant(*sealingType != typeAddress,
+					                 "Invalid sealed object");
+				}
+				Capability sealedObject = build(target, size);
+				// Seal with the allocator's sealing key
+				sealedObject.seal(build<void, Root::Type::Seal>(Allocator, 1));
+				Debug::log("Static sealed object: {}", sealedObject);
+				return sealedObject;
+			}
+		}
+
 		for (auto &compartment : image.privilegedCompartments)
 		{
 			if (contains<ExportEntry>(compartment.exportTable, target))
@@ -452,6 +567,73 @@ namespace
 		}
 
 		return buildMMIO();
+	}
+
+	/**
+	 * As a first pass, scan the import table of this compartment and resolve
+	 * any static sealing types.
+	 */
+	void populate_static_sealing_keys(const ImgHdr &image,
+	                                  const auto   &compartment)
+	{
+		if (compartment.exportTable.size() == 0)
+		{
+			return;
+		}
+		const auto &importTable = compartment.import_table();
+		if (importTable.size() == 0)
+		{
+			return;
+		}
+		// The import table might not have strongly aligned bounds and so we
+		// are happy with an imprecise capability here.
+		auto impPtr = build<ImportTable,
+		                    Root::Type::RWGlobal,
+		                    Root::Permissions<Root::Type::RWGlobal>,
+		                    false>(importTable);
+		// FIXME: This should use a range-based for loop
+		for (int i = 0; i < (importTable.size() / sizeof(void *)) - 1; i++)
+		{
+			ptraddr_t importAddr = impPtr->imports[i].address;
+			size_t    importSize = impPtr->imports[i].size;
+			// If the size is not 0, this isn't an import table entry.
+			if (importSize != 0)
+			{
+				continue;
+			}
+			// If the low bit is 1, it's either a library import or an MMIO
+			// import.  Skip it either way.
+			if (importAddr & 1)
+			{
+				continue;
+			}
+			// If this points anywhere other than the current compartment's
+			// export table, it isn't a sealing capability entry.
+			if (!contains(compartment.exportTable, importAddr))
+			{
+				continue;
+			}
+			// Build an export table entry for the given compartment.
+			auto exportEntry =
+			  build<ExportEntry>(compartment.exportTable, importAddr);
+
+			// If the export entry isn't a sealing type, this is not a
+			// reference to a sealing capability.
+			if (!exportEntry->is_sealing_type())
+			{
+				continue;
+			}
+			Debug::Invariant(exportEntry->functionStart == 0,
+			                 "Two import entries point to the same export "
+			                 "entry for a sealing key {}",
+			                 exportEntry);
+			// Allocate a new sealing key type.
+			exportEntry->functionStart = allocate_static_sealing_key();
+			Debug::log("Creating sealing key {}", exportEntry->functionStart);
+			// Build the sealing key corresponding to that type.
+			impPtr->imports[i].pointer =
+			  build_static_sealing_key(exportEntry->functionStart);
+		}
 	}
 
 	/**
@@ -482,6 +664,13 @@ namespace
 		// FIXME: This should use a range-based for loop
 		for (int i = 0; i < (importTable.size() / sizeof(void *)) - 1; i++)
 		{
+			// If this is a sealing key then we will have initialised it
+			// already, skip it now.
+			if (Capability{impPtr->imports[i].pointer}.is_valid())
+			{
+				Debug::log("Skipping sealing type import");
+				continue;
+			}
 			ptraddr_t importAddr = impPtr->imports[i].address;
 			size_t    importSize = impPtr->imports[i].size;
 
@@ -874,9 +1063,12 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	switcherKey.bounds()  = 1;
 	setSealingKey(imgHdr.scheduler(), Scheduler);
 	setSealingKey(imgHdr.allocator(), Allocator);
+	constexpr size_t DynamicSealingLength =
+	  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
+
 	setSealingKey(imgHdr.allocator(),
-	              static_cast<SealingType>(0x1000000),
-	              0xff000000,
+	              FirstDynamicSoftware,
+	              DynamicSealingLength,
 	              sizeof(void *));
 
 	// Set up export tables
@@ -906,6 +1098,15 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 		           expTablePtr->errorHandler);
 		expTablePtr->pcc = build_pcc(compartment);
 		expTablePtr->cgp = build_cgp(compartment);
+	}
+
+	Debug::log("First pass to find sealing key imports");
+
+	// Populate import entries that refer to static sealing keys first.
+	for (auto &compartment : imgHdr.libraries_and_compartments())
+	{
+		populate_static_sealing_keys(imgHdr, compartment);
+		Debug::log("Done");
 	}
 
 	Debug::log("Creating import tables");

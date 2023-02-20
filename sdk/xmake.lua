@@ -291,7 +291,9 @@ rule("firmware")
 				"\n\t\tSHORT(SIZEOF(.${compartment}_globals));" ..
 				"\n\t\tSHORT(.${compartment}_bss_start - .${compartment}_globals);" ..
 				"\n\t\tLONG(.${compartment}_cap_relocs_start);" ..
-				"\n\t\tSHORT(.${compartment}_cap_relocs_end - .${compartment}_cap_relocs_start);\n",
+				"\n\t\tSHORT(.${compartment}_cap_relocs_end - .${compartment}_cap_relocs_start);" ..
+				"\n\t\tLONG(.${compartment}_sealed_objects_start);" ..
+				"\n\t\tSHORT(.${compartment}_sealed_objects_end - .${compartment}_sealed_objects_start);\n",
 			pcc_ld =
 				"\n\t.${compartment}_code : CAPALIGN" ..
 				"\n\t{" ..
@@ -317,7 +319,10 @@ rule("firmware")
 				"\n\t\t.${compartment}_export_table_end = .;\n",
 			cap_relocs =
 				"\n\t\t.${compartment}_cap_relocs_start = .;" ..
-				"\n\t\t${obj}(__cap_relocs);\n\t\t.${compartment}_cap_relocs_end = .;"
+				"\n\t\t${obj}(__cap_relocs);\n\t\t.${compartment}_cap_relocs_end = .;",
+			sealed_objects =
+				"\n\t\t.${compartment}_sealed_objects_start = .;" ..
+				"\n\t\t${obj}(.sealed_objects);\n\t\t.${compartment}_sealed_objects_end = .;"
 		}
 		--Library headers are almost identical to compartment headers, except
 		--that they don't have any globals.
@@ -332,11 +337,14 @@ rule("firmware")
 				"\n\t\tSHORT(0);" ..
 				"\n\t\tSHORT(0);" ..
 				"\n\t\tLONG(.${compartment}_cap_relocs_start);" ..
-				"\n\t\tSHORT(.${compartment}_cap_relocs_end - .${compartment}_cap_relocs_start);\n",
+				"\n\t\tSHORT(.${compartment}_cap_relocs_end - .${compartment}_cap_relocs_start);" ..
+				"\n\t\tLONG(.${compartment}_sealed_objects_start);" ..
+				"\n\t\tSHORT(.${compartment}_sealed_objects_end - .${compartment}_sealed_objects_start);\n",
 			pcc_ld = compartment_templates.pcc_ld,
 			gdc_ld = "",
 			compartment_exports = compartment_templates.compartment_exports,
-			cap_relocs = compartment_templates.cap_relocs
+			cap_relocs = compartment_templates.cap_relocs,
+			sealed_objects = compartment_templates.sealed_objects
 		}
 		-- The substitutions that we're going to have in the final linker
 		-- script.  Initialised as empty strings.
@@ -349,6 +357,7 @@ rule("firmware")
 			software_revoker_code="",
 			software_revoker_globals="",
 			software_revoker_header="",
+			sealed_objects="",
 			mmio=mmio,
 			code_start=code_start,
 			heap_start=heap_start,
