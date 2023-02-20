@@ -97,8 +97,8 @@ int compartment_call_inner(int        x0,
 	return 0;
 }
 
-int test_incorrect_export_table(__cheri_callback void (*fn)(),
-                                bool *outTestFailed)
+void test_incorrect_export_table(__cheri_callback void (*fn)(),
+                                 bool *outTestFailed)
 {
 	/*
 	 * Trigger a cross-compartment call with an invalid export entry.
@@ -111,5 +111,4 @@ int test_incorrect_export_table(__cheri_callback void (*fn)(),
 	fn();
 
 	*outTestFailed = false;
-	return 0;
 }

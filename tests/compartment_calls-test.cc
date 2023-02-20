@@ -50,7 +50,7 @@ void test_compartment_call()
 	ret = test_incorrect_export_table_with_handler(nullptr);
 	TEST(ret == -1, "Test incorrect entry point with error handler failed");
 
-	ret = test_incorrect_export_table(nullptr, &outTestFailed);
+	test_incorrect_export_table(nullptr, &outTestFailed);
 	TEST(outTestFailed == false,
 	     "Test incorrect entry point without error handler failed");
 }
