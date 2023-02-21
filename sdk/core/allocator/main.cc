@@ -223,12 +223,6 @@ namespace
 	{
 		return -EINVAL;
 	}
-	/*
-	 * On allocation, we paint the shadow bit as a marker to detect valid
-	 * free(). Now the bit has served its purpose, clear it. This is also to
-	 * detect double free.
-	 */
-	revoker.shadow_paint_single(mem.address() - MallocAlignment, false);
 	gm->mspace_free(mem);
 
 	// If there are any threads blocked allocating memory, wake them up.
