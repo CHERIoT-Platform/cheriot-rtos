@@ -169,7 +169,7 @@ namespace
 	{
 		static constexpr size_t MaxAllocs    = 256;
 		static constexpr size_t AllocSizes[] = {
-		  16, 64, 72, 96, 128, 256, 348, 1024};
+		  16, 64, 72, 96, 128, 256, 384, 1024};
 		static constexpr size_t NAllocSizes = std::size(AllocSizes);
 
 		ds::xoroshiro::P32R16 rand = {};
@@ -180,7 +180,10 @@ namespace
 
 			if (p != nullptr)
 			{
-				TEST(CHERI::Capability{p}.length() == sz, "Bad return length");
+				CHERI::Capability pwrap{p};
+				// dlmalloc can give you one granule more.
+				TEST(pwrap.length() == sz || pwrap.length() == sz + 8,
+				     "Bad return length");
 				memset(p, 0xCA, sz);
 				allocations.push_back(p);
 			}

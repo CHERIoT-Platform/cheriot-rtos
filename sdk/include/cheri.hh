@@ -844,6 +844,11 @@ namespace CHERI
 			return std::partial_ordering::unordered;
 		}
 
+		constexpr bool operator==(const Capability Other) const
+		{
+			return __builtin_cheri_equal_exact(ptr, Other.ptr);
+		}
+
 		/**
 		 * Capability comparison.  Defines ordered comparison for capabilities
 		 * with the same bounds and permissions.  All other capabilities are
@@ -1001,6 +1006,13 @@ namespace CHERI
 	__always_inline inline size_t representable_alignment_mask(size_t length)
 	{
 		return __builtin_cheri_representable_alignment_mask(length);
+	}
+
+	/// Can the range [base, base + size) be precisely covered by a capability?
+	inline bool is_precise_range(ptraddr_t base, size_t size)
+	{
+		return (base & ~representable_alignment_mask(size)) == 0 &&
+		       representable_length(size) == size;
 	}
 
 	namespace detail
