@@ -1114,14 +1114,14 @@ class MState
 	 */
 	static bool __always_inline capaligned_range_do(void  *start,
 	                                                size_t size,
-	                                                bool (*fn)(void *&))
+	                                                bool (*fn)(void **))
 	{
 		Debug::Assert((size & (sizeof(void *) - 1)) == 0,
 		              "Cap range is not aligned");
 		void **capstart = static_cast<void **>(start);
 		for (size_t i = 0; i < size / sizeof(void *); ++i)
 		{
-			if (fn(capstart[i]))
+			if (fn(&capstart[i]))
 			{
 				return true;
 			}
@@ -1132,8 +1132,8 @@ class MState
 
 	static void capaligned_zero(void *start, size_t size)
 	{
-		capaligned_range_do(start, size, [](void *&word) {
-			word = nullptr;
+		capaligned_range_do(start, size, [](void **word) {
+			*word = nullptr;
 			return false;
 		});
 	}
@@ -2173,15 +2173,22 @@ class MState
 		// If we reached here, then it means we took a real chunk off the free
 		// list without errors. Zero the user portion metadata.
 		size_t size = p->size_get();
-		// We sanity check that things off the free list are indeed zeroed out.
-		Debug::Assert(capaligned_range_do(p->body(),
-		                                  size - sizeof(MChunkHeader),
-		                                  [](void *&word) {
-			                                  return CHERI::Capability<void>(
-			                                           word) != nullptr;
-		                                  }) == false,
-		              "Memory from free list is not entirely zeroed, size {}",
-		              size);
+		/*
+		 * We sanity check that things off the free list are indeed zeroed out,
+		 * and none corresponds to a set shadow bit. We need to wrap *word
+		 * inside a Capability because that gives exact equal for nullptr.
+		 */
+		Debug::Assert(
+		  capaligned_range_do(p->body(),
+		                      size - sizeof(MChunkHeader),
+		                      [](void **word) {
+			                      CHERI::Capability eachCap{*word};
+			                      return eachCap != nullptr &&
+			                             revoker.shadow_bit_get(
+			                               CHERI::Capability{word}.address());
+		                      }) == false,
+		  "Memory from free list is not entirely zeroed, size {}",
+		  size);
 		heapFreeSize -= size;
 		return p->body();
 	}
