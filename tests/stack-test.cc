@@ -36,7 +36,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		return ErrorRecoveryBehaviour::InstallContext;
 	}
 
-	TEST(false, "Should be unreachable");
+	debug_log("Force unwind in the outer compartment");
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
 
@@ -44,17 +44,6 @@ __cheri_callback void test_trusted_stack_exhaustion()
 {
 	exhaust_trusted_stack(&test_trusted_stack_exhaustion,
 	                      &leakedSwitcherCapability);
-}
-
-void test_stack_exhaustion()
-{
-	inTrustedStackExhaustion = true;
-	leakedSwitcherCapability = false;
-	test_trusted_stack_exhaustion();
-
-	inTrustedStackExhaustion = false;
-	threadStackTestFailed    = false;
-	exhaust_thread_stack(&threadStackTestFailed);
 }
 
 /*
@@ -68,7 +57,17 @@ void test_stack_exhaustion()
  */
 void test_stack()
 {
-	test_stack_exhaustion();
-	test_stack_permissions();
-	test_stack_invalid();
+	inTrustedStackExhaustion = true;
+	leakedSwitcherCapability = false;
+	test_trusted_stack_exhaustion();
+
+	inTrustedStackExhaustion = false;
+	threadStackTestFailed    = false;
+	exhaust_thread_stack(&threadStackTestFailed);
+
+	threadStackTestFailed = false;
+	test_stack_permissions(&threadStackTestFailed);
+
+	threadStackTestFailed = false;
+	test_stack_invalid(&threadStackTestFailed);
 }

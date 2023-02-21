@@ -48,3 +48,63 @@ void exhaust_thread_stack(bool *outTestFailed)
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
 }
+
+void set_csp_and_fault(Capability<void> csp)
+{
+	__asm__ volatile("cmove csp, %0\n" ::"C"(csp.get()));
+	__asm__ volatile("csh            zero, 0(cnull)\n");
+}
+
+void test_stack_permissions(bool *outTestFailed)
+{
+	debug_log("modify the compartment stack permissions");
+
+	threadStackTestFailed = outTestFailed;
+
+	Capability<void> csp = ({
+		register void *cspRegister asm("csp");
+		asm("" : "=C"(cspRegister));
+		cspRegister;
+	});
+
+	// TODO: this should be static constexpr; In the meantime, the begin
+	// function is not marked const
+	PermissionSet PermissionsToRemove{
+	  Permission::Load, Permission::Store, Permission::LoadStoreCapability};
+	for (auto permission : PermissionsToRemove)
+	{
+		csp.permissions() &= csp.permissions().without(permission);
+		TEST(csp.permissions().contains(permission) == false,
+		     "Did not remove permission");
+	}
+
+	// Verify CSP is valid
+	TEST(csp.is_valid() == true, "CSP isn't valid");
+
+	set_csp_and_fault(csp);
+
+	*threadStackTestFailed = true;
+	TEST(false, "Should be unreachable");
+}
+
+void test_stack_invalid(bool *outTestFailed)
+{
+	debug_log("modify the compartment stack tag");
+
+	threadStackTestFailed = outTestFailed;
+
+	Capability<void> csp = ({
+		register void *cspRegister asm("csp");
+		asm("" : "=C"(cspRegister));
+		cspRegister;
+	});
+
+	// Verify CSP is valid
+	__asm__ volatile("ccleartag		csp, csp\n");
+	TEST(csp.is_valid() == false, "CSP is valid");
+
+	set_csp_and_fault(csp);
+
+	*threadStackTestFailed = true;
+	TEST(false, "Should be unreachable");
+}
