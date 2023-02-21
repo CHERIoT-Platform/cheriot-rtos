@@ -1,5 +1,5 @@
-#define TEST_NAME "Stack exhaustion, exhaust trusted stack"
-#include "stack_exhaustion.h"
+#define TEST_NAME "Stack tests, exhaust trusted stack"
+#include "stack_tests.h"
 #include "tests.hh"
 #include <cheri.hh>
 #include <errno.h>

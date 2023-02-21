@@ -7,6 +7,8 @@ __cheri_compartment("stack_exhaustion_trusted") void exhaust_trusted_stack(
   bool *outLeakedSwitcherCapability);
 __cheri_compartment("stack_exhaustion_thread") void exhaust_thread_stack(
   bool *outTestFailed);
+__cheri_compartment("stack_metadata") void test_stack_permissions();
+__cheri_compartment("stack_metadata") void test_stack_invalid();
 
 using namespace CHERI;
 
