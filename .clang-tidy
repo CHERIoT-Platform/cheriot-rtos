@@ -39,3 +39,8 @@ CheckOptions:
       value: '__.*'
     - key: cppcoreguidelines-narrowing-conversions.WarnOnEquivalentBitWidth
       value: false
+
+    # Suppress bogus "invalid case style for template parameter 'expr-type'"
+    # See https://github.com/llvm/llvm-project/issues/46097
+    - key: readability-identifier-naming.TypeTemplateParameterIgnoredRegexp
+      value: expr-type
