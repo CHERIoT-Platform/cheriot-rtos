@@ -36,7 +36,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		return ErrorRecoveryBehaviour::InstallContext;
 	}
 
-	TEST(false, "force unwind in the parent!!!!");
+	TEST(false, "Should be unreachable");
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
 
