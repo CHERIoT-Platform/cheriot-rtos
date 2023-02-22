@@ -308,7 +308,7 @@ namespace CHERI
 		 * Returns an iterator over the permissions starting at the
 		 * lowest-numbered permission.
 		 */
-		constexpr Iterator begin() const
+		[[nodiscard]] constexpr Iterator begin() const
 		{
 			return {rawPermissions};
 		}
@@ -316,7 +316,7 @@ namespace CHERI
 		/**
 		 * Returns an end iterator.
 		 */
-		constexpr Iterator end() const
+		[[nodiscard]] constexpr Iterator end() const
 		{
 			// Each increment of an iterator will drop one permission and so an
 			// iterator will compare equal to {0} once all permissions have
