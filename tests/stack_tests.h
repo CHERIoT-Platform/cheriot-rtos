@@ -2,17 +2,16 @@
 #include <cheri.hh>
 #include <compartment.h>
 
+using namespace CHERI;
+
 __cheri_compartment("stack_exhaustion_trusted") void exhaust_trusted_stack(
   __cheri_callback void (*fn)(),
   bool *outLeakedSwitcherCapability);
 __cheri_compartment("stack_exhaustion_thread") void exhaust_thread_stack(
   bool *outTestFailed);
-__cheri_compartment("stack_exhaustion_thread") void test_stack_permissions(
-  bool *outTestFailed);
+__cheri_compartment("stack_exhaustion_thread") void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove);
 __cheri_compartment("stack_exhaustion_thread") void test_stack_invalid(
   bool *outTestFailed);
-
-using namespace CHERI;
 
 bool is_switcher_capability(void *reg)
 {

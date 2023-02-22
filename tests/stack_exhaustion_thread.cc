@@ -11,6 +11,7 @@ bool *threadStackTestFailed;
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
+	debug_log("Error handler called, set threadStackTestFailed");
 	*threadStackTestFailed = true;
 
 	TEST(false,
@@ -55,9 +56,9 @@ void set_csp_and_fault(Capability<void> csp)
 	__asm__ volatile("csh            zero, 0(cnull)\n");
 }
 
-void test_stack_permissions(bool *outTestFailed)
+void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove)
 {
-	debug_log("modify the compartment stack permissions");
+	debug_log("modify the compartment stack permissions {}", permissionToRemove);
 
 	threadStackTestFailed = outTestFailed;
 
@@ -67,16 +68,9 @@ void test_stack_permissions(bool *outTestFailed)
 		cspRegister;
 	});
 
-	// TODO: this should be static constexpr; In the meantime, the begin
-	// function is not marked const
-	PermissionSet PermissionsToRemove{
-	  Permission::Load, Permission::Store, Permission::LoadStoreCapability};
-	for (auto permission : PermissionsToRemove)
-	{
-		csp.permissions() &= csp.permissions().without(permission);
-		TEST(csp.permissions().contains(permission) == false,
-		     "Did not remove permission");
-	}
+	csp.permissions() &= csp.permissions().without(permissionToRemove);
+	TEST(csp.permissions().contains(permissionToRemove) == false,
+			"Did not remove permission");
 
 	// Verify CSP is valid
 	TEST(csp.is_valid() == true, "CSP isn't valid");
