@@ -13,10 +13,13 @@ bool leakedSwitcherCapability = false;
 bool threadStackTestFailed    = false;
 bool inTrustedStackExhaustion = false;
 
+// Compartments CSP have the following permissions: RWcgm-
 static constexpr PermissionSet PermissionsToRemove{
   Permission::Load,
   Permission::Store,
-  Permission::LoadStoreCapability};
+  Permission::LoadStoreCapability,
+  Permission::LoadGlobal,
+  Permission::LoadMutable};
 
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)

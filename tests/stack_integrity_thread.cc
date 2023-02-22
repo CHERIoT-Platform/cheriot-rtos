@@ -57,7 +57,7 @@ void set_csp_and_fault(Capability<void> csp)
 
 void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove)
 {
-	debug_log("modify the compartment stack permissions");
+	debug_log("modify the compartment stack permissions: remove {}", permissionToRemove);
 
 	threadStackTestFailed = outTestFailed;
 

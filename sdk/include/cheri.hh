@@ -145,7 +145,10 @@ namespace CHERI
 			/// The raw permissions bitmap.
 			uint32_t permissions;
 			/// Constructor, take a raw permissions bitmap.
-			constexpr Iterator(uint32_t rawPermissions) : permissions(rawPermissions) {}
+			constexpr Iterator(uint32_t rawPermissions)
+			  : permissions(rawPermissions)
+			{
+			}
 
 			public:
 			/**
