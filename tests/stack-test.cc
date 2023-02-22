@@ -70,12 +70,10 @@ void test_stack()
 	threadStackTestFailed    = false;
 	exhaust_thread_stack(&threadStackTestFailed);
 
-	threadStackTestFailed = false;
 	for (auto permission : PermissionsToRemove)
 	{
 		test_stack_permissions(&threadStackTestFailed, permission);
 	}
 
-	threadStackTestFailed = false;
 	test_stack_invalid(&threadStackTestFailed);
 }

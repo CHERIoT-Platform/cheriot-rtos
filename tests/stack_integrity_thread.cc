@@ -11,7 +11,6 @@ bool *threadStackTestFailed;
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
-	debug_log("Error handler called, set threadStackTestFailed");
 	*threadStackTestFailed = true;
 
 	TEST(false,
