@@ -14,8 +14,8 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 	*threadStackTestFailed = true;
 
 	TEST(false,
-	     "Error handler in compartment that exhausts its stack should not be "
-	     "called");
+	     "Error handler in compartment that exhausts/invalidated its stack "
+	     "should not be called");
 
 	/* This is unreachable code, but we need to make the compiler happy
 	 * because the function has a non-void return value
@@ -57,7 +57,8 @@ void set_csp_and_fault(Capability<void> csp)
 
 void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove)
 {
-	debug_log("modify the compartment stack permissions: remove {}", permissionToRemove);
+	debug_log("modify the compartment stack permissions: remove {}",
+	          permissionToRemove);
 
 	threadStackTestFailed = outTestFailed;
 

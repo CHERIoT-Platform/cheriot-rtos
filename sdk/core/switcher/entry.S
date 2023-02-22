@@ -99,8 +99,8 @@ compartment_switcher_entry:
 
 	// make sure the caller's CSP has the expected permissions
 	cgetperm		t2, csp
-	li 				tp, 0x6e
-	//bne				t2, tp, .Linvalid_stack
+	li 				tp, 0x7e
+	bne				tp, t2, .Linvalid_stack
 
 	// we are past the stacks checks. Reload ct2 and tp
 	cspecialr		ct2, mscratchc

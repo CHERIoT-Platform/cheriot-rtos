@@ -13,8 +13,8 @@ bool leakedSwitcherCapability = false;
 bool threadStackTestFailed    = false;
 bool inTrustedStackExhaustion = false;
 
-// Compartments CSP have the following permissions: RWcgm-
-static constexpr PermissionSet PermissionsToRemove{
+// Compartments CSP have the following permissions: RWcgml
+static constexpr PermissionSet CompartmentStackPermissions{
   Permission::Load,
   Permission::Store,
   Permission::LoadStoreCapability,
@@ -73,9 +73,9 @@ void test_stack()
 	threadStackTestFailed    = false;
 	exhaust_thread_stack(&threadStackTestFailed);
 
-	for (auto permission : PermissionsToRemove)
+	for (auto permissionToRemove : CompartmentStackPermissions)
 	{
-		test_stack_permissions(&threadStackTestFailed, permission);
+		test_stack_permissions(&threadStackTestFailed, permissionToRemove);
 	}
 
 	test_stack_invalid(&threadStackTestFailed);
