@@ -36,7 +36,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		return ErrorRecoveryBehaviour::InstallContext;
 	}
 
-	debug_log("Force unwind in the outer compartment");
+	TEST(false, "Force unwind in the outer compartment");
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
 
