@@ -228,15 +228,15 @@ namespace loader
 			});
 		}
 
-		template<Type                 type,
+		template<Type                 Type,
 		         CHERI::PermissionSet RequestedPermissions,
-		         bool                 precise = true>
+		         bool                 Precise = true>
 		static inline void *build_from_root(ptraddr_t addr, size_t size)
 		{
-			check_permissions<RequestedPermissions, Permissions<type>>();
-			auto ret      = roots[static_cast<size_t>(type)];
+			check_permissions<RequestedPermissions, Permissions<Type>>();
+			auto ret      = roots[static_cast<size_t>(Type)];
 			ret.address() = addr;
-			if constexpr (precise)
+			if constexpr (Precise)
 			{
 				ret.bounds() = size;
 			}
