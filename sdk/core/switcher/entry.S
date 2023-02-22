@@ -91,11 +91,20 @@ compartment_switcher_entry:
 	// XXX: This line is useless, only for mscratch to show up in debugging.
 	cmove			ct2, ct2
 #endif
-	clhu			tp, TrustedStack_offset_frameoffset(ct2)
+
 	// make sure the trusted stack is still in bounds
-	cgetlen                 t2, ct2
-	bgeu                    tp, t2, .Lout_of_trusted_stack
+	clhu			tp, TrustedStack_offset_frameoffset(ct2)
+	cgetlen         t2, ct2
+	bgeu           	tp, t2, .Linvalid_stack
+
+	// make sure the caller's CSP has the expected permissions
+	cgetperm		t2, csp
+	li 				tp, 0x6e
+	//bne				t2, tp, .Linvalid_stack
+
+	// we are past the stacks checks. Reload ct2 and tp
 	cspecialr		ct2, mscratchc
+	clhu			tp, TrustedStack_offset_frameoffset(ct2)
 	// ctp points to the current available trusted stack frame.
 	cincoffset		ctp, ct2, tp
 	csc				cra, TrustedStackFrame_offset_pcc(ctp)
@@ -334,7 +343,7 @@ exception_entry_asm:
 	// Pop the trusted stack frame.
 	cjal           .Lpop_trusted_stack_frame
 	cmove          cra, ca2
-.Lout_of_trusted_stack:
+.Linvalid_stack:
 	cmove          ct0, csp
 	// Fetch the trusted stack pointer.
 	cspecialr      csp, mscratchc
