@@ -9,7 +9,9 @@ __cheri_compartment("stack_exhaustion_trusted") void exhaust_trusted_stack(
   bool *outLeakedSwitcherCapability);
 __cheri_compartment("stack_exhaustion_thread") void exhaust_thread_stack(
   bool *outTestFailed);
-__cheri_compartment("stack_exhaustion_thread") void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove);
+__cheri_compartment("stack_exhaustion_thread") void test_stack_permissions(
+  bool      *outTestFailed,
+  Permission permissionToRemove);
 __cheri_compartment("stack_exhaustion_thread") void test_stack_invalid(
   bool *outTestFailed);
 

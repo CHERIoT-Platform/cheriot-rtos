@@ -58,7 +58,8 @@ void set_csp_and_fault(Capability<void> csp)
 
 void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove)
 {
-	debug_log("modify the compartment stack permissions {}", permissionToRemove);
+	debug_log("modify the compartment stack permissions {}",
+	          permissionToRemove);
 
 	threadStackTestFailed = outTestFailed;
 
@@ -70,7 +71,7 @@ void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove)
 
 	csp.permissions() &= csp.permissions().without(permissionToRemove);
 	TEST(csp.permissions().contains(permissionToRemove) == false,
-			"Did not remove permission");
+	     "Did not remove permission");
 
 	// Verify CSP is valid
 	TEST(csp.is_valid() == true, "CSP isn't valid");

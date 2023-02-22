@@ -13,8 +13,10 @@ bool leakedSwitcherCapability = false;
 bool threadStackTestFailed    = false;
 bool inTrustedStackExhaustion = false;
 
-PermissionSet PermissionsToRemove{
-	  Permission::Load, Permission::Store, Permission::LoadStoreCapability};
+static constexpr PermissionSet PermissionsToRemove{
+  Permission::Load,
+  Permission::Store,
+  Permission::LoadStoreCapability};
 
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
@@ -69,12 +71,7 @@ void test_stack()
 	exhaust_thread_stack(&threadStackTestFailed);
 
 	threadStackTestFailed = false;
-	debug_log("{}", PermissionsToRemove.as_raw());
-	for(auto permission : PermissionsToRemove)
-	{
-		debug_log("{}", permission);
-	}
-	for(auto permission : PermissionsToRemove)
+	for (auto permission : PermissionsToRemove)
 	{
 		test_stack_permissions(&threadStackTestFailed, permission);
 	}
