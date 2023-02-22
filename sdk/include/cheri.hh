@@ -145,21 +145,21 @@ namespace CHERI
 			/// The raw permissions bitmap.
 			uint32_t permissions;
 			/// Constructor, take a raw permissions bitmap.
-			Iterator(uint32_t rawPermissions) : permissions(rawPermissions) {}
+			constexpr Iterator(uint32_t rawPermissions) : permissions(rawPermissions) {}
 
 			public:
 			/**
 			 * Dereference, returns the lowest-numbered permission.
 			 */
-			Permission operator*()
+			constexpr Permission operator*()
 			{
-				return Permission(__builtin_ffs(permissions));
+				return Permission(__builtin_ffs(permissions) - 1);
 			}
 
 			/**
 			 * Preincrement, drops the lowest-numbered permission.
 			 */
-			Iterator &operator++()
+			constexpr Iterator &operator++()
 			{
 				permissions &= ~(1 << (__builtin_ffs(permissions) - 1));
 				return *this;
@@ -169,7 +169,7 @@ namespace CHERI
 			 * Returns true if the other iterator has a different set of
 			 * permissions.
 			 */
-			bool operator!=(const Iterator Other)
+			constexpr bool operator!=(const Iterator Other)
 			{
 				return permissions != Other.permissions;
 			}
@@ -308,7 +308,7 @@ namespace CHERI
 		 * Returns an iterator over the permissions starting at the
 		 * lowest-numbered permission.
 		 */
-		Iterator begin()
+		constexpr Iterator begin() const
 		{
 			return {rawPermissions};
 		}
@@ -316,7 +316,7 @@ namespace CHERI
 		/**
 		 * Returns an end iterator.
 		 */
-		Iterator end()
+		constexpr Iterator end() const
 		{
 			// Each increment of an iterator will drop one permission and so an
 			// iterator will compare equal to {0} once all permissions have
