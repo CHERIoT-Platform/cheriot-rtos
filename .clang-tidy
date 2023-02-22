@@ -25,6 +25,14 @@ CheckOptions:
       value: camelBack
     - key: readability-identifier-naming.ConstantCase
       value: CamelCase
+    - key: readability-identifier-naming.TemplateParameterCase
+      value: CamelCase
+    - key: readability-identifier-naming.TemplateTemplateParameterCase
+      value: CamelCase
+    - key: readability-identifier-naming.TypeTemplateParameterCase
+      value: CamelCase
+    - key: readability-identifier-naming.ValueTemplateParameterCase
+      value: CamelCase
     - key: readability-identifier-naming.ConstantIgnoredRegexp
       value: '__.*'
     - key: readability-identifier-naming.ParameterCase
@@ -39,3 +47,8 @@ CheckOptions:
       value: '__.*'
     - key: cppcoreguidelines-narrowing-conversions.WarnOnEquivalentBitWidth
       value: false
+
+    # Suppress bogus "invalid case style for template parameter 'expr-type'"
+    # See https://github.com/llvm/llvm-project/issues/46097
+    - key: readability-identifier-naming.TypeTemplateParameterIgnoredRegexp
+      value: expr-type

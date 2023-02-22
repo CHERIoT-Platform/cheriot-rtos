@@ -34,17 +34,17 @@ namespace ds::ring_buffer
 	 *   - call tail_advance() to make that element available to the
 	 *     consumer
 	 */
-	template<typename Debug, std::size_t Capacity, typename _Ix = std::size_t>
+	template<typename Debug, std::size_t Capacity, typename IxTy = std::size_t>
 	class Cursors
 	{
-		static_assert(std::is_arithmetic_v<_Ix> && std::is_unsigned_v<_Ix>,
+		static_assert(std::is_arithmetic_v<IxTy> && std::is_unsigned_v<IxTy>,
 		              "Ring buffer cursor type must be unsigned arithmetic");
 
 		template<typename... Args>
 		using Assert = typename Debug::template Assert<Args...>;
 
 		public:
-		using Ix = _Ix;
+		using Ix = IxTy;
 
 		private:
 		Ix   head;

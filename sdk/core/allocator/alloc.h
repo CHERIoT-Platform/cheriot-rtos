@@ -387,6 +387,11 @@ MChunkHeader
 	 * system.  In particular, if this is a free chunk, then the result will be
 	 * two free chunks in a row; the caller is expected to fix this by marking
 	 * at least one of the two split chunks as in-use.
+	 *
+	 * Note that we keep the invariant that all headers correspond to shadow
+	 * bits that are set. For this to be true, new headers are assumed to be
+	 * created only by split() after initialisation which is in charge of
+	 * setting the bits.
 	 */
 	MChunkHeader *split(size_t offset)
 	{
@@ -394,6 +399,8 @@ MChunkHeader
 
 		auto newnext = new (newloc) MChunkHeader();
 		newnext->clear();
+		// Invariant that headers must point to shadow bits that are set.
+		revoker.shadow_paint_single(CHERI::Capability{newloc}.address(), true);
 
 		ds::linked_list::emplace_after(this, newnext);
 		newnext->isCurrInUse = newnext->isPrevInUse = isCurrInUse;
@@ -421,6 +428,7 @@ MChunkHeader
 		first->currSize    = size2head(size);
 		first->isPrevInUse = true;
 		first->isCurrInUse = false;
+		revoker.shadow_paint_single(CHERI::Capability{first}.address(), true);
 
 		auto footer =
 		  new (ds::pointer::offset<void>(base, size)) MChunkHeader();
@@ -429,6 +437,7 @@ MChunkHeader
 		footer->currSize    = size2head(sizeof(MChunkHeader));
 		footer->isPrevInUse = false;
 		footer->isCurrInUse = true;
+		revoker.shadow_paint_single(CHERI::Capability{footer}.address(), true);
 
 		return first;
 	}
@@ -1035,14 +1044,6 @@ class MState
 		}
 		++sanityCounter;
 #endif
-		/*
-		 * We abuse shadow bits to give us a marker for the allocated address.
-		 * On free, we check that the allocation granule right below the address
-		 * should have the shadow bit set, which means this is a valid thing for
-		 * free();
-		 */
-		revoker.shadow_paint_single(ret.address() - MallocAlignment, true);
-
 		ret.bounds() = alignSize;
 		return ret;
 	}
@@ -1113,14 +1114,14 @@ class MState
 	 */
 	static bool __always_inline capaligned_range_do(void  *start,
 	                                                size_t size,
-	                                                bool (*fn)(void *&))
+	                                                bool (*fn)(void **))
 	{
 		Debug::Assert((size & (sizeof(void *) - 1)) == 0,
 		              "Cap range is not aligned");
 		void **capstart = static_cast<void **>(start);
 		for (size_t i = 0; i < size / sizeof(void *); ++i)
 		{
-			if (fn(capstart[i]))
+			if (fn(&capstart[i]))
 			{
 				return true;
 			}
@@ -1131,8 +1132,8 @@ class MState
 
 	static void capaligned_zero(void *start, size_t size)
 	{
-		capaligned_range_do(start, size, [](void *&word) {
-			word = nullptr;
+		capaligned_range_do(start, size, [](void **word) {
+			*word = nullptr;
 			return false;
 		});
 	}
@@ -1168,6 +1169,18 @@ class MState
 	}
 	void ok_any_chunk(MChunkHeader *p)
 	{
+		bool thisShadowBit =
+		  revoker.shadow_bit_get(CHERI::Capability{p}.address());
+		Debug::Assert(thisShadowBit,
+		              "Chunk header does not point to a set shadow bit: {}",
+		              p);
+		MChunkHeader *next = p->cell_next();
+		bool          nextShadowBit =
+		  revoker.shadow_bit_get(CHERI::Capability{next}.address());
+		Debug::Assert(
+		  nextShadowBit,
+		  "Next chunk header does not point to a set shadow bit: {}",
+		  next);
 		Debug::Assert(
 		  is_aligned(p->body()), "Chunk is not correctly aligned: {}", p);
 		Debug::Assert(
@@ -1966,6 +1979,8 @@ class MState
 			unlink_chunk(MChunk::from_header(prev), prev->size_get());
 			ds::linked_list::unsafe_remove_link(prev, p);
 			p->clear();
+			// p is no longer a header. Clear the shadow bit.
+			revoker.shadow_paint_single(CHERI::Capability{p}.address(), false);
 			p = prev;
 		}
 
@@ -1976,6 +1991,9 @@ class MState
 			unlink_chunk(MChunk::from_header(next), next->size_get());
 			ds::linked_list::unsafe_remove_link(p, next);
 			next->clear();
+			// next is no longer a header. Clear the shadow bit.
+			revoker.shadow_paint_single(CHERI::Capability{next}.address(),
+			                            false);
 		}
 
 		p->mark_free();
@@ -2155,15 +2173,22 @@ class MState
 		// If we reached here, then it means we took a real chunk off the free
 		// list without errors. Zero the user portion metadata.
 		size_t size = p->size_get();
-		// We sanity check that things off the free list are indeed zeroed out.
-		Debug::Assert(capaligned_range_do(p->body(),
-		                                  size - sizeof(MChunkHeader),
-		                                  [](void *&word) {
-			                                  return CHERI::Capability<void>(
-			                                           word) != nullptr;
-		                                  }) == false,
-		              "Memory from free list is not entirely zeroed, size {}",
-		              size);
+		/*
+		 * We sanity check that things off the free list are indeed zeroed out,
+		 * and none corresponds to a set shadow bit. We need to wrap *word
+		 * inside a Capability because that gives exact equal for nullptr.
+		 */
+		Debug::Assert(
+		  capaligned_range_do(p->body(),
+		                      size - sizeof(MChunkHeader),
+		                      [](void **word) {
+			                      CHERI::Capability eachCap{*word};
+			                      return eachCap != nullptr &&
+			                             revoker.shadow_bit_get(
+			                               CHERI::Capability{word}.address());
+		                      }) == false,
+		  "Memory from free list is not entirely zeroed, size {}",
+		  size);
 		heapFreeSize -= size;
 		return p->body();
 	}
