@@ -81,12 +81,12 @@ void __cheri_compartment("test_runner") run_tests()
 	 * order to match it to the order the Iterator implements: the Iterator
 	 * returns then in value order, and not insertion order.
 	 */
-	static constexpr PermissionSet permissions{
+	static constexpr PermissionSet Permissions{
 	  Permission::Load, Permission::Store, Permission::LoadStoreCapability};
 	static Permission permissionArray[] = {
 	  Permission::Store, Permission::Load, Permission::LoadStoreCapability};
 	size_t index = 0;
-	for (auto permission : permissions)
+	for (auto permission : Permissions)
 	{
 		TEST(permission == permissionArray[index++],
 		     "Iterator of PermissionSet failed");
