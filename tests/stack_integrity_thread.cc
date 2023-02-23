@@ -68,6 +68,9 @@ void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove)
 		cspRegister;
 	});
 
+	TEST(PermissionSet{permissionToRemove}.can_derive_from(csp.permissions()) == true,
+	     "permission to remove is not set in the compartment stack");
+
 	csp.permissions() &= csp.permissions().without(permissionToRemove);
 	TEST(csp.permissions().contains(permissionToRemove) == false,
 	     "Did not remove permission");
