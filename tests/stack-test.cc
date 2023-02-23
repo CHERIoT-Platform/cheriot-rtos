@@ -13,14 +13,6 @@ bool leakedSwitcherCapability = false;
 bool threadStackTestFailed    = false;
 bool inTrustedStackExhaustion = false;
 
-// Compartments CSP have the following permissions: RWcgml
-static constexpr PermissionSet CompartmentStackPermissions{
-  Permission::Load,
-  Permission::Store,
-  Permission::LoadStoreCapability,
-  Permission::LoadGlobal,
-  Permission::LoadMutable};
-
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
@@ -48,6 +40,17 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
 
+PermissionSet get_stack_permissions()
+{
+	Capability<void> csp = ({
+		register void *cspRegister asm("csp");
+		asm("" : "=C"(cspRegister));
+		cspRegister;
+	});
+
+	return csp.permissions();
+}
+
 __cheri_callback void test_trusted_stack_exhaustion()
 {
 	exhaust_trusted_stack(&test_trusted_stack_exhaustion,
@@ -73,7 +76,8 @@ void test_stack()
 	threadStackTestFailed    = false;
 	exhaust_thread_stack(&threadStackTestFailed);
 
-	for (auto permissionToRemove : CompartmentStackPermissions)
+	PermissionSet compartment_stack_permission = get_stack_permissions();
+	for (auto permissionToRemove : compartment_stack_permission)
 	{
 		test_stack_permissions(&threadStackTestFailed, permissionToRemove);
 	}
