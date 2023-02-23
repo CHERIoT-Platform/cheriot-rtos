@@ -95,12 +95,12 @@ compartment_switcher_entry:
 	// make sure the trusted stack is still in bounds
 	clhu			tp, TrustedStack_offset_frameoffset(ct2)
 	cgetlen         t2, ct2
-	bgeu           	tp, t2, .Linvalid_stack
+	bgeu           	tp, t2, .Lout_of_trusted_stack
 
 	// make sure the caller's CSP has the expected permissions
 	cgetperm		t2, csp
 	li 				tp, 0x7e
-	bne				tp, t2, .Linvalid_stack
+	bne				tp, t2, .Linvalid_csp_permissions
 
 	// we are past the stacks checks. Reload ct2 and tp
 	cspecialr		ct2, mscratchc
@@ -324,6 +324,14 @@ exception_entry_asm:
 	reloadRegisters c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, csp
 	mret
 
+.Linvalid_csp_permissions:
+	cjal 			.Lpop_trusted_stack_frame
+	cspecialr		ctp, mscratchc
+	li				a0, 1
+	csb				a0, TrustedStack_offset_inForcedUnwind(ctp)
+	li				a0, -1
+	j				.Lhandle_error
+
 // If we detect an invalud entry and there is no error handler installed, we want
 // to resume rather than unwind.
 .Linvalid_entry:
@@ -343,7 +351,7 @@ exception_entry_asm:
 	// Pop the trusted stack frame.
 	cjal           .Lpop_trusted_stack_frame
 	cmove          cra, ca2
-.Linvalid_stack:
+.Lout_of_trusted_stack:
 	cmove          ct0, csp
 	// Fetch the trusted stack pointer.
 	cspecialr      csp, mscratchc
