@@ -76,8 +76,8 @@ void test_stack()
 	threadStackTestFailed    = false;
 	exhaust_thread_stack(&threadStackTestFailed);
 
-	PermissionSet compartmentStackPermission = get_stack_permissions();
-	for (auto permissionToRemove : compartmentStackPermission)
+	PermissionSet compartmentStackPermissions = get_stack_permissions();
+	for (auto permissionToRemove : compartmentStackPermissions)
 	{
 		test_stack_permissions(&threadStackTestFailed, permissionToRemove);
 	}
