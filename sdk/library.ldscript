@@ -41,6 +41,11 @@ SECTIONS
 		*(.sbss .sbss.*);
 		*(.bss .bss.*);
 	}
+	# Statically allocated sealed objects
+	.sealed_objects :
+	{
+		*(.sealed_objects .sealed_objects.*);
+	}
 	# Throw some stuff away that we don't need.
 	/DISCARD/ :
 	{
