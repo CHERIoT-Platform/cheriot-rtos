@@ -12,6 +12,7 @@
 #include <ds/linked_list.h>
 #include <ds/pointer.h>
 #include <ds/ring_buffer.h>
+#include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -1010,7 +1011,9 @@ class MState
 	 */
 	AllocationResult mspace_dispatch(size_t bytes)
 	{
-		size_t alignSize = CHERI::representable_length(bytes);
+		size_t alignSize =
+		  (CHERI::representable_length(bytes) + MallocAlignMask) &
+		  ~MallocAlignMask;
 		// This 0 size check is for:
 		// 1. We choose to return nullptr for 0-byte requests.
 		// 2. crrl overflows to 0 if bytes is too big. Force failure.
@@ -1044,7 +1047,27 @@ class MState
 		}
 		++sanityCounter;
 #endif
-		ret.bounds() = alignSize;
+		auto   header   = MChunkHeader::from_body(ret);
+		size_t bodySize = header->size_get() - sizeof(MChunkHeader);
+		if (CHERI::is_precise_range(ret.address(), bodySize))
+		{
+			// Can we use this whole chunk as is? Yes!
+			ret.bounds() = bodySize;
+		}
+		else
+		{
+			/*
+			 * Using the whole chunk cannot give a precise capability, so only
+			 * use the portion that gives us a precise capability.
+			 */
+			ret.bounds() = alignSize;
+			Debug::Assert(bodySize == alignSize + MallocAlignment,
+			              "bodySize {} should only be {} bytes larger than "
+			              "alignSize {} when bodySize is not representable",
+			              bodySize,
+			              MallocAlignment,
+			              alignSize);
+		}
 		return ret;
 	}
 
@@ -1055,22 +1078,50 @@ class MState
 	 *
 	 * @param mem the user cap which has been checked, but has not been
 	 * rederived into an internal cap yet
+	 * @return 0 if user input mem is correct. Error code otherwise
 	 */
-	void mspace_free(CHERI::Capability<void> mem)
+	int mspace_free(CHERI::Capability<void> mem)
 	{
 		// Expand the bounds of the freed object to the whole heap and set the
 		// address that we're looking at to the base of the requested
 		// capability.
-		ptraddr_t base = mem.base();
-		mem            = heapStart;
-		mem.address()  = base;
+		CHERI::Capability user{mem};
+		ptraddr_t         base = mem.base();
+		mem                    = heapStart;
+		mem.address()          = base;
+		CHERI::Capability correct{mem};
 		/*
 		 * Rederived into allocator capability. From now on faults on this
 		 * pointer are internal.
 		 */
-		auto p = MChunkHeader::from_body(mem);
+		auto   p        = MChunkHeader::from_body(mem);
+		size_t bodySize = p->size_get() - sizeof(MChunkHeader);
+		if (!CHERI::is_precise_range(base, bodySize))
+		{
+			/*
+			 * If we can't give a precise capability covering the whole chunk,
+			 * then we must have given out the representable portion.
+			 * See also the logic in mspace_dispatch().
+			 */
+			bodySize -= MallocAlignment;
+			Debug::Assert(
+			  CHERI::is_precise_range(base, bodySize),
+			  "Neither bodySize nor bodySize - 8 can give a precise "
+			  "capability. "
+			  "Something is wrong during allocation.");
+		}
+		correct.bounds() = bodySize;
+		if (user != correct)
+		{
+			Debug::log(
+			  "Freed capability: {} is almost correct, but not quite. Please "
+			  "pass in the exact capability {}.",
+			  user,
+			  correct);
+			return -EINVAL;
+		}
 		// At this point, we know mem is capability aligned.
-		capaligned_zero(mem, p->size_get() - sizeof(MChunkHeader));
+		capaligned_zero(mem, bodySize);
 		revoker.shadow_paint_range(mem.address(), p->cell_next(), true);
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk
@@ -1091,6 +1142,8 @@ class MState
 		// Dequeue 3 times. 3 is chosen randomly. 2 is at least needed.
 		mspace_qtbin_deqn(3);
 		mspace_bg_revoker_kick<false>();
+
+		return 0;
 	}
 
 	/**

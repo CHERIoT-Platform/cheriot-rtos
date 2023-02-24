@@ -215,15 +215,11 @@ namespace
 	{
 		return -EINVAL;
 	}
-	/*
-	 * Since we use the shadow bits to detect valid frees, we need to consult
-	 * the revoker on whether the user cap is valid.
-	 */
-	if (!revoker.is_free_cap_valid(mem))
+	int rv = gm->mspace_free(mem);
+	if (rv)
 	{
-		return -EINVAL;
+		return rv;
 	}
-	gm->mspace_free(mem);
 
 	// If there are any threads blocked allocating memory, wake them up.
 	if (freeFutex > 0)
