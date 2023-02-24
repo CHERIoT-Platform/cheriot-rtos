@@ -1,5 +1,5 @@
-#define TEST_NAME "Stack exhaustion, exhaust trusted stack"
-#include "stack_exhaustion.h"
+#define TEST_NAME "Stack tests, exhaust trusted stack"
+#include "stack_tests.h"
 #include "tests.hh"
 #include <cheri.hh>
 #include <errno.h>
@@ -31,7 +31,6 @@ void self_recursion(__cheri_callback void (*fn)())
 void exhaust_trusted_stack(__cheri_callback void (*fn)(),
                            bool *outLeakedSwitcherCapability)
 {
-	debug_log("exhaust trusted stack, do self recursion with a cheri_callback");
 	leakedSwitcherCapability = outLeakedSwitcherCapability;
 	self_recursion(fn);
 }

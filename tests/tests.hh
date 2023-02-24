@@ -12,7 +12,7 @@ __cheri_compartment("queue_test") void test_queue();
 __cheri_compartment("locks_test") void test_locks();
 __cheri_compartment("crash_recovery_test") void test_crash_recovery();
 __cheri_compartment("multiwaiter_test") void test_multiwaiter();
-__cheri_compartment("stack_exhaustion_test") void test_stack_exhaustion();
+__cheri_compartment("stack_test") void test_stack();
 __cheri_compartment("compartment_calls_test") void test_compartment_call();
 
 // Simple tests don't need a separate compartment.
