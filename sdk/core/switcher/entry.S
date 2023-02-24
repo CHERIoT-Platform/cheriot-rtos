@@ -100,7 +100,7 @@ compartment_switcher_entry:
 	// make sure the caller's CSP has the expected permissions
 	cgetperm		t2, csp
 	li 				tp, 0x7e
-	bne				tp, t2, .Linvalid_csp_permissions
+	bne				tp, t2, .Lforce_unwind
 
 	// we are past the stacks checks. Reload ct2 and tp
 	cspecialr		ct2, mscratchc
@@ -324,13 +324,6 @@ exception_entry_asm:
 	reloadRegisters c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, csp
 	mret
 
-.Linvalid_csp_permissions:
-	cjal 			.Lpop_trusted_stack_frame
-	cspecialr		ctp, mscratchc
-	li				a0, 1
-	csb				a0, TrustedStack_offset_inForcedUnwind(ctp)
-	li				a0, -1
-	j				.Lhandle_error
 // If we detect an invalud entry and there is no error handler installed, we want
 // to resume rather than unwind.
 .Linvalid_entry:
