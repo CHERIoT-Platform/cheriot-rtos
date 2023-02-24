@@ -79,7 +79,9 @@ void test_stack()
 	PermissionSet compartmentStackPermissions = get_stack_permissions();
 	for (auto permissionToRemove : compartmentStackPermissions)
 	{
-		test_stack_permissions(&threadStackTestFailed, permissionToRemove);
+		test_stack_permissions(
+		  &threadStackTestFailed,
+		  compartmentStackPermissions.without(permissionToRemove));
 	}
 
 	test_stack_invalid(&threadStackTestFailed);

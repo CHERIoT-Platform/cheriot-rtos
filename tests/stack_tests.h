@@ -10,8 +10,8 @@ __cheri_compartment("stack_exhaustion_trusted") void exhaust_trusted_stack(
 __cheri_compartment("stack_integrity_thread") void exhaust_thread_stack(
   bool *outTestFailed);
 __cheri_compartment("stack_integrity_thread") void test_stack_permissions(
-  bool      *outTestFailed,
-  Permission permissionToRemove);
+  bool         *outTestFailed,
+  PermissionSet newPermissions);
 __cheri_compartment("stack_integrity_thread") void test_stack_invalid(
   bool *outTestFailed);
 

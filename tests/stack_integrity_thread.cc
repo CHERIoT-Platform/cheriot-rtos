@@ -49,37 +49,15 @@ void exhaust_thread_stack(bool *outTestFailed)
 	TEST(false, "Should be unreachable");
 }
 
-void set_csp_and_fault(Capability<void> csp)
+void test_stack_permissions(bool *outTestFailed, PermissionSet newPermissions)
 {
-	__asm__ volatile("cmove csp, %0\n" ::"C"(csp.get()));
-	__asm__ volatile("csh            zero, 0(cnull)\n");
-}
-
-void test_stack_permissions(bool *outTestFailed, Permission permissionToRemove)
-{
-	debug_log("modify the compartment stack permissions: remove {}",
-	          permissionToRemove);
+	debug_log("modify the compartment stack permissions: setting {}",
+	          newPermissions);
 
 	threadStackTestFailed = outTestFailed;
 
-	Capability<void> csp = ({
-		register void *cspRegister asm("csp");
-		asm("" : "=C"(cspRegister));
-		cspRegister;
-	});
-
-	TEST(PermissionSet{permissionToRemove}.can_derive_from(csp.permissions()) ==
-	       true,
-	     "permission to remove is not set in the compartment stack");
-
-	csp.permissions() &= csp.permissions().without(permissionToRemove);
-	TEST(csp.permissions().contains(permissionToRemove) == false,
-	     "Did not remove permission");
-
-	// Verify CSP is valid
-	TEST(csp.is_valid() == true, "CSP isn't valid");
-
-	set_csp_and_fault(csp);
+	__asm__ volatile("candperm csp, csp, %0\n"
+	                 "csh zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -91,17 +69,8 @@ void test_stack_invalid(bool *outTestFailed)
 
 	threadStackTestFailed = outTestFailed;
 
-	Capability<void> csp = ({
-		register void *cspRegister asm("csp");
-		asm("" : "=C"(cspRegister));
-		cspRegister;
-	});
-
-	// Verify CSP is valid
-	__asm__ volatile("ccleartag		csp, csp\n");
-	TEST(csp.is_valid() == false, "CSP is valid");
-
-	set_csp_and_fault(csp);
+	__asm__ volatile("ccleartag		csp, csp\n"
+	                 "csh            zero, 0(cnull)\n");
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
