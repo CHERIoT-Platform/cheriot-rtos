@@ -60,8 +60,8 @@ void modify_csp_permissions_on_fault(bool         *outTestFailed,
 }
 
 void modify_stack_permissions_on_call(bool         *outTestFailed,
-                                    PermissionSet newPermissions,
-                                    __cheri_callback void (*fn)())
+                                      PermissionSet newPermissions,
+                                      __cheri_callback void (*fn)())
 {
 	threadStackTestFailed = outTestFailed;
 
