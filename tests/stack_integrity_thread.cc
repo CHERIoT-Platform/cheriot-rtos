@@ -49,11 +49,9 @@ void exhaust_thread_stack(bool *outTestFailed)
 	TEST(false, "Should be unreachable");
 }
 
-void test_stack_permissions(bool *outTestFailed, PermissionSet newPermissions)
+void test_stack_permissions_on_fault(bool         *outTestFailed,
+                                     PermissionSet newPermissions)
 {
-	debug_log("modify the compartment stack permissions: setting {}",
-	          newPermissions);
-
 	threadStackTestFailed = outTestFailed;
 
 	__asm__ volatile("candperm csp, csp, %0\n"
@@ -63,7 +61,34 @@ void test_stack_permissions(bool *outTestFailed, PermissionSet newPermissions)
 	TEST(false, "Should be unreachable");
 }
 
-void test_stack_invalid(bool *outTestFailed)
+void test_stack_permissions_on_compartment_call(bool         *outTestFailed,
+                                                PermissionSet newPermissions,
+                                                __cheri_callback void (*fn)())
+{
+	threadStackTestFailed = outTestFailed;
+
+	__asm__ volatile("candperm csp, csp, %0\n"
+	                 "csh zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
+
+	*threadStackTestFailed = true;
+	TEST(false, "Should be unreachable");
+}
+
+void test_stack_invalid_on_fault(bool *outTestFailed)
+{
+	debug_log("modify the compartment stack tag");
+
+	threadStackTestFailed = outTestFailed;
+
+	__asm__ volatile("ccleartag		csp, csp\n"
+	                 "csh            zero, 0(cnull)\n");
+
+	*threadStackTestFailed = true;
+	TEST(false, "Should be unreachable");
+}
+
+void test_stack_invalid_on_cross_compartment_call(bool *outTestFailed,
+                                                  __cheri_callback void (*fn)())
 {
 	debug_log("modify the compartment stack tag");
 

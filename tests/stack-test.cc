@@ -57,6 +57,8 @@ __cheri_callback void test_trusted_stack_exhaustion()
 	                      &leakedSwitcherCapability);
 }
 
+__cheri_callback void cross_compartment_call() {}
+
 /*
  * The stack tests should cover the edge-cases scenarios for both
  * the trusted and compartment stacks. We make sure the
@@ -76,13 +78,28 @@ void test_stack()
 	threadStackTestFailed    = false;
 	exhaust_thread_stack(&threadStackTestFailed);
 
+	debug_log("Test modifying stack permissions on fault");
 	PermissionSet compartmentStackPermissions = get_stack_permissions();
 	for (auto permissionToRemove : compartmentStackPermissions)
 	{
-		test_stack_permissions(
+		test_stack_permissions_on_fault(
 		  &threadStackTestFailed,
 		  compartmentStackPermissions.without(permissionToRemove));
 	}
 
-	test_stack_invalid(&threadStackTestFailed);
+	debug_log("Test modifying stack permissions on cross compartment call");
+	for (auto permissionToRemove : compartmentStackPermissions)
+	{
+		test_stack_permissions_on_compartment_call(
+		  &threadStackTestFailed,
+		  compartmentStackPermissions.without(permissionToRemove),
+		  &cross_compartment_call);
+	}
+
+	debug_log("Test invalid stack on fault");
+	test_stack_invalid_on_fault(&threadStackTestFailed);
+
+	debug_log("Test invalid stack on cross compartment call");
+	test_stack_invalid_on_cross_compartment_call(&threadStackTestFailed,
+	                                             &cross_compartment_call);
 }

@@ -326,7 +326,6 @@ exception_entry_asm:
 
 .Linvalid_csp_permissions:
 	cjal 			.Lpop_trusted_stack_frame
-	csh zero, 0(cnull)
 	cspecialr		ctp, mscratchc
 	li				a0, 1
 	csb				a0, TrustedStack_offset_inForcedUnwind(ctp)

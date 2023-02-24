@@ -9,11 +9,16 @@ __cheri_compartment("stack_exhaustion_trusted") void exhaust_trusted_stack(
   bool *outLeakedSwitcherCapability);
 __cheri_compartment("stack_integrity_thread") void exhaust_thread_stack(
   bool *outTestFailed);
-__cheri_compartment("stack_integrity_thread") void test_stack_permissions(
+__cheri_compartment("stack_integrity_thread") void test_stack_permissions_on_fault(
   bool         *outTestFailed,
   PermissionSet newPermissions);
-__cheri_compartment("stack_integrity_thread") void test_stack_invalid(
+__cheri_compartment("stack_integrity_thread") void test_stack_permissions_on_compartment_call(bool *outTestFailed,
+                                                PermissionSet newPermissions,
+                                                __cheri_callback void (*fn)());
+__cheri_compartment("stack_integrity_thread") void test_stack_invalid_on_fault(
   bool *outTestFailed);
+__cheri_compartment("stack_integrity_thread") void test_stack_invalid_on_cross_compartment_call(bool *outTestFailed,
+                                                  __cheri_callback void (*fn)());
 
 bool is_switcher_capability(void *reg)
 {
