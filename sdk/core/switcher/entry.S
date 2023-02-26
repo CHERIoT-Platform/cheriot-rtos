@@ -605,7 +605,6 @@ exception_entry_asm:
 	li				tp, TrustedStackFrame_size
 	bgeu           	tp, t2, .Lset_mcause_and_exit_thread
 	cspecialr		ctp, mscratchc
-	cmove			ct2, ctp
 	clhu			t2, TrustedStack_offset_frameoffset(ctp)
 	addi			t2, t2, -TrustedStackFrame_size
 	cincoffset		ct1, ctp, t2
