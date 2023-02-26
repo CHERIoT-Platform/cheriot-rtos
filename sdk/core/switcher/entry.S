@@ -96,12 +96,13 @@ compartment_switcher_entry:
 	clhu			tp, TrustedStack_offset_frameoffset(ct2)
 	cgetlen         t2, ct2
 	bgeu           	tp, t2, .Lout_of_trusted_stack
-
+	// make sure the caller's CSP is valid
+	cgettag         t2, csp
+	beqz            t2, .Lforce_unwind
 	// make sure the caller's CSP has the expected permissions
-	cgetperm		t2, csp
-	li 				tp, 0x7e
-	bne				tp, t2, .Lforce_unwind
-
+	cgetperm        t2, csp
+	li              tp, 0x7e
+	bne	            tp, t2, .Lforce_unwind
 	// we are past the stacks checks. Reload ct2 and tp
 	cspecialr		ct2, mscratchc
 	clhu			tp, TrustedStack_offset_frameoffset(ct2)
@@ -424,10 +425,13 @@ exception_entry_asm:
 	li          a1, 0
 	// If we don't have enough space, give up and force unwind
 	bltu        t1, tp, .Lforce_unwind
+	// make sure the caller's CSP is valid
+	cgettag     t1, ct0
+	beqz        t1, .Lforce_unwind
 	// make sure the caller's CSP has the expected permissions
-	cgetperm		t1, ct0
-	li 				tp, 0x7e
-	bne				tp, t1, .Lforce_unwind
+	cgetperm    t1, ct0
+	li 	        tp, 0x7e
+	bne	        tp, t1, .Lforce_unwind
 	// See if we can find a handler:
 	clhu        tp, TrustedStack_offset_frameoffset(csp)
 	li          t1, TrustedStack_offset_frames
