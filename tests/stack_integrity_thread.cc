@@ -38,10 +38,10 @@ void exhaust_thread_stack(bool *outTestFailed)
 	 * We use the boolean thread_stack_test_failed to indicate
 	 * to the parent if any unexpected error occured.
 	 */
-	__asm__ volatile("cgetbase	t1, csp\n"
-	                 "addi		t1, t1, 16\n"
-	                 "csetaddr	csp, csp, t1\n"
-	                 "csh            zero, 0(cnull)\n");
+	__asm__ volatile("cgetbase  t1, csp\n"
+	                 "addi      t1, t1, 16\n"
+	                 "csetaddr  csp, csp, t1\n"
+	                 "csh       zero, 0(cnull)\n");
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -52,8 +52,9 @@ void modify_csp_permissions_on_fault(bool         *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("candperm csp, csp, %0\n"
-	                 "csh zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
+	__asm__ volatile(
+	  "candperm csp, csp, %0\n"
+	  "csh      zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -76,8 +77,8 @@ void test_stack_invalid_on_fault(bool *outTestFailed)
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("ccleartag		csp, csp\n"
-	                 "csh            zero, 0(cnull)\n");
+	__asm__ volatile("ccleartag     csp, csp\n"
+	                 "csh           zero, 0(cnull)\n");
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -88,7 +89,7 @@ void test_stack_invalid_on_call(bool *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("ccleartag		csp, csp\n"
+	__asm__ volatile("ccleartag      csp, csp\n"
 	                 "csh            zero, 0(cnull)\n");
 
 	*threadStackTestFailed = true;
