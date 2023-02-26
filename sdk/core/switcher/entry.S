@@ -567,6 +567,7 @@ exception_entry_asm:
 	clb         a2, TrustedStack_offset_inForcedUnwind(csp)
 	bnez        a2, .Lreset_mepcc_and_install_context
 	// Value 24 is reserved for custom use.
+.Lset_mcause_and_exit_thread:
 	csrw        mcause, 24
 	j           .Lthread_exit
 
@@ -594,6 +595,12 @@ exception_entry_asm:
 .Lpop_trusted_stack_frame:
 	// The below should not fault before returning back to the caller. If a fault occurs there must
 	// be a serious bug elsewhere.
+	cspecialr		ctp, mscratchc
+	// make sure there is a frame left in the trusted stack
+	cmove 			csp, ctp
+	clhu			t2, TrustedStack_offset_frameoffset(ctp)
+	li				tp, TrustedStackFrame_size
+	bgeu           	tp, t2, .Lset_mcause_and_exit_thread
 	cspecialr		ctp, mscratchc
 	cmove			ct2, ctp
 	clhu			t2, TrustedStack_offset_frameoffset(ctp)
