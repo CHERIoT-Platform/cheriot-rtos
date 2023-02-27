@@ -427,9 +427,13 @@ exception_entry_asm:
 	cspecialw   mscratchc, csp
 	// Load the interrupted thread's stack pointer into ct0
 	clc         ct0, TrustedStack_offset_csp(csp)
+	// Fetch the base of compartment stack before cincoffset for later
+	// comparison. The subsequent cincoffset could cause the base to change,
+	// if the capability becomes unrepresentable. Even though that would clear
+	// the tag, which we will detect in check_compartment_stack_integrity.
+	cgetbase    tp, ct0
 	// Allocate space for the register save frame on the stack.
 	cincoffset  ct0, ct0, -(16*8)
-	cgetbase    tp, ct0
 	cgetaddr    t1, ct0
 	// Store an error value in return registers, which will be passed to the
 	// caller on unwind.  They are currently undefined, if we leave this path
@@ -438,6 +442,10 @@ exception_entry_asm:
 	li          a0, -1
 	li          a1, 0
 	// If we don't have enough space, give up and force unwind
+	// This check is unnecessary because we would fail in
+	// check_compartment_stack_integrity due to invalid capability. However,
+	// we check for that on the off-chance the capability representation
+	// changes in the future.
 	bltu        t1, tp, .Lforce_unwind
 	// verify the compartment csp
 	check_compartment_stack_integrity ct0
