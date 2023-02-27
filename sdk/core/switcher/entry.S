@@ -79,11 +79,32 @@ switcher_scheduler_entry_csp:
 	forall reloadOne, \reg1, \regs
 .endm
 
+/**
+ * Verify the compartment stack is valid, with the expected permissions and
+ * unsealed.
+ * This macro assumes t2 and tp are available to use.
+ */
+.macro check_compartment_stack_integrity reg
+	// make sure the caller's CSP is valid
+	cgettag         t2, \reg
+	beqz            t2, .Lforce_unwind
+	// make sure the caller's CSP has the expected permissions
+	cgetperm        t2, \reg
+	li              tp, 0x7e
+	bne	            tp, t2, .Lforce_unwind
+	// make sure the caller's CSP is unsealed
+	cgettype        t2, \reg
+	bnez            t2, .Lforce_unwind
+.endm
+
 	.section .text, "ax", @progbits
 	.globl compartment_switcher_entry
 	.p2align 2
 	.type compartment_switcher_entry,@function
 compartment_switcher_entry:
+	// before we access any privileged state, we can verify the
+	// compartment's csp is valid. If no, force unwind.
+	check_compartment_stack_integrity csp
 	// The caller should back up all callee saved registers.
 	// mscratchc should always have an offset of 0.
 	cspecialr		ct2, mscratchc
@@ -96,13 +117,6 @@ compartment_switcher_entry:
 	clhu			tp, TrustedStack_offset_frameoffset(ct2)
 	cgetlen         t2, ct2
 	bgeu           	tp, t2, .Lout_of_trusted_stack
-	// make sure the caller's CSP is valid
-	cgettag         t2, csp
-	beqz            t2, .Lforce_unwind
-	// make sure the caller's CSP has the expected permissions
-	cgetperm        t2, csp
-	li              tp, 0x7e
-	bne	            tp, t2, .Lforce_unwind
 	// we are past the stacks checks. Reload ct2 and tp
 	cspecialr		ct2, mscratchc
 	clhu			tp, TrustedStack_offset_frameoffset(ct2)
@@ -425,13 +439,8 @@ exception_entry_asm:
 	li          a1, 0
 	// If we don't have enough space, give up and force unwind
 	bltu        t1, tp, .Lforce_unwind
-	// make sure the caller's CSP is valid
-	cgettag     t1, ct0
-	beqz        t1, .Lforce_unwind
-	// make sure the caller's CSP has the expected permissions
-	cgetperm    t1, ct0
-	li 	        tp, 0x7e
-	bne	        tp, t1, .Lforce_unwind
+	// verify the compartment csp
+	check_compartment_stack_integrity ct0
 	// See if we can find a handler:
 	clhu        tp, TrustedStack_offset_frameoffset(csp)
 	li          t1, TrustedStack_offset_frames
