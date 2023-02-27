@@ -8,6 +8,7 @@ set_toolchains("cheriot-clang")
 
 -- Support libraries
 includes(path.join(sdkdir, "lib/freestanding"),
+         path.join(sdkdir, "lib/atomic"),
          path.join(sdkdir, "lib/crt"))
 
 option("board")
@@ -21,7 +22,7 @@ compartment("hello")
 
 -- Firmware image for the example.
 firmware("hello_safe_compartment")
-    add_deps("crt", "freestanding")
+    add_deps("crt", "freestanding", "atomic_fixed")
     add_deps("hello", "uart")
     on_load(function(target)
         target:values_set("board", "$(board)")

@@ -93,6 +93,7 @@ class FlagLock
 			}
 			if (old != Flag::Unlocked)
 			{
+				LockDebug::log("hitting slow path wait for {}", &flag);
 				futex_timed_wait(futex_word(), old, timeout);
 			}
 			old = Flag::Unlocked;
@@ -133,9 +134,11 @@ class FlagLock
 	{
 		Flag old =
 		  __c11_atomic_exchange(&flag, Flag::Unlocked, __ATOMIC_SEQ_CST);
+		LockDebug::Assert(old != Flag::Unlocked, "Double-unlocking {}", &flag);
 		// If there are waiters, wake one.
 		if (old == Flag::LockedWithWaiters)
 		{
+			LockDebug::log("hitting slow path wake for {}", &flag);
 			futex_wake(futex_word(), std::numeric_limits<uint32_t>::max());
 		}
 	}
@@ -202,6 +205,24 @@ class TicketLock
 	}
 };
 
+template<typename T>
+concept Lockable = requires(T l)
+{
+	{l.lock()};
+	{l.unlock()};
+};
+
+template<typename T>
+concept TryLockable = Lockable<T> && requires(T l, Timeout *t)
+{
+	{
+		l.try_lock(t)
+		} -> std::same_as<bool>;
+};
+
+static_assert(TryLockable<FlagLock>);
+static_assert(Lockable<TicketLock>);
+
 /**
  * A simple RAII type that owns a lock.
  */
@@ -209,19 +230,67 @@ template<typename Lock>
 class LockGuard
 {
 	/// A reference to the managed lock
-	Lock &lock;
+	Lock *wrappedLock;
+
+	/// Flag indicating whether the lock is owned.
+	bool isOwned;
 
 	public:
 	/// Constructor, acquires the lock.
-	[[nodiscard]] explicit LockGuard(Lock &lock) : lock(lock)
+	[[nodiscard]] explicit LockGuard(Lock &lock)
+	  : wrappedLock(&lock), isOwned(true)
 	{
-		lock.lock();
+		wrappedLock->lock();
+	}
+
+	/// Move constructor, transfers ownership of the lock.
+	[[nodiscard]] explicit LockGuard(LockGuard &&guard)
+	  : wrappedLock(guard.wrappedLock), isOwned(guard.isOwned)
+	{
+		guard.wrappedLock = nullptr;
+		guard.isOwned     = false;
+	}
+
+	/**
+	 * Explicitly lock the wrapped lock. Must be called with the lock unlocked.
+	 */
+	void lock()
+	{
+		LockDebug::Assert(!isOwned, "Trying to lock an already-locked lock");
+		wrappedLock->lock();
+		isOwned = true;
+	}
+
+	/**
+	 * Explicitly lock the wrapped lock. Must be called with the lock locked by
+	 * this wrapper.
+	 */
+	void unlock()
+	{
+		LockDebug::Assert(isOwned, "Trying to unlock an unlocked lock");
+		wrappedLock->unlock();
+		isOwned = false;
+	}
+
+	/**
+	 * If the underlying lock type supports locking with a timeout, try to lock
+	 * it with the specified timeout. This must be called with the lock
+	 * unlocked.  Returns true if the lock has been acquired, false otherwise.
+	 */
+	bool try_lock(Timeout *timeout) requires(TryLockable<Lock>)
+	{
+		LockDebug::Assert(!isOwned, "Trying to lock an already-locked lock");
+		isOwned = wrappedLock->try_lock(timeout);
+		return isOwned;
 	}
 
 	/// Destructor, releases the lock.
 	~LockGuard()
 	{
-		lock.unlock();
+		if (isOwned)
+		{
+			wrappedLock->unlock();
+		}
 	}
 };
 __clang_ignored_warning_pop()
