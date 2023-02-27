@@ -90,7 +90,7 @@ switcher_scheduler_entry_csp:
 	beqz            t2, .Lforce_unwind
 	// make sure the caller's CSP has the expected permissions
 	cgetperm        t2, \reg
-	li              tp, 0x7e
+	li              tp, COMPARTMENT_STACK_PERMISSIONS
 	bne	            tp, t2, .Lforce_unwind
 	// make sure the caller's CSP is unsealed
 	cgettype        t2, \reg

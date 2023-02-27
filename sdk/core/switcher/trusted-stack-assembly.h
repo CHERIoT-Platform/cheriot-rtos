@@ -29,7 +29,7 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStack, mcause, (16 * 8) + 4)
 // unwind state of the initial thread. (7 * 8) is the size of TrustedStackFrame
 // and will match the value below.
 EXPORT_ASSEMBLY_SIZE(TrustedStack, TSTACK_REGFRAME_SZ + 8 + (7 * 8))
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, frames, TSTACK_REGFRAME_SZ+8)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, frames, TSTACK_REGFRAME_SZ + 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, frameoffset, TSTACK_REGFRAME_SZ)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, inForcedUnwind, TSTACK_REGFRAME_SZ + 2)
 
@@ -44,3 +44,5 @@ EXPORT_ASSEMBLY_SIZE(TrustedStackFrame, (7 * 8))
 
 #define TSTACKOFFSET_FIRSTFRAME                                                \
 	(TrustedStack_offset_frameoffset + TSTACK_HEADER_SZ)
+
+#define COMPARTMENT_STACK_PERMISSIONS 0x7e
