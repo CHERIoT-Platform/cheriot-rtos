@@ -9,6 +9,7 @@ set_toolchains("cheriot-clang")
 -- Support libraries
 includes(path.join(sdkdir, "lib/freestanding"),
          path.join(sdkdir, "lib/string"),
+         path.join(sdkdir, "lib/atomic"),
          path.join(sdkdir, "lib/microvium"),
          path.join(sdkdir, "lib/crt"))
 
@@ -20,7 +21,7 @@ compartment("hello")
 
 -- Firmware image for the example.
 firmware("javascript")
-    add_deps("crt", "freestanding", "string", "microvium")
+    add_deps("crt", "freestanding", "string", "microvium", "atomic_fixed")
     add_deps("hello")
     on_load(function(target)
         target:values_set("board", "$(board)")

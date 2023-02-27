@@ -35,8 +35,7 @@ __BEGIN_DECLS
  * If the sealing keys have been exhausted then this will return
  * `INVALID_SKEY`.  This API is guaranteed never to block.
  */
-[[cheri::interrupt_state(disabled)]] SKey __cheri_compartment("alloc")
-  token_key_new(void);
+SKey __cheri_compartment("alloc") token_key_new(void);
 
 /**
  * Allocate a new object with size `sz`.
@@ -49,7 +48,7 @@ __BEGIN_DECLS
  *
  * On error, this returns `INVALID_SOBJ`.
  */
-[[cheri::interrupt_state(disabled)]] SObj __cheri_compartment("alloc")
+SObj __cheri_compartment("alloc")
   token_sealed_unsealed_alloc(SKey key, size_t sz, void **unsealed);
 
 /**
@@ -58,8 +57,7 @@ __BEGIN_DECLS
  *
  * The key must have the permit-seal permission.
  */
-[[cheri::interrupt_state(disabled)]] SObj __cheri_compartment("alloc")
-  token_sealed_alloc(SKey, size_t);
+SObj __cheri_compartment("alloc") token_sealed_alloc(SKey, size_t);
 
 /**
  * Unseal the obj given the key.
@@ -69,8 +67,7 @@ __BEGIN_DECLS
  * @return unsealed obj if key and obj are valid and they match. nullptr
  * otherwise
  */
-[[cheri::interrupt_state(disabled)]] void *__cheri_compartment("alloc")
-  token_obj_unseal(SKey, SObj);
+void *__cheri_compartment("alloc") token_obj_unseal(SKey, SObj);
 
 /**
  * Destroy the obj given its key, freeing memory.
@@ -80,8 +77,7 @@ __BEGIN_DECLS
  * @return 0 if no errors. -EINVAL if key or obj not valid, or they don't
  * match, or double destroy.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("alloc")
-  token_obj_destroy(SKey, SObj);
+int __cheri_compartment("alloc") token_obj_destroy(SKey, SObj);
 
 __END_DECLS
 

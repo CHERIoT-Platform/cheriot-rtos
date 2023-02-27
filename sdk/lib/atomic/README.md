@@ -9,7 +9,7 @@ The `atomicn.cc` file provides support for arbitrary-width operations.
 
 A lot of systems are likely to need only a subset of these operations.
 You can provide subsets of these in three different ways.
-First, you can depend on the `atomic-fixed` target rather than `atomic`.
+First, you can depend on the `atomic_fixed` target rather than `atomic`.
 This excludes the variable-width atomics, which are required by C11 / C++11 but which are rarely used.
 
 If you know that you are using atomics only of a single size, you can define your own library target that specifies a custom subset of the files.

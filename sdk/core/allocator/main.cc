@@ -7,6 +7,7 @@
 #include <compartment.h>
 #include <errno.h>
 #include <futex.h>
+#include <locks.hh>
 #include <priv/riscv.h>
 #include <riscvreg.h>
 #include <stdint.h>
@@ -23,6 +24,14 @@ namespace
 {
 	// the global memory space
 	MState *gm;
+
+	/**
+	 * A global lock for the allocator.  This is acquired in public API
+	 * functions, all internal functions should assume that it is held. If
+	 * allocation fails for transient reasons then the lock will be dropped and
+	 * reacquired over the yield.
+	 */
+	FlagLock lock;
 
 	// chunk associated with aligned address a
 	MChunk *align_as_chunk(Capability<void> a)
@@ -111,8 +120,14 @@ namespace
 	 * Malloc implementation.  Allocates `bytes` bytes of memory.  If `timeout`
 	 * is greater than zero, may block for that many ticks.  If `timeout` is the
 	 * maximum value permitted by the type, may block indefinitely.
+	 *
+	 * The lock guard own the lock on entry. It will drop the lock if a
+	 * transient error occurs and attempt to reacquire it. If the lock cannot be
+	 * reacquired during the permitted timeout then this returns nullptr.
 	 */
-	void *malloc_internal(size_t bytes, Timeout *timeout = nullptr)
+	void *malloc_internal(size_t                      bytes,
+	                      LockGuard<decltype(lock)> &&g,
+	                      Timeout                    *timeout = nullptr)
 	{
 		check_gm();
 
@@ -148,14 +163,31 @@ namespace
 					           "allocation, kicking revoker");
 					revoker.system_bg_revoker_kick();
 
+					// Drop and reacquire the lock while yielding.
+					g.unlock();
+					// Sleep for a single tick.
 					Timeout smallSleep{1};
 					thread_sleep(&smallSleep);
 					// It's possible that, while we slept, `*timeout` was
 					// freed.  Check that the pointer is still valid so that we
-					// don't fault if this happens.
-					if (Capability{timeout}.is_valid())
+					// don't fault if this happens. We are not holding the lock
+					// at this point and so we must do the check with interrupts
+					// disabled to protect against concurrent free.
+					if (!with_interrupts_disabled([&]() {
+						    if (Capability{timeout}.is_valid())
+						    {
+							    timeout->elapse(smallSleep.elapsed);
+							    return g.try_lock(timeout);
+						    }
+						    if (timeout == nullptr)
+						    {
+							    g.lock();
+							    return true;
+						    }
+						    return false;
+					    }))
 					{
-						timeout->elapse(smallSleep.elapsed);
+						return nullptr;
 					}
 				}
 				continue;
@@ -167,6 +199,8 @@ namespace
 			{
 				Debug::log(
 				  "Not enough free space to handle allocation, sleeping");
+				// Drop the lock while yielding
+				g.unlock();
 				auto err = futex_timed_wait(&freeFutex, ++freeFutex, timeout);
 				Debug::Assert(
 				  err != -EINVAL,
@@ -174,7 +208,25 @@ namespace
 				  &freeFutex,
 				  freeFutex,
 				  timeout);
+				// If we timed out, we don't need to reacquire the lock, just
+				// exit
 				if (err == -ETIMEDOUT)
+				{
+					return nullptr;
+				}
+				Debug::log("Woke from futex wake");
+				if (!with_interrupts_disabled([&]() {
+					    if (Capability{timeout}.is_valid())
+					    {
+						    return g.try_lock(timeout);
+					    }
+					    if (timeout == nullptr)
+					    {
+						    g.lock();
+						    return true;
+					    }
+					    return false;
+				    }))
 				{
 					return nullptr;
 				}
@@ -190,20 +242,21 @@ namespace
 
 } // namespace
 
-[[cheri::interrupt_state(disabled)]] void *heap_allocate(size_t   bytes,
-                                                         Timeout *timeout)
+void *heap_allocate(size_t bytes, Timeout *timeout)
 {
+	LockGuard g{lock};
 	if (!check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
 	      timeout))
 	{
 		return nullptr;
 	}
 	// Use the default memory space.
-	return malloc_internal(bytes, timeout);
+	return malloc_internal(bytes, std::move(g), timeout);
 }
 
-[[cheri::interrupt_state(disabled)]] int heap_free(void *rawPointer)
+int heap_free(void *rawPointer)
 {
+	LockGuard        g{lock};
 	Capability<void> mem{rawPointer};
 	if (!mem.is_valid())
 	{
@@ -232,9 +285,9 @@ namespace
 	return 0;
 }
 
-[[cheri::interrupt_state(disabled)]] void *
-heap_allocate_array(size_t nElements, size_t elemSize, Timeout *timeout)
+void *heap_allocate_array(size_t nElements, size_t elemSize, Timeout *timeout)
 {
+	LockGuard g{lock};
 	// Use the default memory space.
 	size_t req;
 	if (__builtin_mul_overflow(nElements, elemSize, &req))
@@ -246,7 +299,7 @@ heap_allocate_array(size_t nElements, size_t elemSize, Timeout *timeout)
 	{
 		return nullptr;
 	}
-	return malloc_internal(req, timeout);
+	return malloc_internal(req, std::move(g), timeout);
 }
 
 namespace
@@ -311,8 +364,8 @@ namespace
 			return {nullptr, nullptr};
 		}
 
-		SealedAllocation obj{
-		  static_cast<SObj>(malloc_internal(sz + ObjHdrSize))};
+		SealedAllocation obj{static_cast<SObj>(
+		  malloc_internal(sz + ObjHdrSize, LockGuard<FlagLock>{lock}))};
 		if (obj == nullptr)
 		{
 			Debug::log("Underlying allocation failed for sealed object");
@@ -331,7 +384,11 @@ namespace
 
 SKey token_key_new(void)
 {
-	auto keyRoot = software_sealing_key();
+	// This needs protecting against races but doesn't touch any other data
+	// structures and so can have its own lock.
+	static FlagLock tokenLock;
+	LockGuard       g{tokenLock};
+	auto            keyRoot = software_sealing_key();
 	// For now, strip the user permissions.  We might want to use them for
 	// permit-allocate and permit-free.
 	keyRoot.permissions() &=
@@ -350,15 +407,19 @@ SKey token_key_new(void)
 
 SObj token_sealed_unsealed_alloc(SKey key, size_t sz, void **unsealed)
 {
-	if (!check_pointer<PermissionSet{
-	      Permission::Store, Permission::LoadStoreCapability}>(unsealed))
-	{
-		return INVALID_SOBJ;
-	}
 	auto [sealed, obj] =
 	  allocate_sealed_unsealed(key, sz, {Permission::Seal, Permission::Unseal});
-	*unsealed = obj;
-	return sealed;
+	{
+		LockGuard g{lock};
+		if (check_pointer<PermissionSet{
+		      Permission::Store, Permission::LoadStoreCapability}>(unsealed))
+		{
+			*unsealed = obj;
+			return sealed;
+		}
+	}
+	heap_free(obj);
+	return INVALID_SOBJ;
 }
 
 SObj token_sealed_alloc(SKey rawKey, size_t sz)
@@ -395,7 +456,8 @@ __noinline static SealedAllocation unseal_internal(SKey rawKey, SObj obj)
 
 void *token_obj_unseal(SKey rawKey, SObj obj)
 {
-	auto unsealed = unseal_internal(rawKey, obj);
+	LockGuard g{lock};
+	auto      unsealed = unseal_internal(rawKey, obj);
 	if (unsealed == nullptr)
 	{
 		return nullptr;
@@ -408,10 +470,17 @@ void *token_obj_unseal(SKey rawKey, SObj obj)
 
 int token_obj_destroy(SKey key, SObj object)
 {
-	void *unsealed = unseal_internal(key, object);
-	if (unsealed == nullptr)
+	void *unsealed;
 	{
-		return -EINVAL;
+		LockGuard g{lock};
+		unsealed = unseal_internal(key, object);
+		if (unsealed == nullptr)
+		{
+			return -EINVAL;
+		}
+		// At this point, we drop and reacquire the lock. This is better for
+		// code reuse and heap_free will catch races because it will check the
+		// revocation state.
 	}
 	return heap_free(unsealed);
 }

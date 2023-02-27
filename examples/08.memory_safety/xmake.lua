@@ -19,7 +19,7 @@ compartment("memory_safety_runner")
 
 -- Firmware image for the example.
 firmware("memory_safety")
-    add_deps("crt", "freestanding")
+    add_deps("crt", "freestanding", "atomic_fixed")
     add_deps("memory_safety_runner", "memory_safety_inner")
     on_load(function(target)
         target:values_set("board", "$(board)")
