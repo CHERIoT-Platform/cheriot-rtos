@@ -103,7 +103,7 @@ switcher_scheduler_entry_csp:
 	.type compartment_switcher_entry,@function
 compartment_switcher_entry:
 	// before we access any privileged state, we can verify the
-	// compartment's csp is valid. If no, force unwind.
+	// compartment's csp is valid. If not, force unwind.
 	check_compartment_stack_integrity csp
 	// The caller should back up all callee saved registers.
 	// mscratchc should always have an offset of 0.
@@ -115,8 +115,8 @@ compartment_switcher_entry:
 
 	// make sure the trusted stack is still in bounds
 	clhu			tp, TrustedStack_offset_frameoffset(ct2)
-	cgetlen         t2, ct2
-	bgeu           	tp, t2, .Lout_of_trusted_stack
+	cgetlen			t2, ct2
+	bgeu			tp, t2, .Lout_of_trusted_stack
 	// we are past the stacks checks. Reload ct2 and tp
 	cspecialr		ct2, mscratchc
 	clhu			tp, TrustedStack_offset_frameoffset(ct2)
