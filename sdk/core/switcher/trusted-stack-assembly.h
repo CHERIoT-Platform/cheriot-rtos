@@ -45,4 +45,10 @@ EXPORT_ASSEMBLY_SIZE(TrustedStackFrame, (7 * 8))
 #define TSTACKOFFSET_FIRSTFRAME                                                \
 	(TrustedStack_offset_frameoffset + TSTACK_HEADER_SZ)
 
+/* Constant to represent the raw permissions of the compartment CSP.
+ *  We use this in the switcher, to verify the CSP comes from the
+ *  compartment is exactly what we expect.
+ *  This represents the following permissions:
+ *  Load, Store, LoadStnoreCapability, LoadMutable StoreLocal and LoadGlobal
+ */
 #define COMPARTMENT_STACK_PERMISSIONS 0x7e
