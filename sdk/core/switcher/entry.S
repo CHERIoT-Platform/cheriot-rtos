@@ -79,11 +79,32 @@ switcher_scheduler_entry_csp:
 	forall reloadOne, \reg1, \regs
 .endm
 
+/**
+ * Verify the compartment stack is valid, with the expected permissions and
+ * unsealed.
+ * This macro assumes t2 and tp are available to use.
+ */
+.macro check_compartment_stack_integrity reg
+	// make sure the caller's CSP is valid
+	cgettag			t2, \reg
+	beqz			t2, .Lforce_unwind
+	// make sure the caller's CSP has the expected permissions
+	cgetperm		t2, \reg
+	li				tp, COMPARTMENT_STACK_PERMISSIONS
+	bne				tp, t2, .Lforce_unwind
+	// make sure the caller's CSP is unsealed
+	cgettype		t2, \reg
+	bnez			t2, .Lforce_unwind
+.endm
+
 	.section .text, "ax", @progbits
 	.globl compartment_switcher_entry
 	.p2align 2
 	.type compartment_switcher_entry,@function
 compartment_switcher_entry:
+	// before we access any privileged state, we can verify the
+	// compartment's csp is valid. If not, force unwind.
+	check_compartment_stack_integrity csp
 	// The caller should back up all callee saved registers.
 	// mscratchc should always have an offset of 0.
 	cspecialr		ct2, mscratchc
@@ -91,11 +112,14 @@ compartment_switcher_entry:
 	// XXX: This line is useless, only for mscratch to show up in debugging.
 	cmove			ct2, ct2
 #endif
-	clhu			tp, TrustedStack_offset_frameoffset(ct2)
+
 	// make sure the trusted stack is still in bounds
-	cgetlen                 t2, ct2
-	bgeu                    tp, t2, .Lout_of_trusted_stack
+	clhu			tp, TrustedStack_offset_frameoffset(ct2)
+	cgetlen			t2, ct2
+	bgeu			tp, t2, .Lout_of_trusted_stack
+	// we are past the stacks checks. Reload ct2 and tp
 	cspecialr		ct2, mscratchc
+	clhu			tp, TrustedStack_offset_frameoffset(ct2)
 	// ctp points to the current available trusted stack frame.
 	cincoffset		ctp, ct2, tp
 	csc				cra, TrustedStackFrame_offset_pcc(ctp)
@@ -403,23 +427,33 @@ exception_entry_asm:
 	cspecialw   mscratchc, csp
 	// Load the interrupted thread's stack pointer into ct0
 	clc         ct0, TrustedStack_offset_csp(csp)
+	// Fetch the base of compartment stack before cincoffset for later
+	// comparison. The subsequent cincoffset could cause the base to change,
+	// if the capability becomes unrepresentable. Even though that would clear
+	// the tag, which we will detect in check_compartment_stack_integrity.
+	cgetbase	tp, ct0
 	// Allocate space for the register save frame on the stack.
-	cincoffset  ct0, ct0, -(16*8)
-	cgetbase    tp, ct0
-	cgetaddr    t1, ct0
+	cincoffset	ct0, ct0, -(16*8)
+	cgetaddr	t1, ct0
 	// Store an error value in return registers, which will be passed to the
 	// caller on unwind.  They are currently undefined, if we leave this path
 	// for a forced unwind then we will return whatever is in ca0 and ca1 to
 	// the caller so must ensure that we don't leak anything.
-	li          a0, -1
-	li          a1, 0
+	li			a0, -1
+	li			a1, 0
 	// If we don't have enough space, give up and force unwind
+	// This check is unnecessary because we would fail in
+	// check_compartment_stack_integrity due to invalid capability. However,
+	// we check for that on the off-chance the capability representation
+	// changes in the future.
 	bltu        t1, tp, .Lforce_unwind
+	// verify the compartment csp
+	check_compartment_stack_integrity ct0
 	// See if we can find a handler:
-	clhu        tp, TrustedStack_offset_frameoffset(csp)
-	li          t1, TrustedStack_offset_frames
-	beq         tp, t1, .Lend_of_stack
-	addi        tp, tp, -TrustedStackFrame_size
+	clhu		tp, TrustedStack_offset_frameoffset(csp)
+	li			t1, TrustedStack_offset_frames
+	beq			tp, t1, .Lend_of_stack
+	addi		tp, tp, -TrustedStackFrame_size
 	// ctp points to the current available trusted stack frame.
 	cincoffset  ctp, csp, tp
 	// ct1 now contains the export table for the callee
@@ -554,6 +588,7 @@ exception_entry_asm:
 	clb         a2, TrustedStack_offset_inForcedUnwind(csp)
 	bnez        a2, .Lreset_mepcc_and_install_context
 	// Value 24 is reserved for custom use.
+.Lset_mcause_and_exit_thread:
 	csrw        mcause, 24
 	j           .Lthread_exit
 
@@ -582,7 +617,11 @@ exception_entry_asm:
 	// The below should not fault before returning back to the caller. If a fault occurs there must
 	// be a serious bug elsewhere.
 	cspecialr		ctp, mscratchc
-	cmove			ct2, ctp
+	// make sure there is a frame left in the trusted stack
+	clhu			t2, TrustedStack_offset_frameoffset(ctp)
+	li				tp, TrustedStackFrame_size
+	bgeu			tp, t2, .Lset_mcause_and_exit_thread
+	cspecialr		ctp, mscratchc
 	clhu			t2, TrustedStack_offset_frameoffset(ctp)
 	addi			t2, t2, -TrustedStackFrame_size
 	cincoffset		ct1, ctp, t2
