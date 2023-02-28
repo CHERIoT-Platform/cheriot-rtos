@@ -86,15 +86,15 @@ switcher_scheduler_entry_csp:
  */
 .macro check_compartment_stack_integrity reg
 	// make sure the caller's CSP is valid
-	cgettag         t2, \reg
-	beqz            t2, .Lforce_unwind
+	cgettag			t2, \reg
+	beqz			t2, .Lforce_unwind
 	// make sure the caller's CSP has the expected permissions
-	cgetperm        t2, \reg
-	li              tp, COMPARTMENT_STACK_PERMISSIONS
-	bne	            tp, t2, .Lforce_unwind
+	cgetperm		t2, \reg
+	li				tp, COMPARTMENT_STACK_PERMISSIONS
+	bne				tp, t2, .Lforce_unwind
 	// make sure the caller's CSP is unsealed
-	cgettype        t2, \reg
-	bnez            t2, .Lforce_unwind
+	cgettype		t2, \reg
+	bnez			t2, .Lforce_unwind
 .endm
 
 	.section .text, "ax", @progbits
@@ -431,16 +431,16 @@ exception_entry_asm:
 	// comparison. The subsequent cincoffset could cause the base to change,
 	// if the capability becomes unrepresentable. Even though that would clear
 	// the tag, which we will detect in check_compartment_stack_integrity.
-	cgetbase    tp, ct0
+	cgetbase	tp, ct0
 	// Allocate space for the register save frame on the stack.
-	cincoffset  ct0, ct0, -(16*8)
-	cgetaddr    t1, ct0
+	cincoffset	ct0, ct0, -(16*8)
+	cgetaddr	t1, ct0
 	// Store an error value in return registers, which will be passed to the
 	// caller on unwind.  They are currently undefined, if we leave this path
 	// for a forced unwind then we will return whatever is in ca0 and ca1 to
 	// the caller so must ensure that we don't leak anything.
-	li          a0, -1
-	li          a1, 0
+	li			a0, -1
+	li			a1, 0
 	// If we don't have enough space, give up and force unwind
 	// This check is unnecessary because we would fail in
 	// check_compartment_stack_integrity due to invalid capability. However,
@@ -450,10 +450,10 @@ exception_entry_asm:
 	// verify the compartment csp
 	check_compartment_stack_integrity ct0
 	// See if we can find a handler:
-	clhu        tp, TrustedStack_offset_frameoffset(csp)
-	li          t1, TrustedStack_offset_frames
-	beq         tp, t1, .Lend_of_stack
-	addi        tp, tp, -TrustedStackFrame_size
+	clhu		tp, TrustedStack_offset_frameoffset(csp)
+	li			t1, TrustedStack_offset_frames
+	beq			tp, t1, .Lend_of_stack
+	addi		tp, tp, -TrustedStackFrame_size
 	// ctp points to the current available trusted stack frame.
 	cincoffset  ctp, csp, tp
 	// ct1 now contains the export table for the callee
@@ -620,7 +620,7 @@ exception_entry_asm:
 	// make sure there is a frame left in the trusted stack
 	clhu			t2, TrustedStack_offset_frameoffset(ctp)
 	li				tp, TrustedStackFrame_size
-	bgeu           	tp, t2, .Lset_mcause_and_exit_thread
+	bgeu			tp, t2, .Lset_mcause_and_exit_thread
 	cspecialr		ctp, mscratchc
 	clhu			t2, TrustedStack_offset_frameoffset(ctp)
 	addi			t2, t2, -TrustedStackFrame_size
