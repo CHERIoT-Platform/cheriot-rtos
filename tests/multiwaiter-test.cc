@@ -21,25 +21,26 @@ void test_multiwaiter()
 	static uint32_t futex2 = 0;
 	int             ret;
 	MultiWaiter    *mw;
-	ret = multiwaiter_create(&mw, 4);
+	Timeout         t{0};
+	ret = multiwaiter_create(&t, MALLOC_CAPABILITY, &mw, 4);
 	TEST((ret == 0) && (mw != nullptr),
 	     "Allocating multiwaiter failed {} ({})",
 	     ret,
 	     mw);
 	debug_log("Allocated multiwaiter {}");
 
+	t.remaining = 5;
 	EventWaiterSource events[4];
-	Timeout           t{5};
 
 	debug_log("Testing error case: Invalid values");
 	events[0] = {nullptr, static_cast<EventWaiterKind>(5), 0};
-	ret       = multiwaiter_wait(mw, events, 1, &t);
+	ret       = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == -EINVAL, "multiwaiter returned {}, expected {}", ret, -EINVAL);
 
 	debug_log("Testing one futex, already ready");
 	events[0]   = {&futex, EventWaiterFutex, 1};
 	t.remaining = 5;
-	ret         = multiwaiter_wait(mw, events, 1, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 
 	auto setFutex = [](uint32_t *futexWord, uint32_t value) {
@@ -55,7 +56,7 @@ void test_multiwaiter()
 	setFutex(&futex, 1);
 	events[0]   = {&futex, EventWaiterFutex, 0};
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 1, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 
 	debug_log("Testing two futexes, not yet ready");
@@ -65,17 +66,18 @@ void test_multiwaiter()
 	events[0]   = {&futex, EventWaiterFutex, 0};
 	events[1]   = {&futex2, EventWaiterFutex, 2};
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 2, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 2);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 	TEST(events[0].value == 0, "Futex reports wake but none occurred");
 	TEST(events[1].value == 1, "Futex reports no wake");
 
 	void *queue;
-	ret = queue_create(&queue, sizeof(int), 1);
+	t.remaining = 0;
+	ret         = queue_create(&t, MALLOC_CAPABILITY, &queue, sizeof(int), 1);
 	TEST(ret == 0, "Queue create failed:", ret);
 	int     val = 0;
 	Timeout noWait{0};
-	ret = queue_send(queue, &val, &noWait);
+	ret = queue_send(&noWait, queue, &val);
 	TEST(ret == 0, "Queue send failed: {}", ret);
 
 	debug_log("Testing queue, blocked on send");
@@ -83,14 +85,14 @@ void test_multiwaiter()
 		sleep(1);
 		int     val;
 		Timeout noWait{0};
-		int     ret = queue_recv(queue, &val, &noWait);
+		int     ret = queue_recv(&noWait, queue, &val);
 		TEST(ret == 0, "Background receive failed: {}", ret);
 		TEST(val == 0, "Background receive returned incorrect value: {}", ret);
 		debug_log("Background thread made queue ready to send");
 	});
 	events[0]   = {queue, EventWaiterQueue, EventWaiterQueueSendReady};
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 1, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 	TEST(events[0].value == EventWaiterQueueSendReady,
 	     "Queue reports not ready");
@@ -100,17 +102,17 @@ void test_multiwaiter()
 		sleep(1);
 		int     val = 1;
 		Timeout noWait{0};
-		int     ret = queue_send(queue, &val, &noWait);
+		int     ret = queue_send(&noWait, queue, &val);
 		TEST(ret == 0, "Background send failed: {}", ret);
 		debug_log("Background thread made queue ready to receive");
 	});
 	events[0]   = {queue, EventWaiterQueue, EventWaiterQueueReceiveReady};
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 1, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 	TEST(events[0].value == EventWaiterQueueReceiveReady,
 	     "Queue did not return ready to receive");
-	ret = queue_recv(queue, &val, &noWait);
+	ret = queue_recv(&noWait, queue, &val);
 	TEST(ret == 0, "Queue ready to receive but receive returned {}", ret);
 	TEST(val == 1, "Incorrect value returned from queue");
 
@@ -120,14 +122,14 @@ void test_multiwaiter()
 	events[0]   = {queue, EventWaiterQueue, EventWaiterQueueReceiveReady};
 	events[1]   = {&futex, EventWaiterFutex, 0};
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 2, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 2);
 	TEST(ret == 0, "multiwait on futex and queue returned {}", ret);
 	TEST(events[0].value == 0,
 	     "Queue reports ready to receive but should be empty.");
 	TEST(events[1].value == 1, "Futex reports no wake");
 
 	void *ev;
-	ret = event_create(&ev);
+	ret = event_create(&noWait, MALLOC_CAPABILITY, &ev);
 	TEST(ret == 0, "Failed to create event channel");
 
 	debug_log("Testing event channel wait that shouldn't trigger wake");
@@ -149,7 +151,7 @@ void test_multiwaiter()
 	events[1] = {&futex, EventWaiterFutex, 0};
 	// This should not return until the futex fires...
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 2, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 2);
 	TEST(ret == 0, "Wait for event channel and futex failed: {}", ret);
 	TEST(events[0].value == 0,
 	     "Event channel returned wrong bits: {}",
@@ -171,7 +173,7 @@ void test_multiwaiter()
 	  ev, EventWaiterEventChannel, EventWaiterEventChannelWaitAll | 0b1111};
 	// This should not return until the second set bits.
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 1, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "Wait for event channel failed: {}", ret);
 	TEST(events[0].value == 0b1111,
 	     "Event channel returned wrong bits: {}",
@@ -189,7 +191,7 @@ void test_multiwaiter()
 	  ev, EventWaiterEventChannel, EventWaiterEventChannelClearOnExit | 0b1};
 	// This should not return until the bottom bit is set.
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 1, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "Wait for event channel failed: {}", ret);
 	TEST(events[0].value == 0b1,
 	     "Event channel returned wrong bits: {}",
@@ -213,7 +215,7 @@ void test_multiwaiter()
 	events[0] = {ev, EventWaiterEventChannel, 0b1111};
 	// We should be woken up after the first 0b1010 setBits call.
 	t.remaining = 6;
-	ret         = multiwaiter_wait(mw, events, 1, &t);
+	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "Wait for event channel failed: {}", ret);
 	TEST(events[0].value == 0b1010,
 	     "Event channel returned wrong bits: {}, expected {}",
@@ -223,9 +225,9 @@ void test_multiwaiter()
 	// by waiting until the async has completed.
 	events[0].value = EventWaiterEventChannelWaitAll | 0b1111;
 	t.remaining     = 10;
-	multiwaiter_wait(mw, events, 1, &t);
+	multiwaiter_wait(&t, mw, events, 1);
 
-	event_delete(ev);
-	queue_delete(queue);
-	multiwaiter_delete(mw);
+	event_delete(MALLOC_CAPABILITY, ev);
+	queue_delete(MALLOC_CAPABILITY, queue);
+	multiwaiter_delete(MALLOC_CAPABILITY, mw);
 }

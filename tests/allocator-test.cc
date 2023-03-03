@@ -1,10 +1,13 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+// Use a large quota for this compartment.
+#define MALLOC_QUOTA 0x100000
 #define TEST_NAME "Allocator"
 #include "tests.hh"
 #include <debug.hh>
 #include <ds/xoroshiro.h>
+#include <errno.h>
 #include <futex.h>
 #include <global_constructors.hh>
 #include <thread.h>
@@ -12,6 +15,7 @@
 #include <vector>
 
 using thread_pool::async;
+DEFINE_ALLOCATOR_CAPABILITY(secondHeap, 1024);
 
 namespace
 {
@@ -60,7 +64,7 @@ namespace
 			for (auto &allocation : allocations)
 			{
 				Timeout t{AllocTimeout};
-				allocation = heap_allocate(AllocSize, &t);
+				allocation = heap_allocate(&t, MALLOC_CAPABILITY, AllocSize);
 				TEST(
 				  allocation != nullptr,
 				  "Cannot make allocations anymore. Either the revoker is not "
@@ -116,7 +120,7 @@ namespace
 			{
 				if (allocation != nullptr)
 				{
-					heap_free(allocation);
+					heap_free(MALLOC_CAPABILITY, allocation);
 				}
 			}
 			// Notify the parent thread that we're done.
@@ -128,7 +132,7 @@ namespace
 		for (auto &allocation : allocations)
 		{
 			Timeout t{0};
-			allocation = heap_allocate(1024 * 16, &noWait);
+			allocation = heap_allocate(&noWait, MALLOC_CAPABILITY, 1024 * 16);
 			if (allocation == nullptr)
 			{
 				memoryExhausted = true;
@@ -137,12 +141,13 @@ namespace
 		}
 		TEST(memoryExhausted, "Failed to exhaust memory");
 		debug_log("Trying a non-blocking allocation");
-		TEST(heap_allocate(1024 * 16, &noWait) == nullptr,
+		TEST(heap_allocate(&noWait, MALLOC_CAPABILITY, 1024 * 16) == nullptr,
 		     "Non-blocking heap allocation did not return failure with memory "
 		     "exhausted");
 		debug_log("Trying a huge allocation");
 		Timeout forever{UnlimitedTimeout};
-		TEST(heap_allocate(1024 * 1024 * 1024, &forever) == nullptr,
+		TEST(heap_allocate(&forever, MALLOC_CAPABILITY, 1024 * 1024 * 1024) ==
+		       nullptr,
 		     "Non-blocking heap allocation did not return failure on huge "
 		     "allocation");
 		// Wake up the thread that will free memory
@@ -150,7 +155,7 @@ namespace
 		futex_wake(&freeStart, 1);
 		debug_log("Entering blocking malloc");
 		Timeout t{AllocTimeout};
-		void   *ptr = heap_allocate(1024 * 16, &t);
+		void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, 1024 * 16);
 		TEST(ptr != nullptr,
 		     "Failed to make progress on blocking allocation, allocation "
 		     "returned {}",
@@ -176,7 +181,7 @@ namespace
 		auto                  t    = Timeout(0); /* don't sleep */
 
 		auto doAlloc = [&](size_t sz) {
-			auto p = heap_allocate(sz, &t);
+			auto p = heap_allocate(&t, MALLOC_CAPABILITY, sz);
 
 			if (p != nullptr)
 			{
@@ -248,7 +253,33 @@ namespace
 void test_allocator()
 {
 	GlobalConstructors::run();
+
+	// Make sure that free works only on memory owned by the caller.
+	Timeout t{5};
+	void   *ptr = heap_allocate(&t, STATIC_SEALED_VALUE(secondHeap), 32);
+	TEST(ptr, "Failed to allocate 32 bytes");
+	int ret = heap_free(MALLOC_CAPABILITY, ptr);
+	TEST(
+	  ret == -EPERM,
+	  "Heap free with the wrong capability returned {}. expected -EPERM ({})",
+	  ret,
+	  -EPERM);
+	ret = heap_free(STATIC_SEALED_VALUE(secondHeap), ptr);
+	TEST(ret == 0,
+	     "Heap free with the correct capability returned failed with {}.",
+	     ret);
+	size_t quotaLeft = heap_quota_remaining(STATIC_SEALED_VALUE(secondHeap));
+	TEST(quotaLeft == 1024,
+	     "After alloc and free from 1024-byte quota, {} bytes left",
+	     quotaLeft);
+
 	test_blocking_allocator();
 	test_revoke();
 	test_fuzz();
+	allocations.clear();
+	allocations.shrink_to_fit();
+	quotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
+	TEST(quotaLeft == 0x100000,
+	     "After alloc and free from 0x100000-byte quota, {} bytes left",
+	     quotaLeft);
 }

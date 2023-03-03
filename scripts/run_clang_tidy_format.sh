@@ -21,7 +21,11 @@ if [ ! -x ${CLANG_FORMAT} ] ; then
 	exit 1
 fi
 
-PARALLEL_JOBS=$(nproc)
+if which nproc ; then
+	PARALLEL_JOBS=$(nproc)
+else
+	PARALLEL_JOBS=$(sysctl -n kern.smp.cpus)
+fi
 DIRECTORIES="sdk tests examples"
 # Standard headers should be included once we move to a clang-tidy that
 # supports NOLINTBEGIN to disable specific checks over a whole file.
@@ -33,10 +37,10 @@ echo Sources: ${SOURCES}
 rm -f tidy-*.fail
 
 # sh syntax is -c "string" [name [args ...]], so "tidy" here is the name and not included in "$@"
-echo ${HEADERS} ${SOURCES} | xargs -P${PARALLEL_JOBS} -n5 sh -c "${CLANG_TIDY} -export-fixes=\$(mktemp -p. tidy-XXXX.fail) \$@" tidy
-if [ $(find . -maxdepth 1 -name 'tidy-*.fail' -size +0 | wc -l) -gt 0 ] ; then
+echo ${HEADERS} ${SOURCES} | xargs -P${PARALLEL_JOBS} -n5 sh -c "${CLANG_TIDY} -export-fixes=\$(mktemp -p. tidy.fail-XXXX) \$@" tidy
+if [ $(find . -maxdepth 1 -name 'tidy.fail-*' -size +0 | wc -l) -gt 0 ] ; then
 	# clang-tidy put non-empty output in one of the tidy-*.fail files
-	cat tidy-*.fail
+	cat tidy.fail-*
 	exit 1
 fi
 

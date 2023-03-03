@@ -6,6 +6,7 @@
 #include <fail-simulator-on-error.h>
 #include <futex.h>
 #include <queue.h>
+#include <timeout.hh>
 
 using Debug = ConditionalDebug<true, "Consumer">;
 
@@ -42,7 +43,7 @@ void __cheri_compartment("consumer") run()
 	// Get a message from the queue and print it.  This blocks indefinitely.
 	int     value = 0;
 	Timeout t{UnlimitedTimeout};
-	while ((value != 199) && (queue_recv(queue, &value, &t) == 0))
+	while ((value != 199) && (queue_recv(&t, queue, &value) == 0))
 	{
 		Debug::log("Read {} from queue", value);
 	}

@@ -226,25 +226,29 @@ namespace sched
 		 * failure, sets `error` to the errno constant corresponding to the
 		 * failure reason and return `nullptr`.
 		 */
-		static std::unique_ptr<MultiWaiter> create(size_t length, int &error)
+		static HeapObject<MultiWaiter> create(Timeout           *timeout,
+		                                      struct SObjStruct *heapCapability,
+		                                      size_t             length,
+		                                      int               &error)
 		{
 			static_assert(sizeof(MultiWaiter) <= 2 * sizeof(void *),
 			              "Header for event queue is too large");
 			if (length > MaxMultiWaiterSize)
 			{
 				error = -EINVAL;
-				return nullptr;
+				return {};
 			}
-			Timeout t{0};
-			void   *q = heap_allocate(
-			    sizeof(MultiWaiter) + (length * sizeof(EventWaiter)), &t);
+			void *q = heap_allocate(timeout,
+			                        heapCapability,
+			                        sizeof(MultiWaiter) +
+			                          (length * sizeof(EventWaiter)));
 			if (q == nullptr)
 			{
 				error = -ENOMEM;
-				return nullptr;
+				return {};
 			}
 			error = 0;
-			return std::unique_ptr<MultiWaiter>{new (q) MultiWaiter(length)};
+			return {heapCapability, new (q) MultiWaiter(length)};
 		}
 
 		/**

@@ -525,22 +525,40 @@ namespace
 				      decltype(ExportEntry::functionStart)>::max())
 				{
 					auto typeAddress = *sealingType;
-					for (auto &compartment : image.compartments())
+					auto findExport  = [&](auto &compartment) {
+                        if (contains<ExportEntry>(compartment.exportTable,
+                                                  typeAddress))
+                        {
+                            auto exportEntry = build<ExportEntry>(
+                              compartment.exportTable, typeAddress);
+                            Debug::Invariant(
+							   exportEntry->is_sealing_type(),
+							   "Sealed object points to invalid sealing type");
+                            *sealingType = exportEntry->functionStart;
+                            return true;
+                        }
+                        return false;
+					};
+					bool found = false;
+					for (auto &compartment : image.privilegedCompartments)
 					{
-						if (contains<ExportEntry>(compartment.exportTable,
-						                          typeAddress))
+						if (found)
 						{
-							auto exportEntry = build<ExportEntry>(
-							  compartment.exportTable, typeAddress);
-							Debug::Invariant(
-							  exportEntry->is_sealing_type(),
-							  "Sealed object points to invalid sealing type");
-							*sealingType = exportEntry->functionStart;
 							break;
 						}
+						found = findExport(compartment);
+					}
+					for (auto &compartment : image.compartments())
+					{
+						if (found)
+						{
+							break;
+						}
+						found = findExport(compartment);
 					}
 					Debug::Invariant(*sealingType != typeAddress,
-					                 "Invalid sealed object");
+					                 "Invalid sealed object {}",
+					                 typeAddress);
 				}
 				Capability sealedObject = build(target, size);
 				// Seal with the allocator's sealing key
@@ -1103,10 +1121,14 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	Debug::log("First pass to find sealing key imports");
 
 	// Populate import entries that refer to static sealing keys first.
+	for (auto &compartment : imgHdr.privilegedCompartments)
+	{
+		populate_static_sealing_keys(imgHdr, compartment);
+	}
+
 	for (auto &compartment : imgHdr.libraries_and_compartments())
 	{
 		populate_static_sealing_keys(imgHdr, compartment);
-		Debug::log("Done");
 	}
 
 	Debug::log("Creating import tables");

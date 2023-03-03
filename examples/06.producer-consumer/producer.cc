@@ -5,6 +5,7 @@
 #include <debug.hh>
 #include <fail-simulator-on-error.h>
 #include <queue.h>
+#include <timeout.hh>
 
 using Debug = ConditionalDebug<true, "Producer">;
 
@@ -15,15 +16,14 @@ void __cheri_compartment("producer") run()
 {
 	// Allocate the queue
 	void *queue;
-	queue_create(&queue, sizeof(int), 16);
+	non_blocking<queue_create>(MALLOC_CAPABILITY, &queue, sizeof(int), 16);
 	// Pass the queue handle to the consumer.
 	set_queue(queue);
 	Debug::log("Starting producer loop");
-	Timeout t{UnlimitedTimeout};
 	// Loop, sending some numbers to the other thread.
 	for (int i = 1; i < 200; i++)
 	{
-		int ret = queue_send(queue, &i, &t);
+		int ret = blocking_forever<queue_send>(queue, &i);
 		// Abort if the queue send errors.
 		Debug::Invariant(ret == 0, "Queue send failed {}", ret);
 	}

@@ -18,7 +18,7 @@ namespace sched
 	class Queue final : private utils::NoCopyNoMove, public Handle
 	{
 		/// The address is used as the send offset.
-		std::unique_ptr<char> storage;
+		HeapBuffer storage;
 		/**
 		 * The address to the recv location. We don't have a SendAddr because
 		 * it's already captured in the address field of Storage.
@@ -57,9 +57,7 @@ namespace sched
 		 * @param itemSize size of each queue item
 		 * @param maxNItems maximum number of items allowed in queue
 		 */
-		Queue(std::unique_ptr<char> &&messageStorage,
-		      size_t                  itemSize,
-		      size_t                  maxNItems)
+		Queue(HeapBuffer &&messageStorage, size_t itemSize, size_t maxNItems)
 		  : Handle(TypeMarker),
 		    storage(std::move(messageStorage)),
 		    recvAddr(CHERI::Capability(storage.get()).base()),
@@ -70,8 +68,8 @@ namespace sched
 		    recvWaitList(nullptr)
 		{
 			Debug::Assert(
-			  (storage == nullptr && itemSize == 0) ||
-			    (storage != nullptr && itemSize > 0 && maxNItems > 0),
+			  (!storage && itemSize == 0) ||
+			    (storage && (itemSize > 0) && (maxNItems > 0)),
 			  "Invalid queue constructor arguments.  Storage: {}, itemSize: {}",
 			  storage.get(),
 			  itemSize);
@@ -79,7 +77,7 @@ namespace sched
 
 		Queue(std::nullptr_t, size_t itemSize, size_t maxNItems)
 		  : Handle(TypeMarker),
-		    storage(nullptr),
+		    storage(),
 		    recvAddr(0),
 		    ItemSize(itemSize),
 		    maxNItems(maxNItems),
@@ -184,9 +182,7 @@ namespace sched
 				{
 					storageAddress = storageBase;
 				}
-				CHERI::Capability newStorage{storage.release()};
-				newStorage.address() = storageAddress;
-				storage.reset(newStorage);
+				storage.set_address(storageAddress);
 			}
 			nItems++;
 

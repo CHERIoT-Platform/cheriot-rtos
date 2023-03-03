@@ -105,13 +105,16 @@ struct MultiWaiter;
  * most `maxItems` event sources.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  multiwaiter_create(struct MultiWaiter **ret, size_t maxItems);
+  multiwaiter_create(Timeout             *timeout,
+                     struct SObjStruct   *heapCapability,
+                     struct MultiWaiter **ret,
+                     size_t               maxItems);
 
 /**
  * Destroy a multiwaiter object.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  multiwaiter_delete(struct MultiWaiter *mw);
+  multiwaiter_delete(struct SObjStruct *heapCapability, struct MultiWaiter *mw);
 
 /**
  * Wait for events.  The first argument is the multiwaiter to wait on.  New
@@ -126,7 +129,7 @@ struct MultiWaiter;
  *    returns -ETIMEOUT.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  multiwaiter_wait(struct MultiWaiter       *waiter,
+  multiwaiter_wait(Timeout                  *timeout,
+                   struct MultiWaiter       *waiter,
                    struct EventWaiterSource *events,
-                   size_t                    newEventsCount,
-                   Timeout                  *timeout);
+                   size_t                    newEventsCount);

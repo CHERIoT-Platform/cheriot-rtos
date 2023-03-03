@@ -4,6 +4,7 @@
 #include "identifier.h"
 #include <debug.hh>
 #include <fail-simulator-on-error.h>
+#include <timeout.hh>
 #include <token.h>
 
 using Debug = ConditionalDebug<true, "Identifier service">;
@@ -33,7 +34,8 @@ Identifier *identifier_create(int value)
 {
 	// Allocate the identifier object and get back both sealed and unsealed
 	// capabilities.
-	auto [unsealed, sealed] = token_allocate<Identifier>(key());
+	auto [unsealed, sealed] =
+	  blocking_forever<token_allocate<Identifier>>(MALLOC_CAPABILITY, key());
 	if (sealed == nullptr)
 	{
 		return nullptr;
@@ -69,5 +71,6 @@ int identifier_value(Identifier *identifier)
 void identifier_destroy(Identifier *identifier)
 {
 	// The allocator does validity checks here, so we can skip them.
-	token_obj_destroy(key(), reinterpret_cast<SObj>(identifier));
+	token_obj_destroy(
+	  MALLOC_CAPABILITY, key(), reinterpret_cast<SObj>(identifier));
 }

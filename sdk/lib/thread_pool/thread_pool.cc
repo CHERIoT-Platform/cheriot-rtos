@@ -15,8 +15,10 @@ namespace
 	void *get_queue()
 	{
 		static void *queue = []() {
-			void *q;
-			int   ret = queue_create(&q, 2 * sizeof(void *), 16);
+			void   *q;
+			Timeout t{UnlimitedTimeout};
+			int     ret =
+			  queue_create(&t, MALLOC_CAPABILITY, &q, 2 * sizeof(void *), 16);
 			assert(ret == 0);
 			return q;
 		}();
@@ -48,7 +50,7 @@ int thread_pool_async(ThreadPoolCallback fn, void *data)
 	Timeout           t{UnlimitedTimeout};
 	do
 	{
-		ret = queue_send(queue, &message, &t);
+		ret = queue_send(&t, queue, &message);
 	} while (ret == -ETIMEDOUT);
 
 	return 0;
@@ -63,7 +65,7 @@ void __cheri_compartment("thread_pool") thread_pool_run()
 	while (true)
 	{
 		// Retry until we get a message.
-		while (queue_recv(queue, &message, &t) < 0)
+		while (queue_recv(&t, queue, &message) < 0)
 		{
 			yield();
 		}

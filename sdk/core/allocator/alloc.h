@@ -295,10 +295,12 @@ MChunkHeader
 	 */
 	SmallSize currSize;
 
-	bool isPrevInUse : 1;
-	bool isCurrInUse : 1;
+	/// The unique identifier of the allocator.
+	uint16_t ownerID;
+	bool     isPrevInUse : 1;
+	bool     isCurrInUse : 1;
 
-	/* There are 30 bits free in the header here for future use */
+	/* There are 18 bits free in the header here for future use */
 
 	public:
 	__always_inline auto cell_prev()
@@ -313,6 +315,28 @@ MChunkHeader
 		return displacement_proxy::
 		  Proxy<MChunkHeader, SmallSize, true, head2size, size2head>(this,
 		                                                             currSize);
+	}
+
+	/**
+	 * Returns the owner for an in-use chunk. This should not be called with a
+	 * not-in-use chunk.
+	 */
+	uint16_t owner()
+	{
+		Debug::Assert(is_in_use(),
+		              "owner does not make sense on unallocated chunk");
+		return ownerID;
+	}
+
+	/**
+	 * Sets the owner for an in-use chunk. This should not be called with a
+	 * not-in-use chunk.
+	 */
+	void set_owner(uint16_t newOwner)
+	{
+		Debug::Assert(is_in_use(),
+		              "owner does not make sense on unallocated chunk");
+		ownerID = newOwner;
 	}
 
 	/**
@@ -1007,9 +1031,15 @@ class MState
 	 * @brief Adjust size and alignment to ensure precise representability, and
 	 * paint the shadow bit for the header to detect valid free().
 	 *
+	 * The `quota` is the amount of memory that the caller is still permitted
+	 * to allocate.  This is decremented by the amount allocated on successful
+	 * allocation.  The `identifier` will be stored as the owner in the header
+	 * of a successful allocation.
+	 *
 	 * @return User pointer if request can be satisfied, nullptr otherwise.
 	 */
-	AllocationResult mspace_dispatch(size_t bytes)
+	AllocationResult
+	mspace_dispatch(size_t bytes, size_t &quota, uint16_t identifier)
 	{
 		size_t alignSize =
 		  (CHERI::representable_length(bytes) + MallocAlignMask) &
@@ -1020,6 +1050,21 @@ class MState
 		if (alignSize == 0)
 		{
 			return AllocationFailurePermanent{};
+		}
+		// Check this first so that quota exhaustion doesn't return temporary
+		// failure.
+		if (heapTotalSize < alignSize)
+		{
+			return AllocationFailurePermanent{};
+		}
+		// Return failure if the quota is exhausted.
+		if (alignSize > quota)
+		{
+			Debug::log("Quota exhausted trying to allocate {} bytes (remaining "
+			           "quota is {})",
+			           alignSize,
+			           quota);
+			return AllocationFailureDeallocationNeeded{};
 		}
 		CHERI::Capability<void> ret{mspace_memalign(
 		  alignSize, -CHERI::representable_alignment_mask(bytes))};
@@ -1037,6 +1082,19 @@ class MState
 			}
 			return AllocationFailureDeallocationNeeded{};
 		}
+		auto header = MChunkHeader::from_body(ret);
+		// The allocation might be just on the boundary where the requested
+		// size is less than the quota but the allocated size is greater. In
+		// this case, return the memory without quarantining and retry.
+		if (header->size_get() > quota)
+		{
+			Debug::log("Quota exhausted trying to allocate {} bytes (remaining "
+			           "quota is {})",
+			           header->size_get(),
+			           quota);
+			mspace_free_internal(header);
+			return AllocationFailureDeallocationNeeded{};
+		}
 
 #ifndef NDEBUG
 		// Periodically sanity check the entire state for this mspace.
@@ -1047,8 +1105,9 @@ class MState
 		}
 		++sanityCounter;
 #endif
-		auto   header   = MChunkHeader::from_body(ret);
 		size_t bodySize = header->size_get() - sizeof(MChunkHeader);
+		header->set_owner(identifier);
+		quota -= header->size_get();
 		if (CHERI::is_precise_range(ret.address(), bodySize))
 		{
 			// Can we use this whole chunk as is? Yes!
@@ -1076,11 +1135,23 @@ class MState
 	 * onto the quarantine list. It tries to dequeue the quarantine list a
 	 * couple of times.
 	 *
-	 * @param mem the user cap which has been checked, but has not been
-	 * rederived into an internal cap yet
+	 * The `mem` parameter is the user-provided pointer, which has been checked
+	 * as a valid pointer to *something* in the heap, but has not yet been
+	 * checked as a valid pointer to a complete heap allocation.
+	 *
+	 * If this is a valid pointer to allocated memory then it must be owned by
+	 * the quota identified by `identifier`.  If so, then it will be freed and
+	 * the used memory returned to the `quota` provided by the caller.
+	 *
+	 * If `reallyFree` is false, this simply checks whether freeing would
+	 * succeed but does not actually deallocate the object.
+	 *
 	 * @return 0 if user input mem is correct. Error code otherwise
 	 */
-	int mspace_free(CHERI::Capability<void> mem)
+	int mspace_free(CHERI::Capability<void> mem,
+	                size_t                 &quota,
+	                uint16_t                identifier,
+	                bool                    reallyFree)
 	{
 		// Expand the bounds of the freed object to the whole heap and set the
 		// address that we're looking at to the base of the requested
@@ -1120,8 +1191,20 @@ class MState
 			  correct);
 			return -EINVAL;
 		}
+		if (p->owner() != identifier)
+		{
+			Debug::log("Trying to free memory owned by {} with allocator id {}",
+			           p->owner(),
+			           identifier);
+			return -EPERM;
+		}
+		if (!reallyFree)
+		{
+			return 0;
+		}
 		// At this point, we know mem is capability aligned.
 		capaligned_zero(mem, bodySize);
+		quota += bodySize + sizeof(MChunkHeader);
 		revoker.shadow_paint_range(mem.address(), p->cell_next(), true);
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk

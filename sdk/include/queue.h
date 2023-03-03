@@ -33,8 +33,11 @@ __BEGIN_DECLS
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched")
-  queue_create(void **outQue, size_t itemSize, size_t maxNItems);
+int __cheri_compartment("sched") queue_create(Timeout           *timeout,
+                                              struct SObjStruct *heapCapability,
+                                              void             **outQue,
+                                              size_t             itemSize,
+                                              size_t             maxNItems);
 
 /**
  * Delete this queue. All blockers will be woken up.
@@ -43,7 +46,8 @@ int __cheri_compartment("sched")
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched") queue_delete(void *que);
+int __cheri_compartment("sched")
+  queue_delete(struct SObjStruct *heapCapability, void *que);
 
 /**
  * Send a message to the queue, blocking for at most waitTicks of timer
@@ -56,13 +60,13 @@ int __cheri_compartment("sched") queue_delete(void *que);
  * @return error code. 0 on success
  */
 int __cheri_compartment("sched")
-  queue_send(void *que, const void *src, Timeout *timeout);
+  queue_send(Timeout *timeout, void *que, const void *src);
 
 /**
  * Same as queue_send, just in the other direction.
  */
 int __cheri_compartment("sched")
-  queue_recv(void *que, void *dst, Timeout *timeout);
+  queue_recv(Timeout *timeout, void *que, void *dst);
 
 /**
  * Check the number of remaining items in the queue.

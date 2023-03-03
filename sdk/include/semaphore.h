@@ -26,7 +26,11 @@ __BEGIN_DECLS
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched") semaphore_create(void **ret, size_t maxNItems);
+int __cheri_compartment("sched")
+  semaphore_create(Timeout           *timeout,
+                   struct SObjStruct *heapCapability,
+                   void             **ret,
+                   size_t             maxNItems);
 
 /**
  * Delete semaphore, waking up all blockers.
@@ -35,7 +39,8 @@ int __cheri_compartment("sched") semaphore_create(void **ret, size_t maxNItems);
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched") semaphore_delete(void *sema);
+int __cheri_compartment("sched")
+  semaphore_delete(struct SObjStruct *heapCapability, void *sema);
 
 /**
  * Take the semaphore. If its count has reached the maximum, block.
@@ -45,7 +50,7 @@ int __cheri_compartment("sched") semaphore_delete(void *sema);
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched") semaphore_take(void *sema, Timeout *timeout);
+int __cheri_compartment("sched") semaphore_take(Timeout *timeout, void *sema);
 
 /**
  * Release the semaphore. If its count has reached 0, block.
@@ -55,6 +60,6 @@ int __cheri_compartment("sched") semaphore_take(void *sema, Timeout *timeout);
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched") semaphore_give(void *sema, Timeout *timeout);
+int __cheri_compartment("sched") semaphore_give(Timeout *timeout, void *sema);
 
 __END_DECLS

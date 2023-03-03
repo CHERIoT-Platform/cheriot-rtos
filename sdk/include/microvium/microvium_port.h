@@ -291,5 +291,5 @@ static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size) {
  * The `context` passed to these macros is whatever value that the host passes
  * to `mvm_restore`. It can be any value that fits in a pointer.
  */
-#define MVM_CONTEXTUAL_MALLOC(size, context) malloc(size)
-#define MVM_CONTEXTUAL_FREE(ptr, context) free(ptr)
+#define MVM_CONTEXTUAL_MALLOC(size, context) ({ Timeout t = {0, 0}; heap_allocate(&t, context, size); })
+#define MVM_CONTEXTUAL_FREE(ptr, context) heap_free(context, ptr)
