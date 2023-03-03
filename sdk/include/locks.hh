@@ -94,7 +94,7 @@ class FlagLock
 			if (old != Flag::Unlocked)
 			{
 				LockDebug::log("hitting slow path wait for {}", &flag);
-				futex_timed_wait(futex_word(), old, timeout);
+				futex_timed_wait(timeout, futex_word(), old);
 			}
 			old = Flag::Unlocked;
 			// Try to acquire, acquire with waiters so that we don't lose wakes

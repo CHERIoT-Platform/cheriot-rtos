@@ -1,6 +1,8 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+#define CHERIOT_NO_AMBIENT_MALLOC
+#define CHERIOT_NO_NEW_DELETE
 #include "../switcher/tstack.h"
 #include "multiwait.h"
 #include "plic.h"
@@ -10,6 +12,7 @@
 #include <cheri.hh>
 #include <compartment.h>
 #include <futex.h>
+#include <locks.hh>
 #include <new>
 #include <priv/riscv.h>
 #include <riscvreg.h>
@@ -188,23 +191,54 @@ namespace sched
 		                                   Permission::Store}>(timeout);
 	}
 
+	/// Lock used to serialise deallocations.
+	FlagLock deallocLock;
+
+	/// Helper to safely deallocate an instance of `T`.
+	template<typename T>
+	int deallocate(SObjStruct *heapCapability, void *object)
+	{
+		// Acquire the lock and hold it. We need to be careful of two attempts
+		// to free the same object racing, so we cause others to back up behind
+		// this one.  They will then fail in the unseal operation.
+		LockGuard g{deallocLock};
+		return typed_op<T>(object, [&](T &unsealed) {
+			if (int ret = heap_can_free(heapCapability, &unsealed); ret != 0)
+			{
+				return ret;
+			}
+			unsealed.~T();
+			heap_free(heapCapability, &unsealed);
+			return 0;
+		});
+	}
+
 } // namespace sched
 
 using namespace sched;
 
 // queue APIs
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  queue_create(void **ret, size_t itemSize, size_t maxNItems)
+  queue_create(Timeout           *timeout,
+               struct SObjStruct *heapCapability,
+               void             **ret,
+               size_t             itemSize,
+               size_t             maxNItems)
 {
-	std::unique_ptr<char> storage{
-	  static_cast<char *>(calloc(itemSize, maxNItems))};
-	if (storage == nullptr)
+	HeapBuffer storage{timeout, heapCapability, itemSize, maxNItems};
+
+	if (!storage)
 	{
 		return -ENOMEM;
 	}
 
-	auto queue = std::unique_ptr<Queue>{
-	  new (std::nothrow) Queue(std::move(storage), itemSize, maxNItems)};
+	HeapObject<Queue> queue{
+	  timeout, heapCapability, std::move(storage), itemSize, maxNItems};
+
+	if (!queue)
+	{
+		return -ENOMEM;
+	}
 
 	if (!check_pointer<PermissionSet{Permission::Store,
 	                                 Permission::LoadStoreCapability}>(ret))
@@ -218,13 +252,9 @@ using namespace sched;
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  queue_delete(void *que)
+  queue_delete(struct SObjStruct *heapCapability, void *queue)
 {
-	return typed_op<Queue>(que, [&](Queue &queue) {
-		queue.~Queue();
-		free(&queue);
-		return 0;
-	});
+	return deallocate<Queue>(heapCapability, queue);
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
@@ -241,7 +271,7 @@ using namespace sched;
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  queue_send(void *que, const void *src, Timeout *timeout)
+  queue_send(Timeout *timeout, void *que, const void *src)
 {
 	return typed_op<Queue>(que, [&](Queue &queue) {
 		if (!check_pointer<PermissionSet{Permission::Load}>(
@@ -255,7 +285,7 @@ using namespace sched;
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  queue_recv(void *que, void *dst, Timeout *timeout)
+  queue_recv(Timeout *timeout, void *que, void *dst)
 {
 	return typed_op<Queue>(que, [&](Queue &queue) {
 		// TODO: We may need to sink this check down further because we may
@@ -272,11 +302,13 @@ using namespace sched;
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  semaphore_create(void **ret, size_t maxNItems)
+  semaphore_create(Timeout           *timeout,
+                   struct SObjStruct *heapCapability,
+                   void             **ret,
+                   size_t             maxNItems)
 {
-	auto queue =
-	  std::unique_ptr<Queue>{new (std::nothrow) Queue(nullptr, 0, maxNItems)};
-	if (queue == nullptr)
+	HeapObject<Queue> queue{timeout, heapCapability, nullptr, 0, maxNItems};
+	if (!queue)
 	{
 		return -ENOMEM;
 	}
@@ -293,17 +325,13 @@ using namespace sched;
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  semaphore_delete(void *sema)
+  semaphore_delete(struct SObjStruct *heapCapability, void *sema)
 {
-	return typed_op<Queue>(sema, [](Queue &queue) {
-		queue.~Queue();
-		free(&queue);
-		return 0;
-	});
+	return deallocate<Queue>(heapCapability, sema);
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  semaphore_take(void *sema, Timeout *timeout)
+  semaphore_take(Timeout *timeout, void *sema)
 {
 	return typed_op<Queue>(sema, [&](Queue &queue) {
 		if (!queue.is_semaphore())
@@ -315,7 +343,7 @@ using namespace sched;
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  semaphore_give(void *sema, Timeout *timeout)
+  semaphore_give(Timeout *timeout, void *sema)
 {
 	return typed_op<Queue>(sema, [&](Queue &queue) {
 		if (!queue.is_semaphore())
@@ -353,11 +381,11 @@ uint16_t __cheri_compartment("sched") thread_id_get(void)
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  event_create(void **ret)
+  event_create(Timeout *timeout, struct SObjStruct *heapCapability, void **ret)
 {
-	auto event = std::unique_ptr<Event>{new (std::nothrow) Event()};
+	HeapObject<Event> event{timeout, heapCapability};
 
-	if (event == nullptr)
+	if (!event)
 	{
 		return -ENOMEM;
 	}
@@ -374,12 +402,12 @@ uint16_t __cheri_compartment("sched") thread_id_get(void)
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  event_bits_wait(void     *evt,
+  event_bits_wait(Timeout  *timeout,
+                  void     *evt,
                   uint32_t *retBits,
                   uint32_t  bitsToWait,
                   bool      clearOnExit,
-                  bool      waitAll,
-                  Timeout  *timeout)
+                  bool      waitAll)
 {
 	if (!check_pointer<PermissionSet{Permission::Store}>(retBits) ||
 	    !check_timeout_pointer(timeout))
@@ -427,13 +455,9 @@ uint16_t __cheri_compartment("sched") thread_id_get(void)
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  event_delete(void *evt)
+  event_delete(struct SObjStruct *heapCapability, void *evt)
 {
-	return typed_op<Event>(evt, [&](Event &event) {
-		event.~Event();
-		free(&event);
-		return 0;
-	});
+	return deallocate<Event>(heapCapability, evt);
 }
 
 [[cheri::interrupt_state(disabled)]] void *__cheri_compartment("sched")
@@ -462,7 +486,7 @@ namespace
 
 } // namespace
 
-int futex_timed_wait(uint32_t *address, uint32_t expected, Timeout *timeout)
+int futex_timed_wait(Timeout *timeout, uint32_t *address, uint32_t expected)
 {
 	if (!check_timeout_pointer(timeout) ||
 	    !check_pointer<PermissionSet{Permission::Load}>(address))
@@ -540,10 +564,16 @@ int futex_wake(uint32_t *address, uint32_t count)
 	return woke;
 }
 
-int multiwaiter_create(::MultiWaiter **ret, size_t maxItems)
+int multiwaiter_create(Timeout           *timeout,
+                       struct SObjStruct *heapCapability,
+                       ::MultiWaiter    **ret,
+                       size_t             maxItems)
 {
-	int  error;
-	auto mw = sched::MultiWaiter::create(maxItems, error);
+	int error;
+	// Don't bother checking if timeout is valid, the allocator will check for
+	// us.
+	auto mw =
+	  sched::MultiWaiter::create(timeout, heapCapability, maxItems, error);
 
 	if (!check_pointer<PermissionSet{Permission::Store,
 	                                 Permission::LoadStoreCapability}>(ret))
@@ -559,21 +589,15 @@ int multiwaiter_create(::MultiWaiter **ret, size_t maxItems)
 	return error;
 }
 
-int multiwaiter_delete(::MultiWaiter *mw)
+int multiwaiter_delete(struct SObjStruct *heapCapability, ::MultiWaiter *mw)
 {
-	auto *unsealed = Handle::unseal<sched::MultiWaiter>(mw);
-	if (unsealed != nullptr)
-	{
-		delete unsealed;
-		return 0;
-	}
-	return -EINVAL;
+	return deallocate<sched::MultiWaiter>(heapCapability, mw);
 }
 
-int multiwaiter_wait(::MultiWaiter     *waiter,
+int multiwaiter_wait(Timeout           *timeout,
+                     ::MultiWaiter     *waiter,
                      EventWaiterSource *events,
-                     size_t             newEventsCount,
-                     Timeout           *timeout)
+                     size_t             newEventsCount)
 {
 	return typed_op<sched::MultiWaiter>(waiter, [&](sched::MultiWaiter &mw) {
 		if (newEventsCount > mw.capacity())

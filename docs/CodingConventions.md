@@ -119,6 +119,14 @@ Arguments may use the OpenStep convention of starting with an article to disting
 Most of the time, fields are unambiguously nouns and so, for example `fooStart`, is obviously the start of the foo (whatever that is) and not an operation that starts a foo.
 This is not true for variables that hold lambdas or other callable objects and so these must follow the rules for unambiguous naming.
 
+### Parameter order
+
+Public functions that may block should take a `Timeout *` as the first parameter.
+This position makes it easy to forward to other functions (the `Timeout` structure is designed to be reused across nested calls).
+
+Any software capabilities that authorise an operation should be passed next.
+This ordering makes it easy to write templated wrappers that forward to other functions.
+
 C++ features
 ------------
 

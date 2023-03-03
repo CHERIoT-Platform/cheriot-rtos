@@ -5,6 +5,7 @@
 
 #include <cdefs.h>
 #include <stddef.h>
+#include <timeout.h>
 
 struct SKeyStruct;
 struct SObjStruct;
@@ -35,7 +36,7 @@ __BEGIN_DECLS
  * If the sealing keys have been exhausted then this will return
  * `INVALID_SKEY`.  This API is guaranteed never to block.
  */
-SKey __cheri_compartment("alloc") token_key_new(void);
+SKey __cheri_compartment("alloc") token_key_new();
 
 /**
  * Allocate a new object with size `sz`.
@@ -49,7 +50,11 @@ SKey __cheri_compartment("alloc") token_key_new(void);
  * On error, this returns `INVALID_SOBJ`.
  */
 SObj __cheri_compartment("alloc")
-  token_sealed_unsealed_alloc(SKey key, size_t sz, void **unsealed);
+  token_sealed_unsealed_alloc(Timeout           *timeout,
+                              struct SObjStruct *heapCapability,
+                              SKey               key,
+                              size_t             sz,
+                              void             **unsealed);
 
 /**
  * Same as token_sealed_unsealed_alloc() without getting the unsealed
@@ -57,7 +62,11 @@ SObj __cheri_compartment("alloc")
  *
  * The key must have the permit-seal permission.
  */
-SObj __cheri_compartment("alloc") token_sealed_alloc(SKey, size_t);
+SObj __cheri_compartment("alloc")
+  token_sealed_alloc(Timeout           *timeout,
+                     struct SObjStruct *heapCapability,
+                     SKey,
+                     size_t);
 
 /**
  * Unseal the obj given the key.
@@ -77,7 +86,8 @@ void *__cheri_compartment("alloc") token_obj_unseal(SKey, SObj);
  * @return 0 if no errors. -EINVAL if key or obj not valid, or they don't
  * match, or double destroy.
  */
-int __cheri_compartment("alloc") token_obj_destroy(SKey, SObj);
+int __cheri_compartment("alloc")
+  token_obj_destroy(struct SObjStruct *heapCapability, SKey, SObj);
 
 __END_DECLS
 
@@ -127,10 +137,12 @@ class Sealed
  * pointers.
  */
 template<typename T>
-__always_inline std::pair<T *, Sealed<T>> token_allocate(SKey key)
+__always_inline std::pair<T *, Sealed<T>>
+token_allocate(Timeout *timeout, struct SObjStruct *heapCapability, SKey key)
 {
 	void *unsealed;
-	SObj  sealed = token_sealed_unsealed_alloc(key, sizeof(T), &unsealed);
+	SObj  sealed = token_sealed_unsealed_alloc(
+	   timeout, heapCapability, key, sizeof(T), &unsealed);
 	return {static_cast<T *>(unsealed), Sealed<T>{sealed}};
 }
 

@@ -95,7 +95,7 @@ namespace thread_pool
 				return;
 			}
 			(*fn)();
-			token_obj_destroy(key, static_cast<SObj>(rawFn));
+			token_obj_destroy(MALLOC_CAPABILITY, key, static_cast<SObj>(rawFn));
 		}
 
 		/**
@@ -152,10 +152,13 @@ namespace thread_pool
 			using LambdaType = std::remove_reference_t<decltype(lambda)>;
 			// Allocate a new sealed object with a key that is unique to this
 			// type.
-			void *sealed = token_sealed_unsealed_alloc(
-			  detail::sealing_key_for_type<LambdaType>(),
-			  sizeof(lambda),
-			  &buffer);
+			Timeout t{UnlimitedTimeout};
+			void   *sealed = token_sealed_unsealed_alloc(
+			    &t,
+			    MALLOC_CAPABILITY,
+			    detail::sealing_key_for_type<LambdaType>(),
+			    sizeof(lambda),
+			    &buffer);
 			// Copy the lambda into the new allocation.
 			// Note: We silence a warning here because we *do* want to
 			// explicitly move, not forward.

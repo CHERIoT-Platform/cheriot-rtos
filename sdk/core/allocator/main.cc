@@ -22,6 +22,26 @@ using namespace CHERI;
 Revocation::Revoker revoker;
 namespace
 {
+	/**
+	 * Internal view of an allocator capability.
+	 *
+	 * TODO: For now, these are statically allocated. Eventually we will have
+	 * some that are dynamically allocated. These should be ref counted so that
+	 * we can avoid repeated validity checks.
+	 */
+	struct PrivateAllocatorCapabilityState
+	{
+		/// The remaining quota for this capability.
+		size_t quota;
+		/// A unique identifier for this pool.
+		uint16_t identifier;
+	};
+
+	static_assert(sizeof(PrivateAllocatorCapabilityState) <=
+	              sizeof(AllocatorCapabilityState));
+	static_assert(alignof(PrivateAllocatorCapabilityState) <=
+	              alignof(AllocatorCapabilityState));
+
 	// the global memory space
 	MState *gm;
 
@@ -121,19 +141,24 @@ namespace
 	 * is greater than zero, may block for that many ticks.  If `timeout` is the
 	 * maximum value permitted by the type, may block indefinitely.
 	 *
+	 * Memory is allocated against the quota in `capability`, which must be
+	 * unsealed by the caller.
+	 *
 	 * The lock guard own the lock on entry. It will drop the lock if a
 	 * transient error occurs and attempt to reacquire it. If the lock cannot be
 	 * reacquired during the permitted timeout then this returns nullptr.
 	 */
-	void *malloc_internal(size_t                      bytes,
-	                      LockGuard<decltype(lock)> &&g,
-	                      Timeout                    *timeout = nullptr)
+	void *malloc_internal(size_t                           bytes,
+	                      LockGuard<decltype(lock)>      &&g,
+	                      PrivateAllocatorCapabilityState *capability,
+	                      Timeout                         *timeout)
 	{
 		check_gm();
 
 		do
 		{
-			auto ret = gm->mspace_dispatch(bytes);
+			auto ret = gm->mspace_dispatch(
+			  bytes, capability->quota, capability->identifier);
 			if (std::holds_alternative<Capability<void>>(ret))
 			{
 				return std::get<Capability<void>>(ret);
@@ -179,11 +204,6 @@ namespace
 							    timeout->elapse(smallSleep.elapsed);
 							    return g.try_lock(timeout);
 						    }
-						    if (timeout == nullptr)
-						    {
-							    g.lock();
-							    return true;
-						    }
 						    return false;
 					    }))
 					{
@@ -197,11 +217,12 @@ namespace
 			if (std::holds_alternative<
 			      MState::AllocationFailureDeallocationNeeded>(ret))
 			{
-				Debug::log(
-				  "Not enough free space to handle allocation, sleeping");
+				Debug::log("Not enough free space to handle {}-byte "
+				           "allocation, sleeping",
+				           bytes);
 				// Drop the lock while yielding
 				g.unlock();
-				auto err = futex_timed_wait(&freeFutex, ++freeFutex, timeout);
+				auto err = futex_timed_wait(timeout, &freeFutex, ++freeFutex);
 				Debug::Assert(
 				  err != -EINVAL,
 				  "Invalid arguments to futex_timed_wait({}, {}, {})",
@@ -220,11 +241,6 @@ namespace
 					    {
 						    return g.try_lock(timeout);
 					    }
-					    if (timeout == nullptr)
-					    {
-						    g.lock();
-						    return true;
-					    }
 					    return false;
 				    }))
 				{
@@ -240,38 +256,103 @@ namespace
 		return nullptr;
 	}
 
+	/**
+	 * Unseal an allocator capability and return it.  Returns `nullptr` if this
+	 * is not a heap capability.
+	 */
+	PrivateAllocatorCapabilityState *
+	malloc_capability_unseal(SealedAllocation in)
+	{
+		Capability type = STATIC_SEALING_TYPE(MallocKey);
+		Capability key{SEALING_CAP()};
+		in.unseal(key);
+		if (!in.is_valid() || (in->type != type.address()))
+		{
+			Debug::log("Invalid malloc capability {}", in);
+			return nullptr;
+		}
+		auto *capability =
+		  reinterpret_cast<PrivateAllocatorCapabilityState *>(&in->data);
+		// Assign an identifier if this is the first time that we've seen this.
+		if (capability->identifier == 0)
+		{
+			static uint32_t nextIdentifier = 1;
+			if (nextIdentifier >
+			    std::numeric_limits<decltype(capability->identifier)>::max())
+			{
+				return nullptr;
+			}
+			capability->identifier = nextIdentifier++;
+		}
+		return capability;
+	}
+
+	__noinline int
+	heap_free_internal(SObj heapCapability, void *rawPointer, bool reallyFree)
+	{
+		auto *capability = malloc_capability_unseal(heapCapability);
+		if (capability == nullptr)
+		{
+			Debug::log("Invalid heap capabilityL {}", heapCapability);
+			return -EPERM;
+		}
+		Capability<void> mem{rawPointer};
+		if (!mem.is_valid())
+		{
+			return 0;
+		}
+		// Use the default memory space.
+		check_gm();
+		if (!gm->is_free_cap_inbounds(mem))
+		{
+			return -EINVAL;
+		}
+		return gm->mspace_free(
+		  mem, capability->quota, capability->identifier, reallyFree);
+	}
 } // namespace
 
-void *heap_allocate(size_t bytes, Timeout *timeout)
+size_t heap_quota_remaining(struct SObjStruct *heapCapability)
 {
 	LockGuard g{lock};
+	auto     *cap = malloc_capability_unseal(heapCapability);
+	if (cap == nullptr)
+	{
+		return -1;
+	}
+	return cap->quota;
+}
+
+void *heap_allocate(Timeout *timeout, SObj heapCapability, size_t bytes)
+{
+	LockGuard g{lock};
+	auto     *cap = malloc_capability_unseal(heapCapability);
+	if (cap == nullptr)
+	{
+		return nullptr;
+	}
 	if (!check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
 	      timeout))
 	{
 		return nullptr;
 	}
 	// Use the default memory space.
-	return malloc_internal(bytes, std::move(g), timeout);
+	return malloc_internal(bytes, std::move(g), cap, timeout);
 }
 
-int heap_free(void *rawPointer)
+int heap_can_free(SObj heapCapability, void *rawPointer)
 {
-	LockGuard        g{lock};
-	Capability<void> mem{rawPointer};
-	if (!mem.is_valid())
+	LockGuard g{lock};
+	return heap_free_internal(heapCapability, rawPointer, false);
+}
+
+int heap_free(SObj heapCapability, void *rawPointer)
+{
+	LockGuard g{lock};
+	int       ret = heap_free_internal(heapCapability, rawPointer, true);
+	if (ret != 0)
 	{
-		return 0;
-	}
-	// Use the default memory space.
-	check_gm();
-	if (!gm->is_free_cap_inbounds(mem))
-	{
-		return -EINVAL;
-	}
-	int rv = gm->mspace_free(mem);
-	if (rv)
-	{
-		return rv;
+		return ret;
 	}
 
 	// If there are any threads blocked allocating memory, wake them up.
@@ -285,9 +366,17 @@ int heap_free(void *rawPointer)
 	return 0;
 }
 
-void *heap_allocate_array(size_t nElements, size_t elemSize, Timeout *timeout)
+void *heap_allocate_array(Timeout *timeout,
+                          SObj     heapCapability,
+                          size_t   nElements,
+                          size_t   elemSize)
 {
 	LockGuard g{lock};
+	auto     *cap = malloc_capability_unseal(heapCapability);
+	if (cap == nullptr)
+	{
+		return nullptr;
+	}
 	// Use the default memory space.
 	size_t req;
 	if (__builtin_mul_overflow(nElements, elemSize, &req))
@@ -299,7 +388,7 @@ void *heap_allocate_array(size_t nElements, size_t elemSize, Timeout *timeout)
 	{
 		return nullptr;
 	}
-	return malloc_internal(req, std::move(g), timeout);
+	return malloc_internal(req, std::move(g), cap, timeout);
 }
 
 namespace
@@ -345,10 +434,17 @@ namespace
 	 * all of the permissions in `permissions`.
 	 */
 	std::pair<SObj, void *>
-	  __noinline allocate_sealed_unsealed(SealingKey    key,
+	  __noinline allocate_sealed_unsealed(Timeout      *timeout,
+	                                      SObj          heapCapability,
+	                                      SealingKey    key,
 	                                      size_t        sz,
 	                                      PermissionSet permissions)
 	{
+		if (!check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
+		      timeout))
+		{
+			return {nullptr, nullptr};
+		}
 		if (!permissions.can_derive_from(key.permissions()))
 		{
 			Debug::log(
@@ -364,8 +460,14 @@ namespace
 			return {nullptr, nullptr};
 		}
 
+		LockGuard g{lock};
+		auto     *capability = malloc_capability_unseal(heapCapability);
+		if (capability == nullptr)
+		{
+			return {nullptr, nullptr};
+		}
 		SealedAllocation obj{static_cast<SObj>(
-		  malloc_internal(sz + ObjHdrSize, LockGuard<FlagLock>{lock}))};
+		  malloc_internal(sz + ObjHdrSize, std::move(g), capability, timeout))};
 		if (obj == nullptr)
 		{
 			Debug::log("Underlying allocation failed for sealed object");
@@ -382,7 +484,7 @@ namespace
 	}
 } // namespace
 
-SKey token_key_new(void)
+SKey token_key_new()
 {
 	// This needs protecting against races but doesn't touch any other data
 	// structures and so can have its own lock.
@@ -405,10 +507,14 @@ SKey token_key_new(void)
 	return nullptr;
 }
 
-SObj token_sealed_unsealed_alloc(SKey key, size_t sz, void **unsealed)
+SObj token_sealed_unsealed_alloc(Timeout *timeout,
+                                 SObj     heapCapability,
+                                 SKey     key,
+                                 size_t   sz,
+                                 void   **unsealed)
 {
-	auto [sealed, obj] =
-	  allocate_sealed_unsealed(key, sz, {Permission::Seal, Permission::Unseal});
+	auto [sealed, obj] = allocate_sealed_unsealed(
+	  timeout, heapCapability, key, sz, {Permission::Seal, Permission::Unseal});
 	{
 		LockGuard g{lock};
 		if (check_pointer<PermissionSet{
@@ -418,13 +524,18 @@ SObj token_sealed_unsealed_alloc(SKey key, size_t sz, void **unsealed)
 			return sealed;
 		}
 	}
-	heap_free(obj);
+	heap_free(heapCapability, obj);
 	return INVALID_SOBJ;
 }
 
-SObj token_sealed_alloc(SKey rawKey, size_t sz)
+SObj token_sealed_alloc(Timeout *timeout,
+                        SObj     heapCapability,
+                        SKey     rawKey,
+                        size_t   sz)
 {
-	return allocate_sealed_unsealed(rawKey, sz, {Permission::Seal}).first;
+	return allocate_sealed_unsealed(
+	         timeout, heapCapability, rawKey, sz, {Permission::Seal})
+	  .first;
 }
 
 /**
@@ -468,7 +579,7 @@ void *token_obj_unseal(SKey rawKey, SObj obj)
 	return unsealed;
 }
 
-int token_obj_destroy(SKey key, SObj object)
+int token_obj_destroy(SObj heapCapability, SKey key, SObj object)
 {
 	void *unsealed;
 	{
@@ -481,6 +592,8 @@ int token_obj_destroy(SKey key, SObj object)
 		// At this point, we drop and reacquire the lock. This is better for
 		// code reuse and heap_free will catch races because it will check the
 		// revocation state.
+		// The key can't be revoked and so there is no race with the key going
+		// away after the check.
 	}
-	return heap_free(unsealed);
+	return heap_free(heapCapability, unsealed);
 }

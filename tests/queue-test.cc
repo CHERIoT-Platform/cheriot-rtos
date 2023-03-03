@@ -22,32 +22,33 @@ void test_queue()
 	static void    *queue;
 	Timeout         timeout{0, 0};
 	debug_log("Testing queue send operations");
-	int rv = queue_create(&queue, ItemSize, MaxItems);
+	int rv =
+	  queue_create(&timeout, MALLOC_CAPABILITY, &queue, ItemSize, MaxItems);
 	TEST(rv == 0, "Queue creation failed with {}", rv);
-	rv = queue_send(queue, Message[0], &timeout);
+	rv = queue_send(&timeout, queue, Message[0]);
 	TEST(rv == 0, "Sending the first message failed with {}", rv);
-	rv = queue_send(queue, Message[1], &timeout);
+	rv = queue_send(&timeout, queue, Message[1]);
 	TEST(rv == 0, "Sending the second message failed with {}", rv);
 	// Queue is full, it should time out.
 	timeout.remaining = 5;
-	rv                = queue_send(queue, Message[1], &timeout);
+	rv                = queue_send(&timeout, queue, Message[1]);
 	TEST(rv == -ETIMEDOUT,
 	     "Sending to a full queue didn't time out as expected, returned {}",
 	     rv);
 	debug_log("Testing queue receive operations");
 	timeout.remaining = 10;
-	rv                = queue_recv(queue, bytes, &timeout);
+	rv                = queue_recv(&timeout, queue, bytes);
 	TEST(rv == 0, "Receiving the first message failed with {}", rv);
 	TEST(memcmp(Message[0], bytes, ItemSize) == 0,
 	     "First message received but not as expected. Got {}",
 	     bytes);
-	rv = queue_recv(queue, bytes, &timeout);
+	rv = queue_recv(&timeout, queue, bytes);
 	TEST(rv == 0, "Receiving the second message failed with {}", rv);
 	TEST(memcmp(Message[1], bytes, ItemSize) == 0,
 	     "Second message received but not as expected. Got {}",
 	     bytes);
 	timeout.remaining = 5;
-	rv                = queue_recv(queue, bytes, &timeout);
+	rv                = queue_recv(&timeout, queue, bytes);
 	TEST(
 	  rv == -ETIMEDOUT,
 	  "Receiving from an empty queue didn't time out as expected, returned {}",
@@ -62,7 +63,7 @@ void test_queue()
 		 * is dead and will trap, causing a force unwind in the scheduler
 		 * compartment.
 		 */
-		int rv = queue_recv(queue, bytesForAsync, &infinity);
+		int rv = queue_recv(&infinity, queue, bytesForAsync);
 		TEST(
 		  rv == -1,
 		  "queue_recv() should return -1 because the queue was freed() "
@@ -73,7 +74,7 @@ void test_queue()
 	});
 	timeout.remaining = 20;
 	thread_sleep(&timeout);
-	rv = queue_delete(queue);
+	rv = queue_delete(MALLOC_CAPABILITY, queue);
 	TEST(rv == 0, "Queue deletion failed with {}", rv);
 	// Wait until the async is done.
 	rv = futex_wait(&futex, 0);

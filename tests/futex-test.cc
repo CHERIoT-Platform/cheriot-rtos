@@ -37,7 +37,7 @@ void test_futex()
 	debug_log("Calling futex with timeout");
 	{
 		Timeout t{3};
-		auto    err = futex_timed_wait(&futex, 1, &t);
+		auto    err = futex_timed_wait(&t, &futex, 1);
 		TEST(err == -ETIMEDOUT,
 		     "futex_timed_wait returned {}, expected {}",
 		     err,
@@ -47,7 +47,7 @@ void test_futex()
 		     t.elapsed);
 	}
 	Timeout t{3};
-	auto    err = futex_timed_wait(&futex, 0, &t);
+	auto    err = futex_timed_wait(&t, &futex, 0);
 	TEST(err == 0, "futex_timed_wait returned {}, expected {}", err, 0);
 	// Some tests for invalid API usage.
 	ret = futex_wait(nullptr, 0);

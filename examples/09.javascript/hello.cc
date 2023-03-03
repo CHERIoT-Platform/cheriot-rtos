@@ -93,8 +93,11 @@ void __cheri_compartment("hello") say_hello()
 	// Load the JavaScript bytecode snapshot
 	{
 		mvm_VM *rawVm;
-		err = mvm_restore(
-		  &rawVm, bytecode, sizeof(bytecode), nullptr, ::resolve_import);
+		err = mvm_restore(&rawVm,
+		                  bytecode,
+		                  sizeof(bytecode),
+		                  MALLOC_CAPABILITY,
+		                  ::resolve_import);
 		Debug::Assert(
 		  err == MVM_E_SUCCESS, "Failed to parse bytecode: {}", err);
 		vm.reset(rawVm);

@@ -27,7 +27,8 @@ __BEGIN_DECLS
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched") event_create(void **ret);
+int __cheri_compartment("sched")
+  event_create(Timeout *timeout, struct SObjStruct *heapCapability, void **ret);
 
 /**
  * Wait on this event group for a particular set of bits.
@@ -43,12 +44,12 @@ int __cheri_compartment("sched") event_create(void **ret);
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched") event_bits_wait(void     *evt,
+int __cheri_compartment("sched") event_bits_wait(Timeout  *timeout,
+                                                 void     *evt,
                                                  uint32_t *retBits,
                                                  uint32_t  bitsToWait,
                                                  bool      clearOnExit,
-                                                 bool      waitAll,
-                                                 Timeout  *timeout);
+                                                 bool      waitAll);
 
 /**
  * Set the bits in an event group.
@@ -93,6 +94,7 @@ int __cheri_compartment("sched")
  *
  * @return error code. 0 on success
  */
-int __cheri_compartment("sched") event_delete(void *evt);
+int __cheri_compartment("sched")
+  event_delete(struct SObjStruct *heapCapability, void *evt);
 
 __END_DECLS
