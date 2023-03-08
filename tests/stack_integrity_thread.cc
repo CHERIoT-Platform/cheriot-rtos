@@ -8,6 +8,24 @@ using namespace CHERI;
 
 bool *threadStackTestFailed;
 
+/*
+ * Define a macro that gets a __cheri_callback capability and calls it, while
+ * support adding instruction before the call. This is used to avoid code
+ * duplication, in cases we want to call a __cheri_callback in multiple
+ * places while adding additional functionalities.
+ */
+#define CALL_CHERI_CALLBACK(fn, instruction, additional_argument)              \
+	({                                                                         \
+		__asm__ volatile(                                                      \
+		  "1:\n"                                                               \
+		  "cmove ct1, %0\n"                                                    \
+		  "2:\n"                                                               \
+		  "auipcc ct2, %%cheri_compartment_pccrel_hi(.compartment_switcher)\n" \
+		  "clc ct2, %%cheri_compartment_pccrel_lo(2b)(ct2)\n" instruction      \
+		  "cjalr ct2" ::"C"(fn),                                               \
+		  additional_argument);                                                \
+	})
+
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
@@ -66,13 +84,8 @@ void modify_csp_permissions_on_call(bool         *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	/*
-	 * TODO: at the moment, we can't call a __cheri_callback in inline assembly.
-	 * Therefore, we need to rely on the compiler, and modify the stack
-	 * permissions in inline assembly before the call.
-	 */
-	__asm__ volatile("candperm csp, csp, %0" ::"r"(newPermissions.as_raw()));
-	fn();
+	CALL_CHERI_CALLBACK(
+	  fn, "candperm csp, csp, %1\n", "r"(newPermissions.as_raw()));
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -94,13 +107,7 @@ void test_stack_invalid_on_call(bool *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	/*
-	 * TODO: at the moment, we can't call a __cheri_callback in inline assembly.
-	 * Therefore, we need to rely on the compiler, and clear the CSP tag
-	 * in inline assembly before the call.
-	 */
-	__asm__ volatile("ccleartag      csp, csp");
-	fn();
+	CALL_CHERI_CALLBACK(fn, "move a0, %1\nccleartag csp, csp\n", "r"(0));
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
