@@ -52,22 +52,27 @@ void modify_csp_permissions_on_fault(bool         *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("candperm csp, csp, %0\n"
-	                 "csh      zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
+	__asm__ volatile(
+	  "candperm csp, csp, %0\n"
+	  "csh      zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
 }
 
-void modify_stack_permissions_on_call(bool         *outTestFailed,
-                                      PermissionSet newPermissions,
-                                      __cheri_callback void (*fn)())
+void modify_csp_permissions_on_call(bool         *outTestFailed,
+                                    PermissionSet newPermissions,
+                                    __cheri_callback void (*fn)())
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("cmove ct2, %0\n"
-	                 "candperm csp, csp, %1\n"
-	                 "cjalr ct2\n" ::"C"(fn) , "r"(newPermissions.as_raw()));
+	/*
+	 * TODO: at the moment, we can't call a __cheri_callback in inline assembly.
+	 * Therefore, we need to rely on the compiler, and modify the stack
+	 * permissions in inline assembly before the call.
+	 */
+	__asm__ volatile("candperm csp, csp, %0" ::"r"(newPermissions.as_raw()));
+	fn();
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -89,9 +94,13 @@ void test_stack_invalid_on_call(bool *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("cmove ct2, %0\n"
-	                 "ccleartag      csp, csp\n"
-	                 "cjalr ct2\n" ::"C"(fn));
+	/*
+	 * TODO: at the moment, we can't call a __cheri_callback in inline assembly.
+	 * Therefore, we need to rely on the compiler, and clear the CSP tag
+	 * in inline assembly before the call.
+	 */
+	__asm__ volatile("ccleartag      csp, csp");
+	fn();
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");

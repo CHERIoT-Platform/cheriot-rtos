@@ -92,7 +92,7 @@ void test_stack()
 	debug_log("modifying stack permissions on cross compartment call");
 	for (auto permissionToRemove : compartmentStackPermissions)
 	{
-		modify_stack_permissions_on_call(
+		modify_csp_permissions_on_call(
 		  &threadStackTestFailed,
 		  compartmentStackPermissions.without(permissionToRemove),
 		  &cross_compartment_call);
