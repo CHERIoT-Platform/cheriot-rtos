@@ -21,8 +21,9 @@ bool *threadStackTestFailed;
 		  "cmove ct1, %0\n"                                                    \
 		  "2:\n"                                                               \
 		  "auipcc ct2, %%cheri_compartment_pccrel_hi(.compartment_switcher)\n" \
-		  "clc ct2, %%cheri_compartment_pccrel_lo(2b)(ct2)\n" instruction      \
-		  "cjalr ct2" ::"C"(fn),                                               \
+		  "clc ct2, %%cheri_compartment_pccrel_lo(2b)(ct2)\n"                  \
+		  "" instruction "\n"                                                  \
+		  "cjalr ct2\n" ::"C"(fn),                                             \
 		  additional_argument);                                                \
 	})
 
