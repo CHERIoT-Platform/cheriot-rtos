@@ -52,9 +52,8 @@ void modify_csp_permissions_on_fault(bool         *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile(
-	  "candperm csp, csp, %0\n"
-	  "csh      zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
+	__asm__ volatile("candperm csp, csp, %0\n"
+	                 "csh      zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -66,8 +65,9 @@ void modify_stack_permissions_on_call(bool         *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("candperm csp, csp, %0\n"
-	                 "csh zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
+	__asm__ volatile("cmove ct2, %0\n"
+	                 "candperm csp, csp, %1\n"
+	                 "cjalr ct2\n" ::"C"(fn) , "r"(newPermissions.as_raw()));
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -89,8 +89,9 @@ void test_stack_invalid_on_call(bool *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("ccleartag      csp, csp\n"
-	                 "csh            zero, 0(cnull)\n");
+	__asm__ volatile("cmove ct2, %0\n"
+	                 "ccleartag      csp, csp\n"
+	                 "cjalr ct2\n" ::"C"(fn));
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
