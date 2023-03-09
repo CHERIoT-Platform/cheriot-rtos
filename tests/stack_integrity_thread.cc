@@ -14,17 +14,18 @@ bool *threadStackTestFailed;
  * duplication, in cases we want to call a __cheri_callback in multiple
  * places while adding additional functionalities.
  */
-#define CALL_CHERI_CALLBACK(fn, instruction, additional_argument)              \
+#define CALL_CHERI_CALLBACK(fn, instruction, additional_input)                 \
 	({                                                                         \
+		register auto rfn asm ("ct1") = fn;                                    \
 		__asm__ volatile(                                                      \
 		  "1:\n"                                                               \
-		  "cmove ct1, %0\n"                                                    \
-		  "2:\n"                                                               \
 		  "auipcc ct2, %%cheri_compartment_pccrel_hi(.compartment_switcher)\n" \
-		  "clc ct2, %%cheri_compartment_pccrel_lo(2b)(ct2)\n"                  \
+		  "clc ct2, %%cheri_compartment_pccrel_lo(1b)(ct2)\n"                  \
 		  "" instruction "\n"                                                  \
-		  "cjalr ct2\n" ::"C"(fn),                                             \
-		  additional_argument);                                                \
+		  "cjalr ct2\n"                                                        \
+		  : /* no outputs; we're jumping and probably not coming back */       \
+		  : "C"(rfn), additional_input                                         \
+		  : "ct2", "memory" /* in case we return */);                          \
 	})
 
 extern "C" ErrorRecoveryBehaviour
