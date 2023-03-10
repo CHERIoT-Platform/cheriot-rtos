@@ -16,7 +16,7 @@ bool *threadStackTestFailed;
  */
 #define CALL_CHERI_CALLBACK(fn, instruction, additional_input)                 \
 	({                                                                         \
-		register auto rfn asm ("ct1") = fn;                                    \
+		register auto rfn asm("ct1") = fn;                                     \
 		__asm__ volatile(                                                      \
 		  "1:\n"                                                               \
 		  "auipcc ct2, %%cheri_compartment_pccrel_hi(.compartment_switcher)\n" \
