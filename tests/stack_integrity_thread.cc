@@ -67,8 +67,8 @@ void exhaust_thread_stack(bool *outTestFailed)
 	TEST(false, "Should be unreachable");
 }
 
-void modify_csp_permissions_on_fault(bool         *outTestFailed,
-                                     PermissionSet newPermissions)
+void set_csp_permissions_on_fault(bool         *outTestFailed,
+                                  PermissionSet newPermissions)
 {
 	threadStackTestFailed = outTestFailed;
 
@@ -80,9 +80,9 @@ void modify_csp_permissions_on_fault(bool         *outTestFailed,
 	TEST(false, "Should be unreachable");
 }
 
-void modify_csp_permissions_on_call(bool         *outTestFailed,
-                                    PermissionSet newPermissions,
-                                    __cheri_callback void (*fn)())
+void set_csp_permissions_on_call(bool         *outTestFailed,
+                                 PermissionSet newPermissions,
+                                 __cheri_callback void (*fn)())
 {
 	threadStackTestFailed = outTestFailed;
 

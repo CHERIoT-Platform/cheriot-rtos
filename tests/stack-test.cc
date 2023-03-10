@@ -90,7 +90,7 @@ void test_stack()
 	PermissionSet compartmentStackPermissions = get_stack_permissions();
 	for (auto permissionToRemove : compartmentStackPermissions)
 	{
-		modify_csp_permissions_on_fault(
+		set_csp_permissions_on_fault(
 		  &threadStackTestFailed,
 		  compartmentStackPermissions.without(permissionToRemove));
 	}
@@ -98,7 +98,7 @@ void test_stack()
 	debug_log("modifying stack permissions on cross compartment call");
 	for (auto permissionToRemove : compartmentStackPermissions)
 	{
-		modify_csp_permissions_on_call(
+		set_csp_permissions_on_call(
 		  &threadStackTestFailed,
 		  compartmentStackPermissions.without(permissionToRemove),
 		  callback);
