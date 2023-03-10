@@ -24,7 +24,7 @@ bool *threadStackTestFailed;
 		  "" instruction "\n"                                                  \
 		  "cjalr ct2\n"                                                        \
 		  : /* no outputs; we're jumping and probably not coming back */       \
-		  : "C"(rfn), additional_input                                         \
+		  : "C"(rfn), "r"(additional_input)                                    \
 		  : "ct2", "memory" /* in case we return */);                          \
 	})
 
@@ -86,8 +86,7 @@ void modify_csp_permissions_on_call(bool         *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	CALL_CHERI_CALLBACK(
-	  fn, "candperm csp, csp, %1\n", "r"(newPermissions.as_raw()));
+	CALL_CHERI_CALLBACK(fn, "candperm csp, csp, %1\n", newPermissions.as_raw());
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -109,7 +108,7 @@ void test_stack_invalid_on_call(bool *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	CALL_CHERI_CALLBACK(fn, "move a0, %1\nccleartag csp, csp\n", "r"(0));
+	CALL_CHERI_CALLBACK(fn, "move a0, %1\nccleartag csp, csp\n", 0);
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
