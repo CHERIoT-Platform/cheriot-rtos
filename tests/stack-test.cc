@@ -57,7 +57,10 @@ __cheri_callback void test_trusted_stack_exhaustion()
 	                      &leakedSwitcherCapability);
 }
 
-__cheri_callback void cross_compartment_call() {}
+__cheri_callback void cross_compartment_call()
+{
+	TEST(false, "Cross compartment call with invalid CSP shouldn't be reachable");
+}
 
 /*
  * The stack tests should cover the edge-cases scenarios for both
@@ -70,6 +73,8 @@ __cheri_callback void cross_compartment_call() {}
  */
 void test_stack()
 {
+	__cheri_callback void (*callback)() = cross_compartment_call;
+
 	debug_log("exhaust trusted stack, do self recursion with a cheri_callback");
 	inTrustedStackExhaustion = true;
 	leakedSwitcherCapability = false;
@@ -95,12 +100,12 @@ void test_stack()
 		modify_csp_permissions_on_call(
 		  &threadStackTestFailed,
 		  compartmentStackPermissions.without(permissionToRemove),
-		  &cross_compartment_call);
+		  callback);
 	}
 
 	debug_log("invalid stack on fault");
 	test_stack_invalid_on_fault(&threadStackTestFailed);
 
 	debug_log("invalid stack on cross compartment call");
-	test_stack_invalid_on_call(&threadStackTestFailed, &cross_compartment_call);
+	test_stack_invalid_on_call(&threadStackTestFailed, callback);
 }
