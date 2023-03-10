@@ -59,7 +59,8 @@ __cheri_callback void test_trusted_stack_exhaustion()
 
 __cheri_callback void cross_compartment_call()
 {
-	TEST(false, "Cross compartment call with invalid CSP shouldn't be reachable");
+	TEST(false,
+	     "Cross compartment call with invalid CSP shouldn't be reachable");
 }
 
 /*
