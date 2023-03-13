@@ -8,6 +8,32 @@ using namespace CHERI;
 
 bool *threadStackTestFailed;
 
+/*
+ * Define a macro that gets a __cheri_callback capability and calls it, while
+ * support adding instruction before the call. This is used to avoid code
+ * duplication, in cases we want to call a __cheri_callback in multiple
+ * places while adding additional functionalities.
+ *
+ *  handle: a sealed capability to a __cheri_callback to call
+ *  instruction: additional instruction(s) to add before the call,
+ *				   with an operand.
+ *  additional_input: the operand the additional instruction refers to.
+ */
+#define CALL_CHERI_CALLBACK(handle, instructions, additional_input)            \
+	({                                                                         \
+		register auto rfn asm("ct1") = handle;                                 \
+		__asm__ volatile(                                                      \
+		  "1:\n"                                                               \
+		  "auipcc ct2, %%cheri_compartment_pccrel_hi(.compartment_switcher)\n" \
+		  "clc ct2, %%cheri_compartment_pccrel_lo(1b)(ct2)\n"                  \
+		  "" instructions "\n"                                                 \
+		  "cjalr ct2\n"                                                        \
+		  : /* no outputs; we're jumping and probably not coming back */       \
+		  : "C"(rfn), "r"(additional_input));                                  \
+                                                                               \
+		TEST(false, "Should be unreachable");                                  \
+	})
+
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
@@ -47,8 +73,8 @@ void exhaust_thread_stack(bool *outTestFailed)
 	TEST(false, "Should be unreachable");
 }
 
-void modify_csp_permissions_on_fault(bool         *outTestFailed,
-                                     PermissionSet newPermissions)
+void set_csp_permissions_on_fault(bool         *outTestFailed,
+                                  PermissionSet newPermissions)
 {
 	threadStackTestFailed = outTestFailed;
 
@@ -60,14 +86,13 @@ void modify_csp_permissions_on_fault(bool         *outTestFailed,
 	TEST(false, "Should be unreachable");
 }
 
-void modify_stack_permissions_on_call(bool         *outTestFailed,
-                                      PermissionSet newPermissions,
-                                      __cheri_callback void (*fn)())
+void set_csp_permissions_on_call(bool         *outTestFailed,
+                                 PermissionSet newPermissions,
+                                 __cheri_callback void (*fn)())
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("candperm csp, csp, %0\n"
-	                 "csh zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
+	CALL_CHERI_CALLBACK(fn, "candperm csp, csp, %1\n", newPermissions.as_raw());
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
@@ -89,8 +114,8 @@ void test_stack_invalid_on_call(bool *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	__asm__ volatile("ccleartag      csp, csp\n"
-	                 "csh            zero, 0(cnull)\n");
+	// the `move zero, %1` is a no-op, just to have an operand
+	CALL_CHERI_CALLBACK(fn, "move zero, %1\nccleartag csp, csp\n", 0);
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");

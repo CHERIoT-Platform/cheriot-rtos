@@ -9,16 +9,13 @@ __cheri_compartment("stack_exhaustion_trusted") void exhaust_trusted_stack(
   bool *outLeakedSwitcherCapability);
 __cheri_compartment("stack_integrity_thread") void exhaust_thread_stack(
   bool *outTestFailed);
-__cheri_compartment(
-  "stack_integrity_"
-  "thread") void modify_csp_permissions_on_fault(bool         *outTestFailed,
-                                                 PermissionSet newPermissions);
-__cheri_compartment(
-  "stack_integrity_"
-  "thread") void modify_stack_permissions_on_call(bool         *outTestFailed,
-                                                  PermissionSet newPermissions,
-                                                  __cheri_callback void (
-                                                    *fn)());
+__cheri_compartment("stack_integrity_thread") void set_csp_permissions_on_fault(
+  bool         *outTestFailed,
+  PermissionSet newPermissions);
+__cheri_compartment("stack_integrity_thread") void set_csp_permissions_on_call(
+  bool         *outTestFailed,
+  PermissionSet newPermissions,
+  __cheri_callback void (*fn)());
 __cheri_compartment("stack_integrity_thread") void test_stack_invalid_on_fault(
   bool *outTestFailed);
 __cheri_compartment("stack_integrity_thread") void test_stack_invalid_on_call(
