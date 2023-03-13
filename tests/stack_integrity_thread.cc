@@ -13,15 +13,20 @@ bool *threadStackTestFailed;
  * support adding instruction before the call. This is used to avoid code
  * duplication, in cases we want to call a __cheri_callback in multiple
  * places while adding additional functionalities.
+ *
+ *  handle: a sealed capability to a __cheri_callback to call
+ *  instruction: additional instruction(s) to add before the call,
+ *				   with an operand.
+ *  additional_input: the operand the additional instruction refers to.
  */
-#define CALL_CHERI_CALLBACK(fn, instruction, additional_input)                 \
+#define CALL_CHERI_CALLBACK(handle, instructions, additional_input)            \
 	({                                                                         \
-		register auto rfn asm("ct1") = fn;                                     \
+		register auto rfn asm("ct1") = handle;                                 \
 		__asm__ volatile(                                                      \
 		  "1:\n"                                                               \
 		  "auipcc ct2, %%cheri_compartment_pccrel_hi(.compartment_switcher)\n" \
 		  "clc ct2, %%cheri_compartment_pccrel_lo(1b)(ct2)\n"                  \
-		  "" instruction "\n"                                                  \
+		  "" instructions "\n"                                                 \
 		  "cjalr ct2\n"                                                        \
 		  : /* no outputs; we're jumping and probably not coming back */       \
 		  : "C"(rfn), "r"(additional_input)                                    \
@@ -108,7 +113,8 @@ void test_stack_invalid_on_call(bool *outTestFailed,
 {
 	threadStackTestFailed = outTestFailed;
 
-	CALL_CHERI_CALLBACK(fn, "move a0, %1\nccleartag csp, csp\n", 0);
+	// the `move zero, %1` is a no-op, just to have an operand
+	CALL_CHERI_CALLBACK(fn, "move zero, %1\nccleartag csp, csp\n", 0);
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
