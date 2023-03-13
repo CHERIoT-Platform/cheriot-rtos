@@ -29,8 +29,9 @@ bool *threadStackTestFailed;
 		  "" instructions "\n"                                                 \
 		  "cjalr ct2\n"                                                        \
 		  : /* no outputs; we're jumping and probably not coming back */       \
-		  : "C"(rfn), "r"(additional_input)                                    \
-		  : "ct2", "memory" /* in case we return */);                          \
+		  : "C"(rfn), "r"(additional_input));                                  \
+                                                                               \
+		TEST(false, "Should be unreachable");                                  \
 	})
 
 extern "C" ErrorRecoveryBehaviour
