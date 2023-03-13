@@ -213,17 +213,39 @@ namespace sched
 		});
 	}
 
+	/**
+	 * Return path from `*_create` functions.  Performs a return check with
+	 * interrupts disabled and stores the object managed by `object` via `ret`
+	 * (consuming ownership) if `ret` has valid permissions.  Returns the value
+	 * that the caller should return to the public API.
+	 *
+	 * This function runs with interrupts disabled so that the majority of
+	 * `*_create` can have them enabled.
+	 */
+	template<typename T>
+	[[cheri::interrupt_state(disabled)]] int write_result(void         **ret,
+	                                                      HeapObject<T> &object)
+	{
+		if (!check_pointer<PermissionSet{Permission::Store,
+		                                 Permission::LoadStoreCapability}>(ret))
+		{
+			return -EINVAL;
+		}
+
+		*ret = compart_seal(object.release());
+		return 0;
+	}
+
 } // namespace sched
 
 using namespace sched;
 
 // queue APIs
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  queue_create(Timeout           *timeout,
-               struct SObjStruct *heapCapability,
-               void             **ret,
-               size_t             itemSize,
-               size_t             maxNItems)
+int __cheri_compartment("sched") queue_create(Timeout           *timeout,
+                                              struct SObjStruct *heapCapability,
+                                              void             **ret,
+                                              size_t             itemSize,
+                                              size_t             maxNItems)
 {
 	HeapBuffer storage{timeout, heapCapability, itemSize, maxNItems};
 
@@ -239,16 +261,7 @@ using namespace sched;
 	{
 		return -ENOMEM;
 	}
-
-	if (!check_pointer<PermissionSet{Permission::Store,
-	                                 Permission::LoadStoreCapability}>(ret))
-	{
-		return -EINVAL;
-	}
-
-	*ret = compart_seal(queue.release());
-
-	return 0;
+	return write_result(ret, queue);
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
@@ -301,7 +314,7 @@ using namespace sched;
 	});
 }
 
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
+int __cheri_compartment("sched")
   semaphore_create(Timeout           *timeout,
                    struct SObjStruct *heapCapability,
                    void             **ret,
@@ -313,15 +326,7 @@ using namespace sched;
 		return -ENOMEM;
 	}
 
-	if (!check_pointer<PermissionSet{Permission::Store,
-	                                 Permission::LoadStoreCapability}>(ret))
-	{
-		return -EINVAL;
-	}
-
-	*ret = compart_seal(queue.release());
-
-	return 0;
+	return write_result(ret, queue);
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
@@ -380,7 +385,7 @@ uint16_t __cheri_compartment("sched") thread_id_get(void)
 	return Thread::current_get()->id_get();
 }
 
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
+int __cheri_compartment("sched")
   event_create(Timeout *timeout, struct SObjStruct *heapCapability, void **ret)
 {
 	HeapObject<Event> event{timeout, heapCapability};
@@ -390,15 +395,7 @@ uint16_t __cheri_compartment("sched") thread_id_get(void)
 		return -ENOMEM;
 	}
 
-	if (!check_pointer<PermissionSet{Permission::Store,
-	                                 Permission::LoadStoreCapability}>(ret))
-	{
-		return -EINVAL;
-	}
-
-	*ret = compart_seal(event.release());
-
-	return 0;
+	return write_result(ret, event);
 }
 
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
@@ -574,19 +571,12 @@ int multiwaiter_create(Timeout           *timeout,
 	// us.
 	auto mw =
 	  sched::MultiWaiter::create(timeout, heapCapability, maxItems, error);
+	if (!mw)
+	{
+		return error;
+	}
 
-	if (!check_pointer<PermissionSet{Permission::Store,
-	                                 Permission::LoadStoreCapability}>(ret))
-	{
-		return -EINVAL;
-	}
-	if (mw)
-	{
-		*ret =
-		  reinterpret_cast<::MultiWaiter *>(compart_seal(mw.release()).get());
-		return 0;
-	}
-	return error;
+	return write_result(reinterpret_cast<void **>(ret), mw);
 }
 
 int multiwaiter_delete(struct SObjStruct *heapCapability, ::MultiWaiter *mw)
