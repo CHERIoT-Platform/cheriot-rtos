@@ -8,8 +8,10 @@ SECTIONS
 	{
 		# Space for the compartment's PCC and GDC
 		. = . + 16;
-		# Space for the compartment's ID
-		. = . + 2;
+		# And no compartment error handler.  See the
+		# compartment_export_table section in sdk/compartment.ldscript
+		# and errorHandler in the sdk/core/switcher
+		LONG(-1);
 		# Array of compartment exports
 		*(.compartment_exports);
 	}
