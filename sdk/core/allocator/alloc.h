@@ -259,27 +259,21 @@ namespace displacement_proxy
  *   - Allocated / "In Use" by the application
  *
  *       - body() is untyped memory.
- *
  *       - Not indexed by any other structures in the MState
  *
  *   - Quarantined (until revocation scrubs inward pointers from the system)
  *
- *       - body() is the non-header bits of MChunk and should not be downcast
- *         to TChunk
- *
+ *       - body() is a MChunk (and not a TChunk)
  *       - Collected in a quarantine ring using body()'s MChunk::ring linkages
  *
  *   - Free for allocation and small
  *
- *       - body() is the non-header bits of MChunk and should not be downcast
- *         to TChunk
- *
+ *       - body() is a MChunk (and not a TChunk)
  *       - Collected in a smallbin ring using body()'s MChunk::ring
  *
  *   - Free for allocation and large
  *
- *       - body() is the non-header bits of TChunk
- *
+ *       - body() is a TChunk
  *       - Collected in a treebin ring, using either/both the TChunk linkages
  *         or/and the MChunk::ring links present in body().
  */
@@ -2454,6 +2448,17 @@ class MState
 				alignpad += alignment;
 			}
 
+			/*
+			 * Break off the first chunk.  This is a little subtle, in that the
+			 * short expression here is the result of some cancellation: we
+			 * want to generate an aligned pointer, so we need to create a
+			 * chunk that is misaligned by -sizeof(MChunkHeader).  Having used
+			 * the ->body() address (memAddress) to compute alignpad, we have
+			 * computed the offset from the beginning of this chunk's body to
+			 * the aligned address.  When we ask this chunk's *header* to split
+			 * at that length, it will offset by -sizeof(MChunkHeader), since
+			 * headers always measure lengths inclusive of themselves!
+			 */
 			auto r = p->split(alignpad);
 			/*
 			 * XXX Were we to not use the general mspace_malloc above, but
