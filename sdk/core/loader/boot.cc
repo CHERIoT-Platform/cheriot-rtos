@@ -106,12 +106,17 @@ namespace
 		FirstDataSealingType = 9,
 
 		/**
+		 * The sealing type used for sealed export table entries.
+		 */
+		SealedImportTableEntries = FirstDataSealingType,
+
+		/**
 		 * The compartment switcher has a sealing type for the trusted stack.
 		 *
-		 * This must be the first data sealing type so that we can also permit
-		 * the switcher to unseal sentries.
+		 * This must be the second data sealing type so that we can also permit
+		 * the switcher to unseal sentries and export table entries.
 		 */
-		CompartmentSwitcher = FirstDataSealingType,
+		SealedTrustedStacks,
 
 		/**
 		 * The scheduler has a sealing type for waitable objects.
@@ -405,6 +410,11 @@ namespace
 	 * import tables.
 	 */
 	Capability<void> switcherKey;
+
+	/**
+	 * The sealing key for sealing trusted stacks.
+	 */
+	Capability<void> trustedStackKey;
 
 	/**
 	 * Find an export table target.  This looks for the `target` address within
@@ -785,7 +795,7 @@ namespace
 			threadTStack->frames[0].calleeExportTable =
 			  build(compartment.exportTable);
 
-			threadTStack.seal(switcherKey);
+			threadTStack.seal(trustedStackKey);
 
 			threadInfo[i].trustedStack = threadTStack;
 			threadInfo[i].threadid     = config.threadid;
@@ -1074,11 +1084,14 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	Debug::log("switcherKey: {}", &switcherKey);
 	// Set up the sealing keys for the privileged components.
 	switcherKey =
-	  setSealingKey(imgHdr.switcher, Sentry, CompartmentSwitcher - Sentry + 1);
+	  setSealingKey(imgHdr.switcher, Sentry, SealedTrustedStacks - Sentry + 1);
 	// We need only the rights to seal things with the switcher's data sealing
-	// type, so drop all others.
-	switcherKey.address() = CompartmentSwitcher;
-	switcherKey.bounds()  = 1;
+	// types, so drop all others and store those two types separately.
+	trustedStackKey           = switcherKey;
+	trustedStackKey.address() = SealedTrustedStacks;
+	trustedStackKey.bounds()  = 1;
+	switcherKey.address()     = SealedImportTableEntries;
+	switcherKey.bounds()      = 1;
 	setSealingKey(imgHdr.scheduler(), Scheduler);
 	setSealingKey(imgHdr.allocator(), Allocator);
 	constexpr size_t DynamicSealingLength =

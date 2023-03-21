@@ -287,7 +287,7 @@ exception_entry_asm:
 	// Fetch the sealing key and set the type that we'll use to our data
 	// sealing type.
 	LoadCapPCC         ca5, compartment_switcher_sealing_key
-	li                 gp, 9
+	li                 gp, 10
 	csetaddr           ca5, ca5, gp
 	cseal              ca0, ca0, ca5
 	// Fetch the stack, cgp and the trusted stack for the scheduler.
@@ -313,7 +313,7 @@ exception_entry_asm:
 	// this stack until the next exception, at which point we'll reload the
 	// original stack pointer.
 	LoadCapPCC         ct0, compartment_switcher_sealing_key
-	li                 gp, 9
+	li                 gp, 10
 	csetaddr           ct0, ct0, gp
 	cunseal            csp, ca0, ct0
 	cspecialw          mscratchc, csp
