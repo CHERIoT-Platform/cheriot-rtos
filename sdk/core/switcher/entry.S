@@ -117,9 +117,8 @@ compartment_switcher_entry:
 	clhu               tp, TrustedStack_offset_frameoffset(ct2)
 	cgetlen            t2, ct2
 	bgeu               tp, t2, .Lout_of_trusted_stack
-	// we are past the stacks checks. Reload ct2 and tp
+	// we are past the stacks checks. Reload ct2; tp is still as it was
 	cspecialr          ct2, mscratchc
-	clhu               tp, TrustedStack_offset_frameoffset(ct2)
 	// ctp points to the current available trusted stack frame.
 	cincoffset         ctp, ct2, tp
 	csc                cra, TrustedStackFrame_offset_pcc(ctp)
@@ -617,7 +616,6 @@ exception_entry_asm:
 	li                 tp, TrustedStackFrame_size
 	bgeu               tp, t2, .Lset_mcause_and_exit_thread
 	cspecialr          ctp, mscratchc
-	clhu               t2, TrustedStack_offset_frameoffset(ctp)
 	addi               t2, t2, -TrustedStackFrame_size
 	cincoffset         ct1, ctp, t2
 	clc                ca2, TrustedStackFrame_offset_pcc(ct1)
