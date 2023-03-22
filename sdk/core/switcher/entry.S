@@ -279,16 +279,14 @@ exception_entry_asm:
 	// Function signature of the scheduler entry point:
 	// TrustedStack *exception_entry(TrustedStack *sealedTStack,
 	//     size_t mcause, size_t mepc, size_t mtval)
-	cmove              ca0, csp
-	mv                 a1, t1
-	cgetaddr           a2, ct0
-	csrr               a3, mtval
-	// Fetch the sealing key and set the type that we'll use to our data
-	// sealing type.
+
 	LoadCapPCC         ca5, compartment_switcher_sealing_key
 	li                 gp, 10
 	csetaddr           ca5, ca5, gp
-	cseal              ca0, ca0, ca5
+	cseal              ca0, csp, ca5 // sealed trusted stack
+	mv                 a1, t1 // mcause
+	cgetaddr           a2, ct0 // mepcc address
+	csrr               a3, mtval
 	// Fetch the stack, cgp and the trusted stack for the scheduler.
 	LoadCapPCC         csp, switcher_scheduler_entry_csp
 	LoadCapPCC         cgp, switcher_scheduler_entry_cgp
