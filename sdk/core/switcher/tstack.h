@@ -73,7 +73,7 @@ struct TrustedStackGeneric
 	/**
 	 * The trusted stack.  There is always one frame, describing the entry
 	 * point.  If this is popped then we have run off the stack and the thread
-	 * will exist.
+	 * will exit.
 	 */
 	TrustedStackFrame frames[NFrames + 1];
 };
