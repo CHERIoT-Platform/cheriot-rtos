@@ -55,7 +55,7 @@ It has two main entry points, one that is triggered on interrupt delivery and on
 The majority of the switcher runs with interrupts disabled, to simplify auditing.
 
 The switcher runs with the access-system-registers permission.
-It uses this permission to store a capability to the current thread's trusted stack and register-save area in the `mscratchc` capability special register (CSR).
+It uses this permission to store a capability to the current thread's trusted stack and register-save area in the `mtdc` capability special register (CSR).
 
 On interrupt, the switcher is responsible for saving the register state and invoking the scheduler with a sealed capability to the register save area and trusted stack.
 On cross-compartment call, the switcher is responsible for unsealing the target, shrinking the stack to include only the unused parts, clearing the stack, setting up the new entry on the trusted stack.
