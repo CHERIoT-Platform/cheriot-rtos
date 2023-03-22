@@ -303,15 +303,10 @@ exception_entry_asm:
 	// ca3, used for mtval
 	zeroAllRegistersExcept ra, sp, gp, a0, a1, a2, a3
 
-	// Call the scheduler.  This returns two values via ca0.  The first is a
-	// sealed trusted stack capability, the second is a return value to be
-	// provided to threads that voluntarily yielded.
+	// Call the scheduler.  This returns the new thread in ca0.
 	cjalr              cra
 
-	// The scheduler returns the new thread in ca0.
-	// We don't need to restore the stack pointer because we're now done with
-	// this stack until the next exception, at which point we'll reload the
-	// original stack pointer.
+	// Switch onto the new thread's trusted stack
 	LoadCapPCC         ct0, compartment_switcher_sealing_key
 	li                 gp, 10
 	csetaddr           ct0, ct0, gp
@@ -327,7 +322,7 @@ exception_entry_asm:
 	// Fall through to install context
 
 // Install context expects csp to point to the trusted stack and ct2 to be the
-// pcc to jump to.  All other registeres are in unspecified states and will be
+// pcc to jump to.  All other registers are in unspecified states and will be
 // overwritten when we install the context.
 .Linstall_context:
 	clw                x1, TrustedStack_offset_mstatus(csp)
@@ -339,7 +334,7 @@ exception_entry_asm:
 	reloadRegisters c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, csp
 	mret
 
-// If we detect an invalud entry and there is no error handler installed, we want
+// If we detect an invalid entry and there is no error handler installed, we want
 // to resume rather than unwind.
 .Linvalid_entry:
 // Mark this threads as in the middle of a forced unwind.
