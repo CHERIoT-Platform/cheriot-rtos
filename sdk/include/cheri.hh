@@ -1235,14 +1235,14 @@ namespace CHERI
 		 *
 		 * Special capability register that contains the memory root capability
 		 * on boot. Only accessible when PCC has the AccessSystemRegisters
-		 * permission. Currently not used after boot in the RTOS.
+		 * permission.  Use by the RTOS to store a capability to the trusted
+		 * stack.
 		 */
 		MTDC = 0x3d,
 		/**
 		 * Machine-mode Scratch Capability. Special capabiltiy register that
 		 * contains the sealing root capability on boot. Only accessible when
-		 * PCC has the AccessSystemRegisters permission. Use by the RTOS to
-		 * store a capability to the trusted stack.
+		 * PCC has the AccessSystemRegisters permission.
 		 */
 		MScratchC = 0x3e,
 		/**

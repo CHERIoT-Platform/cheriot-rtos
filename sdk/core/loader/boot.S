@@ -32,12 +32,12 @@ start:
 
 	la_abs			a3, bootStack
 	li				a1, BOOT_STACK_SIZE
-	cspecialr		ca2, mtdc
-	li				a4, ~CHERI_PERM_STORE_LOCAL
+	cspecialr		ca4, mtdc // Keep the RW memory root in ca4 throughout
+	li				a2, ~CHERI_PERM_STORE_LOCAL
 	li				a5, ~CHERI_PERM_GLOBAL
-	// Keep G in ca4 and SL in ca5.
-	candperm		ca4, ca2, a4
-	candperm		ca5, ca2, a5
+	// Keep G in ca2 and SL in ca5.
+	candperm		ca2, ca4, a2
+	candperm		ca5, ca4, a5
 	csetaddr		csp, ca5, a3
 	csetboundsexact	csp, csp, a1
 	cincoffset		csp, csp, a1 // Move to the end and grow downwards.
@@ -45,17 +45,17 @@ start:
 	// Prepare a trusted stack for the loader.
 	la_abs			a3, bootTStack
 	li				a1, BOOT_TSTACK_SIZE
-	csetaddr        ca3, ca2, a3 // ca2 has the RW root
+	csetaddr		ca3, ca4, a3 // ca4 still has the RW (G+SL!) root
 	csetboundsexact	ca3, ca3, a1
 	li				a1, TSTACKOFFSET_FIRSTFRAME
 	csh				a1, TrustedStack_offset_frameoffset(ca3)
-	cspecialrw		ctp, mscratchc, ca3
+	cspecialw		mtdc, ca3
 
 	// Prepare a bounded pointer to the header.
-	la_abs			a2, __compart_headers
+	la_abs			a1, __compart_headers
 	la_abs			a3, __compart_headers_end
-	sub				a3, a3, a2
-	csetaddr		ca1, ca4, a2 // ca4 has the G root.
+	sub				a3, a3, a1
+	csetaddr		ca1, ca2, a1 // ca2 still has the G root.
 	csetboundsexact	ca1, ca1, a3
 	// Set up $cra to be the loader's C++ entry point.
 	// We are safe to clobber $cra here because this is the root function on
@@ -90,13 +90,13 @@ start:
 	cincoffset		cgp, cgp, s1
 
 	// We just want to grab the EXE root. Offset in auipcc matters not.
-	auipcc          ca2, 0
+	auipcc			ca2, 0
 	cgetbase		t1, ca2
 	csetaddr		ca2, ca2, t1
-	// ctp still has the sealing root.
-	cmove			ca3, ctp
-	// mtdc still has the memory root.
-	cspecialr		ca4, mtdc
+	// mscratchc still has the sealing root; take it and stash the RW root
+	cmove			ca3, ca4
+	cspecialrw		ca3, mscratchc, ca3
+	// ca4 still has the RW memory root; nothing to change
 	// The return value is SchedEntryInfo.
 	cincoffset		csp, csp, -16 - CONFIG_THREADS_NUM * BOOT_THREADINFO_SZ
 	csetbounds		ca0, csp, 16 + CONFIG_THREADS_NUM * BOOT_THREADINFO_SZ
@@ -117,15 +117,17 @@ start:
 	// Nothing in the loader stores to the stack after this point
 
 	// Zero the entire heap and clear roots.
-	cspecialr		ca0, mtdc // RW root is still in MTDC.
+	cspecialr		ca0, mscratchc // RW root temporarily held here
 	la_abs			a1, __export_mem_heap
 	csetaddr		ca0, ca0, a1
 	la_abs			a1, __export_mem_heap_end
 	cjal			.Lfill_block
-	// Clear the roots.
+	// Clear the remaining roots.
+	// mtdc is serving its purpose since being set above, and mtcc
+	// has been set by the loader_entry_point.
 	zeroOne			a0
 	cspecialw		mepcc, ca0
-	cspecialw		mtdc, ca0
+	cspecialw		mscratchc, ca0
 
 	// Move the scheduler's PCC into the register we'll jump to later.
 	cmove			cra, cs0

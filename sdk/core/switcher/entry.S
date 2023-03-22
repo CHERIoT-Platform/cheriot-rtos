@@ -106,10 +106,10 @@ compartment_switcher_entry:
 	// compartment's csp is valid. If not, force unwind.
 	check_compartment_stack_integrity csp
 	// The caller should back up all callee saved registers.
-	// mscratchc should always have an offset of 0.
-	cspecialr          ct2, mscratchc
+	// mtdc should always have an offset of 0.
+	cspecialr          ct2, mtdc
 #ifndef NDEBUG
-	// XXX: This line is useless, only for mscratch to show up in debugging.
+	// XXX: This line is useless, only for mtdc to show up in debugging.
 	cmove              ct2, ct2
 #endif
 
@@ -118,7 +118,7 @@ compartment_switcher_entry:
 	cgetlen            t2, ct2
 	bgeu               tp, t2, .Lout_of_trusted_stack
 	// we are past the stacks checks. Reload ct2; tp is still as it was
-	cspecialr          ct2, mscratchc
+	cspecialr          ct2, mtdc
 	// ctp points to the current available trusted stack frame.
 	cincoffset         ctp, ct2, tp
 	csc                cra, TrustedStackFrame_offset_pcc(ctp)
@@ -237,14 +237,16 @@ compartment_switcher_entry:
 exception_entry_asm:
 	// We do not trust the interruptee's context. We cannot use its stack in any way.
 	// The save reg frame we can use is fetched from the tStack.
-	// mscratchc plays the trusted stack register role now. We may want to change that.
-	cspecialrw         csp, mscratchc, csp
+	// In general, mtdc holds the trusted stack register.  We are here with
+	// interrupts off and precious few registers available to us, so swap it
+	// with the csp (we'll put it back, later).
+	cspecialrw         csp, mtdc, csp
 #ifndef NDEBUG
 	// XXX: This move is useless, but just for debugging in the simulator.
 	cmove              csp, csp
 #endif
 	// csp now points to the save reg frame that we can use.
-	// The guest csp (c2) is now in mscratchc. Will be spilled later, but we
+	// The guest csp (c2) is now in mtdc. Will be spilled later, but we
 	// spill all other registers now.
 	spillRegisters     c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15
 
@@ -254,8 +256,8 @@ exception_entry_asm:
 	// Store all special resgisters now.
 	cspecialr          ct0, mepcc
 	csc                ct0, TrustedStack_offset_mepcc(csp)
-	// mscratchc got swapped with the thread's csp, store it now.
-	cspecialr          ct1, mscratchc
+	// mtdc got swapped with the thread's csp, store it now
+	cspecialr          ct1, mtdc
 	csc                ct1, TrustedStack_offset_csp(csp)
 	csrr               t1, mstatus
 	csw                t1, TrustedStack_offset_mstatus(csp)
@@ -308,7 +310,7 @@ exception_entry_asm:
 	li                 gp, 10
 	csetaddr           ct0, ct0, gp
 	cunseal            csp, ca0, ct0
-	cspecialw          mscratchc, csp
+	cspecialw          mtdc, csp
 	// Environment call from M-mode is exception code 11.
 	// We need to skip the ecall instruction to avoid an infinite loop.
 	clw                t0, TrustedStack_offset_mcause(csp)
@@ -353,7 +355,7 @@ exception_entry_asm:
 .Lout_of_trusted_stack:
 	cmove              ct0, csp
 	// Fetch the trusted stack pointer.
-	cspecialr          csp, mscratchc
+	cspecialr          csp, mtdc
 	// csp now points to the save reg frame that we can use.
 	// Spill all of the registers that we want to propagate to the caller:
 	// c1(cra), c2(csp), c3(cgp), c8(cs0), c9(cs1), c10(ca0), c11(ca1)
@@ -414,9 +416,9 @@ exception_entry_asm:
 //                                                       size_t             mcause,
 //                                                       size_t             mtval);
 .Lhandle_error:
-	// We're now out of the exception path, so make sure that mscratch contains
+	// We're now out of the exception path, so make sure that mtdc contains
 	// the trusted stack pointer.
-	cspecialw   mscratchc, csp
+	cspecialw   mtdc, csp
 	// Load the interrupted thread's stack pointer into ct0
 	clc                ct0, TrustedStack_offset_csp(csp)
 	// Fetch the base of compartment stack before cincoffset for later
@@ -536,7 +538,7 @@ exception_entry_asm:
 	// detect it as a double fault and forcibly unwind.
 
 	// Load the trusted stack pointer to ct1
-	cspecialr          ct1, mscratchc
+	cspecialr          ct1, mtdc
 	clhu               tp, TrustedStack_offset_frameoffset(ct1)
 	addi               tp, tp, -TrustedStackFrame_size
 	// ctp points to the current available trusted stack frame.
@@ -608,12 +610,12 @@ exception_entry_asm:
 .Lpop_trusted_stack_frame:
 	// The below should not fault before returning back to the caller. If a fault occurs there must
 	// be a serious bug elsewhere.
-	cspecialr          ctp, mscratchc
+	cspecialr          ctp, mtdc
 	// make sure there is a frame left in the trusted stack
 	clhu               t2, TrustedStack_offset_frameoffset(ctp)
 	li                 tp, TrustedStackFrame_size
 	bgeu               tp, t2, .Lset_mcause_and_exit_thread
-	cspecialr          ctp, mscratchc
+	cspecialr          ctp, mtdc
 	addi               t2, t2, -TrustedStackFrame_size
 	cincoffset         ct1, ctp, t2
 	clc                ca2, TrustedStackFrame_offset_pcc(ct1)
