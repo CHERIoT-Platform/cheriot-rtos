@@ -852,7 +852,7 @@ class MState
 	 * which one to use.  There's some redundancy in this aggregate encoding,
 	 * but it's small.
 	 */
-	static constexpr size_t QuarantineRings = 3;
+	static constexpr size_t QuarantineRings = 2;
 	RingSentinel            quarantinePendingChunks[QuarantineRings];
 	size_t                  quarantinePendingEpoch[QuarantineRings];
 	ds::ring_buffer::Cursors<Debug, QuarantineRings, uint8_t>
@@ -1208,6 +1208,12 @@ class MState
 		 */
 
 		auto epoch = revoker.system_epoch_get();
+		/*
+		 * We do not need to store lists for odd epochs (that is, things freed
+		 * during a revocation sweep); just step the counter as if they had
+		 * been freed after this pass had finished.
+		 */
+		epoch += epoch & 1;
 
 		/*
 		 * Enqueue this chunk to quarantine.  Its header is still marked as
@@ -2189,9 +2195,12 @@ class MState
 			/*
 			 * We need to insert this object onto a new pending ring for the
 			 * new epoch.  Ensure that we have room by transferring a pending
-			 * ring whose epoch is past onto the finished ring, if any.  We
-			 * can be waiting for at most three epochs to age out, and have
-			 * room for four in our pending ring buffer.
+			 * ring whose epoch is past onto the finished ring, if any.  We can
+			 * be waiting for at most three epochs to age out, two of which are
+			 * merged onto one ring, and have room for two in our pending ring
+			 * buffer.  As long as the passed-in epoch is a later observation
+			 * than those that went into the pending ring, either there is
+			 * already room for that epoch or this will create it.
 			 */
 			quarantine_pending_to_finished();
 
