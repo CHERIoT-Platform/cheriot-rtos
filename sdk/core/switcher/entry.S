@@ -245,6 +245,26 @@ exception_entry_asm:
 	// XXX: This move is useless, but just for debugging in the simulator.
 	cmove              csp, csp
 #endif
+
+	// If we read out zero, we've reentered the exception and are about to
+	// trap.  Make sure that we end up in an architectural trap loop: clobber
+	// mtcc, so that trapping attempts to vector to an untagged PCC, thereby
+	// causing another (i.e., a third) trap in spillRegisters, below.
+	//
+	// While that's a good start, it does not guarantee that we end up in a
+	// trap loop: the reentry will probably have put something non-zero into
+	// mtdc, so we wouldn't hit this, and wouldn't loop, when we take that
+	// third trap.  (Exactly what we'd do instead is hard to say; we'd try
+	// spilling registers to an attacker-controlled pointer, at the very
+	// least.) Therefore, clobber mtcc (!) to ensure that the certainly
+	// upcoming third trap puts us in an architectural trap loop.  This is
+	// slightly preferable to clearing mtdc, which would also ensure that we
+	// looped, because the architectural loop is tighter and involves no
+	// program text, making it easier for microarchitecture to detect.
+	bnez               sp, .Lexception_entry_still_alive
+	cspecialw          mtcc, csp
+.Lexception_entry_still_alive:
+
 	// csp now points to the save reg frame that we can use.
 	// The guest csp (c2) is now in mtdc. Will be spilled later, but we
 	// spill all other registers now.
@@ -253,12 +273,17 @@ exception_entry_asm:
 	// If a thread has exited then it will set a fake value in the mcause so
 	// that the scheduler knows not to try to resume it.
 .Lthread_exit:
-	// Store all special resgisters now.
+	// mtdc got swapped with the thread's csp, store it and clobber mtdc with
+	// zero.  The trusted stack pointer is solely in csp, now; if we take
+	// another trap before a new one is installed, or if the scheduler enables
+	// interrupts and we take one, we'll pull this zero out of mtdc, above.
+	zeroOne            t1
+	cspecialrw         ct1, mtdc, ct1
+	csc                ct1, TrustedStack_offset_csp(csp)
+
+	// Store the rest of the special registers
 	cspecialr          ct0, mepcc
 	csc                ct0, TrustedStack_offset_mepcc(csp)
-	// mtdc got swapped with the thread's csp, store it now
-	cspecialr          ct1, mtdc
-	csc                ct1, TrustedStack_offset_csp(csp)
 	csrr               t1, mstatus
 	csw                t1, TrustedStack_offset_mstatus(csp)
 	csrr               t1, mcause
@@ -304,25 +329,39 @@ exception_entry_asm:
 
 	// Call the scheduler.  This returns the new thread in ca0.
 	cjalr              cra
+	// The scheduler may change interrupt posture or may trap, but if it
+	// returns to us (that is, we reach here), the use of the sentry created by
+	// cjalr will have restored us to deferring interrupts, and we will remain
+	// in that posture until the mret in install_context.
 
 	// Switch onto the new thread's trusted stack
 	LoadCapPCC         ct0, compartment_switcher_sealing_key
 	li                 gp, 10
 	csetaddr           ct0, ct0, gp
 	cunseal            csp, ca0, ct0
-	cspecialw          mtdc, csp
 	// Environment call from M-mode is exception code 11.
 	// We need to skip the ecall instruction to avoid an infinite loop.
 	clw                t0, TrustedStack_offset_mcause(csp)
+
+	// Only now that we have done something that actually requires the tag of
+	// csp be set, put it into mtdc.  If the scheduler has returned something
+	// untagged or something with the wrong otype, the cunseal will have left
+	// csp untagged and clw will trap with mtdc still 0.  If we made it here,
+	// though, csp is tagged and so was tagged and correctly typed, and so it
+	// is safe to install it to mtdc.  We won't cause traps between here and
+	// mret, so reentrancy is no longer a concern.
+	cspecialw          mtdc, csp
+
+	// Back to your regularly scheduled program (testing for ecall from M mode)
 	li                 t1, 11
 	clc                ct2, TrustedStack_offset_mepcc(csp)
 	bne                t0, t1, .Linstall_context
 	cincoffset         ct2, ct2, 4
 	// Fall through to install context
 
-// Install context expects csp to point to the trusted stack and ct2 to be the
-// pcc to jump to.  All other registers are in unspecified states and will be
-// overwritten when we install the context.
+// Install context expects csp and mtdc to point to the trusted stack and for
+// ct2 to be the pcc to jump to.  All other registers are in unspecified states
+// and will be overwritten when we install the context.
 .Linstall_context:
 	clw                x1, TrustedStack_offset_mstatus(csp)
 	csrw               mstatus, x1
