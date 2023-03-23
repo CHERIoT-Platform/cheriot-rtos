@@ -323,6 +323,19 @@ size_t heap_quota_remaining(struct SObjStruct *heapCapability)
 	return cap->quota;
 }
 
+void heap_quarantine_empty()
+{
+	LockGuard g{lock};
+	while (gm->heapQuarantineSize > 0)
+	{
+		if (!gm->quarantine_dequeue())
+		{
+			revoker.system_bg_revoker_kick();
+		}
+		g.unlock(); yield(); g.lock();
+	}
+}
+
 void *heap_allocate(Timeout *timeout, SObj heapCapability, size_t bytes)
 {
 	LockGuard g{lock};
