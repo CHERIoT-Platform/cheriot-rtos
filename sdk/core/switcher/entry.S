@@ -95,6 +95,40 @@ switcher_scheduler_entry_csp:
 	// make sure the caller's CSP is unsealed
 	cgettype           t2, \reg
 	bnez               t2, .Lforce_unwind
+	// Check that the base is 16-byte aligned
+	cgetbase           t2, csp
+	andi               t2, t2, 0xf
+	bnez               t2, .Lforce_unwind
+	// Check that the address (top of the remainder) is 16-byte aligned
+	andi               t2, sp, 0xf
+	bnez               t2, .Lforce_unwind
+.endm
+
+/**
+ * Zero the stack.  The three operands are the base address (modified during
+ * this call, will point at the top at the end), the top address, and a scratch
+ * register to use.  The base must be a capability but it must be provided
+ * without the c prefix because it is used as both a capability and integer
+ * register.  Top and scratch are both clobbered.
+ */
+.macro zero_stack base top scratch
+	addi               \scratch, \top, -32
+	addi               \top, \top, -16
+	bgt                \base, \scratch, 1f
+	// Zero the stack in 32-byte chunks
+0:
+	csc                cnull, 0(c\base)
+	csc                cnull, 8(c\base)
+	csc                cnull, 16(c\base)
+	csc                cnull, 24(c\base)
+	cincoffset         c\base, c\base, 32
+	ble                \base, \scratch, 0b
+1:
+	bgt                \base, \top, 2f
+	// Zero any 16-byte tail
+	csc                cnull, 0(c\base)
+	csc                cnull, 8(c\base)
+2:
 .endm
 
 	.section .text, "ax", @progbits
@@ -148,12 +182,7 @@ compartment_switcher_entry:
 	csetaddr           csp, csp, s1
 	sub                s1, s0, s1
 	csetboundsexact    csp, csp, s1
-	bge                sp, s0, .Lout
-	// Zero the part that the caller offers to the callee.
-.Lzero_loop:
-	csc                c0, 0(csp)
-	cincoffset         csp, csp, 8
-	blt                sp, s0, .Lzero_loop
+	zero_stack         sp, s0, gp
 #endif // CONFIG_NO_SWITCHER_SAFETY
 .Lout:
 	// Fetch the sealing key
@@ -668,12 +697,6 @@ exception_entry_asm:
 	cgetbase           tp, csp
 	cgetaddr           t1, csp
 	csetaddr           ct2, csp, tp
-	bge                t2, t1, .Lout2
-	// Zero the stack used by the callee.
-.Lzero_loop2:
-	csc                c0, 0(ct2)
-	cincoffset         ct2, ct2, 8
-	blt                t2, t1, .Lzero_loop2
-.Lout2:
+	zero_stack         t2, t1, tp
 #endif // CONFIG_NO_SWITCHER_SAFETY
 	cret
