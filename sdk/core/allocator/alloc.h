@@ -2478,7 +2478,7 @@ class MState
 
 		// Also give back spare room at the end.
 		auto size = p->size_get();
-		if (size > nb + MinChunkSize)
+		if (size >= nb + MinChunkSize)
 		{
 			auto r = p->split(nb);
 			/*
