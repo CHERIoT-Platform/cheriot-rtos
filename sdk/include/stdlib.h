@@ -151,6 +151,15 @@ int __cheri_compartment("alloc")
 size_t __cheri_compartment("alloc")
   heap_quota_remaining(struct SObjStruct *heapCapability);
 
+/**
+ * Block until the quarantine is empty.
+ *
+ * This should be used only in testing, to place the system in a quiesced
+ * state.  It can block indefinitely if another thread is allocating and
+ * freeing memory while this runs.
+ */
+void __cheri_compartment("alloc") heap_quarantine_empty(void);
+
 static inline void __dead2 abort()
 {
 	panic();
