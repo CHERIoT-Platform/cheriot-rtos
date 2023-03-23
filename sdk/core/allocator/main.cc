@@ -53,13 +53,6 @@ namespace
 	 */
 	FlagLock lock;
 
-	// chunk associated with aligned address a
-	MChunk *align_as_chunk(Capability<void> a)
-	{
-		a.address() += align_offset(a);
-		return a.cast<MChunk>();
-	}
-
 	/**
 	 * @brief Take a memory region and initialise a memory space for it. The
 	 * MState structure will be placed at the beginning and the rest used as the
