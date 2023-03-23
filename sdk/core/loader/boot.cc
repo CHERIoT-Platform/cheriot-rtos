@@ -35,15 +35,30 @@ namespace
 	};
 	constexpr ThreadConfig ThreadConfigs[] = CONFIG_THREADS;
 
+	/**
+	 * Round up to a multiple of `Multiple`, which must be a power of two.
+	 */
+	template<size_t Multiple>
+	constexpr size_t round_up(size_t value)
+	{
+		static_assert((Multiple & (Multiple - 1)) == 0,
+		              "Multiple must be a power of two");
+		return (value + Multiple - 1) & -Multiple;
+	}
+	static_assert(round_up<16>(15) == 16);
+	static_assert(round_up<16>(28) == 32);
+	static_assert(round_up<8>(17) == 24);
+
 	template<size_t N>
 	constexpr size_t total_stacksize(const ThreadConfig (&configs)[N])
 	{
 		size_t ret = 0;
 		for (const auto &config : configs)
 		{
-			ret += config.stackSize;
-			ret += sizeof(TrustedStack) +
-			       sizeof(TrustedStackFrame) * config.trustedStackFrames;
+			ret += round_up<16>(config.stackSize);
+			ret +=
+			  round_up<16>(sizeof(TrustedStack) + sizeof(TrustedStackFrame) *
+			                                        config.trustedStackFrames);
 		}
 		return ret;
 	}
@@ -54,8 +69,12 @@ namespace
 	static_assert(
 	  CheckSize<BOOT_TSTACK_SIZE, sizeof(TrustedStackGeneric<0>)>::Value,
 	  "Boot trusted stack sizes do not match.");
-	alignas(TrustedStack) char __section(".thread_stacks")
+	// Stacks must be 16-byte aligned, so ensure that this is 16-byte aligned.
+	alignas(16) char __section(".thread_stacks")
 	  stackSpace[total_stacksize(ThreadConfigs)];
+	// It must also be aligned sufficiently for trusted stacks, so ensure that
+	// we've captured that requirement above.
+	static_assert(alignof(TrustedStack) <= 16);
 	__END_DECLS
 
 	static_assert(
@@ -723,6 +742,8 @@ namespace
 		                       false>(LA_ABS(stackSpace), sizeof(stackSpace));
 		/// Allocate some space from the pool.
 		auto allocate = [&](size_t size) {
+			Debug::log("Rounded up {} to {}", size, round_up<16>(size));
+			size         = round_up<16>(size);
 			auto ret     = stackArea;
 			ret.bounds() = size;
 			stackArea.address() += size;
@@ -734,7 +755,13 @@ namespace
 			// Trusted stack root has both global and store local,
 			ret.permissions() &= ret.permissions().without(Permission::Global);
 			// Move the pointer to the top for stack usage.
-			ret.address() += size;
+			Debug::Invariant((ret.address() & 0xf) == 0,
+			                 "Stack is not 16-byte aligned: {}",
+			                 ret);
+			ret.address() += ret.length();
+			Debug::Invariant((ret.address() & 0xf) == 0,
+			                 "Stack is not 16-byte aligned: {}",
+			                 ret);
 			return ret;
 		};
 		/// Allocate a trusted stack from the pool.
