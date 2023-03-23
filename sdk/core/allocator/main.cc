@@ -332,7 +332,9 @@ void heap_quarantine_empty()
 		{
 			revoker.system_bg_revoker_kick();
 		}
-		g.unlock(); yield(); g.lock();
+		g.unlock();
+		yield();
+		g.lock();
 	}
 }
 
