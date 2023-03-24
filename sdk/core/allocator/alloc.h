@@ -259,27 +259,21 @@ namespace displacement_proxy
  *   - Allocated / "In Use" by the application
  *
  *       - body() is untyped memory.
- *
  *       - Not indexed by any other structures in the MState
  *
  *   - Quarantined (until revocation scrubs inward pointers from the system)
  *
- *       - body() is the non-header bits of MChunk and should not be downcast
- *         to TChunk
- *
+ *       - body() is a MChunk (and not a TChunk)
  *       - Collected in a quarantine ring using body()'s MChunk::ring linkages
  *
  *   - Free for allocation and small
  *
- *       - body() is the non-header bits of MChunk and should not be downcast
- *         to TChunk
- *
+ *       - body() is a MChunk (and not a TChunk)
  *       - Collected in a smallbin ring using body()'s MChunk::ring
  *
  *   - Free for allocation and large
  *
- *       - body() is the non-header bits of TChunk
- *
+ *       - body() is a TChunk
  *       - Collected in a treebin ring, using either/both the TChunk linkages
  *         or/and the MChunk::ring links present in body().
  */
@@ -858,7 +852,7 @@ class MState
 	 * which one to use.  There's some redundancy in this aggregate encoding,
 	 * but it's small.
 	 */
-	static constexpr size_t QuarantineRings = 3;
+	static constexpr size_t QuarantineRings = 2;
 	RingSentinel            quarantinePendingChunks[QuarantineRings];
 	size_t                  quarantinePendingEpoch[QuarantineRings];
 	ds::ring_buffer::Cursors<Debug, QuarantineRings, uint8_t>
@@ -1214,6 +1208,12 @@ class MState
 		 */
 
 		auto epoch = revoker.system_epoch_get();
+		/*
+		 * We do not need to store lists for odd epochs (that is, things freed
+		 * during a revocation sweep); just step the counter as if they had
+		 * been freed after this pass had finished.
+		 */
+		epoch += epoch & 1;
 
 		/*
 		 * Enqueue this chunk to quarantine.  Its header is still marked as
@@ -2195,9 +2195,12 @@ class MState
 			/*
 			 * We need to insert this object onto a new pending ring for the
 			 * new epoch.  Ensure that we have room by transferring a pending
-			 * ring whose epoch is past onto the finished ring, if any.  We
-			 * can be waiting for at most three epochs to age out, and have
-			 * room for four in our pending ring buffer.
+			 * ring whose epoch is past onto the finished ring, if any.  We can
+			 * be waiting for at most three epochs to age out, two of which are
+			 * merged onto one ring, and have room for two in our pending ring
+			 * buffer.  As long as the passed-in epoch is a later observation
+			 * than those that went into the pending ring, either there is
+			 * already room for that epoch or this will create it.
 			 */
 			quarantine_pending_to_finished();
 
@@ -2454,6 +2457,17 @@ class MState
 				alignpad += alignment;
 			}
 
+			/*
+			 * Break off the first chunk.  This is a little subtle, in that the
+			 * short expression here is the result of some cancellation: we
+			 * want to generate an aligned pointer, so we need to create a
+			 * chunk that is misaligned by -sizeof(MChunkHeader).  Having used
+			 * the ->body() address (memAddress) to compute alignpad, we have
+			 * computed the offset from the beginning of this chunk's body to
+			 * the aligned address.  When we ask this chunk's *header* to split
+			 * at that length, it will offset by -sizeof(MChunkHeader), since
+			 * headers always measure lengths inclusive of themselves!
+			 */
 			auto r = p->split(alignpad);
 			/*
 			 * XXX Were we to not use the general mspace_malloc above, but
@@ -2473,7 +2487,7 @@ class MState
 
 		// Also give back spare room at the end.
 		auto size = p->size_get();
-		if (size > nb + MinChunkSize)
+		if (size >= nb + MinChunkSize)
 		{
 			auto r = p->split(nb);
 			/*
