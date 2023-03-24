@@ -11,8 +11,12 @@ using Debug = ConditionalDebug<DEBUG_ALLOCBENCH, "Allocator benchmark">;
  */
 void __cheri_compartment("allocbench") run()
 {
+	// Make sure sail doesn't print annoying log messages in the middle of the
+	// output the first time that allocation happens.
+	free(malloc(16));
+	heap_quarantine_empty();
 	MessageBuilder<ImplicitUARTOutput> out;
-	out.format("#board\tsize\ttime");
+	out.format("#board\tsize\ttime\n");
 	const size_t MinimumSize = 32;
 	const size_t MaximumSize = 131072;
 	const size_t TotalSize   = 1024 * 1024;
