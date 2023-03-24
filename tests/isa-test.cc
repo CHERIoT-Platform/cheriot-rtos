@@ -483,7 +483,7 @@ namespace
 	}
 
 	/**
-	 * Run a test where we attempt a capability store of a capability to a local
+	 * Run a test where we attempt a capability store of a local capability to a
 	 * int into a global int*. The capability base for the store is passed
 	 * through `baseFilter` and the stored capability through `dataFilter`.
 	 * Optionally assert that we receive CHERI fault `expectedFault`. The fault
