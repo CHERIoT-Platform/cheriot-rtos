@@ -544,6 +544,12 @@ namespace
 				        Root::Type::RWGlobal,
 				        PermissionSet{Permission::Load, Permission::Store}>(
 				    target);
+				// Is the software sealing type owned by the scheduler?  If so,
+				// we're going to seal the object with the scheduler's sealing
+				// type, not the allocator's.  This lets the scheduler export
+				// software-defined capabilities without adding the allocator
+				// to the TCB for availability.
+				bool isSchedulerObject = false;
 				// TODO: This currently places a restriction that data memory
 				// can't be in the low 64 KiB of the address space.  That may be
 				// too restrictive. If we haven't visited this sealed object
@@ -568,14 +574,11 @@ namespace
                         }
                         return false;
 					};
-					bool found = false;
-					for (auto &compartment : image.privilegedCompartments)
+					bool found = findExport(image.allocator());
+					if (!found && findExport(image.scheduler()))
 					{
-						if (found)
-						{
-							break;
-						}
-						found = findExport(compartment);
+						found             = true;
+						isSchedulerObject = true;
 					}
 					for (auto &compartment : image.compartments())
 					{
@@ -591,7 +594,8 @@ namespace
 				}
 				Capability sealedObject = build(target, size);
 				// Seal with the allocator's sealing key
-				sealedObject.seal(build<void, Root::Type::Seal>(Allocator, 1));
+				sealedObject.seal(build<void, Root::Type::Seal>(
+				  isSchedulerObject ? Scheduler : Allocator, 1));
 				Debug::log("Static sealed object: {}", sealedObject);
 				return sealedObject;
 			}
