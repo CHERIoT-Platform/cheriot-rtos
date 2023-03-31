@@ -43,8 +43,21 @@ namespace sched
 		protected:
 		/**
 		 * The real type of this subclass.
+		 *
+		 * This must be 32 bits and must be the first word of the class, so that
+		 * we are layout-compatible with the static sealing capabilities.  We
+		 * use low-value numbers for things that we dynamically allocate to
+		 * check types.  Anything that is statically allocated will have this
+		 * field initialised by the loader.
+		 *
+		 * Note that allocator-allocated and static types have a word of
+		 * padding here.  This is necessary to ensure that the base of the sub
+		 * object is capability-aligned.  In cases created with subclassing,
+		 * this is not required - the compiler will insert padding if it needs
+		 * to, but we can also put small fields in this space.  For anything
+		 * statically allocated, we will need to handle this separately.
 		 */
-		enum class Type : uint8_t
+		enum class Type : uint32_t
 		{
 			Invalid = 0,
 			/**
@@ -95,6 +108,8 @@ namespace sched
 			static_assert(std::is_base_of_v<Handle, T>,
 			              "Cannot down-cast something that is not a subclass "
 			              "of Handle");
+			static_assert(offsetof(T, type) == 0,
+			              "Type field must be at the start of the object");
 			auto unsealed = compart_unseal(this);
 			if (unsealed.is_valid() && unsealed->type == T::TypeMarker)
 			{
