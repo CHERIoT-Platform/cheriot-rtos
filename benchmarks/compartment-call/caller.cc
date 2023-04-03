@@ -24,9 +24,6 @@ void __cheri_compartment("caller") run()
 		returnPath = rdcycle() - returnPath;
 		return std::tuple{full, callPath, returnPath};
 	});
-	register void    *cspRegister asm("csp");
-	asm("" : "=C"(cspRegister));
-	CHERI::Capability stack{cspRegister};
-	size_t            stackSize = stack.length();
+	size_t stackSize = get_stack_size();
 	out.format(__XSTRING(BOARD) "\t{}\t{}\t{}\t{}\n", stackSize, full, callPath, returnPath);
 }
