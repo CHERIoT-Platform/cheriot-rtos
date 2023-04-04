@@ -114,8 +114,7 @@ namespace sched
 		 * interrupts. Worse, if this is the only thread, then it blocks
 		 * interrupts forever for the whole system.
 		 */
-		[[cheri::interrupt_state(enabled)]] static void
-		yield_interrupt_enabled()
+		static void yield_interrupt_enabled()
 		{
 			__asm volatile("ecall");
 		}
