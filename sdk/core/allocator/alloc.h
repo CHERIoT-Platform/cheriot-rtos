@@ -1185,6 +1185,9 @@ class MState
 			  correct);
 			return -EINVAL;
 		}
+
+		// At this point, we know mem is capability-aligned.
+
 		if (p->owner() != identifier)
 		{
 			Debug::log("Trying to free memory owned by {} with allocator id {}",
@@ -1196,18 +1199,29 @@ class MState
 		{
 			return 0;
 		}
-		// At this point, we know mem is capability aligned.
-		capaligned_zero(mem, bodySize);
-		quota += bodySize + sizeof(MChunkHeader);
+
+		/*
+		 * Paint the shadow bitmap and then zero the memory contents.  These
+		 * must happen in this order, since the allocator is running with
+		 * interrupts enabled.  Were we to zero and then paint, there would be a
+		 * window in which preemption could allow a store through a copy of
+		 * the user capability (or its progeny) that undid our work of zeroing!
+		 */
 		revoker.shadow_paint_range(mem.address(), p->cell_next(), true);
+
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk
 		 * will not come to exist in registers due to load barrier.  Any that
 		 * are already there will be addressed (either zeroed or reloaded and,
 		 * so, tag-cleared) when we return from this compartment.
 		 */
-
 		auto epoch = revoker.system_epoch_get();
+
+		capaligned_zero(mem, bodySize);
+
+		/* Release the occupied space back to the allocation authority */
+		quota += bodySize + sizeof(MChunkHeader);
+
 		/*
 		 * We do not need to store lists for odd epochs (that is, things freed
 		 * during a revocation sweep); just step the counter as if they had
@@ -1220,9 +1234,13 @@ class MState
 		 * being allocated.
 		 */
 		quarantine_pending_push(epoch, p);
-
 		heapQuarantineSize += p->size_get();
-		// Dequeue 3 times. 3 is chosen randomly. 2 is at least needed.
+
+		/*
+		 * Perhaps there has been some progress on revocation.  Dequeue 3 times.
+		 * 3 is chosen randomly. At least 2 is needed for easy argument that the
+		 * allocator stays ahead of its quarantine.
+		 */
 		mspace_qtbin_deqn(3);
 		mspace_bg_revoker_kick<false>();
 
