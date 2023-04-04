@@ -52,6 +52,39 @@ namespace Revocation
 			shadowCap = const_cast<WordT *>(MMIO_CAPABILITY(WordT, shadow));
 		}
 
+		static constexpr size_t shadow_offset_bits(ptraddr_t addr)
+		{
+			return (addr - TCMBaseAddr) >> MallocAlignShift;
+		}
+
+		static constexpr size_t shadow_word_index(size_t offsetBits)
+		{
+			return offsetBits >> ShadowWordShift;
+		}
+
+		static constexpr WordT shadow_mask_bits_below_address(ptraddr_t addr)
+		{
+			size_t capoffset = shadow_offset_bits(addr);
+			return (WordT(1) << (capoffset & ShadowWordMask)) - 1;
+		}
+
+		static constexpr WordT shadow_mask_bits_above_address(ptraddr_t addr)
+		{
+			return ~shadow_mask_bits_below_address(addr);
+		}
+
+		/*
+		 * Some quick verification that the union of these two masks is
+		 * all bits set.
+		 */
+		static_assert((shadow_mask_bits_above_address(0) ^
+		               shadow_mask_bits_below_address(0)) == WordT(-1));
+		static_assert((shadow_mask_bits_above_address(7) ^
+		               shadow_mask_bits_below_address(7)) == WordT(-1));
+		static_assert((shadow_mask_bits_above_address(ShadowWordSizeBits - 1) ^
+		               shadow_mask_bits_below_address(ShadowWordSizeBits -
+		                                              1)) == WordT(-1));
+
 		public:
 		/**
 		 * @brief Set or clear the single shadow bit for an address.
@@ -64,9 +97,9 @@ namespace Revocation
 			              "Address {} is below the TCM base {}",
 			              addr,
 			              TCMBaseAddr);
-			size_t   capoffset  = (addr - TCMBaseAddr) >> MallocAlignShift;
-			WordT    shadowWord = shadowCap[capoffset >> ShadowWordShift];
-			uint32_t mask       = (1U << (capoffset & ShadowWordMask));
+			size_t capoffset  = shadow_offset_bits(addr);
+			WordT  shadowWord = shadowCap[shadow_word_index(capoffset)];
+			WordT  mask       = (WordT(1) << (capoffset & ShadowWordMask));
 
 			if (fill)
 			{
@@ -76,7 +109,7 @@ namespace Revocation
 			{
 				shadowWord &= ~mask;
 			}
-			shadowCap[capoffset >> ShadowWordShift] = shadowWord;
+			shadowCap[shadow_word_index(capoffset)] = shadowWord;
 		}
 
 		/**
@@ -87,52 +120,69 @@ namespace Revocation
 		 */
 		void shadow_paint_range(ptraddr_t base, ptraddr_t top, bool fill)
 		{
-			constexpr size_t ShadowWordAddrMask =
-			  (1U << (ShadowWordShift + MallocAlignShift)) - 1;
-			ptraddr_t baseUp =
-			  (base + ShadowWordAddrMask) & ~ShadowWordAddrMask;
-			ptraddr_t topDown = top & ~ShadowWordAddrMask;
+			size_t baseCapOffset = shadow_offset_bits(base);
+			size_t topCapOffset  = shadow_offset_bits(top);
+			size_t baseWordIx    = shadow_word_index(baseCapOffset);
+			size_t topWordIx     = shadow_word_index(topCapOffset);
 
-			// There isn't a single aligned shadow word for this range, so paint
-			// one bit at a time.
-			if (baseUp >= topDown)
+			WordT maskHi = shadow_mask_bits_below_address(top);
+			WordT maskLo = shadow_mask_bits_above_address(base);
+
+			if (baseWordIx == topWordIx)
 			{
-				for (ptraddr_t ptr = base; ptr < top; ptr += MallocAlignment)
+				/*
+				 * This object is entirely contained within one word of the
+				 * bitmap.  We must AND the mask{Hi,Lo} together, since those
+				 * masks were assuming that the object ran to (or past) the
+				 * respective ends of the word.
+				 */
+				WordT mask = maskHi & maskLo;
+				if (fill)
 				{
-					shadow_paint_single(ptr, fill);
+					shadowCap[baseWordIx] |= mask;
 				}
+				else
+				{
+					shadowCap[baseWordIx] &= ~mask;
+				}
+
 				return;
 			}
 
-			// First, paint the individual bits at the beginning.
-			for (ptraddr_t ptr = base; ptr < baseUp; ptr += MallocAlignment)
+			/*
+			 * Otherwise, there are at least two words of the bitmap that need
+			 * to be updated with the masks, and possibly some in between that
+			 * just need to be set wholesale.
+			 */
+			WordT midWord;
+			if (fill)
 			{
-				shadow_paint_single(ptr, fill);
+				shadowCap[baseWordIx] |= maskLo;
+				shadowCap[topWordIx] |= maskHi;
+				midWord = ~WordT(0);
 			}
-			// Then, paint the aligned shadow words using word instructions.
-			for (ptraddr_t ptr = baseUp; ptr < topDown;
-			     ptr += ShadowWordSizeBits * MallocAlignment)
+			else
 			{
-				size_t capoffset  = (ptr - TCMBaseAddr) >> MallocAlignShift;
-				WordT  shadowWord = fill ? -1 : 0;
+				shadowCap[baseWordIx] &= ~maskLo;
+				shadowCap[topWordIx] &= ~maskHi;
+				midWord = 0;
+			}
 
-				shadowCap[capoffset >> ShadowWordShift] = shadowWord;
-			}
-			// Finally, paint individual bits at the end.
-			for (ptraddr_t ptr = topDown; ptr < top; ptr += MallocAlignment)
+			for (size_t shadowWordIx = baseWordIx + 1; shadowWordIx < topWordIx;
+			     shadowWordIx++)
 			{
-				shadow_paint_single(ptr, fill);
+				shadowCap[shadowWordIx] = midWord;
 			}
 		}
 
 		// Return the shadow bit at address addr.
 		bool shadow_bit_get(size_t addr)
 		{
-			size_t   capoffset  = (addr - TCMBaseAddr) >> MallocAlignShift;
-			WordT    shadowWord = shadowCap[capoffset >> ShadowWordShift];
-			uint32_t mask       = (1U << (capoffset & ShadowWordMask));
+			size_t capoffset  = shadow_offset_bits(addr);
+			WordT  shadowWord = shadowCap[shadow_word_index(capoffset)];
+			WordT  mask       = (WordT(1) << (capoffset & ShadowWordMask));
 
-			return shadowWord & mask;
+			return (shadowWord & mask) != 0;
 		}
 
 		/**
