@@ -36,7 +36,7 @@ __BEGIN_DECLS
  * If the sealing keys have been exhausted then this will return
  * `INVALID_SKEY`.  This API is guaranteed never to block.
  */
-SKey __cheri_compartment("alloc") token_key_new();
+SKey __cheri_compartment("alloc") token_key_new(void);
 
 /**
  * Allocate a new object with size `sz`.

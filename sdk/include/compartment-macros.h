@@ -116,7 +116,11 @@
 #define DECLARE_STATIC_SEALED_VALUE(type, compartment, keyName, name)          \
 	struct __##name##_type; /* NOLINT(bugprone-macro-parentheses) */           \
 	extern __if_cxx("C") struct __##name##_type                                \
-	  name; /* NOLINT(bugprone-macro-parentheses) */
+	{                                                                          \
+		uint32_t key;                                                          \
+		uint32_t padding;                                                      \
+		type     body;                                                         \
+	} name /* NOLINT(bugprone-macro-parentheses) */
 
 /**
  * Define a static sealed object.  This creates an object of type `type`,
@@ -134,15 +138,28 @@
 	  "__export.sealing_type." #compartment "." #keyName);                     \
 	__attribute__((section(".sealed_objects"), used))                          \
 	__if_cxx(inline) struct __##name##_type                                    \
-	{                                                                          \
-		uint32_t key;                                                          \
-		uint32_t padding;                                                      \
-		type     body;                                                         \
-	} name = /* NOLINT(bugprone-macro-parentheses) */                          \
+	  name = /* NOLINT(bugprone-macro-parentheses) */                          \
 	  {(uint32_t)&__sealing_key_##compartment##_##keyName,                     \
 	   0,                                                                      \
 	   initialiser,                                                            \
 	   ##__VA_ARGS__}
+
+/**
+ * Helper macro that declares and defines a sealed value.
+ */
+#define DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(                                \
+  type, compartment, keyName, name, initialiser, ...)                          \
+	DECLARE_STATIC_SEALED_VALUE(                                               \
+	  type,                                                                    \
+	  compartment,                                                             \
+	  keyName,                                                                 \
+	  name); /* NOLINT(bugprone-macro-parentheses) */                          \
+	DEFINE_STATIC_SEALED_VALUE(                                                \
+	  type,                                                                    \
+	  compartment,                                                             \
+	  keyName,                                                                 \
+	  name,                                                                    \
+	  initialiser); /* NOLINT(bugprone-macro-parentheses) */
 
 /**
  * Returns a sealed capability to the named object created with

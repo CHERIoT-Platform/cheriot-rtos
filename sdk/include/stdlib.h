@@ -54,6 +54,14 @@ struct SObjStruct;
 	                           0,                                              \
 	                           {0, 0});
 
+/**
+ * Helper macro to define an allocator capability without a separate
+ * declaration.
+ */
+#define DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(name, quota)                   \
+	DECLARE_ALLOCATOR_CAPABILITY(name);                                        \
+	DEFINE_ALLOCATOR_CAPABILITY(name, quota)
+
 #ifndef CHERIOT_NO_AMBIENT_MALLOC
 /**
  * Declare a default capability for use with malloc-style APIs.  Compartments
@@ -61,11 +69,11 @@ struct SObjStruct;
  * heaps) can define `CHERIOT_NO_AMBIENT_MALLOC` to disable this.
  */
 DECLARE_ALLOCATOR_CAPABILITY(__default_malloc_capability)
-#	ifndef CUSTOM_DEFAULT_MALLOC_CAPARBILITY
+#	ifndef CHERIOT_CUSTOM_DEFAULT_MALLOC_CAPABILITY
 /**
  * Define the capability for use with malloc-style APIs. In C code, this may be
  * defined in precisely on compilation unit per compartment.  Others should
- * define `CUSTOM_DEFAULT_MALLOC_CAPARBILITY` to avoid the definition.
+ * define `CHERIOT_CUSTOM_DEFAULT_MALLOC_CAPABILITY` to avoid the definition.
  */
 DEFINE_ALLOCATOR_CAPABILITY(__default_malloc_capability, MALLOC_QUOTA)
 #	endif

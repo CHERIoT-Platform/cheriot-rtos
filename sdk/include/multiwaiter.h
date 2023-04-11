@@ -30,6 +30,7 @@
  * expected number of waited objects is small and so is the number of threads.
  */
 #include <compartment.h>
+#include <stdlib.h>
 #include <timeout.h>
 
 /**

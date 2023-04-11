@@ -15,7 +15,7 @@
 #include <vector>
 
 using thread_pool::async;
-DEFINE_ALLOCATOR_CAPABILITY(secondHeap, 1024);
+DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(secondHeap, 1024);
 
 namespace
 {
