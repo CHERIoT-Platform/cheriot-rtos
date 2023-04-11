@@ -9,11 +9,11 @@
 using namespace CHERI;
 
 // Create a static sealed object that we can't access
-DEFINE_STATIC_SEALED_VALUE(TestType,
-                           static_sealing_inner,
-                           SealingType,
-                           test,
-                           {42});
+DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(TestType,
+                                       static_sealing_inner,
+                                       SealingType,
+                                       test,
+                                       {42});
 
 void test_static_sealing()
 {
