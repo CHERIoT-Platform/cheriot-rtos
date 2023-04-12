@@ -1,12 +1,26 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
-#ifndef _CTYPE_H_
-#define _CTYPE_H_
+#pragma once
 
 static inline int isdigit(int c)
 {
 	return c >= '0' && c <= '9';
 }
 
-#endif // _CTYPE_H_
+static inline int isspace(int c)
+{
+	switch (c)
+	{
+		default:
+			return 0;
+		case '\t':
+		case '\n':
+		case '\v':
+		case '\f':
+		case '\r':
+		case ' ':
+			return 1;
+	}
+}
+
