@@ -43,4 +43,21 @@ typedef struct
  */
 [[cheri::interrupt_state(disabled)]] uint16_t __cheri_compartment("sched")
   thread_id_get(void);
+
+/**
+ * Returns the number of cycles accounted to the idle thread.
+ *
+ * This API is available only if the scheduler is built with accounting support
+ * enabled.
+ */
+__cheri_compartment("sched") uint64_t thread_elapsed_cycles_idle(void);
+
+/**
+ * Returns the number of cycles accounted to the current thread.
+ *
+ * This API is available only if the scheduler is built with accounting
+ * support enabled.
+ */
+__cheri_compartment("sched") uint64_t thread_elapsed_cycles_current(void);
+
 __END_DECLS

@@ -18,7 +18,7 @@
 #define CSR_READ64(csr)                                                        \
 	({                                                                         \
 		uint64_t val;                                                          \
-		size_t   high, low;                                                    \
+		uint32_t high, low;                                                    \
 		__asm __volatile("1: "                                                 \
 		                 "csrr t0, " #csr "h\n"                                \
 		                 "csrr %0, " #csr "\n"                                 \
@@ -42,3 +42,12 @@
 	})
 
 #define BARRIER() __asm volatile("" : : : "memory")
+
+/**
+ * Read the cycle counter.  Returns the number of cycles since boot as a 64-bit
+ * value.
+ */
+static inline uint64_t rdcycle64()
+{
+	return CSR_READ64(mcycle);
+}

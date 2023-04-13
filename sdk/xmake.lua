@@ -11,6 +11,11 @@ if is_mode("release") then
     add_defines("NDEBUG", {force = true})
 end
 
+option("scheduler-accounting")
+	set_default(false)
+	set_description("Track per-thread cycle counts in the scheduler");
+	set_showmenu(true)
+
 function debugOption(name)
 	option("debug-" .. name)
 		set_default(false)
@@ -498,6 +503,7 @@ function firmware(name)
 		on_load(function (target)
 			target:set("cherimcu.compartment", "sched")
 			target:set('cherimcu.debug-name', "scheduler")
+			target:add('defines', "SCHEDULER_ACCOUNTING=" .. tostring(get_config("scheduler-accounting")))
 		end)
 		add_files(path.join(coredir, "scheduler/main.cc"))
 

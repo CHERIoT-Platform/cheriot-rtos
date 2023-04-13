@@ -491,6 +491,13 @@ namespace sched
 		/// If suspended, when will this thread expire. The maximum value is
 		/// special-cased to mean blocked indefinitely.
 		uint64_t expiryTime;
+
+		/// The number of cycles that this thread has been scheduled for.
+		uint64_t cycles;
+
+		/// The number of cycles accounted to the idle thread.
+		static inline uint64_t idleThreadCycles;
+
 		union
 		{
 			/// When the thread wakes up from event group, this stores the bits

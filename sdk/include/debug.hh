@@ -164,12 +164,10 @@ namespace
 		}
 
 		/**
-		 * Append a size to the buffer.
+		 * Append a 32-bit unsigned integer to the buffer as hex with no prefix.
 		 */
-		__attribute__((noinline)) void append(uint32_t s)
+		__attribute__((noinline)) void append_hex_word(uint32_t s)
 		{
-			append_char('0');
-			append_char('x');
 			std::array<char, 8> buf;
 			const char          Hexdigits[] = "0123456789abcdef";
 			// Length of string including null terminator
@@ -193,6 +191,32 @@ namespace
 			{
 				append_char('0');
 			}
+		}
+
+		/**
+		 * Append a 32-bit unsigned integer to the buffer as hex.
+		 */
+		__attribute__((noinline)) void append(uint32_t s)
+		{
+			append_char('0');
+			append_char('x');
+			append_hex_word(s);
+		}
+
+		/**
+		 * Append a 64-bit unsigned integer to the buffer as hex.
+		 */
+		__attribute__((noinline)) void append(uint64_t s)
+		{
+			append_char('0');
+			append_char('x');
+			uint32_t hi = static_cast<uint32_t>(s >> 32);
+			uint32_t lo = static_cast<uint32_t>(s);
+			if (hi != 0)
+			{
+				append_hex_word(hi);
+			}
+			append_hex_word(lo);
 		}
 
 		/**

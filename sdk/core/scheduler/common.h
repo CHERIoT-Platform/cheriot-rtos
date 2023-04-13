@@ -24,6 +24,15 @@ namespace sched
 #endif
 	  ;
 
+	/// Is scheduler accounting enabled?
+	constexpr bool Accounting =
+#ifdef SCHEDULER_ACCOUNTING
+	  SCHEDULER_ACCOUNTING
+#else
+	  false
+#endif
+	  ;
+
 	using Debug = ConditionalDebug<DebugScheduler, "Scheduler">;
 	/**
 	 * Base class for types that are exported from the scheduler with a common
