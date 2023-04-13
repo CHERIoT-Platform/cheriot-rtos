@@ -45,6 +45,11 @@ void simulation_exit(uint32_t code)
 
 #endif
 
+/**
+ * The value of the cycle counter at the last scheduling event.
+ */
+static uint64_t cyclesAtLastSchedulingEvent;
+
 namespace sched
 {
 	using namespace priv;
@@ -105,7 +110,17 @@ namespace sched
 	                                               size_t        mepc,
 	                                               size_t        mtval)
 	{
+		// The cycle count value the last time the scheduler returned.
 		bool schedNeeded;
+		if constexpr (sched::Accounting)
+		{
+			uint64_t  currentCycles = rdcycle64();
+			auto     *thread        = Thread::current_get();
+			uint64_t &threadCycleCounter =
+			  thread ? thread->cycles : Thread::idleThreadCycles;
+			auto elapsedCycles = currentCycles - cyclesAtLastSchedulingEvent;
+			threadCycleCounter += elapsedCycles;
+		}
 
 		ExceptionGuard g{[=]() { sched_panic(mcause, mepc, mtval); }};
 
@@ -141,6 +156,10 @@ namespace sched
 		auto newContext =
 		  schedNeeded ? Thread::schedule(sealedTStack) : sealedTStack;
 
+		if constexpr (sched::Accounting)
+		{
+			cyclesAtLastSchedulingEvent = rdcycle64();
+		}
 		return newContext;
 	}
 
@@ -642,3 +661,20 @@ int multiwaiter_wait(Timeout           *timeout,
 		return 0;
 	});
 }
+
+#ifdef SCHEDULER_ACCOUNTING
+[[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
+{
+	return Thread::idleThreadCycles;
+}
+
+[[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_current()
+{
+	// Calculate the number of cycles not yet reported to the current thread.
+	uint64_t currentCycles = rdcycle64();
+	currentCycles -= cyclesAtLastSchedulingEvent;
+	// Report the number of cycles accounted to this thread, plus the number
+	// that have occurred in the current quantum.
+	return Thread::current_get()->cycles + currentCycles;
+}
+#endif
