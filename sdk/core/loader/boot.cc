@@ -811,13 +811,18 @@ namespace
 			Debug::log("New thread's trusted stack is {}", threadTStack);
 			threadTStack->mepcc = pcc;
 			threadTStack->cgp   = cgp;
-			threadTStack->csp   = allocateStack(config.stackSize);
-			Debug::log("New thread's stack is {}", threadTStack->csp);
+			auto stack          = allocateStack(config.stackSize);
+			threadTStack->csp   = stack;
+			Debug::log("New thread's stack is {}", stack);
 			// Enable previous level interrupts and set the previous exception
 			// level to M mode.
 			threadTStack->mstatus =
 			  (priv::MSTATUS_MPIE |
 			   (priv::MSTATUS_PRV_M << priv::MSTATUS_MPP_SHIFT));
+#ifdef CONFIG_MSHWM
+			threadTStack->mshwm  = stack.top();
+			threadTStack->mshwmb = stack.base();
+#endif
 			threadTStack->frameoffset = offsetof(TrustedStack, frames[1]);
 			threadTStack->frames[0].calleeExportTable =
 			  build(compartment.exportTable);
