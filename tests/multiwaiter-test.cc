@@ -27,7 +27,7 @@ void test_multiwaiter()
 	     "Allocating multiwaiter failed {} ({})",
 	     ret,
 	     mw);
-	debug_log("Allocated multiwaiter {}");
+	debug_log("Allocated multiwaiter {}", mw);
 
 	t.remaining = 5;
 	EventWaiterSource events[4];
