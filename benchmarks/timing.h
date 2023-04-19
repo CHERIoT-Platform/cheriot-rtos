@@ -36,4 +36,28 @@ namespace
 		CHERI::Capability stack{cspRegister};
 		return stack.length();
 	}
+
+	void use_stack(size_t s)
+	{
+		volatile uint8_t stack_array[s];
+		stack_array[0] = 1;
+	}
+
+	void check_stack_zeroed()
+	{
+		register void **cspRegister asm("csp");
+		asm("" : "=C"(cspRegister));
+		CHERI::Capability stack{cspRegister};
+		CHERI::Capability<void*> stackP{stack};
+		stackP.address() = stack.base();
+		while(stackP.address() < stack.address())
+		{
+			CHERI::Capability<void> value{*stackP};
+			if (value != NULL)
+			{
+				__builtin_trap();
+			}
+			stackP += 1;
+		}
+	}
 } // namespace
