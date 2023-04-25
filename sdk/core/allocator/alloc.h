@@ -21,6 +21,10 @@
 
 extern Revocation::Revoker revoker;
 
+/// Do we have temporal safety support in hardware?
+constexpr bool HasTemporalSafety =
+  !std::is_same_v<Revocation::Revoker, Revocation::NoTemporalSafety>;
+
 // the byte and bit size of a size_t
 constexpr size_t BitsInSizeT = utils::bytes2bits(sizeof(size_t));
 
@@ -1323,22 +1327,25 @@ class MState
 	}
 	void ok_any_chunk(MChunkHeader *p)
 	{
-		bool thisShadowBit =
-		  revoker.shadow_bit_get(CHERI::Capability{p}.address());
-		Debug::Assert(thisShadowBit,
-		              "Chunk header does not point to a set shadow bit: {}",
-		              p);
-		MChunkHeader *next = p->cell_next();
-		bool          nextShadowBit =
-		  revoker.shadow_bit_get(CHERI::Capability{next}.address());
-		Debug::Assert(
-		  nextShadowBit,
-		  "Next chunk header does not point to a set shadow bit: {}",
-		  next);
-		Debug::Assert(
-		  is_aligned(p->body()), "Chunk is not correctly aligned: {}", p);
-		Debug::Assert(
-		  ok_address(p->body()), "Invalid address {} for chunk", p->body());
+		if constexpr (HasTemporalSafety)
+		{
+			bool thisShadowBit =
+			  revoker.shadow_bit_get(CHERI::Capability{p}.address());
+			Debug::Assert(thisShadowBit,
+			              "Chunk header does not point to a set shadow bit: {}",
+			              p);
+			MChunkHeader *next = p->cell_next();
+			bool          nextShadowBit =
+			  revoker.shadow_bit_get(CHERI::Capability{next}.address());
+			Debug::Assert(
+			  nextShadowBit,
+			  "Next chunk header does not point to a set shadow bit: {}",
+			  next);
+			Debug::Assert(
+			  is_aligned(p->body()), "Chunk is not correctly aligned: {}", p);
+			Debug::Assert(
+			  ok_address(p->body()), "Invalid address {} for chunk", p->body());
+		}
 	}
 	// Sanity check an in-use chunk.
 	void ok_in_use_chunk(MChunkHeader *p)
@@ -2340,9 +2347,13 @@ class MState
 		                      size - sizeof(MChunkHeader),
 		                      [](void **word) {
 			                      CHERI::Capability eachCap{*word};
-			                      return eachCap != nullptr &&
-			                             revoker.shadow_bit_get(
-			                               CHERI::Capability{word}.address());
+			                      bool              shadowBit = true;
+			                      if constexpr (HasTemporalSafety)
+			                      {
+				                      shadowBit = revoker.shadow_bit_get(
+				                        CHERI::Capability{word}.address());
+			                      }
+			                      return eachCap != nullptr && shadowBit;
 		                      }) == false,
 		  "Memory from free list is not entirely zeroed, size {}",
 		  size);

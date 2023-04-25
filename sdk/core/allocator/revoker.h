@@ -314,6 +314,13 @@ namespace Revocation
 		{
 			return true;
 		}
+		bool shadow_bit_get(size_t addr)
+		{
+			Debug::Assert(false,
+			              "shadow_bit_get should not be called on the revoker "
+			              "with no temporal safety, its result is meaningless");
+			return false;
+		}
 	};
 
 	/**
