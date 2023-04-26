@@ -668,6 +668,13 @@ namespace
 		 */
 		template<typename... Ts>
 		Assert(bool, const char *, Ts &&...) -> Assert<Ts...>;
+
+		/**
+		 * Deduction guide, allows `Assert` to be used as if it were a
+		 * function with a lambda argument.
+		 */
+		template<typename... Ts>
+		Assert(auto, const char *, Ts &&...) -> Assert<Ts...>;
 	};
 
 } // namespace
