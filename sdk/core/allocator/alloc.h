@@ -1327,7 +1327,7 @@ class MState
 	}
 	void ok_any_chunk(MChunkHeader *p)
 	{
-		if constexpr (HasTemporalSafety)
+		if constexpr (HasTemporalSafety && DEBUG_ALLOCATOR)
 		{
 			bool thisShadowBit =
 			  revoker.shadow_bit_get(CHERI::Capability{p}.address());
@@ -2343,18 +2343,19 @@ class MState
 		 * inside a Capability because that gives exact equal for nullptr.
 		 */
 		Debug::Assert(
-		  capaligned_range_do(p->body(),
-		                      size - sizeof(MChunkHeader),
-		                      [](void **word) {
-			                      CHERI::Capability eachCap{*word};
-			                      bool              shadowBit = true;
-			                      if constexpr (HasTemporalSafety)
-			                      {
-				                      shadowBit = revoker.shadow_bit_get(
-				                        CHERI::Capability{word}.address());
-			                      }
-			                      return eachCap != nullptr && shadowBit;
-		                      }) == false,
+		  [&]() -> bool {
+			  return capaligned_range_do(
+			           p->body(), size - sizeof(MChunkHeader), [](void **word) {
+				           CHERI::Capability eachCap{*word};
+				           bool              shadowBit = true;
+				           if constexpr (HasTemporalSafety)
+				           {
+					           shadowBit = revoker.shadow_bit_get(
+					             CHERI::Capability{word}.address());
+				           }
+				           return eachCap != nullptr && shadowBit;
+			           }) == false;
+		  },
 		  "Memory from free list is not entirely zeroed, size {}",
 		  size);
 		heapFreeSize -= size;
