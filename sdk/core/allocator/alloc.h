@@ -1246,7 +1246,7 @@ class MState
 		 * allocator stays ahead of its quarantine.
 		 */
 		mspace_qtbin_deqn(3);
-		mspace_bg_revoker_kick<false>();
+		mspace_bg_revoker_kick();
 
 		return 0;
 	}
@@ -1300,29 +1300,20 @@ class MState
 	 * Internal debug checks. Crashes the allocator when inconsistency detected.
 	 * No-ops in Release build.
 	 */
-#ifdef NDEBUG
 	bool ok_address(ptraddr_t a)
 	{
-		return true;
-	}
-	bool ok_address(void *)
-	{
-		return true;
-	}
-	void ok_any_chunk(MChunkHeader *p) {}
-	void ok_in_use_chunk(MChunkHeader *p) {}
-	void ok_free_chunk(MChunkHeader *p) {}
-	void ok_malloced_chunk(MChunkHeader *p, size_t s) {}
-	void ok_treebin(BIndex i) {}
-	void ok_smallbin(BIndex i) {}
-	void ok_malloc_state() {}
-#else
-	bool ok_address(ptraddr_t a)
-	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return true;
+		}
 		return a >= heapStart.base();
 	}
 	bool ok_address(void *p)
 	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return true;
+		}
 		return ok_address(CHERI::Capability{p}.address());
 	}
 	void ok_any_chunk(MChunkHeader *p)
@@ -1350,6 +1341,10 @@ class MState
 	// Sanity check an in-use chunk.
 	void ok_in_use_chunk(MChunkHeader *p)
 	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return;
+		}
 		ok_any_chunk(p);
 		Debug::Assert(p->is_in_use(), "In use chunk {} is not in use", p);
 		Debug::Assert(p->cell_next()->is_prev_in_use(),
@@ -1364,6 +1359,10 @@ class MState
 	// Sanity check a free chunk.
 	void ok_free_chunk(MChunkHeader *pHeader)
 	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return;
+		}
 		auto   p          = MChunk::from_header(pHeader);
 		size_t sz         = pHeader->size_get();
 		auto   nextHeader = pHeader->cell_next();
@@ -1413,6 +1412,10 @@ class MState
 	// Sanity check a chunk that was just malloced.
 	void ok_malloced_chunk(MChunkHeader *p, size_t s)
 	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return;
+		}
 		if (p != nullptr)
 		{
 			size_t sz = p->size_get();
@@ -1445,6 +1448,10 @@ class MState
 	 */
 	void ok_tree_next(TChunk *from, TChunk *t)
 	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return;
+		}
 		if (from == t->parent)
 		{
 			/* Came from parent; descend as leftwards as we can */
@@ -1481,6 +1488,10 @@ class MState
 	 */
 	void ok_tree(TChunk *from, TChunk *t)
 	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return;
+		}
 		auto   tHeader = MChunkHeader::from_body(t);
 		BIndex tindex  = t->index;
 		size_t tsize   = tHeader->size_get();
@@ -1577,6 +1588,10 @@ class MState
 	// Sanity check the tree at treebin[i].
 	void ok_treebin(BIndex i)
 	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return;
+		}
 		TChunk **tb    = treebin_at(i);
 		TChunk  *t     = *tb;
 		bool     empty = (treemap & (1U << i)) == 0;
@@ -1594,6 +1609,10 @@ class MState
 	// Sanity check smallbin[i].
 	void ok_smallbin(BIndex i)
 	{
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return;
+		}
 		auto b     = smallbin_at(i);
 		bool empty = (smallmap & (1U << i)) == 0;
 
@@ -1620,6 +1639,14 @@ class MState
 	// Sanity check the entire malloc state in this MState.
 	void ok_malloc_state()
 	{
+		if constexpr (Revocation::Revoker::IsAsynchronous)
+		{
+			mspace_bg_revoker_kick();
+		}
+		if constexpr (!DEBUG_ALLOCATOR)
+		{
+			return;
+		}
 		BIndex i;
 		size_t total;
 		// Check all the bins.
@@ -1632,7 +1659,6 @@ class MState
 			ok_treebin(i);
 		}
 	}
-#endif
 
 	private:
 	/*
@@ -2247,7 +2273,7 @@ class MState
 	 *
 	 * @return true if there are things in the quarantine
 	 */
-	template<bool Force>
+	template<bool Force = false>
 	bool mspace_bg_revoker_kick()
 	{
 		if (heapQuarantineSize == 0)
