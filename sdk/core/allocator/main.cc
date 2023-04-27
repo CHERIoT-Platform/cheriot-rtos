@@ -179,28 +179,64 @@ namespace
 				{
 					Debug::log("Quarantine has enough memory to satisfy "
 					           "allocation, kicking revoker");
-					revoker.system_bg_revoker_kick();
 
 					// Drop and reacquire the lock while yielding.
-					g.unlock();
 					// Sleep for a single tick.
-					Timeout smallSleep{1};
-					thread_sleep(&smallSleep);
-					// It's possible that, while we slept, `*timeout` was
-					// freed.  Check that the pointer is still valid so that we
-					// don't fault if this happens. We are not holding the lock
-					// at this point and so we must do the check with interrupts
-					// disabled to protect against concurrent free.
-					if (!with_interrupts_disabled([&]() {
-						    if (Capability{timeout}.is_valid())
-						    {
-							    timeout->elapse(smallSleep.elapsed);
-							    return g.try_lock(timeout);
-						    }
-						    return false;
-					    }))
+					if constexpr (Revocation::Revoker::IsAsynchronous)
 					{
-						return nullptr;
+						auto epoch = revoker.system_epoch_get();
+						revoker.system_bg_revoker_kick();
+						// Yield while until a revocation pass has finished.
+						while (!revoker.has_revocation_finished_for_epoch<true>(
+						  epoch))
+						{
+							g.unlock();
+							Timeout smallSleep{1};
+							thread_sleep(&smallSleep);
+							// It's possible that, while we slept,
+							// `*timeout` was freed.  Check that the pointer
+							// is still valid so that we don't fault if this
+							// happens. We are not holding the lock at this
+							// point and so we must do the check with
+							// interrupts disabled to protect against
+							// concurrent free.
+							if (!with_interrupts_disabled([&]() {
+								    if (Capability{timeout}.is_valid())
+								    {
+									    timeout->elapse(smallSleep.elapsed);
+									    return g.try_lock(timeout);
+								    }
+								    return false;
+							    }))
+							{
+								return nullptr;
+							}
+						}
+					}
+					else
+					{
+						revoker.system_bg_revoker_kick();
+						g.unlock();
+						Timeout smallSleep{0};
+						thread_sleep(&smallSleep);
+						// It's possible that, while we slept,
+						// `*timeout` was freed.  Check that the pointer
+						// is still valid so that we don't fault if this
+						// happens. We are not holding the lock at this
+						// point and so we must do the check with
+						// interrupts disabled to protect against
+						// concurrent free.
+						if (!with_interrupts_disabled([&]() {
+							    if (Capability{timeout}.is_valid())
+							    {
+								    timeout->elapse(smallSleep.elapsed);
+								    return g.try_lock(timeout);
+							    }
+							    return false;
+						    }))
+						{
+							return nullptr;
+						}
 					}
 				}
 				continue;
