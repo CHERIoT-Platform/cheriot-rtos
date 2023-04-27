@@ -213,13 +213,13 @@ namespace Revocation
 			uint32_t pad0;
 			uint32_t top;
 			uint32_t pad1;
-			uint32_t enqEpoch;
+			uint32_t epoch;
 			uint32_t pad2;
-			uint32_t deqEpoch;
-			uint32_t pad3;
 			uint32_t go;
 			uint32_t pad4;
 		};
+		static_assert(offsetof(ShadowCtrl, epoch) == 16);
+		static_assert(offsetof(ShadowCtrl, go) == 24);
 
 		volatile ShadowCtrl *shadowCtrl;
 
@@ -261,28 +261,30 @@ namespace Revocation
 		 */
 		uint32_t system_epoch_get()
 		{
-			return shadowCtrl->enqEpoch;
+			asm volatile("" ::: "memory");
+			return shadowCtrl->epoch;
 		}
 
 		/**
 		 * Queries whether the specified revocation epoch has finished.
 		 */
+		template<bool AllowPartial = false>
 		uint32_t has_revocation_finished_for_epoch(uint32_t epoch)
 		{
-			/*
-			 * Currently we use a 2-counter design. The enq counter starts at
-			 * deq + 1. Enq counter += 1 when the revocation starts and deq +=
-			 * 1 when a background revocation is done. We know a chunk has gone
-			 * through a full revocation start and finish when the system deq
-			 * counter has caught up with the enq stamp of this chunk.
-			 */
-			return shadowCtrl->deqEpoch >= epoch;
+			asm volatile("" ::: "memory");
+			if (AllowPartial)
+			{
+				return shadowCtrl->epoch > epoch;
+			}
+			return shadowCtrl->epoch - epoch >= (2 + (epoch & 1));
 		}
 
 		// Start a revocation.
 		void system_bg_revoker_kick()
 		{
+			asm volatile("" ::: "memory");
 			shadowCtrl->go = 1;
+			asm volatile("" ::: "memory");
 		}
 	};
 
@@ -305,6 +307,7 @@ namespace Revocation
 		{
 			return 0;
 		}
+		template<bool AllowPartial = true>
 		uint32_t has_revocation_finished_for_epoch(uint32_t previousEpoch)
 		{
 			return true;
@@ -367,6 +370,7 @@ namespace Revocation
 		/**
 		 * Queries whether the specified revocation epoch has finished.
 		 */
+		template<bool AllowPartial = false>
 		uint32_t has_revocation_finished_for_epoch(uint32_t previousEpoch)
 		{
 			// If the revoker is running, prod it to do a bit more work every
@@ -374,6 +378,10 @@ namespace Revocation
 			if ((*epoch & 1) == 1)
 			{
 				revoker_tick();
+			}
+			if (AllowPartial)
+			{
+				return *epoch > previousEpoch;
 			}
 			// We want to check if a complete revocation pass has happened
 			// since the last query of the epoch.  If the last query happened
@@ -399,6 +407,58 @@ namespace Revocation
 		}
 	};
 
+	template<typename WordT, size_t TCMBaseAddr>
+	class FakeRevoker : public Bitmap<WordT, TCMBaseAddr>
+	{
+		private:
+		/**
+		 * A (read-only) pointer to the revocation epoch.  Incremented once
+		 * when revocation starts and once when it finishes.
+		 */
+		uint32_t epoch;
+
+		public:
+		/**
+		 * Software sweeping is implemented synchronously now. The sweeping is
+		 * done when memory is under pressure or malloc() failed. malloc() and
+		 * free() only return when a certain amount of sweeping is done.
+		 */
+		static constexpr bool IsAsynchronous = false;
+
+		/**
+		 * Initialise the software revoker.
+		 */
+		void init()
+		{
+			Bitmap<WordT, TCMBaseAddr>::init();
+			epoch = 0;
+		}
+
+		/**
+		 * Returns the revocation epoch.  This is the number of revocations
+		 * that have started or finished.  It will be even if revocation is not
+		 * running.
+		 */
+		uint32_t system_epoch_get()
+		{
+			return epoch;
+		}
+
+		/**
+		 * Queries whether the specified revocation epoch has finished.
+		 */
+		template<bool AllowPartial = false>
+		uint32_t has_revocation_finished_for_epoch(uint32_t previousEpoch)
+		{
+			return true;
+		}
+
+		/// Start revocation running.  Fake revocation completes instantly.
+		void system_bg_revoker_kick()
+		{
+			epoch++;
+		}
+	};
 	/**
 	 * The revoker to use for this configuration.
 	 *
@@ -412,7 +472,11 @@ namespace Revocation
 	  HardwareAccelerator<uint32_t, 0x80000000>
 #	endif
 #else
+#	ifdef CHERIOT_FAKE_REVOKER
+	  FakeRevoker<uint32_t, 0x80000000>;
+#	else
 	  NoTemporalSafety
+#	endif
 #endif
 	  ;
 } // namespace Revocation
