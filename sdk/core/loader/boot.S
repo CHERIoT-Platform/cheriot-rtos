@@ -153,7 +153,14 @@ start:
 	ecall
 	// The idle thread sleeps and only waits for interrupts.
 .Lidle_loop:
+	// There is a bug in the Flute hardware revoker that means it stops during
+	// wfi, but we want it to run here.  Flute is simulation only at the
+	// moment, so we don't care that the nop is power-inefficient.
+#if defined(TEMPORAL_SAFETY) && defined(FLUTE) && !defined(SOFTWARE_REVOKER)
+	nop
+#else
 	wfi
+#endif
 	j				.Lidle_loop
 
 .Lfill_block:
