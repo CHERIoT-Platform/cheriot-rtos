@@ -195,12 +195,12 @@ compartment_switcher_entry:
 	csetboundsexact    ct2, csp, s1
 	csetaddr           csp, ct2, s0
 #ifdef CONFIG_MSHWM
-	// read and align the stack high water mark
+	// Read and align the stack high water mark
 	csrr               gp, CSR_MSHWM
 	and                gp, gp, ~0xf
-	// skip zeroing if high water mark >= stack poitner
+	// Skip zeroing if high water mark >= stack pointer
 	bge                t2, sp, after_zero
-	// use stack high water mark as base address for zeroing
+	// Use stack high water mark as base address for zeroing
 	// XXX could be out of bounds / unrepresentable if bad csp?
 	csetaddr           ct2, csp, gp
 #endif
@@ -646,6 +646,13 @@ exception_entry_asm:
 
 	// Load the trusted stack pointer to ct1
 	cspecialr          ct1, mtdc
+#ifdef CONFIG_MSHWM
+	// Update the spilled copy of the stack high watermark to ensure that we
+	// will clear all of the stack used by the error handler and the spilled
+	// context.
+	csrr               t0, CSR_MSHWM
+	csw                t0, TrustedStack_offset_mshwm(ct1)
+#endif
 	clhu               tp, TrustedStack_offset_frameoffset(ct1)
 	addi               tp, tp, -TrustedStackFrame_size
 	// ctp points to the current available trusted stack frame.
