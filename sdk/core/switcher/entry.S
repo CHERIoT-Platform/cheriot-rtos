@@ -647,7 +647,7 @@ exception_entry_asm:
 	// Load the trusted stack pointer to ct1
 	cspecialr          ct1, mtdc
 #ifdef CONFIG_MSHWM
-	// Update the spilled copy of the stack high watermark to ensure that we
+	// Update the spilled copy of the stack high water mark to ensure that we
 	// will clear all of the stack used by the error handler and the spilled
 	// context.
 	csrr               t0, CSR_MSHWM
