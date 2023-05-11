@@ -47,8 +47,6 @@ test("multiwaiter")
 -- Test that C code can compile
 test_c("ccompile")
 -- Test stacks
-compartment("stack_exhaustion_trusted")
-    add_files("stack_exhaustion_trusted.cc")
 compartment("stack_integrity_thread")
     add_files("stack_integrity_thread.cc")
 test("stack")
@@ -85,7 +83,7 @@ firmware("test-suite")
     add_deps("crash_recovery_test", "crash_recovery_inner", "crash_recovery_outer")
     add_deps("multiwaiter_test")
     add_deps("ccompile_test")
-    add_deps("stack_test", "stack_exhaustion_trusted", "stack_integrity_thread")
+    add_deps("stack_test", "stack_integrity_thread")
     add_deps("compartment_calls_test", "compartment_calls_inner", "compartment_calls_inner_with_handler")
     -- Set the thread entry point to the test runner.
     on_load(function(target)

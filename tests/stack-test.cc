@@ -9,52 +9,28 @@
 
 using namespace CHERI;
 
-bool leakedSwitcherCapability = false;
-bool threadStackTestFailed    = false;
-bool inTrustedStackExhaustion = false;
+bool threadStackTestFailed = false;
 
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
-	if (holds_switcher_capability(frame))
-	{
-		TEST(false, "Leaked switcher capabilities to stack_test compartment");
-	}
+	TEST(!holds_switcher_capability(frame),
+	     "Leaked switcher capabilities to stack_test compartment");
+	TEST(!threadStackTestFailed, "Thread stack test failed");
 
-	/* It's bad practice to InstallContext by default. If there are
-	 * unpredicted errors, we want to make them sound.
-	 * Therefore, we ForceUnwind by default, and InstallContext if we
-	 * know the inner compartments indicate unexpected failures.
-	 */
-	if (inTrustedStackExhaustion && !leakedSwitcherCapability)
+	// If we're here because of a force unwind from the callee, just continue.
+	if ((mcause == 0x1c) && (mtval == 0))
 	{
 		return ErrorRecoveryBehaviour::InstallContext;
 	}
 
-	if (!inTrustedStackExhaustion && !threadStackTestFailed)
-	{
-		return ErrorRecoveryBehaviour::InstallContext;
-	}
-
-	TEST(false, "Force unwind in the outer compartment");
 	return ErrorRecoveryBehaviour::ForceUnwind;
-}
-
-PermissionSet get_stack_permissions()
-{
-	Capability<void> csp = ({
-		register void *cspRegister asm("csp");
-		asm("" : "=C"(cspRegister));
-		cspRegister;
-	});
-
-	return csp.permissions();
 }
 
 __cheri_callback void test_trusted_stack_exhaustion()
 {
 	exhaust_trusted_stack(&test_trusted_stack_exhaustion,
-	                      &leakedSwitcherCapability);
+	                      &threadStackTestFailed);
 }
 
 __cheri_callback void cross_compartment_call()
@@ -62,6 +38,40 @@ __cheri_callback void cross_compartment_call()
 	TEST(false,
 	     "Cross compartment call with invalid CSP shouldn't be reachable");
 }
+
+namespace
+{
+	PermissionSet get_stack_permissions()
+	{
+		Capability<void> csp = ({
+			register void *cspRegister asm("csp");
+			asm("" : "=C"(cspRegister));
+			cspRegister;
+		});
+
+		return csp.permissions();
+	}
+
+	/**
+	 * Is the stack sufficiently valid that we expect the switcher to be able
+	 * to spill the register frame there?  If so, it should invoke the error
+	 * handler.
+	 */
+	bool stack_is_mostly_valid(const PermissionSet StackPermissions)
+	{
+		static constexpr PermissionSet StackRequiredPermissions{
+		  Permission::Load,
+		  Permission::Store,
+		  Permission::LoadStoreCapability,
+		  Permission::StoreLocal};
+		return StackRequiredPermissions.can_derive_from(StackPermissions);
+	}
+
+	void expect_handler(bool handlerExpected)
+	{
+		set_expected_behaviour(&threadStackTestFailed, handlerExpected);
+	}
+} // namespace
 
 /*
  * The stack tests should cover the edge-cases scenarios for both
@@ -77,36 +87,38 @@ void test_stack()
 	__cheri_callback void (*callback)() = cross_compartment_call;
 
 	debug_log("exhaust trusted stack, do self recursion with a cheri_callback");
-	inTrustedStackExhaustion = true;
-	leakedSwitcherCapability = false;
+	expect_handler(true);
 	test_trusted_stack_exhaustion();
 
 	debug_log("exhausting the compartment stack");
-	inTrustedStackExhaustion = false;
-	threadStackTestFailed    = false;
-	exhaust_thread_stack(&threadStackTestFailed);
+	expect_handler(false);
+	exhaust_thread_stack();
 
 	debug_log("modifying stack permissions on fault");
 	PermissionSet compartmentStackPermissions = get_stack_permissions();
 	for (auto permissionToRemove : compartmentStackPermissions)
 	{
-		set_csp_permissions_on_fault(
-		  &threadStackTestFailed,
-		  compartmentStackPermissions.without(permissionToRemove));
+		auto permissions =
+		  compartmentStackPermissions.without(permissionToRemove);
+		debug_log("Permissions: {}", permissions);
+		expect_handler(stack_is_mostly_valid(permissions));
+		set_csp_permissions_on_fault(permissions);
 	}
 
 	debug_log("modifying stack permissions on cross compartment call");
 	for (auto permissionToRemove : compartmentStackPermissions)
 	{
-		set_csp_permissions_on_call(
-		  &threadStackTestFailed,
-		  compartmentStackPermissions.without(permissionToRemove),
-		  callback);
+		auto permissions =
+		  compartmentStackPermissions.without(permissionToRemove);
+		debug_log("Permissions: {}", permissions);
+		set_csp_permissions_on_call(permissions, callback);
 	}
 
 	debug_log("invalid stack on fault");
-	test_stack_invalid_on_fault(&threadStackTestFailed);
+	expect_handler(false);
+	test_stack_invalid_on_fault();
 
 	debug_log("invalid stack on cross compartment call");
-	test_stack_invalid_on_call(&threadStackTestFailed, callback);
+	expect_handler(false);
+	test_stack_invalid_on_call(callback);
 }

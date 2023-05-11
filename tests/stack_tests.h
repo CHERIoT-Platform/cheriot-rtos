@@ -4,23 +4,28 @@
 
 using namespace CHERI;
 
-__cheri_compartment("stack_exhaustion_trusted") void exhaust_trusted_stack(
+__cheri_compartment("stack_integrity_thread") void exhaust_trusted_stack(
   __cheri_callback void (*fn)(),
   bool *outLeakedSwitcherCapability);
-__cheri_compartment("stack_integrity_thread") void exhaust_thread_stack(
-  bool *outTestFailed);
+__cheri_compartment("stack_integrity_thread") void exhaust_thread_stack();
 __cheri_compartment("stack_integrity_thread") void set_csp_permissions_on_fault(
-  bool         *outTestFailed,
   PermissionSet newPermissions);
 __cheri_compartment("stack_integrity_thread") void set_csp_permissions_on_call(
-  bool         *outTestFailed,
   PermissionSet newPermissions,
   __cheri_callback void (*fn)());
-__cheri_compartment("stack_integrity_thread") void test_stack_invalid_on_fault(
-  bool *outTestFailed);
+__cheri_compartment(
+  "stack_integrity_thread") void test_stack_invalid_on_fault();
 __cheri_compartment("stack_integrity_thread") void test_stack_invalid_on_call(
-  bool *outTestFailed,
   __cheri_callback void (*fn)());
+
+/**
+ * Sets what we expect to happen for this test.  Is a fault expected to invoke
+ * the handler?  The fault handler will set or clear `*outTestFailed` when a
+ * fault is received, depending on whether it was expected.
+ */
+__cheri_compartment("stack_integrity_thread") void set_expected_behaviour(
+  bool *outTestFailed,
+  bool  handlerExpected);
 
 bool is_switcher_capability(void *reg)
 {
