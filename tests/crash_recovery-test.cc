@@ -3,7 +3,6 @@
 
 #define TEST_NAME "Crash recovery (main runner)"
 #include "crash_recovery.h"
-#include "tests.hh"
 #include <cheri.hh>
 #include <errno.h>
 
@@ -33,23 +32,27 @@ void test_crash_recovery()
 {
 	debug_log("Calling crashy compartment indirectly");
 	test_crash_recovery_outer(0);
+	check_stack();
 	TEST(crashes == 0, "Ran crash handler for outer compartment");
 	debug_log("Compartment with no error handler returned normally after "
 	          "nested call crashed");
 
 	debug_log("Calling crashy compartment to fault and unwind");
 	test_crash_recovery_inner(0);
+	check_stack();
 	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
 	TEST(crashes == 1, "Failed to notice crash");
 
 	debug_log("Calling crashy compartment to return normally");
 	test_crash_recovery_inner(1);
+	check_stack();
 	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
 	TEST(crashes == 1, "Should not have crashed");
 	debug_log("Returning normally from crash test");
 
 	debug_log("Calling crashy compartment to double fault and unwind");
 	test_crash_recovery_inner(2);
+	check_stack();
 	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
 	TEST(crashes == 2, "Failed to notice crash");
 }

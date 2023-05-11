@@ -44,24 +44,28 @@ struct TrustedStackFrame
 template<size_t NFrames>
 struct TrustedStackGeneric
 {
-	void    *mepcc;
-	void    *c1;
-	void    *csp;
-	void    *cgp;
-	void    *c4;
-	void    *c5;
-	void    *c6;
-	void    *c7;
-	void    *c8;
-	void    *c9;
-	void    *c10;
-	void    *c11;
-	void    *c12;
-	void    *c13;
-	void    *c14;
-	void    *c15;
-	size_t   mstatus;
-	size_t   mcause;
+	void  *mepcc;
+	void  *c1;
+	void  *csp;
+	void  *cgp;
+	void  *c4;
+	void  *c5;
+	void  *c6;
+	void  *c7;
+	void  *c8;
+	void  *c9;
+	void  *c10;
+	void  *c11;
+	void  *c12;
+	void  *c13;
+	void  *c14;
+	void  *c15;
+	size_t mstatus;
+	size_t mcause;
+#ifdef CONFIG_MSHWM
+	uint32_t mshwm;
+	uint32_t mshwmb;
+#endif
 	uint16_t frameoffset;
 	/**
 	 * Flag indicating whether this thread is in the process of a forced
@@ -69,8 +73,13 @@ struct TrustedStackGeneric
 	 */
 	uint8_t inForcedUnwind;
 	// Padding up to multiple of 16-bytes.
-	uint8_t  pad0;
-	uint16_t padding[2];
+	uint8_t padding[
+#ifdef CONFIG_MSHWM
+	  13
+#else
+	  5
+#endif
+	];
 	/**
 	 * The trusted stack.  There is always one frame, describing the entry
 	 * point.  If this is popped then we have run off the stack and the thread

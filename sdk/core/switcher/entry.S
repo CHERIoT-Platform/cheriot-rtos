@@ -6,6 +6,18 @@
 
 .include "assembly-helpers.s"
 
+#  Symbolic names for the satck high water mark registers until
+#  the assembler knows about them.
+
+/**
+ * Machine-mode stack high water mark CSR
+ */
+#define CSR_MSHWM  0xbc1
+/**
+ * Machine mode stack high water mark stack base CSR
+ */
+#define CSR_MSHWMB 0xbc2
+
 #define MAX_FAULTS_PER_COMPARTMENT_CALL 1024
 
 # Global for the sealing key.  Stored in the switcher's code section.
@@ -105,11 +117,10 @@ switcher_scheduler_entry_csp:
 .endm
 
 /**
- * Zero the stack.  The three operands are the base address (modified during
- * this call, will point at the top at the end), the top address, and a scratch
- * register to use.  The base must be a capability but it must be provided
- * without the c prefix because it is used as both a capability and integer
- * register.  Top and scratch are both clobbered.
+ * Zero the stack.  The three operands are the base address, the top address,
+ * and a scratch register to use.  The base must be a capability but it must
+ * be provided without the c prefix because it is used as both a capability
+ * and integer register.  All three registers are clobbered.
  */
 .macro zero_stack base top scratch
 	addi               \scratch, \top, -32
@@ -181,8 +192,25 @@ compartment_switcher_entry:
 	cgetbase           s1, csp
 	csetaddr           csp, csp, s1
 	sub                s1, s0, s1
-	csetboundsexact    csp, csp, s1
-	zero_stack         sp, s0, gp
+	csetboundsexact    ct2, csp, s1
+	csetaddr           csp, ct2, s0
+#ifdef CONFIG_MSHWM
+	// Read and align the stack high water mark
+	csrr               gp, CSR_MSHWM
+	and                gp, gp, ~0xf
+	// Skip zeroing if high water mark >= stack pointer
+	bge                t2, sp, after_zero
+	// Use stack high water mark as base address for zeroing.  If this faults
+	// then it will trigger a force unwind.  This can happen only if the caller
+	// is doing something bad.
+	csetaddr           ct2, csp, gp
+#endif
+	zero_stack         t2, s0, gp
+after_zero:
+#ifdef CONFIG_MSHWM
+	// store new stack top as stack high water mark
+	csrw               CSR_MSHWM, sp
+#endif
 #endif // CONFIG_NO_SWITCHER_SAFETY
 .Lout:
 	// Fetch the sealing key
@@ -315,6 +343,12 @@ exception_entry_asm:
 	csc                ct0, TrustedStack_offset_mepcc(csp)
 	csrr               t1, mstatus
 	csw                t1, TrustedStack_offset_mstatus(csp)
+#ifdef CONFIG_MSHWM
+	csrr               t1, CSR_MSHWM
+	csw                t1, TrustedStack_offset_mshwm(csp)
+	csrr               t1, CSR_MSHWMB
+	csw                t1, TrustedStack_offset_mshwmb(csp)
+#endif
 	csrr               t1, mcause
 	csw                t1, TrustedStack_offset_mcause(csp)
 
@@ -394,6 +428,12 @@ exception_entry_asm:
 .Linstall_context:
 	clw                x1, TrustedStack_offset_mstatus(csp)
 	csrw               mstatus, x1
+#ifdef CONFIG_MSHWM
+	clw                x1, TrustedStack_offset_mshwm(csp)
+	csrw               CSR_MSHWM, x1
+	clw                x1, TrustedStack_offset_mshwmb(csp)
+	csrw               CSR_MSHWMB, x1
+#endif
 	cspecialw          mepcc, ct2
 	csb                zero, TrustedStack_offset_inForcedUnwind(csp)
 	// c2 is csp, which will be loaded last and will overwrite the trusted
@@ -487,6 +527,24 @@ exception_entry_asm:
 	// We're now out of the exception path, so make sure that mtdc contains
 	// the trusted stack pointer.
 	cspecialw   mtdc, csp
+	// Store an error value in return registers, which will be passed to the
+	// caller on unwind.  They are currently undefined, if we leave this path
+	// for a forced unwind then we will return whatever is in ca0 and ca1 to
+	// the caller so must ensure that we don't leak anything.
+	li                 a0, -1
+	li                 a1, 0
+
+	// We want to make sure we can't leak any switcher state into error
+	// handlers, so if we're faulting in the switcher then we should force
+	// unwind.  We never change the base of PCC in the switcher, so we can
+	// check for this case by ensuring that the spilled mepcc and our current
+	// pcc have the same base.
+	auipcc             ct0, 0
+	clc                ct1, TrustedStack_offset_mepcc(csp)
+	cgetbase           t0, ct0
+	cgetbase           t1, ct1
+	beq                t0, t1, .Lforce_unwind
+
 	// Load the interrupted thread's stack pointer into ct0
 	clc                ct0, TrustedStack_offset_csp(csp)
 	// Fetch the base of compartment stack before cincoffset for later
@@ -497,12 +555,6 @@ exception_entry_asm:
 	// Allocate space for the register save frame on the stack.
 	cincoffset         ct0, ct0, -(16*8)
 	cgetaddr           t1, ct0
-	// Store an error value in return registers, which will be passed to the
-	// caller on unwind.  They are currently undefined, if we leave this path
-	// for a forced unwind then we will return whatever is in ca0 and ca1 to
-	// the caller so must ensure that we don't leak anything.
-	li                 a0, -1
-	li                 a1, 0
 	// If we don't have enough space, give up and force unwind
 	// This check is unnecessary because we would fail in
 	// check_compartment_stack_integrity due to invalid capability. However,
@@ -607,6 +659,13 @@ exception_entry_asm:
 
 	// Load the trusted stack pointer to ct1
 	cspecialr          ct1, mtdc
+#ifdef CONFIG_MSHWM
+	// Update the spilled copy of the stack high water mark to ensure that we
+	// will clear all of the stack used by the error handler and the spilled
+	// context.
+	csrr               t0, CSR_MSHWM
+	csw                t0, TrustedStack_offset_mshwm(ct1)
+#endif
 	clhu               tp, TrustedStack_offset_frameoffset(ct1)
 	addi               tp, tp, -TrustedStackFrame_size
 	// ctp points to the current available trusted stack frame.
@@ -694,9 +753,21 @@ exception_entry_asm:
 	// Update the current frame offset.
 	csw                t2, TrustedStack_offset_frameoffset(ctp)
 #ifndef CONFIG_NO_SWITCHER_SAFETY
+#ifdef CONFIG_MSHWM
+	// read and align the stack high water mark
+	// we will use this as base address for stack clearing
+	// note that it cannot be greater than stack top as we 
+	// we set it to stack top when we pushed to trusted stack frame
+	csrr               tp, CSR_MSHWM
+	and                tp, tp, ~0xf
+#else
 	cgetbase           tp, csp
+#endif
 	cgetaddr           t1, csp
 	csetaddr           ct2, csp, tp
 	zero_stack         t2, t1, tp
+#ifdef CONFIG_MSHWM
+	csrw               CSR_MSHWM, sp
+#endif
 #endif // CONFIG_NO_SWITCHER_SAFETY
 	cret

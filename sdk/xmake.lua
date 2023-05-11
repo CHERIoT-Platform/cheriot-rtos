@@ -232,6 +232,11 @@ rule("firmware")
 			add_defines("SIMULATION")
 		end
 
+		if board.stack_high_water_mark then
+			print("using stack high water mark")
+			add_defines("CONFIG_MSHWM")
+		end
+
 		-- Build the MMIO space for the board
 		local mmio = ""
 		local mmio_start = 0xffffffff

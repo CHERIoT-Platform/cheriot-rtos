@@ -3,7 +3,6 @@
 
 #define TEST_NAME "Crash recovery (inner compartment)"
 #include "crash_recovery.h"
-#include "tests.hh"
 #include <cheri.hh>
 #include <errno.h>
 #include <new>
@@ -45,6 +44,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 
 void *test_crash_recovery_inner(int option)
 {
+	check_stack();
 	int  x[16];
 	int *ptr      = std::launder(x);
 	auto capFault = [=]() {

@@ -21,10 +21,20 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStack, c14, 14 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, c15, 15 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, mstatus, 16 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, mcause, (16 * 8) + 4)
+#ifdef CONFIG_MSHWM
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwm, 17 * 8)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwmb, (17 * 8) + 4)
+
 // Size of everything up to this point
-#define TSTACK_REGFRAME_SZ ((16 * 8) + (2 * 4))
+#define TSTACK_REGFRAME_SZ (18 * 8)
+// frameoffset, inForcedUnwind and padding
+#define TSTACK_HEADER_SZ 16
+#else
+// Size of everything up to this point
+#define TSTACK_REGFRAME_SZ ((16 * 8) + (2* 4))
 // frameoffset, inForcedUnwind and padding
 #define TSTACK_HEADER_SZ 8
+#endif
 // The basic trusted stack is the size of the save area, 8 bytes of state for
 // unwinding information, and then a single trusted stack frame used for the
 // unwind state of the initial thread. (7 * 8) is the size of TrustedStackFrame
