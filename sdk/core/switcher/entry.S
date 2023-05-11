@@ -526,6 +526,24 @@ exception_entry_asm:
 	// We're now out of the exception path, so make sure that mtdc contains
 	// the trusted stack pointer.
 	cspecialw   mtdc, csp
+	// Store an error value in return registers, which will be passed to the
+	// caller on unwind.  They are currently undefined, if we leave this path
+	// for a forced unwind then we will return whatever is in ca0 and ca1 to
+	// the caller so must ensure that we don't leak anything.
+	li                 a0, -1
+	li                 a1, 0
+
+	// We want to make sure we can't leak any switcher state into error
+	// handlers, so if we're faulting in the switcher then we should force
+	// unwind.  We never change the base of PCC in the switcher, so we can
+	// check for this case by ensuring that the spilled mepcc and our current
+	// pcc have the same base.
+	auipcc             ct0, 0
+	clc                ct1, TrustedStack_offset_mepcc(csp)
+	cgetbase           t0, ct0
+	cgetbase           t1, ct1
+	beq                t0, t1, .Lforce_unwind
+
 	// Load the interrupted thread's stack pointer into ct0
 	clc                ct0, TrustedStack_offset_csp(csp)
 	// Fetch the base of compartment stack before cincoffset for later
@@ -536,12 +554,6 @@ exception_entry_asm:
 	// Allocate space for the register save frame on the stack.
 	cincoffset         ct0, ct0, -(16*8)
 	cgetaddr           t1, ct0
-	// Store an error value in return registers, which will be passed to the
-	// caller on unwind.  They are currently undefined, if we leave this path
-	// for a forced unwind then we will return whatever is in ca0 and ca1 to
-	// the caller so must ensure that we don't leak anything.
-	li                 a0, -1
-	li                 a1, 0
 	// If we don't have enough space, give up and force unwind
 	// This check is unnecessary because we would fail in
 	// check_compartment_stack_integrity due to invalid capability. However,
