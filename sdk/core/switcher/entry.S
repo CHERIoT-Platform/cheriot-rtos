@@ -200,8 +200,9 @@ compartment_switcher_entry:
 	and                gp, gp, ~0xf
 	// Skip zeroing if high water mark >= stack pointer
 	bge                t2, sp, after_zero
-	// Use stack high water mark as base address for zeroing
-	// XXX could be out of bounds / unrepresentable if bad csp?
+	// Use stack high water mark as base address for zeroing.  If this faults
+	// then it will trigger a force unwind.  This can happen only if the caller
+	// is doing something bad.
 	csetaddr           ct2, csp, gp
 #endif
 	zero_stack         t2, s0, gp
