@@ -45,6 +45,13 @@ typedef struct
   thread_id_get(void);
 
 /**
+ * Returns a cacheable (read-only) pointer to a global owned by the scheduler
+ * that contains the current thread ID.  Reading this pointer will return the
+ * thread ID of the currently running thread.
+ */
+__cheri_compartment("sched") uint16_t *thread_id_get_pointer(void);
+
+/**
  * Returns the number of cycles accounted to the idle thread.
  *
  * This API is available only if the scheduler is built with accounting support
@@ -61,3 +68,15 @@ __cheri_compartment("sched") uint64_t thread_elapsed_cycles_idle(void);
 __cheri_compartment("sched") uint64_t thread_elapsed_cycles_current(void);
 
 __END_DECLS
+#ifdef __cplusplus
+/**
+ * Helper function that returns the current thread ID.  This will do a
+ * cross-compartment call the first time it is called but not on any subsequent
+ * calls.
+ */
+inline uint16_t thread_id_get_fast()
+{
+	static auto *ptr = thread_id_get_pointer();
+	return *ptr;
+}
+#endif
