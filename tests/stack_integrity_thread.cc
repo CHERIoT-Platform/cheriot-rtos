@@ -6,8 +6,6 @@
 
 using namespace CHERI;
 
-bool *threadStackTestFailed;
-
 /*
  * Define a macro that gets a __cheri_callback capability and calls it, while
  * support adding instruction before the call. This is used to avoid code
@@ -34,24 +32,46 @@ bool *threadStackTestFailed;
 		TEST(false, "Should be unreachable");                                  \
 	})
 
+namespace
+{
+	/// Is the error handler expected?
+	bool expectedHandler = false;
+
+	/// Pointer to the value in the caller used to report failure.
+	bool *threadStackTestFailed;
+
+} // namespace
+
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
-	*threadStackTestFailed = true;
+	debug_log("Error handler called in callee");
+	bool leakedSwitcherCapabilities = holds_switcher_capability(frame);
+	*threadStackTestFailed = !expectedHandler && !leakedSwitcherCapabilities;
 
-	TEST(false,
+	TEST(!leakedSwitcherCapabilities,
+	     "Switcher leaked privileged capabilities");
+
+	TEST(expectedHandler,
 	     "Error handler in compartment that exhausts/invalidated its stack "
 	     "should not be called");
 
-	/* This is unreachable code, but we need to make the compiler happy
-	 * because the function has a non-void return value
-	 */
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
 
-void exhaust_thread_stack(bool *outTestFailed)
+/**
+ * Set up the handler expectations.  Takes the caller's error flag and
+ * whether the handler is expected as arguments.
+ */
+void set_expected_behaviour(bool *outTestFailed, bool handlerExpected)
 {
+	expectedHandler       = handlerExpected;
 	threadStackTestFailed = outTestFailed;
+	*outTestFailed        = handlerExpected;
+}
+
+void exhaust_thread_stack()
+{
 	/* Move the compartment's stack near its end, in order to
 	 * trigger stack exhaustion while the switcher handles
 	 * faults from the compartment.
@@ -73,35 +93,25 @@ void exhaust_thread_stack(bool *outTestFailed)
 	TEST(false, "Should be unreachable");
 }
 
-void set_csp_permissions_on_fault(bool         *outTestFailed,
-                                  PermissionSet newPermissions)
+void set_csp_permissions_on_fault(PermissionSet newPermissions)
 {
-	threadStackTestFailed = outTestFailed;
-
 	__asm__ volatile(
 	  "candperm csp, csp, %0\n"
 	  "csh      zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
 
-	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
 }
 
-void set_csp_permissions_on_call(bool         *outTestFailed,
-                                 PermissionSet newPermissions,
+void set_csp_permissions_on_call(PermissionSet newPermissions,
                                  __cheri_callback void (*fn)())
 {
-	threadStackTestFailed = outTestFailed;
-
 	CALL_CHERI_CALLBACK(fn, "candperm csp, csp, %1\n", newPermissions.as_raw());
 
-	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
 }
 
-void test_stack_invalid_on_fault(bool *outTestFailed)
+void test_stack_invalid_on_fault()
 {
-	threadStackTestFailed = outTestFailed;
-
 	__asm__ volatile("ccleartag     csp, csp\n"
 	                 "csh           zero, 0(cnull)\n");
 
@@ -109,14 +119,22 @@ void test_stack_invalid_on_fault(bool *outTestFailed)
 	TEST(false, "Should be unreachable");
 }
 
-void test_stack_invalid_on_call(bool *outTestFailed,
-                                __cheri_callback void (*fn)())
+void test_stack_invalid_on_call(__cheri_callback void (*fn)())
 {
-	threadStackTestFailed = outTestFailed;
-
 	// the `move zero, %1` is a no-op, just to have an operand
 	CALL_CHERI_CALLBACK(fn, "move zero, %1\nccleartag csp, csp\n", 0);
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
+}
+
+void self_recursion(__cheri_callback void (*fn)())
+{
+	(*fn)();
+}
+
+void exhaust_trusted_stack(__cheri_callback void (*fn)(),
+                           bool *outLeakedSwitcherCapability)
+{
+	self_recursion(fn);
 }

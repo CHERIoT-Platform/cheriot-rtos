@@ -11,6 +11,7 @@ using namespace CHERI;
 
 volatile bool                   shouldDoubleFault             = false;
 volatile bool                   shouldSkipFaultingInstruction = false;
+volatile bool                   shouldCorruptCSP              = false;
 volatile ErrorRecoveryBehaviour recoveryBehaviour;
 
 extern "C" ErrorRecoveryBehaviour
@@ -39,6 +40,14 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		  static_cast<char *>(__builtin_cheri_program_counter_get());
 		readOnlyPointer[0] = 1;
 	}
+	if (shouldCorruptCSP)
+	{
+		asm volatile("cmove csp, cnull\n"
+		             "cjr %0\n"
+		             :
+		             : "C"(__builtin_return_address(0)));
+	}
+
 	return recoveryBehaviour;
 }
 
@@ -58,6 +67,7 @@ void *test_crash_recovery_inner(int option)
 			// simple crash
 			shouldDoubleFault             = false;
 			shouldSkipFaultingInstruction = false;
+			shouldCorruptCSP              = false;
 			debug_log("Trying to store out of bounds in {}, simple unwind",
 			          ptr);
 			recoveryBehaviour = ErrorRecoveryBehaviour::ForceUnwind;
@@ -67,6 +77,7 @@ void *test_crash_recovery_inner(int option)
 			// Skip, return normally
 			shouldDoubleFault             = false;
 			shouldSkipFaultingInstruction = true;
+			shouldCorruptCSP              = false;
 			recoveryBehaviour = ErrorRecoveryBehaviour::InstallContext;
 			capFault();
 			debug_log("Store silently ignored");
@@ -75,10 +86,20 @@ void *test_crash_recovery_inner(int option)
 			// Double fault
 			shouldDoubleFault             = true;
 			shouldSkipFaultingInstruction = true;
+			shouldCorruptCSP              = false;
 			recoveryBehaviour = ErrorRecoveryBehaviour::InstallContext;
 			debug_log("Trying to fault and double fault in the error handler");
 			capFault();
 			TEST(false, "Double fault resumed");
+		case 3:
+			// Corrupt CSP in the error handler
+			shouldDoubleFault             = false;
+			shouldSkipFaultingInstruction = true;
+			shouldCorruptCSP              = true;
+			recoveryBehaviour = ErrorRecoveryBehaviour::InstallContext;
+			debug_log("Trying to fault and corrupt CSP in the error handler");
+			capFault();
+			TEST(false, "Resumed with exploded CSP");
 	}
 	return nullptr;
 }

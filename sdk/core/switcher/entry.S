@@ -6,7 +6,7 @@
 
 .include "assembly-helpers.s"
 
-#  Symbolic names for the satck high water mark registers until
+#  Symbolic names for the stack high water mark registers until
 #  the assembler knows about them.
 
 /**
@@ -97,22 +97,19 @@ switcher_scheduler_entry_csp:
  * This macro assumes t2 and tp are available to use.
  */
 .macro check_compartment_stack_integrity reg
-	// make sure the caller's CSP is valid
-	cgettag            t2, \reg
-	beqz               t2, .Lforce_unwind
+	// Check that the caller's CSP is a tagged, unsealed capability (with at
+	// least load permission - we'll check the other permissions properly
+	// later) by loading a byte.  If this doesn't work, we'll fall off this
+	// path into the exception handler and force unwind.
+	clb                t2, 0(\reg)
 	// make sure the caller's CSP has the expected permissions
 	cgetperm           t2, \reg
 	li                 tp, COMPARTMENT_STACK_PERMISSIONS
 	bne                tp, t2, .Lforce_unwind
-	// make sure the caller's CSP is unsealed
-	cgettype           t2, \reg
-	bnez               t2, .Lforce_unwind
-	// Check that the base is 16-byte aligned
+	// Check that the top and base are 16-byte aligned
 	cgetbase           t2, csp
+	or                 t2, t2, sp
 	andi               t2, t2, 0xf
-	bnez               t2, .Lforce_unwind
-	// Check that the address (top of the remainder) is 16-byte aligned
-	andi               t2, sp, 0xf
 	bnez               t2, .Lforce_unwind
 .endm
 
@@ -149,6 +146,8 @@ switcher_scheduler_entry_csp:
 compartment_switcher_entry:
 	// before we access any privileged state, we can verify the
 	// compartment's csp is valid. If not, force unwind.
+	// Note that this check is purely to protect the callee, not the switcher
+	// itself.
 	check_compartment_stack_integrity csp
 	// The caller should back up all callee saved registers.
 	// mtdc should always have an offset of 0.
@@ -219,15 +218,13 @@ after_zero:
 	csetaddr           cs0, cs0, gp
 	// The target capability is in ct1. Unseal, check tag and load the entry point offset.
 	cunseal            ct1, ct1, cs0
-	// Make sure the export table is valid
-	cgettag            s0, ct1
-	beqz               s0, .Linvalid_entry
-	// Load the entry point offset.
+	// Load the entry point offset.  If cunseal failed then this will fault and
+	// we will force unwind.
 	clhu               s0, ExportEntry_offset_functionStart(ct1)
-	// At this point, we known that the cunseal has succeeded (we didn't trap
-	// on the load) and so it's safe to store the unsealed value of the export
+	// At this point, we know that the cunseal has succeeded (we didn't trap on
+	// the load) and so it's safe to store the unsealed value of the export
 	// table pointer.  Nothing between this point and transition to the callee
-	// may fault.
+	// should fault.
 	csc                ct1, TrustedStackFrame_offset_calleeExportTable(ctp)
 	// Get the flags field into tp
 	clbu               tp, ExportEntry_offset_flags(ct1)
@@ -548,21 +545,15 @@ exception_entry_asm:
 	// Load the interrupted thread's stack pointer into ct0
 	clc                ct0, TrustedStack_offset_csp(csp)
 	// Fetch the base of compartment stack before cincoffset for later
-	// comparison. The subsequent cincoffset could cause the base to change,
-	// if the capability becomes unrepresentable. Even though that would clear
-	// the tag, which we will detect in check_compartment_stack_integrity.
+	// comparison. The subsequent cincoffset could cause the base to change, if
+	// the capability becomes unrepresentable. That would clear the tag, and so
+	// we'd fault later.  Faulting in the switcher will then trigger a forced
+	// unwind.
 	cgetbase           tp, ct0
-	// Allocate space for the register save frame on the stack.
+	// Allocate space for the register save frame on the stack.  If we didn't
+	// have enough space here, we'll fault setting up the call frame, which
+	// will detect a trap in the switcher and force unwind.
 	cincoffset         ct0, ct0, -(16*8)
-	cgetaddr           t1, ct0
-	// If we don't have enough space, give up and force unwind
-	// This check is unnecessary because we would fail in
-	// check_compartment_stack_integrity due to invalid capability. However,
-	// we check for that on the off-chance the capability representation
-	// changes in the future.
-	bltu               t1, tp, .Lforce_unwind
-	// verify the compartment csp
-	check_compartment_stack_integrity ct0
 	// See if we can find a handler:
 	clhu               tp, TrustedStack_offset_frameoffset(csp)
 	li                 t1, TrustedStack_offset_frames
