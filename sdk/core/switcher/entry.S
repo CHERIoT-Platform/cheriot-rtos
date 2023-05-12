@@ -221,8 +221,8 @@ after_zero:
 	// Load the entry point offset.  If cunseal failed then this will fault and
 	// we will force unwind.
 	clhu               s0, ExportEntry_offset_functionStart(ct1)
-	// At this point, we known that the cunseal has succeeded (we didn't trap
-	// on the load) and so it's safe to store the unsealed value of the export
+	// At this point, we know that the cunseal has succeeded (we didn't trap on
+	// the load) and so it's safe to store the unsealed value of the export
 	// table pointer.  Nothing between this point and transition to the callee
 	// should fault.
 	csc                ct1, TrustedStackFrame_offset_calleeExportTable(ctp)
@@ -545,13 +545,14 @@ exception_entry_asm:
 	// Load the interrupted thread's stack pointer into ct0
 	clc                ct0, TrustedStack_offset_csp(csp)
 	// Fetch the base of compartment stack before cincoffset for later
-	// comparison. The subsequent cincoffset could cause the base to change,
-	// if the capability becomes unrepresentable. Even though that would clear
-	// the tag, will cause a trap later that will force unwind.
+	// comparison. The subsequent cincoffset could cause the base to change, if
+	// the capability becomes unrepresentable. That would clear the tag, and so
+	// we'd fault later.  Faulting in the switcher will then trigger a forced
+	// unwind.
 	cgetbase           tp, ct0
 	// Allocate space for the register save frame on the stack.  If we didn't
-	// have enough space here, we'll fault in the unwind path, which will
-	// detect a trap in the switcher and force unwind.
+	// have enough space here, we'll fault setting up the call frame, which
+	// will detect a trap in the switcher and force unwind.
 	cincoffset         ct0, ct0, -(16*8)
 	// See if we can find a handler:
 	clhu               tp, TrustedStack_offset_frameoffset(csp)
