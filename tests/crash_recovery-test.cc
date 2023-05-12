@@ -55,4 +55,11 @@ void test_crash_recovery()
 	check_stack();
 	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
 	TEST(crashes == 2, "Failed to notice crash");
+
+	debug_log(
+	  "Calling crashy compartment to corrupt CSP in stack pointer and unwind");
+	test_crash_recovery_inner(3);
+	check_stack();
+	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
+	TEST(crashes == 3, "Failed to notice crash");
 }
