@@ -17,6 +17,12 @@ void test_thread_pool()
 	// We can't share stack variables, so create a heap allocation that we can
 	// capture as an explicit pointer.
 	int *heapInt = new (malloc(sizeof(int))) int(0);
+	TEST(thread_id_get() == 1,
+	     "Thread id of main thread should be 1, is {}",
+	     thread_id_get());
+	TEST(thread_id_get_fast() == 1,
+	     "Thread id of main thread should be 1, is {}",
+	     thread_id_get_fast());
 	// Run a simple stateless callback that increments a global in the thread
 	// pool.  This demonstrates that we can correctly capture a stateless
 	// function and pass it to the worker thread.
@@ -49,4 +55,14 @@ void test_thread_pool()
 	TEST(*heapInt == 1, "Heap-allocated integer is {}, should be 1", *heapInt);
 	debug_log("Freeing heap int: {}", heapInt);
 	free(heapInt);
+
+	async([]() {
+		auto fast = thread_id_get_fast();
+		auto slow = thread_id_get();
+		TEST(fast == slow,
+		     "Thread ID is different in fast ({}) and slow ({}) accessors",
+		     fast,
+		     slow);
+		TEST(fast != 1, "Thread ID for thread pool thread should not be 1");
+	});
 }

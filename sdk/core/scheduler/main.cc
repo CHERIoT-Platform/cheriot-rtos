@@ -662,6 +662,11 @@ int multiwaiter_wait(Timeout           *timeout,
 	});
 }
 
+uint16_t *thread_id_get_pointer(void)
+{
+	return sched::Thread::current_thread_id_pointer();
+}
+
 #ifdef SCHEDULER_ACCOUNTING
 [[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
 {
