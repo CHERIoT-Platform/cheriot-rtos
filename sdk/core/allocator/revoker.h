@@ -4,12 +4,42 @@
 #pragma once
 #include "alloc_config.h"
 #include "software_revoker.h"
+#include <concepts>
 #include <riscvreg.h>
 #include <stdint.h>
 #include <utils.h>
 
+#if __has_include(<hardware_revoker.hh>)
+#	include <hardware_revoker.hh>
+#elif defined(TEMPORAL_SAFETY) && !defined(SOFTWARE_REVOKER)
+#	error Hardware revoker requested but no hardware_revoker.hh found
+#endif
+
 namespace Revocation
 {
+	/**
+	 * Concept for a hardware revoker.  Boards can provide their own definition
+	 * of this, which must be found in `<hardware_revoker.hh>` in a path
+	 * provided by the board search.
+	 */
+	template<typename T>
+	concept IsHardwareRevokerDevice = requires(T v, uint32_t epoch)
+	{
+		{v.init()};
+		{
+			v.system_epoch_get()
+			} -> std::same_as<uint32_t>;
+		{
+			v.template has_revocation_finished_for_epoch<true>(epoch)
+			} -> std::same_as<uint32_t>;
+		{
+			v.template has_revocation_finished_for_epoch<false>(epoch)
+			} -> std::same_as<uint32_t>;
+		{
+			v.system_bg_revoker_kick()
+			} -> std::same_as<void>;
+	};
+
 	/**
 	 * Class for interacting with the shadow bitmap.  This bitmap controls the
 	 * behaviour of a hardware load barrier, which will invalidate capabilities
@@ -202,27 +232,14 @@ namespace Revocation
 		}
 	};
 
-	template<typename WordT, size_t TCMBaseAddr>
-	class HardwareAccelerator : public Bitmap<WordT, TCMBaseAddr>
+	template<typename WordT,
+	         size_t TCMBaseAddr,
+	         template<typename, size_t>
+	         typename Revoker>
+	requires IsHardwareRevokerDevice<Revoker<WordT, TCMBaseAddr>>
+	class HardwareAccelerator : public Bitmap<WordT, TCMBaseAddr>,
+	                            public Revoker<WordT, TCMBaseAddr>
 	{
-		private:
-		// layout of the shadow space control registers
-		struct ShadowCtrl
-		{
-			uint32_t base;
-			uint32_t pad0;
-			uint32_t top;
-			uint32_t pad1;
-			uint32_t epoch;
-			uint32_t pad2;
-			uint32_t go;
-			uint32_t pad4;
-		};
-		static_assert(offsetof(ShadowCtrl, epoch) == 16);
-		static_assert(offsetof(ShadowCtrl, go) == 24);
-
-		volatile ShadowCtrl *shadowCtrl;
-
 		public:
 		/**
 		 * Currently the only hardware revoker implementation is async which
@@ -235,56 +252,8 @@ namespace Revocation
 		 */
 		void init()
 		{
-			/**
-			 * These two symbols mark the region that needs revocation.  We
-			 * revoke capabilities everywhere from the start of compartment
-			 * globals to the end of the heap.
-			 */
-			extern char __compart_cgps, __export_mem_heap_end;
-
-			auto base = LA_ABS(__compart_cgps);
-			auto top  = LA_ABS(__export_mem_heap_end);
 			Bitmap<WordT, TCMBaseAddr>::init();
-			shadowCtrl       = MMIO_CAPABILITY(ShadowCtrl, shadowctrl);
-			shadowCtrl->base = base;
-			shadowCtrl->top  = top;
-			Debug::Invariant(base < top,
-			                 "Memory map has unexpected layout, base {} is "
-			                 "expected to be below top {}",
-			                 base,
-			                 top);
-		}
-
-		/**
-		 * Returns the revocation epoch.  This is the number of revocations
-		 * that have started.
-		 */
-		uint32_t system_epoch_get()
-		{
-			asm volatile("" ::: "memory");
-			return shadowCtrl->epoch;
-		}
-
-		/**
-		 * Queries whether the specified revocation epoch has finished.
-		 */
-		template<bool AllowPartial = false>
-		uint32_t has_revocation_finished_for_epoch(uint32_t epoch)
-		{
-			asm volatile("" ::: "memory");
-			if (AllowPartial)
-			{
-				return shadowCtrl->epoch > epoch;
-			}
-			return shadowCtrl->epoch - epoch >= (2 + (epoch & 1));
-		}
-
-		// Start a revocation.
-		void system_bg_revoker_kick()
-		{
-			asm volatile("" ::: "memory");
-			shadowCtrl->go = 1;
-			asm volatile("" ::: "memory");
+			Revoker<WordT, TCMBaseAddr>::init();
 		}
 	};
 
@@ -467,13 +436,13 @@ namespace Revocation
 	using Revoker =
 #ifdef TEMPORAL_SAFETY
 #	ifdef SOFTWARE_REVOKER
-	  SoftwareRevoker<uint32_t, 0x80000000>
+	  SoftwareRevoker<uint32_t, REVOKABLE_MEMORY_START>
 #	else
-	  HardwareAccelerator<uint32_t, 0x80000000>
+	  HardwareAccelerator<uint32_t, REVOKABLE_MEMORY_START, HardwareRevoker>
 #	endif
 #else
 #	ifdef CHERIOT_FAKE_REVOKER
-	  FakeRevoker<uint32_t, 0x80000000>;
+	  FakeRevoker<uint32_t, REVOKABLE_MEMORY_START>;
 #	else
 	  NoTemporalSafety
 #	endif
