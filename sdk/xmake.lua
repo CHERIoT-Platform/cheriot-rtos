@@ -198,8 +198,11 @@ rule("firmware")
 		if not boardfile then
 			raise("target " .. target:name() .. " does not define a board name")
 		end
+		-- The directory containing the board file.
+		local boarddir = path.directory(boardfile);
 		if path.basename(boardfile) == boardfile then
-			boardfile = path.join(scriptdir, "boards", boardfile .. '.json')
+			boarddir = path.join(scriptdir, "boards")
+			boardfile = path.join(boarddir, boardfile .. '.json')
 		end
 		import("core.base.json")
 		print("loading board description from ", boardfile)
@@ -207,6 +210,17 @@ rule("firmware")
 		local add_defines = function (defines)
 			for _, d in table.orderpairs(target:deps()) do
 				d:add('defines', defines)
+			end
+		end
+
+		if board.driver_includes then
+			for _, include_path in ipairs(board.driver_includes) do
+				if not path.is_absolute(include_path) then
+					include_path = path.join(boarddir, include_path);
+				end
+				for _, d in table.orderpairs(target:deps()) do
+					d:add('includedirs', include_path)
+				end
 			end
 		end
 
@@ -262,6 +276,16 @@ rule("firmware")
 			mmio_start, mmio, mmio_end, board.heap["end"])
 
 		local code_start = format("0x%x", board.instruction_memory.start)
+
+		-- Set the start of memory that can be revoked.
+		-- By default, this is the start of code memory but it can be
+		-- explicitly overwritten.
+		local revokable_memory_start = code_start;
+		if board.revokable_memory_start then
+			revokable_memory_start = format("0x%x", board.revokable_memory_start);
+		end
+		add_defines("REVOKABLE_MEMORY_START=" .. revokable_memory_start);
+
 		local heap_start = '.'
 		if board.heap.start then
 			heap_start = format("0x%x", board.heap.start)

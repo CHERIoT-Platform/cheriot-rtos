@@ -25,6 +25,10 @@
 	"heap" : {
 		"end"   : 0x80040000
 	},
+	"driver_includes" : [
+		"../include/platform/flute",
+		"../include/platform/generic-riscv"
+	],
 	"defines" : "FLUTE",
 	"timer_hz" : 40000,
 	"tickrate_hz" : 10,
