@@ -17,6 +17,7 @@ riscv32-unknown-unknown
 -Werror
 -Isdk/include/c++-config
 -Isdk/include/libc++
+-Isdk/include/platform/generic-riscv
 -Isdk/include
 -DDEBUG_LOADER=true
 -DDEBUG_ALLOCATOR=true

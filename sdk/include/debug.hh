@@ -4,7 +4,7 @@
 #pragma once
 #include <cheri.hh>
 #include <compartment.h>
-#include <platform.h>
+#include <uart.hh>
 
 #include <array>
 
@@ -280,12 +280,7 @@ namespace
 		 */
 		static void write(char c)
 		{
-			auto *uart16550 = MMIO_CAPABILITY(Uart, uart);
-			// Wait until the UART is ready for transmission
-			while ((uart16550->lineStatus.txBufEmpty) == 0) {}
-
-			// Write the byte
-			uart16550->data = c;
+			MMIO_CAPABILITY(Uart, uart)->blocking_write(c);
 		}
 	};
 
@@ -314,11 +309,7 @@ namespace
 		 */
 		static void write(char c)
 		{
-			// Wait until the UART is ready for transmission
-			while ((uart16550->lineStatus.txBufEmpty) == 0) {}
-
-			// Write the byte
-			uart16550->data = c;
+			uart16550->blocking_write(c);
 		}
 	};
 

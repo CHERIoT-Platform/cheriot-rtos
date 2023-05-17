@@ -5,7 +5,6 @@
 #include <array>
 #include <cheri.hh>
 #include <debug.hh>
-#include <platform.h>
 
 namespace
 {

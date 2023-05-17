@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <uart.hh>
 
 using namespace CHERI;
 
@@ -974,50 +975,27 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
                                                  void         *almightyRW)
 {
 	SchedulerEntryInfo ret;
-	volatile Uart     *uart16550;
 
 	// Populate the 4 roots from system registers.
 	Root::install_root<Root::ISAType::Execute>(almightyPCC);
 	Root::install_root<Root::ISAType::Seal>(almightySeal);
 	Root::install_root<Root::ISAType::RW>(almightyRW);
 
-	auto populateUart = [](volatile Uart *uart, bool intr = false) {
-		// Initialise the serial UART.
-		// http://wiki.osdev.org/Serial_Ports
-		uart->intrEnable = 0x00;
-		// Set the MSB (DLAB) to set up baud rate.
-		uart->lineControl = 0x83;
-#ifdef SIMULATION
-		constexpr uint32_t Divisor = 1;
-#else
-#	error "Unsupported UART"
-#endif
-		uart->data          = Divisor & 0xff;
-		uart->intrEnable    = (Divisor >> 8) & 0xff;
-		uart->lineControl   = 0x03;
-		uart->intrIDandFifo = 0x01;
-		// Enable RX interrupt.
-		if (intr)
-		{
-			uart->intrEnable = 0x01;
-		}
-	};
-
-	uart16550 =
+	auto uart =
 	  build<volatile Uart,
 	        Root::Type::RWGlobal,
 	        PermissionSet{
 	          Permission::Load, Permission::Store, Permission::Global}>(
 	    LA_ABS(__export_mem_uart));
-	// This is only for printf() debugging. No input interrupt is needed.
-	populateUart(uart16550);
+	// Initialise the UART so that we can use it for debugging.
+	uart->init();
 
 	// Set up the UART that's used for debug output.
 	if constexpr (DebugLoader)
 	{
 		// Set the UART.  `Debug::log` and `Debug::Invariant` work after this
 		// point.
-		ExplicitUARTOutput::set_uart(uart16550);
+		ExplicitUARTOutput::set_uart(uart);
 	}
 
 	Debug::log("UART initialised!");
