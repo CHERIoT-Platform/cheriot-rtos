@@ -5,6 +5,7 @@
 
 #include "thread.h"
 #include <stdint.h>
+#include <tick_macros.h>
 #include <utils.h>
 
 namespace

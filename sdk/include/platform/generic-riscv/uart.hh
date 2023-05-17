@@ -1,0 +1,154 @@
+// Copyright Microsoft and CHERIoT Contributors.
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
+#include <concepts>
+#include <stdint.h>
+
+/**
+ * Concept for checking that a UART driver exposes the right interface.
+ */
+template<typename T>
+concept IsUart = requires(volatile T *v, uint8_t byte)
+{
+	{v->init()};
+	{
+		v->can_write()
+		} -> std::same_as<bool>;
+	{
+		v->can_read()
+		} -> std::same_as<bool>;
+	{
+		v->blocking_read()
+		} -> std::same_as<uint8_t>;
+	{v->blocking_write(byte)};
+};
+
+/**
+ * Generic 16550A memory-mapped register layout.
+ *
+ * The registers are 8 bits wide, but typically the bus supports only 4-byte
+ * (or larger) transactions and so they are padded to a 32-bit word.  The
+ * template parameter allows this to be controlled.
+ */
+template<typename RegisterType = uint32_t>
+class Uart16550
+{
+	static void no_custom_init() {}
+
+	public:
+	/**
+	 * The interface to the read/write FIFOs for this UART.
+	 *
+	 * This is also the low byte of the divisor when the divisor latch (bit 7 of
+	 * the `lineControl`) is set.
+	 */
+	RegisterType data;
+	/**
+	 * Interrupt-enabled control / status.  Write 1 to enabled, 0 to disable, to
+	 * each of the low four bits:
+	 *
+	 * 0: Data-receive interrupt
+	 * 1: Transmit holding register empty interrupt
+	 * 2: Receive line status interrupts
+	 * 3: Modem status interrupts.
+	 *
+	 * When bit 7 of `lineControl` is set, this is instead the
+	 * divisor-latch-high register and stores the high 8 bits of the divisor.
+	 */
+	RegisterType intrEnable;
+	/**
+	 * Interrupt identification and FIFO enable/disable.
+	 *
+	 * We only care about the low bit here, which enables the FIFO.
+	 */
+	RegisterType intrIDandFifo;
+	/**
+	 *
+	 */
+	RegisterType lineControl;
+	/**
+	 * Modem control.
+	 */
+	RegisterType modemControl;
+	/**
+	 * The line status word.  The bits that we care about are:
+	 *
+	 * 0: Receive ready
+	 * 5: Transmit buffer empty
+	 */
+	const RegisterType LineStatus;
+	/**
+	 * Modem status.
+	 */
+	const RegisterType ModemStatus;
+	/**
+	 * Scratch register.  Unused.
+	 */
+	RegisterType scratch;
+
+	/**
+	 * Returns true if the transmit buffer is empty.
+	 */
+	__always_inline bool can_write() volatile
+	{
+		return LineStatus & (1 << 5);
+	}
+
+	/**
+	 * Returns true if the receive buffer is not.
+	 */
+	__always_inline bool can_read() volatile
+	{
+		return LineStatus & (1 << 0);
+	}
+
+	/**
+	 * Read one byte, blocking until a byte is available.
+	 */
+	uint8_t blocking_read() volatile
+	{
+		while (!can_read()) {}
+		return data;
+	}
+
+	/**
+	 * Write one byte, blocking until the byte is written.
+	 */
+	void blocking_write(uint8_t byte) volatile
+	{
+		while (!can_write()) {}
+		data = byte;
+	}
+
+	/**
+	 * Initialise the UART.
+	 */
+	template<typename T = decltype(no_custom_init)>
+	void init(int divisor = 1, T &&otherSetup = no_custom_init) volatile
+	{
+		// Disable interrupts
+		intrEnable = 0x00;
+		// Set the divisor latch (we're going to write the divisor) and set the
+		// character width to 8 bits.
+		lineControl = 0x83;
+		// Set the divisor
+		data       = divisor & 0xff;
+		intrEnable = (divisor >> 8) & 0xff;
+		// Run any other setup that we were asked to do.
+		otherSetup();
+		// Clear the divisor latch
+		lineControl = 0x03;
+		// Enable the FIFO and reset
+		intrIDandFifo = 0x01;
+	}
+};
+
+// A platform can provide a custom version of this.
+#ifndef CHERIOT_PLATFORM_CUSTOM_UART
+/// The default UART type.
+using Uart = Uart16550<uint32_t>;
+// Check that our UART matches the concept.
+static_assert(IsUart<Uart>);
+#endif
