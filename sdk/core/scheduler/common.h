@@ -74,6 +74,13 @@ namespace sched
 			 * Multiwaiter type.
 			 */
 			MultiWaiter,
+
+			/**
+			 * Used only as the type marker, not for comparisons.  This
+			 * indicates that the type uses a dynamically allocated type value
+			 * that is provided in the `dynamic_type_marker()` static function.
+			 */
+			Dynamic,
 		} type;
 
 		/**
@@ -111,9 +118,20 @@ namespace sched
 			static_assert(offsetof(T, type) == 0,
 			              "Type field must be at the start of the object");
 			auto unsealed = compart_unseal(this);
-			if (unsealed.is_valid() && unsealed->type == T::TypeMarker)
+			if constexpr (T::TypeMarker == Type::Dynamic)
 			{
-				return unsealed.cast<T>();
+				if (unsealed.is_valid() && uint32_t(unsealed->type) ==
+				                             T::dynamic_type_marker().address())
+				{
+					return unsealed.cast<T>();
+				}
+			}
+			else
+			{
+				if (unsealed.is_valid() && unsealed->type == T::TypeMarker)
+				{
+					return unsealed.cast<T>();
+				}
 			}
 			return nullptr;
 		}

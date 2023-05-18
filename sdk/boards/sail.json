@@ -20,6 +20,13 @@
     "heap": {
         "end": 0x80040000
     },
+    "interrupts": [
+        {
+            "name": "FakeInterrupt",
+            "number": 4,
+            "priority": 2
+        }
+    ],
     "defines" : "SAIL",
     "driver_includes" : [
         "../include/platform/generic-riscv"

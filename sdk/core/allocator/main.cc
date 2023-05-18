@@ -15,7 +15,7 @@
 #include <string.h>
 #include <thread.h>
 #include <token.h>
-#include <utils.h>
+#include <utils.hh>
 
 using namespace CHERI;
 

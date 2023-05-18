@@ -5,7 +5,7 @@
 #define _PRIV_RISCV_H_
 
 #include <stddef.h>
-#include <utils.h>
+#include <utils.hh>
 
 namespace priv
 {

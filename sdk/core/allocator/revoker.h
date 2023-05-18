@@ -7,7 +7,7 @@
 #include <concepts>
 #include <riscvreg.h>
 #include <stdint.h>
-#include <utils.h>
+#include <utils.hh>
 
 #if __has_include(<hardware_revoker.hh>)
 #	include <hardware_revoker.hh>

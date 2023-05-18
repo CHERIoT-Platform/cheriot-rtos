@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <utility>
-#include <utils.h>
+#include <utils.hh>
 
 namespace sched
 {

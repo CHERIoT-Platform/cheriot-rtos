@@ -65,7 +65,9 @@ class Uart16550
 	 */
 	RegisterType intrIDandFifo;
 	/**
-	 *
+	 * Specifies properties of the line (stop bit, parity, and so on).  The
+	 * only bit that we use is bit 7, the divisor latch, which enables writing
+	 * the speed.
 	 */
 	RegisterType lineControl;
 	/**

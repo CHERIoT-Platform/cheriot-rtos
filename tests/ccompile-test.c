@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <event.h>
 #include <futex.h>
+#include <interrupt.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <multiwaiter.h>
@@ -33,4 +34,3 @@
 #include <time.h>
 #include <timeout.h>
 #include <token.h>
-#include <utils.h>

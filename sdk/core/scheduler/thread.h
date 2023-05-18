@@ -7,7 +7,7 @@
 #include <cdefs.h>
 #include <priv/riscv.h>
 #include <strings.h>
-#include <utils.h>
+#include <utils.hh>
 
 namespace sched
 {

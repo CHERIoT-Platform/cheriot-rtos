@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include <utility>
-#include <utils.h>
+#include <utils.hh>
 
 namespace sched
 {
