@@ -105,12 +105,10 @@ namespace sched
 		bool trigger(Queue *queue);
 		bool trigger(Event *event, uint32_t info);
 
-		bool trigger(uint32_t *address)
+		bool trigger(ptraddr_t address)
 		{
-			ptraddr_t sourceAddress    = Capability{eventSource}.address();
-			ptraddr_t triggeredAddress = Capability{address}.address();
-			if ((kind != EventWaiterFutex) ||
-			    (sourceAddress != triggeredAddress))
+			ptraddr_t sourceAddress = Capability{eventSource}.address();
+			if ((kind != EventWaiterFutex) || (sourceAddress != address))
 			{
 				return false;
 			}
@@ -138,12 +136,12 @@ namespace sched
 		template<typename T>
 		static constexpr std::nullptr_t KindFor = nullptr;
 		template<>
-		static constexpr EventWaiterKind KindFor<Queue> = EventWaiterQueue;
+		static constexpr EventWaiterKind KindFor<Queue *> = EventWaiterQueue;
 		template<>
-		static constexpr EventWaiterKind KindFor<Event> =
+		static constexpr EventWaiterKind KindFor<Event *> =
 		  EventWaiterEventChannel;
 		template<>
-		static constexpr EventWaiterKind KindFor<uint32_t> = EventWaiterFutex;
+		static constexpr EventWaiterKind KindFor<ptraddr_t> = EventWaiterFutex;
 		///@}
 
 		public:
@@ -376,7 +374,7 @@ namespace sched
 		 */
 		template<typename T>
 		static uint32_t
-		wake_waiters(T       *source,
+		wake_waiters(T        source,
 		             uint32_t info     = 0,
 		             uint32_t maxWakes = std::numeric_limits<uint32_t>::max())
 		{
@@ -384,7 +382,7 @@ namespace sched
 			// have not yet been scheduled.
 			for (auto *mw = wokenMultiwaiters; mw != nullptr; mw = mw->next)
 			{
-				if constexpr (std::is_same_v<T, Event>)
+				if constexpr (std::is_same_v<T, Event *>)
 				{
 					mw->trigger(source, info);
 				}
@@ -401,7 +399,7 @@ namespace sched
 			  threads,
 			  [&](Thread *thread) {
 				  bool threadReady;
-				  if constexpr (std::is_same_v<T, Event>)
+				  if constexpr (std::is_same_v<T, Event *>)
 				  {
 					  threadReady = thread->multiWaiter->trigger(source, info);
 				  }
@@ -458,7 +456,7 @@ namespace sched
 		 * this multiwaiter and the thread should be awoken.
 		 */
 		template<typename T>
-		bool trigger(T *source, uint32_t info = 0)
+		bool trigger(T source, uint32_t info = 0)
 		{
 			// If we're not waiting on any of this kind of thing, skip scanning
 			// the list.
@@ -469,7 +467,7 @@ namespace sched
 			bool shouldWake = false;
 			for (auto &registeredSource : *this)
 			{
-				if constexpr (std::is_same_v<T, Event>)
+				if constexpr (std::is_same_v<T, Event *>)
 				{
 					shouldWake |= registeredSource.trigger(source, info);
 				}

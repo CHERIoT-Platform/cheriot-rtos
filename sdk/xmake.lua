@@ -290,6 +290,17 @@ rule("firmware")
 		if board.heap.start then
 			heap_start = format("0x%x", board.heap.start)
 		end
+		
+		if board.interrupts then
+			local interruptNames = "CHERIOT_INTERRUPT_NAMES="
+			local interruptConfiguration = "CHERIOT_INTERRUPT_CONFIGURATION="
+			for _, interrupt in ipairs(board.interrupts) do
+				interruptNames = interruptNames .. interrupt.name .. "=" .. math.floor(interrupt.number) .. ", "
+				interruptConfiguration = interruptConfiguration .. "{" .. math.floor(interrupt.number) .. ", " .. math.floor(interrupt.priority) .. "},"
+			end
+			add_defines(interruptNames)
+			add_defines(interruptConfiguration)
+		end
 
 		-- Get the threads config and prepare the predefined macros that describe them
 		local threads = target:values("threads")

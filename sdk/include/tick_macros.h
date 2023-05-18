@@ -14,4 +14,3 @@
 #define MS_PER_TICK (1000U / TICK_RATE_HZ)
 
 #define MS_TO_TICKS(x) ((x) / MS_PER_TICK)
-

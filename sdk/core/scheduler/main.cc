@@ -12,6 +12,7 @@
 #include <cheri.hh>
 #include <compartment.h>
 #include <futex.h>
+#include <interrupt.h>
 #include <locks.hh>
 #include <new>
 #include <priv/riscv.h>
@@ -20,6 +21,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <thread.h>
+#include <token.h>
 
 using namespace CHERI;
 
@@ -50,6 +52,55 @@ void simulation_exit(uint32_t code)
  */
 static uint64_t cyclesAtLastSchedulingEvent;
 
+namespace
+{
+	/**
+	 * Priority-sorted list of threads waiting for a futex.
+	 */
+	sched::Thread *futexWaitingList;
+
+	/**
+	 * Constant value used to represent an unbounded sleep.
+	 */
+	static constexpr auto UnboundedSleep = std::numeric_limits<uint32_t>::max();
+
+	/**
+	 * Helper that wakes a set of up to `count` threads waiting on the futex
+	 * whose address is given by the `key` parameter.
+	 */
+	std::pair<bool, int>
+	futex_wake(ptraddr_t key,
+	           uint32_t  count = std::numeric_limits<uint32_t>::max())
+	{
+		bool shouldYield = false;
+		// The number of threads that we've woken, this is the return value on
+		// success.
+		int woke = 0;
+		sched::Thread::walk_thread_list(
+		  futexWaitingList,
+		  [&](sched::Thread *thread) {
+			  if (thread->futexWaitAddress == key)
+			  {
+				  shouldYield = thread->ready(sched::Thread::WakeReason::Futex);
+				  count--;
+				  woke++;
+			  }
+		  },
+		  [&]() { return count == 0; });
+
+		if (count > 0)
+		{
+			auto multiwaitersWoken =
+			  sched::MultiWaiter::wake_waiters(key, count);
+			count -= multiwaitersWoken;
+			woke += multiwaitersWoken;
+			shouldYield |= (multiwaitersWoken > 0);
+		}
+		return {shouldYield, woke};
+	}
+
+} // namespace
+
 namespace sched
 {
 	using namespace priv;
@@ -64,10 +115,10 @@ namespace sched
 	[[cheri::interrupt_state(disabled)]] void __cheri_compartment("sched")
 	  scheduler_entry(const ThreadLoaderInfo *info)
 	{
-		Debug::Invariant(CHERI::Capability{info}.length() ==
+		Debug::Invariant(Capability{info}.length() ==
 		                   sizeof(*info) * CONFIG_THREADS_NUM,
 		                 "Thread info is {} bytes, expected {} for {} threads",
-		                 CHERI::Capability{info}.length(),
+		                 Capability{info}.length(),
 		                 sizeof(*info) * CONFIG_THREADS_NUM,
 		                 CONFIG_THREADS_NUM);
 
@@ -79,9 +130,7 @@ namespace sched
 			i++;
 		}
 
-#if DEVICE_EXISTS(plic)
-		Plic::master_init();
-#endif
+		InterruptController::master_init();
 		Timer::interrupt_setup();
 	}
 
@@ -135,7 +184,17 @@ namespace sched
 				schedNeeded = true;
 				break;
 			case MCAUSE_INTR | MCAUSE_MEXTERN:
-				schedNeeded = Plic::master().do_external_interrupt();
+				schedNeeded = false;
+				InterruptController::master().do_external_interrupt().and_then(
+				  [&](uint32_t &word) {
+					  // Increment the futex word so that anyone preempted on
+					  // the way into the scheduler sleeping on its old value
+					  // will still see this update.
+					  word++;
+					  // Wake anyone sleeping on this futex.
+					  std::tie(schedNeeded, std::ignore) =
+					    futex_wake(Capability{&word}.address());
+				  });
 				break;
 			case MCAUSE_THREAD_EXIT:
 				// Make the current thread non-runnable.
@@ -476,32 +535,6 @@ int __cheri_compartment("sched")
 	return deallocate<Event>(heapCapability, evt);
 }
 
-[[cheri::interrupt_state(disabled)]] void *__cheri_compartment("sched")
-  ethernet_event_get()
-{
-	return Plic::master().ethernet_event_get();
-}
-
-[[cheri::interrupt_state(disabled)]] void __cheri_compartment("sched")
-  ethernet_intr_complete()
-{
-	Plic::master().ethernet_intr_complete();
-}
-
-namespace
-{
-	/**
-	 * Priority-sorted list of threads waiting for a futex.
-	 */
-	Thread *futexWaitingList;
-
-	/**
-	 * Constant value used to represent an unbounded sleep.
-	 */
-	static constexpr auto UnboundedSleep = std::numeric_limits<uint32_t>::max();
-
-} // namespace
-
 int futex_timed_wait(Timeout *timeout, uint32_t *address, uint32_t expected)
 {
 	if (!check_timeout_pointer(timeout) ||
@@ -547,30 +580,7 @@ int futex_wake(uint32_t *address, uint32_t count)
 	}
 	ptraddr_t key = Capability{address}.address();
 
-	bool shouldYield = false;
-	// The number of threads that we've woken, this is the return value on
-	// success.
-	int woke = 0;
-	Thread::walk_thread_list(
-	  futexWaitingList,
-	  [&](Thread *thread) {
-		  if (thread->futexWaitAddress == key)
-		  {
-			  shouldYield = thread->ready(Thread::WakeReason::Futex);
-			  count--;
-			  woke++;
-		  }
-	  },
-	  [&]() { return count == 0; });
-
-	if (count > 0)
-	{
-		auto multiwaitersWoken =
-		  sched::MultiWaiter::wake_waiters(address, count);
-		count -= multiwaitersWoken;
-		woke += multiwaitersWoken;
-		shouldYield |= (multiwaitersWoken > 0);
-	}
+	auto [shouldYield, woke] = futex_wake(key, count);
 
 	if (shouldYield)
 	{
@@ -665,6 +675,71 @@ int multiwaiter_wait(Timeout           *timeout,
 uint16_t *thread_id_get_pointer(void)
 {
 	return sched::Thread::current_thread_id_pointer();
+}
+
+namespace
+{
+	/**
+	 *
+	 */
+	struct InterruptCapability : Handle
+	{
+		/**
+		 * Type marker used by `Handle`, tells it to use the dynamic path.
+		 */
+		static constexpr auto TypeMarker = Handle::Type::Dynamic;
+
+		/**
+		 * Dynamic type marker used by `Handle`.
+		 */
+		static Capability<void> dynamic_type_marker()
+		{
+			return STATIC_SEALING_TYPE(InterruptKey);
+		}
+
+		/**
+		 * Padding for compatibility with the token layout.  This can go away
+		 * at some point.
+		 */
+		uint32_t padding;
+
+		/**
+		 * The public structure state.
+		 */
+		InterruptCapabilityState state;
+	};
+} // namespace
+
+[[cheri::interrupt_state(disabled)]] const uint32_t *
+interrupt_futex_get(struct SObjStruct *sealed)
+{
+	auto     *interruptCapability = Handle::unseal<InterruptCapability>(sealed);
+	uint32_t *result              = nullptr;
+	if (interruptCapability && interruptCapability->state.mayWait)
+	{
+		InterruptController::master()
+		  .futex_word_for_source(interruptCapability->state.interruptNumber)
+		  .and_then([&](uint32_t &word) {
+			  Capability capability{&word};
+			  capability.permissions() &=
+			    {Permission::Load, Permission::Global};
+			  result = capability.get();
+		  });
+	}
+	return result;
+}
+
+[[cheri::interrupt_state(disabled)]] int
+interrupt_complete(struct SObjStruct *sealed)
+{
+	auto *interruptCapability = Handle::unseal<InterruptCapability>(sealed);
+	if (interruptCapability && interruptCapability->state.mayComplete)
+	{
+		InterruptController::master().interrupt_complete(
+		  interruptCapability->state.interruptNumber);
+		return 0;
+	}
+	return -EPERM;
 }
 
 #ifdef SCHEDULER_ACCOUNTING

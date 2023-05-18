@@ -6,11 +6,19 @@
 #include <cheri.hh>
 #include <errno.h>
 #include <futex.h>
+#include <interrupt.h>
 #include <thread.h>
 #include <thread_pool.h>
 
 using namespace CHERI;
 using namespace thread_pool;
+
+#ifdef SAIL
+DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(interruptCapability,
+                                        FakeInterrupt,
+                                        true,
+                                        true);
+#endif
 
 void test_futex()
 {
@@ -77,4 +85,27 @@ void test_futex()
 	     "expected {}",
 	     ret,
 	     -EINVAL);
+
+#ifdef SAIL
+	// If we're targeting Sail, also do some basic tests of the interrupt
+	// capability.  We don't have an interrupt controller, so these tests are
+	// quite rudimentary.
+	Capability<const uint32_t> interruptFutex =
+	  interrupt_futex_get(STATIC_SEALED_VALUE(interruptCapability));
+	TEST(interruptFutex.is_valid(),
+	     "Interrupt futex {} is not valid",
+	     interruptFutex);
+	TEST(!interruptFutex.permissions().contains(Permission::Store),
+	     "Interrupt futex {} should not have store permission",
+	     interruptFutex);
+	TEST(*interruptFutex == 0,
+	     "Interrupt futex {} for fake interrupt should not have fired but "
+	     "shows {} interrupts",
+	     interruptFutex,
+	     *interruptFutex);
+	TEST(interrupt_complete(STATIC_SEALED_VALUE(interruptCapability)) == 0,
+	     "interrupt_complete returned an error unexpectedly");
+	TEST(interrupt_complete(nullptr) != 0,
+	     "interrupt_complete returned success unexpectedly");
+#endif
 }
