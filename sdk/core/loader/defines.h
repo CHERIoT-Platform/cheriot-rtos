@@ -3,11 +3,6 @@
 
 #pragma once
 
-#ifdef FLUTE
-#	define SHADOW_BASE 0x40000000U
-#	define SHADOW_SZ 0x1000U
-#endif
-
 #define BOOT_STACK_SIZE 1024
 /**
  * The trusted stack size for the loader. Since the loader, the scheduler and

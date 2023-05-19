@@ -29,7 +29,11 @@
 		"../include/platform/flute",
 		"../include/platform/generic-riscv"
 	],
-	"defines" : "FLUTE",
+	"defines" : [
+		"FLUTE",
+		"FLUTE_SHADOW_BASE=0x40000000U",
+		"FLUTE_SHADOW_SIZE=0x1000U"
+	],
 	"timer_hz" : 40000,
 	"tickrate_hz" : 10,
 	"revoker" : "software",
