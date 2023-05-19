@@ -4,9 +4,9 @@
 #pragma once
 
 #include "thread.h"
+#include <platform-timer.hh>
 #include <stdint.h>
 #include <tick_macros.h>
-#include <timer.hh>
 #include <utils.hh>
 
 namespace

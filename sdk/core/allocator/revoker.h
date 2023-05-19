@@ -9,8 +9,8 @@
 #include <stdint.h>
 #include <utils.hh>
 
-#if __has_include(<hardware_revoker.hh>)
-#	include <hardware_revoker.hh>
+#if __has_include(<platform-hardware_revoker.hh>)
+#	include <platform-hardware_revoker.hh>
 #elif defined(TEMPORAL_SAFETY) && !defined(SOFTWARE_REVOKER)
 #	error Hardware revoker requested but no hardware_revoker.hh found
 #endif
