@@ -4,7 +4,7 @@
 #pragma once
 #include <cheri.hh>
 #include <compartment.h>
-#include <uart.hh>
+#include <platform-uart.hh>
 
 #include <array>
 

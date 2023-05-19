@@ -7,7 +7,7 @@
 #include "event.h"
 #include <compartment.h>
 #include <optional>
-#include <plic.hh>
+#include <platform-plic.hh>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

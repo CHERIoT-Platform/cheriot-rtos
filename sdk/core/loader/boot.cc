@@ -16,12 +16,12 @@
 #include "defines.h"
 #include "types.h"
 #include <cheri.hh>
+#include <platform-uart.hh>
 #include <priv/riscv.h>
 #include <riscvreg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <uart.hh>
 
 using namespace CHERI;
 
