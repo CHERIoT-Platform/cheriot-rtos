@@ -13,21 +13,12 @@
     .p2align 2
     .type start,@function
 start:
+	cjal			.Lregs_clear
 	// The common register clearing function will not zero these registers.
 	zeroRegisters	ra, sp, gp, a0
-	cjal			.Lregs_clear
 	// At this point all registers are cleared.
-#ifdef FLUTE
-	// Ugly hack. For some reason if I don't give this first load, subsequent mem
-	// ops will trap on Flute-TCM.
-	li				a3, 0x80000000
-	cspecialr		ca4, mtdc
-	csetaddr		ca4, ca4, a3
-	clc				c0, 0(ca4)
-	li				a0, SHADOW_BASE
-	csetaddr		ca0, ca4, a0
-	li				a1, SHADOW_BASE + SHADOW_SZ
-	cjal			.Lfill_block
+#if __has_include(<platform-early_boot.inc>)
+#	include <platform-early_boot.inc>
 #endif
 
 	la_abs			a3, bootStack
