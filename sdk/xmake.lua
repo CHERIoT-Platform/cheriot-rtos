@@ -215,6 +215,9 @@ rule("firmware")
 
 		if board.driver_includes then
 			for _, include_path in ipairs(board.driver_includes) do
+				-- Allow ${sdk} to refer to the SDK directory, so that external
+				-- board includes can include generic platform bits.
+				include_path = string.gsub(include_path, "${(%w*)}", { sdk=scriptdir })
 				if not path.is_absolute(include_path) then
 					include_path = path.join(boarddir, include_path);
 				end
