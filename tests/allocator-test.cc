@@ -32,7 +32,7 @@ namespace
 	 * Size of an allocation that is big enough that we'll exhaust memory before
 	 * we allocate `MaxAllocCount` of them.
 	 */
-	constexpr size_t BigAllocSize  = 1024 * 16;
+	constexpr size_t BigAllocSize  = 1024 * 32;
 	constexpr size_t AllocSize     = 0xff0;
 	constexpr size_t MaxAllocCount = 16;
 	constexpr size_t TestIterations =
@@ -132,7 +132,8 @@ namespace
 		for (auto &allocation : allocations)
 		{
 			Timeout t{0};
-			allocation = heap_allocate(&noWait, MALLOC_CAPABILITY, 1024 * 16);
+			allocation =
+			  heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize);
 			if (allocation == nullptr)
 			{
 				memoryExhausted = true;
@@ -141,7 +142,7 @@ namespace
 		}
 		TEST(memoryExhausted, "Failed to exhaust memory");
 		debug_log("Trying a non-blocking allocation");
-		TEST(heap_allocate(&noWait, MALLOC_CAPABILITY, 1024 * 16) == nullptr,
+		TEST(heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize) == nullptr,
 		     "Non-blocking heap allocation did not return failure with memory "
 		     "exhausted");
 		debug_log("Trying a huge allocation");
@@ -155,7 +156,7 @@ namespace
 		futex_wake(&freeStart, 1);
 		debug_log("Entering blocking malloc");
 		Timeout t{AllocTimeout};
-		void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, 1024 * 16);
+		void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, BigAllocSize);
 		TEST(ptr != nullptr,
 		     "Failed to make progress on blocking allocation, allocation "
 		     "returned {}",

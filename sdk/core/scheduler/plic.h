@@ -119,6 +119,16 @@ namespace sched
 
 		public:
 		/**
+		 * Returns a reference that allows callers to directly poke the device.
+		 * This is intended to be used only by timers that need to directly
+		 * interact with the interrupt controller.
+		 */
+		PlicType &plic_device()
+		{
+			return device;
+		}
+
+		/**
 		 * If source corresponds to a valid interrupt, return a reference to
 		 * it, otherwise return an invalid value.
 		 */
