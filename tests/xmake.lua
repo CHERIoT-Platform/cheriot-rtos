@@ -94,21 +94,23 @@ firmware("test-suite")
                 priority = 2,
                 entry_point = "run_tests",
                 stack_size = 0x400,
-                trusted_stack_frames = 5
+                -- This must be an odd number for the trusted stack exhaustion
+                -- test to fail in the right compartment.
+                trusted_stack_frames = 9
             },
             {
                 compartment = "thread_pool",
                 priority = 1,
                 entry_point = "thread_pool_run",
                 stack_size = 0x400,
-                trusted_stack_frames = 5
+                trusted_stack_frames = 8
             },
             {
                 compartment = "thread_pool",
                 priority = 1,
                 entry_point = "thread_pool_run",
                 stack_size = 0x400,
-                trusted_stack_frames = 5
+                trusted_stack_frames = 8
             }
         }, {expand = false})
     end)

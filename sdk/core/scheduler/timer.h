@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "plic.h"
 #include "thread.h"
 #include <platform-timer.hh>
 #include <stdint.h>
