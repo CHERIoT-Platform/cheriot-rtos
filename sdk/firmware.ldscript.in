@@ -114,7 +114,6 @@ SECTIONS
 
 	# Everything after this point can be discarded after the loader has
 	# finished.
-	. = ALIGN(512);
 	__export_mem_heap = @heap_start@;
 
 	__cap_relocs :
