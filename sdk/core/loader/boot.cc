@@ -460,11 +460,41 @@ namespace
 					    (size == (LA_ABS(__export_mem_heap_end) -
 					              LA_ABS(__export_mem_heap))))
 					{
+						ptraddr_t end = target + size;
 						Debug::log(
-						  "Assigning the heap ({}--{}) to the allocator",
+						  "Rounding heap ({}--{}) region", target, end);
+						size_t sizeMask =
+						  __builtin_cheri_representable_alignment_mask(size);
+						Debug::log("Applying mask {} to size", sizeMask);
+						size_t    roundedSize = size & sizeMask;
+						ptraddr_t roundedBase = end - roundedSize;
+						Debug::log(
+						  "Rounding heap size down from {} to {} (rounded up "
+						  "to {})",
+						  size,
+						  roundedSize,
+						  __builtin_cheri_round_representable_length(size));
+						Debug::Invariant(
+						  (end & ~sizeMask) == 0,
+						  "End of heap ({}) is not sufficiently aligned ({})",
+						  end,
+						  sizeMask);
+						Debug::log(
+						  "Assigning rounded heap (in {}--{}) to the allocator",
+						  roundedBase,
+						  roundedBase + roundedSize);
+						Debug::Invariant(
+						  roundedBase >= target,
+						  "Rounding heap base ({}) up to {} rounded down!",
 						  target,
-						  target + size);
-						return build(target, size);
+						  roundedBase);
+						auto heap = build(roundedBase, roundedSize);
+						Debug::log("Heap: {}", heap);
+						Debug::Assert(heap.is_valid(),
+						              "Heap capability rounding went wrong "
+						              "somehow ({} is untagged)",
+						              heap);
+						return heap;
 					}
 				}
 			}
