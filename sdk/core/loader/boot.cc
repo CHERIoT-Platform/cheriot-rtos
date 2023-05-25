@@ -1214,7 +1214,19 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	// accesses these in the revoker is very small and amenable to auditing
 	// (the only memory accesses are a load and a store back at the same
 	// location, with interrupts disabled, to trigger the load barrier).
-	auto scaryCapabilities = build<void *, Root::Type::RWStoreL>(
+	//
+	// We use imprecise set-bounds operations here because we need to ensure
+	// that the regions are completely scanned and scanning slightly more is
+	// not a problem unless the revoker is compromised.  The software revoker
+	// already has a terrifying set of rights, so this doesn't really make
+	// things worse and is a nother good reason to use a hardware revoker.
+	// Given that hardware revokers are lower power, faster, and more secure,
+	// there's little reason for the software revoker to be used for anything
+	// other than testing.
+	auto scaryCapabilities = build<Capability<void>,
+	                               Root::Type::RWStoreL,
+	                               Root::Permissions<Root::Type::RWStoreL>,
+	                               false>(
 	  imgHdr.privilegedCompartments.software_revoker().code.start(),
 	  3 * sizeof(void *));
 	// Read-write capability to all globals.  This is scary because a bug in
@@ -1224,17 +1236,25 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	scaryCapabilities[0] =
 	  build(LA_ABS(__compart_cgps),
 	        LA_ABS(__compart_cgps_end) - LA_ABS(__compart_cgps));
+	scaryCapabilities[0].address() = scaryCapabilities[0].base();
 	Debug::log("Wrote scary capability {}", scaryCapabilities[0]);
 	// Read-write capability to the whole heap.  This is scary because a bug in
 	// the revoker could violate heap safety.
 	scaryCapabilities[1] =
-	  build(LA_ABS(__export_mem_heap),
-	        LA_ABS(__export_mem_heap_end) - LA_ABS(__export_mem_heap));
+	  build<void,
+	        Root::Type::RWGlobal,
+	        Root::Permissions<Root::Type::RWGlobal>,
+	        false>(LA_ABS(__export_mem_heap),
+	               LA_ABS(__export_mem_heap_end) - LA_ABS(__export_mem_heap));
+	scaryCapabilities[1].address() = scaryCapabilities[1].base();
 	Debug::log("Wrote scary capability {}", scaryCapabilities[1]);
 	// Read-write capability to the entire stack.  This is scary because a bug
 	// in the revoker could violate thread isolation.
-	scaryCapabilities[2] =
-	  build<void, Root::Type::RWStoreL>(LA_ABS(stackSpace), sizeof(stackSpace));
+	scaryCapabilities[2]           = build<void,
+                                 Root::Type::RWStoreL,
+                                 Root::Permissions<Root::Type::RWStoreL>,
+                                 false>(LA_ABS(stackSpace), sizeof(stackSpace));
+	scaryCapabilities[2].address() = scaryCapabilities[2].base();
 	Debug::log("Wrote scary capability {}", scaryCapabilities[2]);
 #endif
 
