@@ -1219,7 +1219,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	// that the regions are completely scanned and scanning slightly more is
 	// not a problem unless the revoker is compromised.  The software revoker
 	// already has a terrifying set of rights, so this doesn't really make
-	// things worse and is a nother good reason to use a hardware revoker.
+	// things worse and is another good reason to use a hardware revoker.
 	// Given that hardware revokers are lower power, faster, and more secure,
 	// there's little reason for the software revoker to be used for anything
 	// other than testing.
