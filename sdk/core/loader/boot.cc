@@ -1226,7 +1226,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	auto scaryCapabilities = build<Capability<void>,
 	                               Root::Type::RWStoreL,
 	                               Root::Permissions<Root::Type::RWStoreL>,
-	                               false>(
+	                               /* Precise: */ false>(
 	  imgHdr.privilegedCompartments.software_revoker().code.start(),
 	  3 * sizeof(void *));
 	// Read-write capability to all globals.  This is scary because a bug in
