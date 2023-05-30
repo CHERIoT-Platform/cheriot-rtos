@@ -197,12 +197,47 @@ class TicketLock
 	 */
 	void unlock()
 	{
-		uint32_t currentSnapshot = current++;
+		uint32_t currentSnapshot = ++current;
 		if (next > currentSnapshot)
 		{
 			futex_wake(futex_word(), std::numeric_limits<uint32_t>::max());
 		}
 	}
+};
+
+/**
+ * Class that implements the locking concept but does not perform locking.
+ * This is intended to be used with templated data structures that support
+ * locking, for instantiations that do not require locking.
+ */
+class NoLock
+{
+	public:
+	/**
+	 * Attempt to acquire the lock with a timeout.  Always succeeds.
+	 */
+	bool try_lock(Timeout *timeout)
+	{
+		return true;
+	}
+
+	/**
+	 * Try to acquire the lock, do not block.  Always succeeds.
+	 */
+	bool try_lock()
+	{
+		return true;
+	}
+
+	/**
+	 * Acquire the lock.  Always succeeds
+	 */
+	void lock() {}
+
+	/**
+	 * Release the lock.  Does nothing.
+	 */
+	void unlock() {}
 };
 
 template<typename T>
@@ -220,6 +255,7 @@ concept TryLockable = Lockable<T> && requires(T l, Timeout *t)
 		} -> std::same_as<bool>;
 };
 
+static_assert(TryLockable<NoLock>);
 static_assert(TryLockable<FlagLock>);
 static_assert(Lockable<TicketLock>);
 

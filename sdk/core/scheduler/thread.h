@@ -249,7 +249,7 @@ namespace sched
 		template<typename Visitor,
 		         typename TerminateCondition = decltype([]() { return false; })>
 		__always_inline void static walk_thread_list(
-		  ThreadImpl          *list,
+		  ThreadImpl         *&list,
 		  Visitor            &&visitor,
 		  TerminateCondition &&terminateCondition = TerminateCondition{})
 		{
@@ -259,9 +259,12 @@ namespace sched
 				// Get the next pointer *before* any operation that might
 				// remove this thread from the list.
 				auto *next = thread->next;
+				// The thread queues are actually circularly linked lists to
+				// avoid a head and tail pointer for each queue, so we spot the
+				// last thread if it's the end.
+				next = (list == next) ? nullptr : next;
 				visitor(thread);
-				// The last thread left in the list points to itself.
-				thread = (thread == next) ? nullptr : thread = next;
+				thread = next;
 			}
 		}
 
