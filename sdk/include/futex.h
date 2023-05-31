@@ -34,7 +34,8 @@
  *
  * This returns 0 on success or `-EINVAL` if the arguments are invalid.
  */
-__always_inline static int futex_wait(const uint32_t *address, uint32_t expected)
+__always_inline static int futex_wait(const uint32_t *address,
+                                      uint32_t        expected)
 {
 	Timeout t = {0, UnlimitedTimeout};
 	return futex_timed_wait(&t, address, expected);

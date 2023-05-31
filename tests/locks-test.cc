@@ -18,8 +18,8 @@ namespace
 	FlagLock   flagLock;
 	TicketLock ticketLock;
 
-	_Atomic(bool) modified;
-	_Atomic(int)  counter;
+	cheriot::atomic<bool> modified;
+	cheriot::atomic<int>  counter;
 
 	/**
 	 * Test that a lock meets the minimum requirements: it actually provides
@@ -76,7 +76,7 @@ void test_locks()
 			LockGuard g{ticketLock};
 			TEST(counter == 0,
 			     "Ticket lock acquired out of order, counter is {}, expected 0",
-			     counter);
+			     counter.load());
 			counter = 1;
 		});
 		async([&]() {
@@ -84,7 +84,7 @@ void test_locks()
 			LockGuard g{ticketLock};
 			TEST(counter == 1,
 			     "Ticket lock acquired out of order, counter is {}, expected 1",
-			     counter);
+			     counter.load());
 			counter = 2;
 		});
 		// Make sure both other threads are blocked on the ticket lock.
@@ -94,5 +94,5 @@ void test_locks()
 	LockGuard g{ticketLock};
 	TEST(counter == 2,
 	     "Ticket lock acquired out of order, counter is {}, expected 2",
-	     counter);
+	     counter.load());
 }
