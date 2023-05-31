@@ -352,3 +352,10 @@ MigrationBackup/
 .xmake
 build
 compile_commands.json
+
+*.core
+*.vhx
+*.orig
+*.rej
+*.out
+build
