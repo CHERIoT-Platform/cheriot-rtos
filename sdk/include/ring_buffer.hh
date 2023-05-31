@@ -35,9 +35,9 @@ class RingBuffer
 	/// The lock protecting the pop end, if one exists.
 	[[no_unique_address]] PopLock popLock;
 	/// Free-running producer counter.
-	_Atomic(uint32_t) producer;
+	cheriot::atomic<uint32_t> producer;
 	/// Free-running consumer counter.
-	_Atomic(uint32_t) consumer;
+	cheriot::atomic<uint32_t> consumer;
 
 	static_assert(BufferSize < std::numeric_limits<uint32_t>::max() / 2,
 	              "The buffer size cannot be more than half the range of the "

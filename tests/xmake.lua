@@ -72,7 +72,7 @@ firmware("test-suite")
     -- Main entry points
     add_deps("test_runner", "thread_pool")
     -- Helper libraries
-    add_deps("freestanding", "string", "crt", "cxxrt", "atomic")
+    add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed")
     -- Tests
     add_deps("allocator_test")
     add_deps("thread_pool_test")

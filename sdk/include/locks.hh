@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cdefs.h>
+#include <cheriot-atomic.hh>
 #include <debug.hh>
 #include <futex.h>
 #include <semaphore.h>
@@ -49,26 +50,7 @@ class FlagLock
 	};
 
 	/// The lock word.
-	_Atomic(Flag) flag = Flag::Unlocked;
-
-	/**
-	 * Returns the lock word with the type that the `futex_*` family of calls
-	 * expect.
-	 */
-	uint32_t *futex_word()
-	{
-		return reinterpret_cast<uint32_t *>(&flag);
-	}
-
-	/**
-	 * Convenience wrapper around the atomic builtins to operate on the flag
-	 * words.
-	 */
-	__always_inline bool compare_and_swap_flag(Flag &expected, Flag desired)
-	{
-		return __c11_atomic_compare_exchange_strong(
-		  &flag, &expected, desired, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
-	}
+	cheriot::atomic<Flag> flag = Flag::Unlocked;
 
 	public:
 	/**
@@ -78,7 +60,7 @@ class FlagLock
 	bool try_lock(Timeout *timeout)
 	{
 		Flag old = Flag::Unlocked;
-		if (compare_and_swap_flag(old, Flag::Locked))
+		if (flag.compare_exchange_strong(old, Flag::Locked))
 		{
 			return true;
 		}
@@ -89,17 +71,17 @@ class FlagLock
 			{
 				LockDebug::Assert(
 				  old == Flag::Locked, "Unexpected flag value: {}", old);
-				compare_and_swap_flag(old, Flag::LockedWithWaiters);
+				flag.compare_exchange_strong(old, Flag::LockedWithWaiters);
 			}
 			if (old != Flag::Unlocked)
 			{
 				LockDebug::log("hitting slow path wait for {}", &flag);
-				futex_timed_wait(timeout, futex_word(), old);
+				flag.wait(timeout, old);
 			}
 			old = Flag::Unlocked;
 			// Try to acquire, acquire with waiters so that we don't lose wakes
 			// if we win a race.
-			if (compare_and_swap_flag(old, Flag::LockedWithWaiters))
+			if (flag.compare_exchange_strong(old, Flag::LockedWithWaiters))
 			{
 				return true;
 			}
@@ -132,14 +114,13 @@ class FlagLock
 	 */
 	void unlock()
 	{
-		Flag old =
-		  __c11_atomic_exchange(&flag, Flag::Unlocked, __ATOMIC_SEQ_CST);
+		Flag old = flag.exchange(Flag::Unlocked);
 		LockDebug::Assert(old != Flag::Unlocked, "Double-unlocking {}", &flag);
 		// If there are waiters, wake one.
 		if (old == Flag::LockedWithWaiters)
 		{
 			LockDebug::log("hitting slow path wake for {}", &flag);
-			futex_wake(futex_word(), std::numeric_limits<uint32_t>::max());
+			flag.notify_all();
 		}
 	}
 };
@@ -156,21 +137,12 @@ class TicketLock
 	/**
 	 * The value of the current ticket being served.
 	 */
-	_Atomic(uint32_t) current;
+	cheriot::atomic<uint32_t> current;
 
 	/**
 	 * The next ticket that a caller can take.
 	 */
-	_Atomic(uint32_t) next;
-
-	/**
-	 * Returns the lock word with the type that the `futex_*` family of calls
-	 * expect.
-	 */
-	uint32_t *futex_word()
-	{
-		return reinterpret_cast<uint32_t *>(&current);
-	}
+	cheriot::atomic<uint32_t> next;
 
 	public:
 	/**
@@ -186,7 +158,7 @@ class TicketLock
 			{
 				return;
 			}
-			futex_wait(futex_word(), currentSnapshot);
+			current.wait(currentSnapshot);
 		} while (true);
 	}
 
@@ -200,7 +172,7 @@ class TicketLock
 		uint32_t currentSnapshot = ++current;
 		if (next > currentSnapshot)
 		{
-			futex_wake(futex_word(), std::numeric_limits<uint32_t>::max());
+			current.notify_all();
 		}
 	}
 };
