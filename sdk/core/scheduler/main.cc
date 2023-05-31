@@ -535,7 +535,7 @@ int __cheri_compartment("sched")
 	return deallocate<Event>(heapCapability, evt);
 }
 
-int futex_timed_wait(Timeout *timeout, uint32_t *address, uint32_t expected)
+int futex_timed_wait(Timeout *timeout, const uint32_t *address, uint32_t expected)
 {
 	if (!check_timeout_pointer(timeout) ||
 	    !check_pointer<PermissionSet{Permission::Load}>(address))

@@ -23,7 +23,7 @@
  *  - `-ETIMEOUT` if the timeout expires.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  futex_timed_wait(Timeout *ticks, uint32_t *address, uint32_t expected);
+  futex_timed_wait(Timeout *ticks, const uint32_t *address, uint32_t expected);
 
 /**
  * Compare the value at `address` to `expected` and, if they match, sleep the
@@ -34,7 +34,7 @@
  *
  * This returns 0 on success or `-EINVAL` if the arguments are invalid.
  */
-__always_inline static int futex_wait(uint32_t *address, uint32_t expected)
+__always_inline static int futex_wait(const uint32_t *address, uint32_t expected)
 {
 	Timeout t = {0, UnlimitedTimeout};
 	return futex_timed_wait(&t, address, expected);
