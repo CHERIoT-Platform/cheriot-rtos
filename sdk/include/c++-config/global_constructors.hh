@@ -1,3 +1,6 @@
+// Copyright Microsoft and CHERIoT Contributors.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include <cheri.hh>
 #include <riscvreg.h>

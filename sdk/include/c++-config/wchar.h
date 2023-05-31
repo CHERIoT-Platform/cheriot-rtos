@@ -1,3 +1,6 @@
+// Copyright Microsoft and CHERIoT Contributors.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 /**
  * Minimal wchar.h  This exists because libc++ doesn't support platforms that

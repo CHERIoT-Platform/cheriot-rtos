@@ -1,3 +1,6 @@
+// Copyright Microsoft and CHERIoT Contributors.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 /**
  * This file contains concrete implementations of the C++ replaceable new and
