@@ -137,6 +137,14 @@ void *__cheri_compartment("alloc")
                       size_t             size);
 
 /**
+ * Add a claim to an allocation.  The object will be counted against the quota
+ * provided by the first argument until a corresponding call to `heap_free`.
+ * Note that this can be used with interior pointers.
+ */
+size_t __cheri_compartment("alloc")
+  heap_claim(struct SObjStruct *heapCapability, void *pointer);
+
+/**
  * Free a heap allocation.
  *
  * Returns 0 on success, or `-EINVAL` if `ptr` is not a valid pointer to the
