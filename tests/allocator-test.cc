@@ -246,6 +246,60 @@ namespace
 		allocations.clear();
 	}
 
+	void test_claims()
+	{
+		debug_log("Beginning tests on claims");
+		size_t allocSize       = 128;
+		auto  *heap2           = STATIC_SEALED_VALUE(secondHeap);
+		size_t mallocQuotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
+		CHERI::Capability alloc{
+		  heap_allocate(&noWait, MALLOC_CAPABILITY, allocSize)};
+		TEST(alloc.is_valid(), "Allocation failed");
+		int  claimCount = 0;
+		auto claim      = [&]() {
+            size_t claimSize = heap_claim(heap2, alloc);
+            claimCount++;
+            TEST(claimSize == allocSize,
+			          "{}-byte allocation claimed as {} bytes (claim number {})",
+			          allocSize,
+			          claimSize,
+			          claimCount);
+		};
+		claim();
+		int ret = heap_free(heap2, alloc);
+		TEST(ret == 0, "Freeing claimed allocation returned {}", ret);
+		size_t quotaLeft = heap_quota_remaining(heap2);
+		TEST(quotaLeft == 1024,
+		     "After claim and free from 1024-byte quota, {} bytes left",
+		     quotaLeft);
+		claim();
+		quotaLeft = heap_quota_remaining(heap2);
+		claim();
+		size_t quotaLeftAfterSecondClaim = heap_quota_remaining(heap2);
+		TEST(quotaLeft == quotaLeftAfterSecondClaim,
+		     "Claiming twice reduced quota from {} to {}",
+		     quotaLeft,
+		     quotaLeftAfterSecondClaim);
+		ret = heap_free(MALLOC_CAPABILITY, alloc);
+		TEST(ret == 0, "Failed to free claimed object, return: {}", ret);
+		size_t mallocQuota2 = heap_quota_remaining(MALLOC_CAPABILITY);
+		TEST(mallocQuotaLeft == mallocQuota2,
+		     "Freeing claimed object did not restore quota to {}, quota is {}",
+		     mallocQuotaLeft,
+		     mallocQuota2);
+		ret = heap_free(heap2, alloc);
+		TEST(ret == 0, "Freeing claimed allocation returned {}", ret);
+		ret = heap_free(heap2, alloc);
+		TEST(ret == 0, "Freeing claimed (twice) allocation returned {}", ret);
+		quotaLeft = heap_quota_remaining(heap2);
+		TEST(quotaLeft == 1024,
+		     "After claim and free twice from 1024-byte quota, {} bytes left",
+		     quotaLeft);
+		TEST(!__builtin_launder(&alloc)->is_valid(),
+		     "Heap capability still valid after releasing last claim: {}",
+		     alloc);
+	}
+
 } // namespace
 
 /**
@@ -273,6 +327,7 @@ void test_allocator()
 	TEST(quotaLeft == 1024,
 	     "After alloc and free from 1024-byte quota, {} bytes left",
 	     quotaLeft);
+	test_claims();
 
 	test_blocking_allocator();
 	test_revoke();

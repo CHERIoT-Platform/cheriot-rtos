@@ -284,6 +284,7 @@ namespace displacement_proxy
 struct __packed __aligned(MallocAlignment)
 MChunkHeader
 {
+	static constexpr size_t OwnerIDWidth = 14;
 	/**
 	 * Compressed size of the predecessor chunk.  See cell_prev().
 	 */
@@ -294,13 +295,12 @@ MChunkHeader
 	SmallSize currSize;
 
 	/// The unique identifier of the allocator.
-	uint16_t ownerID;
+	uint16_t ownerID : OwnerIDWidth;
 	bool     isPrevInUse : 1;
 	bool     isCurrInUse : 1;
+	/// Head of a linked list of claims on this allocation
+	uint16_t claims;
 
-	/* There are 18 bits free in the header here for future use */
-
-	public:
 	__always_inline auto cell_prev()
 	{
 		return displacement_proxy::
@@ -1081,6 +1081,7 @@ class MState
 			return AllocationFailureDeallocationNeeded{};
 		}
 		auto header = MChunkHeader::from_body(ret);
+
 		// The allocation might be just on the boundary where the requested
 		// size is less than the quota but the allocated size is greater. In
 		// this case, return the memory without quarantining and retry.
@@ -1129,42 +1130,13 @@ class MState
 	}
 
 	/**
-	 * @brief Free a valid user cap into this MState. This only places the chunk
-	 * onto the quarantine list. It tries to dequeue the quarantine list a
-	 * couple of times.
-	 *
-	 * The `mem` parameter is the user-provided pointer, which has been checked
-	 * as a valid pointer to *something* in the heap, but has not yet been
-	 * checked as a valid pointer to a complete heap allocation.
-	 *
-	 * If this is a valid pointer to allocated memory then it must be owned by
-	 * the quota identified by `identifier`.  If so, then it will be freed and
-	 * the used memory returned to the `quota` provided by the caller.
-	 *
-	 * If `reallyFree` is false, this simply checks whether freeing would
-	 * succeed but does not actually deallocate the object.
-	 *
-	 * @return 0 if user input mem is correct. Error code otherwise
+	 * Returns
+	 * the size of the allocation associated with `chunk`.
 	 */
-	int mspace_free(CHERI::Capability<void> mem,
-	                size_t                 &quota,
-	                uint16_t                identifier,
-	                bool                    reallyFree)
+	size_t chunk_body_size(MChunkHeader &chunk) const
 	{
-		// Expand the bounds of the freed object to the whole heap and set the
-		// address that we're looking at to the base of the requested
-		// capability.
-		CHERI::Capability user{mem};
-		ptraddr_t         base = mem.base();
-		mem                    = heapStart;
-		mem.address()          = base;
-		CHERI::Capability correct{mem};
-		/*
-		 * Rederived into allocator capability. From now on faults on this
-		 * pointer are internal.
-		 */
-		auto   p        = MChunkHeader::from_body(mem);
-		size_t bodySize = p->size_get() - sizeof(MChunkHeader);
+		size_t    bodySize = chunk.size_get() - sizeof(MChunkHeader);
+		ptraddr_t base     = chunk.body().address();
 		if (!CHERI::is_precise_range(base, bodySize))
 		{
 			/*
@@ -1179,30 +1151,20 @@ class MState
 			  "capability. "
 			  "Something is wrong during allocation.");
 		}
-		correct.bounds() = bodySize;
-		if (user != correct)
-		{
-			Debug::log(
-			  "Freed capability: {} is almost correct, but not quite. Please "
-			  "pass in the exact capability {}.",
-			  user,
-			  correct);
-			return -EINVAL;
-		}
+		return bodySize;
+	}
 
-		// At this point, we know mem is capability-aligned.
-
-		if (p->owner() != identifier)
-		{
-			Debug::log("Trying to free memory owned by {} with allocator id {}",
-			           p->owner(),
-			           identifier);
-			return -EPERM;
-		}
-		if (!reallyFree)
-		{
-			return 0;
-		}
+	/**
+	 * Free a chunk.  The `bodySize` parameter specifies the size of the
+	 * allocated space that must be zeroed.  This must be calculated by the
+	 * caller and so is provided here to avoid recalculating it.
+	 */
+	int mspace_free(MChunkHeader &chunk, size_t bodySize)
+	{
+		// Expand the bounds of the freed object to the whole heap and set the
+		// address that we're looking at to the base of the requested
+		// capability.
+		CHERI::Capability mem{chunk.body()};
 
 		/*
 		 * Paint the shadow bitmap and then zero the memory contents.  These
@@ -1211,7 +1173,7 @@ class MState
 		 * window in which preemption could allow a store through a copy of
 		 * the user capability (or its progeny) that undid our work of zeroing!
 		 */
-		revoker.shadow_paint_range(mem.address(), p->cell_next(), true);
+		revoker.shadow_paint_range(mem.address(), chunk.cell_next(), true);
 
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk
@@ -1222,9 +1184,6 @@ class MState
 		auto epoch = revoker.system_epoch_get();
 
 		capaligned_zero(mem, bodySize);
-
-		/* Release the occupied space back to the allocation authority */
-		quota += bodySize + sizeof(MChunkHeader);
 
 		/*
 		 * We do not need to store lists for odd epochs (that is, things freed
@@ -1237,8 +1196,8 @@ class MState
 		 * Enqueue this chunk to quarantine.  Its header is still marked as
 		 * being allocated.
 		 */
-		quarantine_pending_push(epoch, p);
-		heapQuarantineSize += p->size_get();
+		quarantine_pending_push(epoch, &chunk);
+		heapQuarantineSize += chunk.size_get();
 
 		/*
 		 * Perhaps there has been some progress on revocation.  Dequeue 3 times.
@@ -1249,6 +1208,36 @@ class MState
 		mspace_bg_revoker_kick();
 
 		return 0;
+	}
+
+	/**
+	 * Given a pointer that is probably in an allocation, try to find the start
+	 * of that allocation.  Returns the header if this is a valid pointer into
+	 * an allocation, nullptr otherwise.
+	 */
+	MChunkHeader *allocation_start(ptraddr_t address)
+	{
+		address &= ~MallocAlignMask;
+		ptraddr_t base = heapStart.address();
+		if ((address < base) || (address > heapStart.top()))
+		{
+			return nullptr;
+		}
+		if (revoker.shadow_bit_get(address))
+		{
+			return nullptr;
+		}
+		while (!revoker.shadow_bit_get(address) && (address > base))
+		{
+			address -= MallocAlignment;
+		}
+		CHERI::Capability<MChunkHeader> header{heapStart.cast<MChunkHeader>()};
+		header.address() = address;
+		if (header->is_in_use())
+		{
+			return header;
+		}
+		return nullptr;
 	}
 
 	/**

@@ -306,8 +306,7 @@ namespace
 		if (capability->identifier == 0)
 		{
 			static uint32_t nextIdentifier = 1;
-			if (nextIdentifier >
-			    std::numeric_limits<decltype(capability->identifier)>::max())
+			if (nextIdentifier >= (1 << MChunkHeader::OwnerIDWidth))
 			{
 				return nullptr;
 			}
@@ -316,29 +315,404 @@ namespace
 		return capability;
 	}
 
+	/**
+	 * Object representing a claim.  When a heap object is claimed, an instance
+	 * of this structure exists to track the reference count per claimer.
+	 */
+	class Claim
+	{
+		/**
+		 * The identifier of the owning allocation capability.
+		 */
+		uint16_t allocatorIdentifier = 0;
+		/**
+		 * Next 'pointer' encoded as a shifted offset from the start of the
+		 * heap.
+		 */
+		uint16_t encodedNext = 0;
+		/**
+		 * Saturating reference count.  We use one to indicate a single
+		 * reference count rather than zero to slightly simplify the logic at
+		 * the expense of saturating one increment earlier than we need to.  It
+		 * is highly unlikely that any vaguely sensible code will ever
+		 * encounter the saturation case, so this is unlikely to be a problem.
+		 * It might become one if we ever move to using a 16-bit reference
+		 * count (which would require a different allocation path for claim
+		 * structures to make sense).
+		 */
+		uint32_t referenceCount = 1;
+
+		/**
+		 * Private constructor, creates a new claim with a single reference
+		 * count.
+		 */
+		Claim(uint16_t identifier, uint16_t nextClaim)
+		  : allocatorIdentifier(identifier), encodedNext(nextClaim)
+		{
+		}
+
+		/**
+		 * Destructor is private, claims should always be destroyed via
+		 * `destroy`.
+		 */
+		~Claim() = default;
+
+		friend class Iterator;
+
+		public:
+		/**
+		 * Returns the owner of this claim.
+		 */
+		[[nodiscard]] uint16_t owner() const
+		{
+			return allocatorIdentifier;
+		}
+
+		/**
+		 * Returns the value of the compressed next pointer.
+		 */
+		[[nodiscard]] uint16_t encoded_next() const
+		{
+			return encodedNext;
+		}
+
+		/**
+		 * Claims list iterator.  This wraps a next pointer and so can be used
+		 * both to inspect a value and update it.
+		 */
+		class Iterator
+		{
+			/**
+			 * Placeholder value for end iterators.
+			 */
+			static inline const uint16_t EndPlaceholder = 0;
+
+			/**
+			 * A pointer to the encoded next pointer.
+			 */
+			uint16_t *encodedNextPointer =
+			  const_cast<uint16_t *>(&EndPlaceholder);
+
+			public:
+			/**
+			 * Default constructor returns a generic end iterator.
+			 */
+			Iterator() = default;
+
+			/// Copy constructor.
+			__always_inline Iterator(const Iterator &other) = default;
+
+			/// Constructor from an explicit next pointer.
+			__always_inline Iterator(uint16_t *nextPointer)
+			  : encodedNextPointer(nextPointer)
+			{
+			}
+
+			/**
+			 * Dereference.  Returns the claim that this iterator points to.
+			 */
+			__always_inline Claim *operator*()
+			{
+				return Claim::from_encoded_offset(*encodedNextPointer);
+			}
+
+			/**
+			 * Dereference.  Returns the claim that this iterator points to.
+			 */
+			__always_inline Claim *operator->()
+			{
+				return Claim::from_encoded_offset(*encodedNextPointer);
+			}
+
+			/// Iteration termination condition.
+			__always_inline bool operator!=(const Iterator Other)
+			{
+				return *encodedNextPointer != *Other.encodedNextPointer;
+			}
+
+			/**
+			 * Preincrement, moves to the next element.
+			 */
+			Iterator &operator++()
+			{
+				Claim *next = **this;
+				encodedNextPointer =
+				  next != nullptr ? &next->encodedNext : nullptr;
+				return *this;
+			}
+
+			/**
+			 * Assignment, replaces the claim that this iterator points to with
+			 * the new one.
+			 */
+			Iterator &operator=(Claim *claim)
+			{
+				*encodedNextPointer = claim->encode_address();
+				return *this;
+			}
+
+			/**
+			 * Returns the next pointer that this iterator refers to.
+			 */
+			uint16_t *pointer()
+			{
+				return encodedNextPointer;
+			}
+		};
+
+		/**
+		 * Allocate a new claim.  This will fail if space is not immediately
+		 * available.
+		 *
+		 * Returns a pointer to the new allocation on success, nullptr on
+		 * failure.
+		 */
+		static Claim *create(PrivateAllocatorCapabilityState &capability,
+		                     uint16_t                         next)
+		{
+			auto space = gm->mspace_dispatch(
+			  sizeof(Claim), capability.quota, capability.identifier);
+			if (!std::holds_alternative<Capability<void>>(space))
+			{
+				return nullptr;
+			}
+			return new (std::get<Capability<void>>(space))
+			  Claim(capability.identifier, next);
+		}
+
+		/**
+		 * Destroy a claim, which must have been allocated with `capability`.
+		 */
+		static void destroy(PrivateAllocatorCapabilityState &capability,
+		                    Claim                           *claim)
+		{
+			Capability heap{gm->heapStart};
+			heap.address() = Capability{claim}.address();
+			auto chunk     = MChunkHeader::from_body(heap);
+			capability.quota += chunk->size_get();
+			// We could skip quarantine for these objects, since we know that
+			// they haven't escaped, but they're small so it's probably not
+			// worthwhile.
+			gm->mspace_free(*chunk, sizeof(Claim));
+		}
+
+		/**
+		 * Add a reference.  If this would overflow, the reference is pinned
+		 * and this never decrements.
+		 */
+		void reference_add()
+		{
+			if (referenceCount !=
+			    std::numeric_limits<decltype(referenceCount)>::max())
+			{
+				referenceCount++;
+			}
+		}
+
+		/**
+		 * Decrement the reference count and return whether this has dropped
+		 * the reference count to 0.
+		 */
+		bool reference_remove()
+		{
+			if (referenceCount !=
+			    std::numeric_limits<decltype(referenceCount)>::max())
+			{
+				referenceCount--;
+			}
+			return referenceCount == 0;
+		}
+
+		/**
+		 * Decode an encoded offset and return a pointer to the claim.
+		 */
+		static Claim *from_encoded_offset(uint16_t offset)
+		{
+			if (offset == 0)
+			{
+				return nullptr;
+			}
+			Capability<Claim> ret{gm->heapStart.cast<Claim>()};
+			ret.address() += offset << MallocAlignShift;
+			ret.bounds() = sizeof(Claim);
+			return ret;
+		}
+
+		/**
+		 * Encode the address of this object in a 16-bit value.
+		 */
+		uint16_t encode_address()
+		{
+			ptraddr_t address = Capability{this}.address();
+			address -= gm->heapStart.address();
+			Debug::Assert((address & MallocAlignMask) == 0,
+			              "Claim at address {} is insufficiently aligned",
+			              address);
+			address >>= MallocAlignShift;
+			Debug::Assert(address <= std::numeric_limits<uint16_t>::max(),
+			              "Encoded claim address is too large: {}",
+			              address);
+			return address;
+		}
+	};
+	static_assert(sizeof(Claim) <= (1 << MallocAlignShift),
+	              "Claims should fit in the smallest possible allocation");
+
+	/**
+	 * Find a claim if one exists.  Returns a reference to the next pointer
+	 * that refers to this claim.
+	 */
+	std::pair<uint16_t &, Claim *> claim_find(uint16_t      owner,
+	                                          MChunkHeader &chunk)
+	{
+		for (Claim::Iterator i{&chunk.claims}, end; i != end; ++i)
+		{
+			Claim *claim = *i;
+			if (claim->owner() == owner)
+			{
+				return {*i.pointer(), claim};
+			}
+		}
+		return {chunk.claims, nullptr};
+	}
+
+	/**
+	 * Add a claim to a chunk, owned by `owner`.  This returns true if the
+	 * claim was successfully added, false otherwise.
+	 */
+	bool claim_add(PrivateAllocatorCapabilityState &owner, MChunkHeader &chunk)
+	{
+		Debug::log("Adding claim for {}", owner.identifier);
+		auto [next, claim] = claim_find(owner.identifier, chunk);
+		if (claim)
+		{
+			Debug::log("Adding second claim");
+			claim->reference_add();
+			return true;
+		}
+		bool   isOwner = (chunk.ownerID == owner.identifier);
+		size_t size    = chunk.size_get();
+		if (!isOwner)
+		{
+			if (owner.quota < size)
+			{
+				Debug::log("quota insufficient");
+				return false;
+			}
+			owner.quota -= size;
+		}
+		claim = Claim::create(owner, next);
+		if (claim != nullptr)
+		{
+			Debug::log("Allocated new claim");
+			// If this is the owner, remove the owner and downgrade our
+			// ownership to a claim.  This simplifies the deallocation path.
+			if (isOwner)
+			{
+				chunk.ownerID = 0;
+				claim->reference_add();
+			}
+			next = claim->encode_address();
+			return true;
+		}
+		// If we failed to allocate the claim object, undo adding this to our
+		// quota.
+		if (!isOwner)
+		{
+			owner.quota += size;
+		}
+		Debug::log("Failed to add claim");
+		return false;
+	}
+
+	/**
+	 * Drop a claim on an object by the specified allocator capability.  If
+	 * `reallyDrop` is false then this does not actually drop the claim but
+	 * returns true if it *could have* dropped a claim.
+	 * Returns true if a claim was dropped, false otherwise.
+	 */
+	bool claim_drop(PrivateAllocatorCapabilityState &owner,
+	                MChunkHeader                    &chunk,
+	                bool                             reallyDrop)
+	{
+		Debug::log("Dropping claim with {} ({})", owner.identifier, &owner);
+		auto [next, claim] = claim_find(owner.identifier, chunk);
+		// If there is no claim, fail.
+		if (claim == nullptr)
+		{
+			return false;
+		}
+		if (!reallyDrop)
+		{
+			return true;
+		}
+		// Drop the reference.  If this results in the last reference going
+		// away, destroy this claim structure.
+		if (claim->reference_remove())
+		{
+			next        = claim->encoded_next();
+			size_t size = chunk.size_get();
+			owner.quota += size;
+			Claim::destroy(owner, claim);
+		}
+		return true;
+	}
+
 	__noinline int
 	heap_free_internal(SObj heapCapability, void *rawPointer, bool reallyFree)
 	{
 		auto *capability = malloc_capability_unseal(heapCapability);
 		if (capability == nullptr)
 		{
-			Debug::log("Invalid heap capabilityL {}", heapCapability);
+			Debug::log("Invalid heap capability {}", heapCapability);
 			return -EPERM;
 		}
 		Capability<void> mem{rawPointer};
 		if (!mem.is_valid())
 		{
-			return 0;
+			return -EINVAL;
 		}
-		// Use the default memory space.
 		check_gm();
-		if (!gm->is_free_cap_inbounds(mem))
+		// Find the chunk that corresponds to this allocation.
+		auto *chunk = gm->allocation_start(mem.address());
+		if (!chunk)
 		{
 			return -EINVAL;
 		}
-		return gm->mspace_free(
-		  mem, capability->quota, capability->identifier, reallyFree);
+		ptraddr_t start    = chunk->body().address();
+		size_t    bodySize = gm->chunk_body_size(*chunk);
+		// Is the pointer that we're freeing a pointer to the entire allocation?
+		bool isPrecise = (start == mem.base()) && (bodySize == mem.length());
+		// If this is a precise allocation, see if we can free it as the
+		// original owner.  You may drop claims with a capability that is a
+		// subset of the original but you may not free an object with a subset.
+		if (isPrecise && (chunk->owner() == capability->identifier))
+		{
+			if (!reallyFree)
+			{
+				return 0;
+			}
+			capability->quota += chunk->size_get();
+			if (chunk->claims == 0)
+			{
+				return gm->mspace_free(*chunk, bodySize);
+			}
+			chunk->ownerID = 0;
+			return 0;
+		}
+		// If this is an interior (but valid) pointer, see if we can drop a
+		// claim.
+		if (claim_drop(*capability, *chunk, reallyFree))
+		{
+			if ((chunk->claims == 0) && (chunk->ownerID == 0))
+			{
+				return gm->mspace_free(*chunk, bodySize);
+			}
+			return 0;
+		}
+		return -EPERM;
 	}
+
 } // namespace
 
 size_t heap_quota_remaining(struct SObjStruct *heapCapability)
@@ -382,6 +756,34 @@ void *heap_allocate(Timeout *timeout, SObj heapCapability, size_t bytes)
 	}
 	// Use the default memory space.
 	return malloc_internal(bytes, std::move(g), cap, timeout);
+}
+
+size_t heap_claim(SObj heapCapability, void *pointer)
+{
+	LockGuard g{lock};
+	auto     *cap = malloc_capability_unseal(heapCapability);
+	if (cap == nullptr)
+	{
+		Debug::log("Invalid heap cap");
+		return 0;
+	}
+	if (!Capability{pointer}.is_valid())
+	{
+		Debug::log("Invalid claimed cap");
+		return 0;
+	}
+	auto *chunk = gm->allocation_start(Capability{pointer}.address());
+	if (chunk == nullptr)
+	{
+		Debug::log("chunk not found");
+		return 0;
+	}
+	if (claim_add(*cap, *chunk))
+	{
+		return gm->chunk_body_size(*chunk);
+	}
+	Debug::log("failed to add claim");
+	return 0;
 }
 
 int heap_can_free(SObj heapCapability, void *rawPointer)
