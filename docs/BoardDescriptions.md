@@ -14,7 +14,7 @@ The [`boards`](../sdk/boards) directory contains some existing examples.
 Memory layout
 -------------
 
-Our security guarantees for the shared heap depend the mechanism that allows the allocator to mark memory as quarantined.
+Our security guarantees for the shared heap depend on the mechanism that allows the allocator to mark memory as quarantined.
 Any pointer to memory in this region is subject to a check (by the hardware) on load: if it points to deallocated memory then it will be invalidated on load.
 This mechanism is necessary only for memory that can be reused by different trust domains during a single boot.
 Memory used to hold globals and code does not require it and so an implementation may save some hardware and power costs by supporting these temporal safety features for only a subset of memory.

@@ -13,14 +13,14 @@ Allocator capabilities
 Allocating memory requires a capability that authorises memory allocation.
 These are created by the `DECLARE_AND_DEFINE_DEFINE_ALLOCATOR_CAPABILITY` macro, which takes two arguments.
 The first is the name of the capability, the second is the amount of memory that this capability authorises the holder to allocate.
-This capability may then be accessed with the `STATIC_SEALED_VALUE`, which takes the name as the argument.
+This capability may then be accessed with the `STATIC_SEALED_VALUE` macro, which takes the name as the argument.
 If you wish to refer to the same capability from multiple C compilation units, you can use the separate `DECLARE_` and `DEFINE_` versions of this combined macro.
 See [the documentation on software-defined capabilities](SoftwareCapabilities.md) for more information.
 
 
 Compartments may hold more than one allocation capability.
 The design embodies the principle of intentionality: you must explicitly specify the quota against which an allocation counts when performing that allocation.
-The standard C/C++ interfaces do not respect this principle and so are implemented as wrappers (see below).
+The standard C/C++ interfaces do not respect this principle and so are implemented as wrappers that use a default allocator capability (see below).
 
 When inspecting the linker audit report for a firmware image, you will see an entry like this for each allocator capability:
 
@@ -37,7 +37,7 @@ When inspecting the linker audit report for a firmware image, you will see an en
         },
 ```
 
-The `contents` is a hex encoding of the contents of the allocator.
+The `contents` is a hex encoding of the contents of the allocator capability.
 The first word is the size, so 0x00001000 here indicates that this capability authorises 4096 bytes of allocation.
 The remaining space is reserved for use by the allocator (the object must be 6 words long).
 The sealing type describes the kind of sealed capability that this is, in particular it is a type exposed by the `alloc` compartment as `MallocKey`.
@@ -49,7 +49,7 @@ Core APIs
 The allocator APIs all begin `heap_`.
 The `heap_allocate` and `heap_allocate_array` functions allocate memory (the latter is safe in the presence of arithmetic overflow).
 All memory allocated by these functions is guaranteed to be zeroed.
-These functions will fail if the allocator capability does not have sufficient remaining quota to handle the allocation.
+These functions will fail if the allocator capability does not have sufficient remaining quota to handle the allocation (or if the allocator itself is out of memory).
 All allocations have an eight-byte header and this counts towards the quota, so the total quota required is the sum of the size of all objects plus eight times the number of live objects.
 
 The amount of quota remaining in a allocator capability can be queried with `heap_quota_remaining`.

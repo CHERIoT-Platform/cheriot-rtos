@@ -2,7 +2,7 @@ Interrupt handling in CHERIoT RTOS
 ==================================
 
 CHERIoT RTOS does not allow user code to run directly from the interrupt handler.
-The scheduler has a separate stack that is used to run interrupt handler and this then maps interrupts to scheduler events.
+The scheduler has a separate stack that is used to run the interrupt handler and this then maps interrupts to scheduler events.
 This allows interrupts from asynchronous sources to be handled by threads of any priority.
 
 Futex primer

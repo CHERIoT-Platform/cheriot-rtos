@@ -38,7 +38,7 @@ Static software-defined capabilities
 
 Dynamic software-defined capabilities, as described in the previous section, are exposed to the allocating compartment and must be passed to other compartments (usually in response to some request).
 This presents a bootstrapping problem: what authorises a compartment to request a capability?
-This problem is addressed by providing a mechanism provision software-defined capabilities (managed by one compartment) to another compartment at *build time*.
+This problem is addressed by providing a mechanism for provisioning software-defined capabilities (managed by one compartment) to another compartment at *build time*.
 The simplest case for this is (allocator capabilities)[Allocator.md], which authorise allocation and so are necessary to be able to create any dynamic software-defined capabilities.
 The scheduler also uses this mechanism for capabilities that allow interaction with [interrupts](Interrupts.md).
 
@@ -76,7 +76,7 @@ Each static sealing type will have an entry in the exports section of its compar
 ```
 
 This example is taken from the test suite.
-It gives the unique symbol name for the sealing key (which includes the compartment name and the key name) and indicates that it is a sealing key.
+It gives the unique symbol name for the sealing key (which includes the compartment name, `static_sealing_inner`, and the key name, `SealingType`) and indicates that it is a sealing key.
 
 A static sealing value that uses this sealing type will look something like this:
 
