@@ -10,15 +10,15 @@ Futex primer
 
 Interrupts are mapped to futexes and so it's first important to understand how futexes work.
 
-A futex (fast userspace futex) is something of a misnomer on CHERIoT RTOS, where there is no kernel / userspace distinction (the scheduler is a component that is not trusted by the rest of the system for confidentiality or integrity).
+The term futex (fast userspace mutex) is something of a misnomer on CHERIoT RTOS, where there is no kernel / userspace distinction (the scheduler is a component that is not trusted by the rest of the system for confidentiality or integrity).
 The core idea for a futex is an atomic compare-and-wait operation.
 A `futex_wait` call tests whether a 32-bit word contains the expected value and, if it does, suspends the calling thread until another thread calls `futex_wake` on the futex-word address.
 
-This mechanism is intended to avoid missed wakeups.
+This primitive is designed to enable sleeping without missing wakeups.
 Threads waking waiters are expected to modify the futex word and then call `futex_wake`.
 This ensures that either the modification happens before the wait, in which case the comparison fails and the `futex_wait` call returns immediately, or after in which case it is fine to ignore this `futex_wake` because it is not related to the current value.
 
-This primitive can be used to implement locks.
+This primitive can be used to implement locks that yield and avoid busy waiting on acquisition.
 The [`locks.hh`](../sdk/include/locks.hh) file contains a flag lock and a ticket lock that use a futex, for example.
 
 Futexes for interrupts
@@ -29,7 +29,7 @@ This futex contains a number that is incremented every time that the interrupt f
 The scheduler then wakes any threads that are sleeping on that futex.
 A thread that wants to block waiting for an interrupt reads the value of this futex word and then calls `futex_wait` to be notified when the word has been incremented one or more times.
 
-This mechanism allows multiple threads to wait for the same interrupt and perform different bits of processing, for example a network stack may receive an interrupt to detect that a packet needs handling and a lower-priority thread may record telemetry on the number of packets that have been received.
+This mechanism allows multiple threads to wait for the same interrupt and perform different bits of processing, for example a network stack may receive an interrupt to detect that a packet needs handling and a lower-priority thread may record telemetry on the number of packet interrupts that have been received.
 
 The `interrupt_futex_get` requests the futex for a particular interrupt.
 This returns a read-only capability that can be read directly to get the number of times that an interrupt has fired and can be used for `futex_wait`.
@@ -42,6 +42,8 @@ Acknowledging interrupts
 The scheduler will not acknowledge external interrupts until explicitly told to do so.
 The `interrupt_complete` function marks the interrupt as having been handled.
 An interrupt will not be delivered again until it has been acknowledged.
+Multiple threads can wait on a single interrupt source but it **must** be acknowledged by precisely one.
+Interrupt capabilities (described in the next section) separate the permission to wait and the permission to acknowledge and it is good practice to ensure that the permission to acknowledge a specific interrupt is given to precisely one compartment.
 
 Interrupt capabilities
 ----------------------

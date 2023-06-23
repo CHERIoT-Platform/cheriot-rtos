@@ -20,6 +20,7 @@ See [the documentation on software-defined capabilities](SoftwareCapabilities.md
 
 Compartments may hold more than one allocation capability.
 The design embodies the principle of intentionality: you must explicitly specify the quota against which an allocation counts when performing that allocation.
+The standard C/C++ interfaces do not respect this principle and so are implemented as wrappers (see below).
 
 When inspecting the linker audit report for a firmware image, you will see an entry like this for each allocator capability:
 
@@ -79,7 +80,7 @@ This currently defaults to 4096 bytes.
 These APIs are provided for compatibility.
 They are not ideal in embedded systems or with mutual distrust because they do not take explicit allocator capabilities and because they do not provide timeouts (and so can block indefinitely).
 
-We do not provide an implementation of `realloc` because it is dangerous in a single-provenance model.
+We do not provide an implementation of `realloc` because it is dangerous in a single-provenance pointer model.
 Realloc may not do in-place size reduction usefully because there may be dangling capabilities that have wider bounds.
 Doing length extension in place would cause problems with existing pointers being able to access only a subset of the object.
 The only safe way of implementing realloc is as an allocate, copy, deallocate sequence and users are free to provide their own implementation that does this.

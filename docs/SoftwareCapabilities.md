@@ -5,12 +5,14 @@ CHERIoT is a capability system.
 This extends from the hardware (all memory accesses require an authorising capability in a register, provided as an operand to an instruction) up through the software abstractions in the RTOS.
 In a capability system, any privileged operation requires an explicit capability to authorise it.
 
-Privilege is a somewhat fluid notion in a system with fine-grained mutual distrust but, in general, any operation that affects state beyond the current compartment is considered privileged.
+Privilege is a somewhat fluid notion in a system with fine-grained mutual distrust but, in general, any operation that affects state beyond the current compartment (and, especially, anything related to external hardware) is considered privileged.
 This includes actions such as:
 
  - Acknowledging interrupts
  - Allocating heap memory
  - Establishing network connections
+ - Flashing LEDs
+ - Firing missiles
 
 Each of these should require that the caller present a capability that authorises the callee to perform the action on behalf of the caller.
 
@@ -34,12 +36,14 @@ The scheduler uses the same mechanism for providing capabilities for cross-threa
 Static software-defined capabilities
 ------------------------------------
 
-In addition to the dynamic software-defined capabilities, it is often useful to provision a set of capabilities to a compartment at build time.
+Dynamic software-defined capabilities, as described in the previous section, are exposed to the allocating compartment and must be passed to other compartments (usually in response to some request).
+This presents a bootstrapping problem: what authorises a compartment to request a capability?
+This problem is addressed by providing a mechanism provision software-defined capabilities (managed by one compartment) to another compartment at *build time*.
 The simplest case for this is (allocator capabilities)[Allocator.md], which authorise allocation and so are necessary to be able to create any dynamic software-defined capabilities.
 The scheduler also uses this mechanism for capabilities that allow interaction with [interrupts](Interrupts.md).
 
-Objects created in this way are allocated outside of a compartment's global region but are accessed only via capabilities provided by the loader.
-These capabilities use the allocator's sealing mechanism and so can be unsealed only by the owner of the relevant sealing capability.
+Objects created in this way are allocated outside of any compartment's global region and are accessed only via capabilities provided by the loader.
+These capabilities use the allocator's token mechanism and so can be unsealed only with the relevant authorising capability
 
 For more detail on how to use the static sealing mechanism, see [`compartment-macros.h`](../sdk/include/compartment-macros.h).
 
