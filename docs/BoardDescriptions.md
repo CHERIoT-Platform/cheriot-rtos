@@ -109,3 +109,16 @@ Optionally, it may include the string `$(sdk)`, which will be replaced by the fu
 For example, `"$(sdk)/include/platform/generic-riscv"` will expand to the generic RISC-V directory in the SDK.
 
 The driver headers use `#include_next` to include more generic files and so it is important to list the directories containing your overrides first.
+
+Simulation support
+------------------
+
+There are two properties for defining simulation platforms.
+If `simulation` is set to `true` then this board is assumed to be a simulation platform.
+This will make the `simulation_exit` function attempt to exit the simulator in case of catastrophic failures.
+
+In addition, the `simulator` property can be the name of a program (or script) that can simulate images compiled for this board.
+This will be run from the build directory and will be passed the absolute path of the firmware image when `xmake run` is used.
+The build system will look for the simulator in the SDK directory and, failing that, in the path.
+Exact paths can be provided by using `${sdk}` or `${board}` in the name of the simulator.
+These will be expanded to the full path of the SDK or the directory containing the board description file, respectively.

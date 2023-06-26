@@ -45,6 +45,7 @@
 	"timer_hz" : 40000,
 	"tickrate_hz" : 10,
 	"revoker" : "hardware",
+	"simulator" : "${sdk}/../scripts/run-flute.sh",
 	"simulation" : true
 }
 
