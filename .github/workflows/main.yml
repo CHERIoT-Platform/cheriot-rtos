@@ -46,14 +46,13 @@ jobs:
           xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
           xmake
         done
-    - name: Run tests
+    - name: Run examples 
       run: |
         set -e
         for example_dir in $PWD/examples/*/; do
           cd $example_dir
           echo Running $example_dir
-          example_name=$(basename ${example_dir#*.})
-          /cheriot-tools/bin/cheriot_sim -p --no-trace build/cheriot/cheriot/${{ matrix.build-type }}/${example_name}
+          xmake run
         done
 
   check-format:

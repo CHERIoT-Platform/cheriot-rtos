@@ -25,18 +25,17 @@
 	"heap" : {
 		"end"   : 0x80040000
 	},
-	"driver_includes" : [
-		"../include/platform/flute",
-		"../include/platform/generic-riscv"
-	],
 	"defines" : [
 		"FLUTE",
 		"FLUTE_SHADOW_BASE=0x40000000U",
 		"FLUTE_SHADOW_SIZE=0x1000U"
 	],
+	"driver_includes" : [
+		"../include/platform/flute",
+		"../include/platform/generic-riscv"
+	],
 	"timer_hz" : 40000,
 	"tickrate_hz" : 10,
-	"revoker" : "software",
 	"simulator" : "${sdk}/../scripts/run-flute.sh",
 	"simulation" : true
 }

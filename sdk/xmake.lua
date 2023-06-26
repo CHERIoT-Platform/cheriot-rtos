@@ -6,6 +6,15 @@
 set_policy("check.auto_ignore_flags", false)
 
 add_rules("mode.release", "mode.debug")
+
+-- Disallow any modes other than release and debug.  The only difference is the
+-- value of the `NDEBUG` macro: We always enable debug info and optimise for
+-- size in both modes, most things should use the --debug-{option}= flags for
+-- finer-grained control.
+set_allowedmodes("release", "debug")
+
+set_allowedarchs("cheriot")
+
 -- More work arounds for xmake's buggy flag detection.
 if is_mode("release") then
     add_defines("NDEBUG", {force = true})
@@ -180,6 +189,7 @@ target("cherimcu.allocator")
 
 
 target("cherimcu.software_revoker")
+	set_default(false)
 	add_files(path.join(coredir, "software_revoker/revoker.cc"))
 	add_rules("cherimcu.privileged-compartment")
 	on_load(function (target)
@@ -187,30 +197,78 @@ target("cherimcu.software_revoker")
 		target:set("cherimcu.ldscript", "software_revoker.ldscript")
 	end)
 
+-- Helper to get the board file for a given target
+local board_file = function(target)
+	local boardfile = target:values("board")
+	if not boardfile then
+		raise("target " .. target:name() .. " does not define a board name")
+	end
+	-- The directory containing the board file.
+	local boarddir = path.directory(boardfile);
+	if path.basename(boardfile) == boardfile then
+		boarddir = path.join(scriptdir, "boards")
+		boardfile = path.join(boarddir, boardfile .. '.json')
+	end
+	return boarddir, boardfile
+end
+
 -- Rule for defining a firmware image.
 rule("firmware")
+	on_run(function (target)
+		import("core.base.json")
+		import("core.project.config")
+		local boarddir, boardfile = board_file(target)
+		local board = json.loadfile(boardfile)
+		if not board.simulator then
+			raise("board description " .. boardfile .. " does not define a run command")
+		end
+		local simulator = board.simulator
+		simulator = string.gsub(simulator, "${(%w*)}", { sdk=scriptdir, board=boarddir })
+		local firmware = target:targetfile()
+		local directory = path.directory(firmware)
+		firmware = path.basename(firmware)
+		local run = function(simulator)
+			os.execv(simulator, { firmware }, { curdir = directory })
+		end
+		-- Try executing the simulator from the sdk directory, if it's there.
+		local tools_directory = config.get("sdk")
+		local simpath = path.join(tools_directory, simulator)
+		if os.isexec(simpath) then
+			run(simpath)
+			return
+		end
+		simpath = path.join(path.join(tools_directory, "bin"), simulator)
+		if os.isexec(simpath) then
+			run(simpath)
+			return
+		end
+		-- Otherwise, hope that it's in the path
+		run(simulator)
+	end)
+
 	-- Set up the thread defines and the information for the linker script.
 	-- This must be after load so that dependencies are resolved.
 	after_load(function (target)
-		target:add('deps', "cherimcu.software_revoker")
-		local boardfile = target:values("board")
-		local software_revoker = false
-		if not boardfile then
-			raise("target " .. target:name() .. " does not define a board name")
-		end
-		-- The directory containing the board file.
-		local boarddir = path.directory(boardfile);
-		if path.basename(boardfile) == boardfile then
-			boarddir = path.join(scriptdir, "boards")
-			boardfile = path.join(boarddir, boardfile .. '.json')
-		end
 		import("core.base.json")
-		print("loading board description from ", boardfile)
+
+		local boarddir, boardfile = board_file(target);
 		local board = json.loadfile(boardfile)
+
 		local add_defines = function (defines)
 			for _, d in table.orderpairs(target:deps()) do
 				d:add('defines', defines)
 			end
+		end
+
+		local software_revoker = false
+		if board.revoker then
+			local temporal_defines = { "TEMPORAL_SAFETY" }
+			if board.revoker == "software" then
+				temporal_defines[#temporal_defines+1] = "SOFTWARE_REVOKER"
+				software_revoker = true
+				target:add('deps', "cherimcu.software_revoker")
+			end
+			add_defines(temporal_defines)
 		end
 
 		if board.driver_includes then
@@ -235,22 +293,11 @@ rule("firmware")
 		add_defines("CPU_TIMER_HZ=" .. math.floor(board.timer_hz))
 		add_defines("TICK_RATE_HZ=" .. math.floor(board.tickrate_hz))
 
-		if board.revoker then
-			local temporal_defines = { "TEMPORAL_SAFETY" }
-			if board.revoker == "software" then
-				temporal_defines[#temporal_defines+1] = "SOFTWARE_REVOKER"
-				software_revoker = true
-			end
-			add_defines(temporal_defines)
-		end
-
 		if board.simulation then
-			print("targeting a simulated environment")
 			add_defines("SIMULATION")
 		end
 
 		if board.stack_high_water_mark then
-			print("using stack high water mark")
 			add_defines("CONFIG_MSHWM")
 		end
 
