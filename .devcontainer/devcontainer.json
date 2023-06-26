@@ -8,7 +8,7 @@
     "xmake.workingDirectory": "${workspaceRoot}/tests",
     "xmake.additionalConfigArguments": "--sdk=/cheriot-tools/"
   },
-  "postAttachCommand": "git submodule init && git submodule update && cd tests && xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands .. && cd .. && for I in examples/[[:digit:]]* ; do echo $I ; cd $I ; xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands . && cd ../.. ; done",
+  "onCreateCommand": "git submodule init && git submodule update && cd tests && xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands .. && cd .. && for I in examples/[[:digit:]]* ; do echo $I ; cd $I ; xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands . && cd ../.. ; done",
   "customizations": {
     "vscode": {
       "extensions": [
