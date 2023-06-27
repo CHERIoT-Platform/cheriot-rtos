@@ -1224,7 +1224,7 @@ class MState
 			return nullptr;
 		}
 		// If we don't have shadow bits, skip this check and just assume that
-		// this is the start of a capability.  This mode is for benchmark
+		// this is the start of an allocation.  This mode is for benchmark
 		// baselines only.
 		if constexpr (std::is_same_v<Revocation::Revoker,
 		                             Revocation::NoTemporalSafety>)
