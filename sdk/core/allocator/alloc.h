@@ -1223,13 +1223,24 @@ class MState
 		{
 			return nullptr;
 		}
-		if (revoker.shadow_bit_get(address))
-		{
-			return nullptr;
-		}
-		while (!revoker.shadow_bit_get(address) && (address > base))
+		// If we don't have shadow bits, skip this check and just assume that
+		// this is the start of a capability.  This mode is for benchmark
+		// baselines only.
+		if constexpr (std::is_same_v<Revocation::Revoker,
+		                             Revocation::NoTemporalSafety>)
 		{
 			address -= MallocAlignment;
+		}
+		else
+		{
+			if (revoker.shadow_bit_get(address))
+			{
+				return nullptr;
+			}
+			while (!revoker.shadow_bit_get(address) && (address > base))
+			{
+				address -= MallocAlignment;
+			}
 		}
 		CHERI::Capability<MChunkHeader> header{heapStart.cast<MChunkHeader>()};
 		header.address() = address;
