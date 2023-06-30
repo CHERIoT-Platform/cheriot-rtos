@@ -1069,20 +1069,6 @@ __noinline static SealedAllocation unseal_internal(SKey rawKey, SObj obj)
 	return unsealed;
 }
 
-void *token_obj_unseal(SKey rawKey, SObj obj)
-{
-	LockGuard g{lock};
-	auto      unsealed = unseal_internal(rawKey, obj);
-	if (unsealed == nullptr)
-	{
-		return nullptr;
-	}
-	size_t newSize = unsealed.length() - ObjHdrSize;
-	unsealed.address() += ObjHdrSize;
-	unsealed.bounds() = newSize;
-	return unsealed;
-}
-
 int token_obj_destroy(SObj heapCapability, SKey key, SObj object)
 {
 	void *unsealed;
