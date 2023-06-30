@@ -5,11 +5,13 @@
 
 // This is the header used by the sealing manager internally.
 
-#include <cdefs.h>
-#include <cheri.hh>
-#include <stddef.h>
-#include <stdint.h>
-#include <token.h>
+#if !defined(__ASSEMBLER__)
+
+#	include <cdefs.h>
+#	include <cheri.hh>
+#	include <stddef.h>
+#	include <stdint.h>
+#	include <token.h>
 
 /// Opaque type.  Sealing keys don't really point to anything.
 struct SKeyStruct;
@@ -23,6 +25,8 @@ struct SObjStruct
 	/// The real data for this.
 	char data[];
 };
+
+typedef struct SObjStruct TokenSObj;
 
 constexpr size_t ObjHdrSize = offsetof(SObjStruct, data);
 
@@ -46,3 +50,10 @@ struct SealingKey : public CHERI::Capability<SKeyStruct>
 };
 /// Helper for referring to a sealed allocation.
 using SealedAllocation = CHERI::Capability<SObjStruct>;
+
+#endif
+
+#include <assembly-helpers.h>
+
+EXPORT_ASSEMBLY_OFFSET(TokenSObj, type, 0);
+EXPORT_ASSEMBLY_OFFSET(TokenSObj, data, 8);
