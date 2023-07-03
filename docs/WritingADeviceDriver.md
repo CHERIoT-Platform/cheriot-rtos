@@ -45,7 +45,7 @@ The second says that interrupt number 16 is used for the ethernet device.
 Accessing the memory-mapped I/O region
 --------------------------------------
 
-The `MMIO_CAPABILITY` macros is used to get a pointer to memory-mapped I/O devices.
+The `MMIO_CAPABILITY` macro is used to get a pointer to memory-mapped I/O devices.
 This takes two arguments.
 The first is the C/C++ type of the pointer, the second is the name from the board configuration file.
 For example, to get a pointer to the memory-mapped I/O space for the ethernet device above, we might do something like:
@@ -66,7 +66,7 @@ volatile struct EthernetMMIO *ethernet_device()
 Note that this macro must be used in code, it cannot be used for static initialisation.
 The macro expands to a load from the compartment's import table and so there is no point assigning the result to a global: you will get smaller code using it directly.
 
-Now that you have a `volatile` pointer to the device's MMIO region, you can access its control registers directly.
+Now that you have a pointer to a `volatile` object representing the device's MMIO region, you can access its control registers directly.
 Any device can be accessed from any compartment in this way, but that access will appear in the linker audit report.
 
 For this device, you will see an entry like this for any compartment that accesses the device:
@@ -110,7 +110,8 @@ This macro takes four arguments:
  4. Whether this capability authorises acknowledging the interrupt so that it can fire again.
     This will almost always be true in device drivers but should generally be true for only one compartment (for each interrupt), whereas multiple compartments may wish to observe interrupts for monitoring.
 
-As with the MMIO capabilities, compartments 
+As with the MMIO capabilities, sealed objects appear in compartment reports.
+For example, the above macro expands to this in the final report:
 
 ```json
         {
@@ -140,7 +141,7 @@ You can get the word associated with an interrupt by passing the authorising cap
 const uint32_t *ethernetFutex = ethernetFutex = interrupt_futex_get(STATIC_SEALED_VALUE(ethernetInterruptCapability));
 ```
 
-The `ethernetFutex` pointer is now a read-only capability (attempting to store through it will trap) that contains a number that is incremented every time that an interrupt fires.
+The `ethernetFutex` pointer is now a read-only capability (attempting to store through it will trap) that contains a number that is incremented every time the ethernet interrupt fires.
 You can now query whether any interrupts have fired since you last checked by comparing it against a previous value and you can wait for an interrupt with `futex_wait`, for example:
 
 ```c
