@@ -16,13 +16,10 @@ void __cheri_compartment("caller") run()
 		headerWritten = true;
 	}
 	auto [full, callPath, returnPath] = CHERI::with_interrupts_disabled([&]() {
-		auto full = rdcycle();
-		noop();
-		full = rdcycle() - full;
-		auto callPath = noop_call(rdcycle());
-		auto returnPath = noop_return();
-		returnPath = rdcycle() - returnPath;
-		return std::tuple{full, callPath, returnPath};
+		auto start = rdcycle();
+		auto middle = noop_return_rdcycle();
+		auto end = rdcycle();
+		return std::tuple{end - start, middle - start, end - middle};
 	});
 	size_t stackSize = get_stack_size();
 	out.format(__XSTRING(BOARD) "\t{}\t{}\t{}\t{}\n", stackSize, full, callPath, returnPath);
