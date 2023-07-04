@@ -68,7 +68,7 @@ void __cheri_compartment("interrupt_bench") entry_high_priority()
 	if (--threadCounter == 0)
 	{
 		Debug::log("Thread {} exiting simulator", threadID);
-		simulation_exit();
+		simulation_exit(0);
 	}
 	else
 	{

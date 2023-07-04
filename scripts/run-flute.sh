@@ -42,4 +42,4 @@ ${PASTE} -d \\n 0l-2.hex 0u-2.hex > 0-0.hex
 cat 1-0.hex tail.hex | ${HEAD} -n 32768 > Mem-TCM-1.hex
 cat 0-0.hex tail.hex | ${HEAD} -n 32768 > Mem-TCM-0.hex
 
-${FLUTE_BUILD}/exe_HW_sim +tohost
+${FLUTE_BUILD}/exe_HW_sim +tohost > /dev/null

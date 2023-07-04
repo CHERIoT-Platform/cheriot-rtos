@@ -30,6 +30,7 @@
 		"FLUTE_SHADOW_BASE=0x40000000U",
 		"FLUTE_SHADOW_SIZE=0x1000U"
 	],
+	"stack_high_water_mark" : false,
 	"driver_includes" : [
 		"../include/platform/flute",
 		"../include/platform/generic-riscv"

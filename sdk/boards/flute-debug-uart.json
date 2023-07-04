@@ -34,6 +34,7 @@
 		"end"   : 0x80040000
 	},
 	"revoker" : "hardware",
+	"stack_high_water_mark" : true,
 	"driver_includes" : [
 		"../include/platform/flute",
 		"../include/platform/generic-riscv"
