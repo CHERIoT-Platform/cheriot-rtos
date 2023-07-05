@@ -352,24 +352,72 @@ rule("firmware")
 			add_defines(interruptConfiguration)
 		end
 
+		local loader = target:deps()['cheriot.loader'];
+		local loader_stack_size = loader:get('loader_stack_size')
+		local loader_trusted_stack_size = loader:get('loader_trusted_stack_size')
+
 		-- Get the threads config and prepare the predefined macros that describe them
 		local threads = target:values("threads")
+
+
+		-- Declare space and start and end symbols for a thread's C stack
+		local thread_stack_template =
+			"\n\t. = ALIGN(16);" ..
+			"\n\t.thread_stack_${thread_id} : CAPALIGN" ..
+			"\n\t{" ..
+			"\n\t\t.thread_${thread_id}_stack_start = .;" ..
+			"\n\t\t. += ${stack_size};" ..
+			"\n\t\t.thread_${thread_id}_stack_end = .;" ..
+			"\n\t}\n"
+		-- Declare space and start and end symbols for a thread's trusted stack
+		local thread_trusted_stack_template =
+			"\n\t. = ALIGN(8);" ..
+			"\n\t.thread_trusted_stack_${thread_id} : CAPALIGN" ..
+			"\n\t{" ..
+			"\n\t\t.thread_${thread_id}_trusted_stack_start = .;" ..
+			"\n\t\t. += ${trusted_stack_size};" ..
+			"\n\t\t.thread_${thread_id}_trusted_stack_end = .;" ..
+			"\n\t}\n"
+		-- Build a `class ThreadConfig` for a thread
+		local thread_template =
+				"\n\t\tSHORT(${priority});" ..
+				"\n\t\tLONG(${mangled_entry_point});" ..
+				"\n\t\tLONG(.thread_${thread_id}_stack_start);" ..
+				"\n\t\tSHORT(.thread_${thread_id}_stack_end - .thread_${thread_id}_stack_start);" ..
+				"\n\t\tLONG(.thread_${thread_id}_trusted_stack_start);" ..
+				"\n\t\tSHORT(.thread_${thread_id}_trusted_stack_end - .thread_${thread_id}_trusted_stack_start);" ..
+				"\n\n"
+
 		--Pass the declared threads as macros when building the loader and the
 		--scheduler.
-		local config_threads = "CONFIG_THREADS={"
-		local config_threads_entrypoints = "CONFIG_THREADS_ENTRYPOINTS={"
+		local thread_headers = ""
+		local thread_trusted_stacks =
+			"\n\t. = ALIGN(8);" ..
+			"\n\t.loader_trusted_stack : CAPALIGN" ..
+			"\n\t{" ..
+			"\n\t\tbootStack = .;" ..
+			"\n\t\t. += " .. loader_stack_size .. ";" ..
+			"\n\t}\n"
+		local thread_stacks =
+			"\n\t. = ALIGN(16);" ..
+			"\n\t.loader_stack : CAPALIGN" ..
+			"\n\t{" ..
+			"\n\t\tbootTStack = .;" ..
+			"\n\t\t. += " .. loader_trusted_stack_size .. ";" ..
+			"\n\t}\n"
 		for i, thread in ipairs(threads) do
-			config_threads = config_threads .. string.format("{%d,%d,%d,%d},", i, thread.priority, thread.stack_size, thread.trusted_stack_frames)
-			config_threads_entrypoints = config_threads_entrypoints .. string.format("LA_ABS(__export_%s__Z%d%sv),", thread.compartment, string.len(thread.entry_point), thread.entry_point)
+			thread.mangled_entry_point = string.format("__export_%s__Z%d%sv", thread.compartment, string.len(thread.entry_point), thread.entry_point)
+			thread.thread_id = i
+			thread.trusted_stack_size = loader_trusted_stack_size + (64 * thread.trusted_stack_frames)
+
+			thread_stacks = thread_stacks .. string.gsub(thread_stack_template, "${([_%w]*)}", thread)
+			thread_trusted_stacks = thread_trusted_stacks .. string.gsub(thread_trusted_stack_template, "${([_%w]*)}", thread)
+			thread_headers = thread_headers .. string.gsub(thread_template, "${([_%w]*)}", thread)
+
 		end
-		config_threads = config_threads .. "}"
-		config_threads_entrypoints = config_threads_entrypoints .. "}"
 		local add_defines = function(compartment, option_name)
-			target:deps()[compartment]:add('defines', config_threads)
-			target:deps()[compartment]:add('defines', config_threads_entrypoints)
 			target:deps()[compartment]:add('defines', "CONFIG_THREADS_NUM=" .. #(threads))
 		end
-		add_defines(target:name() .. ".loader", "loader")
 		add_defines(target:name() .. ".scheduler", "scheduler")
 
 		-- Next set up the substitutions for the linker scripts.
@@ -456,6 +504,12 @@ rule("firmware")
 			mmio=mmio,
 			code_start=code_start,
 			heap_start=heap_start,
+			thread_count=#(threads),
+			thread_headers=thread_headers,
+			thread_trusted_stacks=thread_trusted_stacks,
+			thread_stacks=thread_stacks,
+			loader_stack_size=loader:get('loader_stack_size'),
+			loader_trusted_stack_size=loader:get('loader_trusted_stack_size')
 		}
 		-- Helper function to add a dependency to the linker script
 		local add_dependency = function (name, dep, templates)
@@ -572,20 +626,33 @@ rule("cherimcu.component-debug")
 		target:add('defines', "DEBUG_" .. name:upper() .. "=" .. tostring(get_config("debug-"..name)))
 	end)
 
+
+-- Build the loader.  The firmware rule will set the flags required for
+-- this to create threads.
+target("cheriot.loader")
+	add_rules("cherimcu.component-debug")
+	set_kind("object")
+	-- FIXME: We should be setting this based on a board config file.
+	add_files(path.join(coredir, "loader/boot.S"), path.join(coredir, "loader/boot.cc"),  {force = {cxflags = "-O1"}})
+	add_defines("CHERIOT_AVOID_CAPRELOCS")
+	on_load(function (target)
+		target:set('cherimcu.debug-name', "loader")
+		local config = {
+			-- Size in bytes of the trusted stack.
+			loader_trusted_stack_size = 224,
+			-- Size in bytes of the loader's stack.
+			loader_stack_size = 1024
+		}
+		target:add('defines', "CHERIOT_LOADER_TRUSTED_STACK_SIZE=" .. config.loader_trusted_stack_size)
+		target:add('defines', "CHERIOT_LOADER_STACK_SIZE=" .. config.loader_stack_size)
+		target:set('cheriot_loader_config', config)
+		for k, v in pairs(config) do
+			target:set(k, v)
+		end
+	end)
+
 -- Helper function to define firmware.  Used as `target`.
 function firmware(name)
-	-- Build the loader.  The firmware rule will set the flags required for
-	-- this to create threads.
-	target(name .. ".loader")
-		add_rules("cherimcu.component-debug")
-		set_kind("object")
-		-- FIXME: We should be setting this based on a board config file.
-		add_files(path.join(coredir, "loader/boot.S"), path.join(coredir, "loader/boot.cc"),  {force = {cxflags = "-O1"}})
-		on_load(function (target)
-			target:set('cherimcu.debug-name', "loader")
-			target:add("defines", "CHERIOT_AVOID_CAPRELOCS")
-		end)
-
 	-- Build the scheduler.  The firmware rule will set the flags required for
 	-- this to create threads.
 	target(name .. ".scheduler")
@@ -603,7 +670,7 @@ function firmware(name)
 		set_kind("binary")
 		add_rules("firmware")
 		-- TODO: Make linking the allocator optional.
-		add_deps(name .. ".scheduler", name .. ".loader", "cherimcu.switcher", "cherimcu.allocator")
+		add_deps(name .. ".scheduler", "cheriot.loader", "cherimcu.switcher", "cherimcu.allocator")
 		-- The firmware linker script will be populated based on the set of
 		-- compartments.
 		add_configfiles(path.join(scriptdir, "firmware.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.ldscript"})

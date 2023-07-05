@@ -31,8 +31,7 @@ riscv32-unknown-unknown
 -DDEVICE_EXISTS_shadow
 -DDEVICE_EXISTS_uart
 -DDEVICE_EXISTS_clint
--DCONFIG_THREADS={{1,2,1024,5},{2,1,1024,5},{3,1,1024,5},}
--DCONFIG_THREADS_ENTRYPOINTS={LA_ABS(__export_test_runner__Z9run_testsv),LA_ABS(__export_thread_pool__Z15thread_pool_runv),LA_ABS(__export_thread_pool__Z15thread_pool_runv),}
+-DCHERIOT_LOADER_TRUSTED_STACK_SIZE=208
 -DCONFIG_THREADS_NUM=3
 -DREVOKABLE_MEMORY_START=0x80000000
 -DCLANG_TIDY

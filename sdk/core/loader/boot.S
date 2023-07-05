@@ -88,9 +88,19 @@ start:
 	cmove			ca3, ca4
 	cspecialrw		ca3, mscratchc, ca3
 	// ca4 still has the RW memory root; nothing to change
-	// The return value is SchedEntryInfo.
-	cincoffset		csp, csp, -16 - CONFIG_THREADS_NUM * BOOT_THREADINFO_SZ
-	csetbounds		ca0, csp, 16 + CONFIG_THREADS_NUM * BOOT_THREADINFO_SZ
+	// The return value is SchedEntryInfo, the space for it is in ca0
+	// See the comment at the start of `loader_entry_point` in `boot.cc`.
+
+	la_abs			s1, __thread_count
+	csetaddr		cs1, ca4, s1
+	clhu			s1, 0(cs1)
+	li			t0, -BOOT_THREADINFO_SZ
+	mul			s1, s1, t0
+	addi			s1, s1, -SchedulerEntryInfo_offset_threads
+
+	cincoffset		csp, csp, s1
+	neg			s1, s1
+	csetbounds		ca0, csp, s1
 
 	// Jump to loader_entry_point.
 	cjalr			cra
@@ -98,7 +108,7 @@ start:
 	// Load the two return values (pcc and cgp for the scheduler entry point)
 	clc				cs0, 0(csp)
 	clc				cgp, 8(csp)
-	cincoffset		csp, csp, 16
+	cincoffset		csp, csp, SchedulerEntryInfo_offset_threads
 
 	// Reset the stack pointer to point to the top and clear it
 	cgetbase		a0, csp
@@ -126,7 +136,8 @@ start:
 	// All other registers will be cleared in the clear-regs block
 
 	// Pass the array of threadInfos as first argument.
-	csetbounds		ca0, csp, CONFIG_THREADS_NUM * BOOT_THREADINFO_SZ
+	addi			s1, s1, -16
+	csetbounds		ca0, csp, s1
 
 .Lregs_clear:
 	// a0 is used to pass arguments to the scheduler entry.

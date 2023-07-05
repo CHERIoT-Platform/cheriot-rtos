@@ -1,6 +1,7 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+#include <assembly-helpers.h>
 #define IMAGE_HEADER_LOADER_CODE_START_OFFSET 0
 #define IMAGE_HEADER_LOADER_CODE_SIZE_OFFSET 4
 #define IMAGE_HEADER_LOADER_DATA_START_OFFSET 6
@@ -8,33 +9,37 @@
 
 #ifdef __cplusplus
 #	include "types.h"
+#	include "../scheduler/common.h"
 namespace
 {
-	/**
-	 * Helper class for checking the size of a structure.  Used in static
-	 * asserts so that the expected size shows up in compiler error messages.
-	 */
-	template<size_t Real, size_t Expected>
-	struct CheckSize
+	/// The return type of the loader, to pass information to the scheduler.
+	struct SchedulerEntryInfo
 	{
-		static constexpr bool Value = Real == Expected;
+		/// scheduler initial entry point for thread initialisation
+		void *schedPCC;
+		/// scheduler CGP for thread initialisation
+		void *schedCGP;
+		/// thread descriptors for all threads
+		sched::ThreadLoaderInfo threads[];
 	};
 
 	using namespace loader;
 
 	static_assert(CheckSize<offsetof(ImgHdr, loader.code.startAddress),
-	                        IMAGE_HEADER_LOADER_CODE_START_OFFSET>::Value,
+	                        IMAGE_HEADER_LOADER_CODE_START_OFFSET>::value,
 	              "Offset of loader code start is incorrect");
 	static_assert(CheckSize<offsetof(ImgHdr, loader.code.smallSize),
-	                        IMAGE_HEADER_LOADER_CODE_SIZE_OFFSET>::Value,
+	                        IMAGE_HEADER_LOADER_CODE_SIZE_OFFSET>::value,
 	              "Offset of loader code size is incorrect");
 	static_assert(CheckSize<offsetof(ImgHdr, loader.data.startAddress),
-	                        IMAGE_HEADER_LOADER_DATA_START_OFFSET>::Value,
+	                        IMAGE_HEADER_LOADER_DATA_START_OFFSET>::value,
 	              "Offset of loader data start is incorrect");
 	static_assert(CheckSize<offsetof(ImgHdr, loader.data.smallSize),
-	                        IMAGE_HEADER_LOADER_DATA_SIZE_OFFSET>::Value,
+	                        IMAGE_HEADER_LOADER_DATA_SIZE_OFFSET>::value,
 	              "Offset of loader data size is incorrect");
-	static_assert(CheckSize<offsetof(ImgHdr, switcher.entryPoint), 18>::Value,
+	static_assert(CheckSize<offsetof(ImgHdr, switcher.entryPoint), 18>::value,
 	              "Offset of loader data size is incorrect");
 } // namespace
 #endif
+
+EXPORT_ASSEMBLY_OFFSET(SchedulerEntryInfo, threads, 16);
