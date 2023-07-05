@@ -9,7 +9,6 @@
 #define __cheri_libcall
 #include <string.h>
 
-#include "../scheduler/common.h"
 #include "../switcher/tstack.h"
 #include "constants.h"
 #include "debug.h"
@@ -27,14 +26,6 @@ using namespace CHERI;
 
 namespace
 {
-	struct ThreadConfig
-	{
-		uint16_t threadid;
-		uint16_t priority;
-		size_t   stackSize;
-		size_t   trustedStackFrames;
-	};
-	constexpr ThreadConfig ThreadConfigs[] = CONFIG_THREADS;
 
 	/**
 	 * Round up to a multiple of `Multiple`, which must be a power of two.
@@ -50,47 +41,17 @@ namespace
 	static_assert(round_up<16>(28) == 32);
 	static_assert(round_up<8>(17) == 24);
 
-	template<size_t N>
-	constexpr size_t total_stacksize(const ThreadConfig (&configs)[N])
-	{
-		size_t ret = 0;
-		for (const auto &config : configs)
-		{
-			ret += round_up<16>(config.stackSize);
-			ret +=
-			  round_up<16>(sizeof(TrustedStack) + sizeof(TrustedStackFrame) *
-			                                        config.trustedStackFrames);
-		}
-		return ret;
-	}
-
 	__BEGIN_DECLS
-	char __section(".thread_stacks") bootStack[BOOT_STACK_SIZE];
-	char __section(".thread_stacks") bootTStack[BOOT_TSTACK_SIZE];
-	static_assert(
-	  CheckSize<BOOT_TSTACK_SIZE, sizeof(TrustedStackGeneric<0>)>::Value,
-	  "Boot trusted stack sizes do not match.");
-	// Stacks must be 16-byte aligned, so ensure that this is 16-byte aligned.
-	alignas(16) char __section(".thread_stacks")
-	  stackSpace[total_stacksize(ThreadConfigs)];
+	static_assert(CheckSize<CHERIOT_LOADER_TRUSTED_STACK_SIZE,
+	                        sizeof(TrustedStackGeneric<0>)>::value,
+	              "Boot trusted stack sizes do not match.");
 	// It must also be aligned sufficiently for trusted stacks, so ensure that
 	// we've captured that requirement above.
 	static_assert(alignof(TrustedStack) <= 16);
 	__END_DECLS
 
 	static_assert(
-	  CheckSize<sizeof(sched::ThreadLoaderInfo), BOOT_THREADINFO_SZ>::Value);
-
-	/// The return type of the loader, to pass information to the scheduler.
-	struct SchedulerEntryInfo
-	{
-		/// scheduler initial entry point for thread initialisation
-		void *schedPCC;
-		/// scheduler CGP for thread initialisation
-		void *schedCGP;
-		/// thread descriptors for all threads
-		sched::ThreadLoaderInfo threads[CONFIG_THREADS_NUM];
-	};
+	  CheckSize<sizeof(sched::ThreadLoaderInfo), BOOT_THREADINFO_SZ>::value);
 
 	/**
 	 * Reserved sealing types.
@@ -767,56 +728,7 @@ namespace
 	void boot_threads_create(const ImgHdr            &image,
 	                         sched::ThreadLoaderInfo *threadInfo)
 	{
-		/*
-		 * The entire pool for stacks and trusted stacks may not be precisely
-		 * represented, but each allocation will be.
-		 */
-		auto stackArea = build<void,
-		                       Root::Type::TrustedStack,
-		                       Root::Permissions<Root::Type::TrustedStack>,
-		                       false>(LA_ABS(stackSpace), sizeof(stackSpace));
-		/// Allocate some space from the pool.
-		auto allocate = [&](size_t size) {
-			Debug::log("Rounded up {} to {}", size, round_up<16>(size));
-			size         = round_up<16>(size);
-			auto ret     = stackArea;
-			ret.bounds() = size;
-			stackArea.address() += size;
-			return ret;
-		};
-		/// Allocate a normal stack from the pool.
-		auto allocateStack = [&](size_t size) {
-			auto ret = allocate(size);
-			// Trusted stack root has both global and store local,
-			ret.permissions() &= ret.permissions().without(Permission::Global);
-			// Move the pointer to the top for stack usage.
-			Debug::Invariant((ret.address() & 0xf) == 0,
-			                 "Stack is not 16-byte aligned: {}",
-			                 ret);
-			ret.address() += ret.length();
-			Debug::Invariant((ret.address() & 0xf) == 0,
-			                 "Stack is not 16-byte aligned: {}",
-			                 ret);
-			return ret;
-		};
-		/// Allocate a trusted stack from the pool.
-		auto allocateTStack = [&](size_t frames) {
-			// Calculate the size in bytes from number of trusted stack frames.
-			size_t size =
-			  sizeof(TrustedStack) + sizeof(TrustedStackFrame) * frames;
-			return allocate(size).cast<TrustedStack>();
-		};
-
-		/*
-		 * XXX: Ideally entries and threadConfigs should be one constexpr array,
-		 * but I cannot figure out how to convert entry point symbol addresses
-		 * into constexpr.
-		 */
-		const ptraddr_t Entrypoints[] = CONFIG_THREADS_ENTRYPOINTS;
-		static_assert(utils::array_size(Entrypoints) ==
-		              utils::array_size(ThreadConfigs));
-
-		for (size_t i = 0; const auto &config : ThreadConfigs)
+		for (size_t i = 0; const auto &config : image.threads())
 		{
 			auto findCompartment = [&]() -> auto &
 			{
@@ -825,7 +737,7 @@ namespace
 					Debug::log("Looking in export table {}+{}",
 					           compartment.exportTable.start(),
 					           compartment.exportTable.size());
-					if (contains(compartment.exportTable, Entrypoints[i]))
+					if (contains(compartment.exportTable, config.entryPoint))
 					{
 						return compartment;
 					}
@@ -837,18 +749,29 @@ namespace
 			const auto &compartment = findCompartment();
 			Debug::log("Creating thread in compartment {}", &compartment);
 			auto pcc = build_pcc(compartment);
-			pcc.address() += build<ExportEntry>(Entrypoints[i])->functionStart;
+			pcc.address() +=
+			  build<ExportEntry>(config.entryPoint)->functionStart;
 			Debug::log("New thread's pcc will be {}", pcc);
 			void *cgp = build_cgp(compartment);
 			Debug::log("New thread's cgp will be {}", cgp);
 
-			auto threadTStack = allocateTStack(config.trustedStackFrames);
-			Debug::log("New thread's trusted stack is {}", threadTStack);
+			auto threadTStack =
+			  build<TrustedStack,
+			        Root::Type::TrustedStack,
+			        Root::Permissions<Root::Type::TrustedStack>,
+			        false>(config.trustedStack);
 			threadTStack->mepcc = pcc;
 			threadTStack->cgp   = cgp;
-			auto stack          = allocateStack(config.stackSize);
-			threadTStack->csp   = stack;
-			Debug::log("New thread's stack is {}", stack);
+			// Stacks have store-local but not global permission.
+			auto stack =
+			  build<void,
+			        Root::Type::TrustedStack,
+			        Root::Permissions<Root::Type::TrustedStack>.without(
+			          Permission::Global),
+			        false>(config.stack);
+			// Stack pointer points to the top of the stack.
+			stack.address() += config.stack.size();
+			threadTStack->csp = stack;
 			// Enable previous level interrupts and set the previous exception
 			// level to M mode.
 			threadTStack->mstatus =
@@ -865,16 +788,10 @@ namespace
 			threadTStack.seal(trustedStackKey);
 
 			threadInfo[i].trustedStack = threadTStack;
-			threadInfo[i].threadid     = config.threadid;
 			threadInfo[i].priority     = config.priority;
 			i++;
 		}
 		Debug::log("Finished creating threads");
-		Debug::Invariant(stackArea.address() ==
-		                   LA_ABS(stackSpace) + sizeof(stackSpace),
-		                 "Stack area {} is not the end of stack space: {}",
-		                 stackArea.address(),
-		                 LA_ABS(stackSpace) + sizeof(stackSpace));
 	}
 
 	/**
@@ -1004,6 +921,17 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
                                                  void         *almightySeal,
                                                  void         *almightyRW)
 {
+	// This relies on a slightly surprising combination of two C++ features:
+	// - Flexible array members (C99, not technically part of C++ but supported
+	//   basically everywhere).
+	// - Guaranteed return copy elision (C++17).
+	//
+	// This means that the caller can allocate a variable-sized structure and
+	// this definition will refer to the space allocated by the caller.  In a
+	// CHERI system, the caller will also set bounds, and so this is actually a
+	// safe thing to do, on any other system it is a terrible idea.  This means
+	// that `ret` points to the space on the stack that was set up by the
+	// caller and which can subsequently be passed to the scheduler.
 	SchedulerEntryInfo ret;
 
 	// Populate the 4 roots from system registers.
@@ -1280,10 +1208,12 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	Debug::log("Wrote scary capability {}", scaryCapabilities[1]);
 	// Read-write capability to the entire stack.  This is scary because a bug
 	// in the revoker could violate thread isolation.
-	scaryCapabilities[2]           = build<void,
-                                 Root::Type::RWStoreL,
-                                 Root::Permissions<Root::Type::RWStoreL>,
-                                 false>(LA_ABS(stackSpace), sizeof(stackSpace));
+	scaryCapabilities[2] =
+	  build<void,
+	        Root::Type::RWStoreL,
+	        Root::Permissions<Root::Type::RWStoreL>,
+	        false>(LA_ABS(__stack_space_start),
+	               LA_ABS(__stack_space_end) - LA_ABS(__stack_space_start));
 	scaryCapabilities[2].address() = scaryCapabilities[2].base();
 	Debug::log("Wrote scary capability {}", scaryCapabilities[2]);
 #endif

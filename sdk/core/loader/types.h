@@ -14,9 +14,6 @@
 
 namespace loader
 {
-	extern "C" char bootStack[BOOT_STACK_SIZE];
-	extern "C" char bootTStack[BOOT_TSTACK_SIZE];
-
 	struct CapReloc
 	{
 		ptraddr_t addr;
@@ -727,15 +724,15 @@ namespace loader
 		CompartmentHeader compartmentHeaders[];
 
 		/**
-		 * Class encapsulating a range of compartment headers.
+		 * Class encapsulating a range of typed values.
 		 */
-		class CompartmentHeaderRange
+		template<typename T>
+		class Range
 		{
 			friend class ImgHdr;
-			const CompartmentHeader *first;
-			const CompartmentHeader *onePastEnd;
-			CompartmentHeaderRange(const CompartmentHeader *first,
-			                       const CompartmentHeader *onePastEnd)
+			const T *first;
+			const T *onePastEnd;
+			Range(const T *first, const T *onePastEnd)
 			  : first(first), onePastEnd(onePastEnd)
 			{
 			}
@@ -744,7 +741,7 @@ namespace loader
 			/**
 			 * Begin iterator.
 			 */
-			[[nodiscard]] const CompartmentHeader *begin() const
+			[[nodiscard]] const T *begin() const
 			{
 				return first;
 			}
@@ -752,11 +749,63 @@ namespace loader
 			/**
 			 * End iterator.
 			 */
-			[[nodiscard]] const CompartmentHeader *end() const
+			[[nodiscard]] const T *end() const
 			{
 				return onePastEnd;
 			}
 		};
+
+		/**
+		 * Structure describing the configuration of a single thread.
+		 */
+		struct __packed ThreadConfig
+		{
+			/**
+			 * The priority of this thread.
+			 */
+			uint16_t priority;
+			/**
+			 * The address of the export table entry for the entry point for
+			 * this thread.
+			 */
+			ptraddr_t entryPoint;
+			/**
+			 * The location for the stack for this thread.
+			 */
+			AddressRange stack;
+			/**
+			 * The location for the trusted stack for this thread.
+			 */
+			AddressRange trustedStack;
+		};
+
+		/**
+		 * Structure describing the threads in this image.
+		 */
+		class __packed ThreadInfo
+		{
+			/**
+			 * The total number of threads.
+			 */
+			uint16_t threadCount;
+
+			/**
+			 * The array of per-thread configuration data.
+			 */
+			ThreadConfig threadConfigs[];
+
+			public:
+			/**
+			 * Returns the per-thread configuration data range.
+			 */
+			[[nodiscard]] Range<const ThreadConfig> threads() const
+			{
+				return {threadConfigs, &threadConfigs[threadCount]};
+			}
+		};
+
+		/// Convenience type for a range of compartment headers.
+		using CompartmentHeaderRange = Range<CompartmentHeader>;
 
 		[[nodiscard]] const CompartmentHeaderRange libraries() const
 		{
@@ -774,6 +823,13 @@ namespace loader
 		{
 			return {compartmentHeaders,
 			        &compartmentHeaders[libraryCount + compartmentCount]};
+		}
+
+		[[nodiscard]] auto threads() const
+		{
+			return reinterpret_cast<const ThreadInfo *>(
+			         &compartmentHeaders[libraryCount + compartmentCount])
+			  ->threads();
 		}
 	};
 

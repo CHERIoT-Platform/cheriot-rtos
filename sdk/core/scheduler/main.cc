@@ -124,8 +124,10 @@ namespace sched
 
 		for (size_t i = 0; auto *threadSpace : threadSpaces)
 		{
+			Debug::log("Created thread for trusted stack {}",
+			           info[i].trustedStack);
 			Thread *th = new (threadSpace)
-			  Thread(info[i].trustedStack, info[i].threadid, info[i].priority);
+			  Thread(info[i].trustedStack, i + 1, info[i].priority);
 			th->ready(Thread::WakeReason::Timer);
 			i++;
 		}

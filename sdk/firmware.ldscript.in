@@ -13,10 +13,11 @@ SECTIONS
 		*(.loader_start);
 	}
 
-	.thread_stacks (NOLOAD) :  ALIGN(0x10)
-	{
-		*(.thread_stacks);
-	}
+	@thread_trusted_stacks@
+
+	__stack_space_start = .;
+	@thread_stacks@
+	__stack_space_end = .;
 
 	.compartment_export_tables : ALIGN(8)
 	{
@@ -192,11 +193,23 @@ SECTIONS
 		SHORT(@library_count@);
 		# Number of compartment headers.
 		SHORT(@compartment_count@);
-
 		@compartment_headers@
+	}
 
+	# Thread configuration.  This follows the compartment headers but is in a
+	# separate section to make auditing easier.
+	# This section holds a `class ThreadInfo` (loader/types.h)
+	.thread_config :
+	{
+		.thread_config_start = .;
+		# Number of threads
+		__thread_count = .;
+		SHORT(@thread_count@);
+		# The thread structures
+		@thread_headers@
 		__compart_headers_end = .;
 	}
+
 
 	.loader_code : CAPALIGN
 	{

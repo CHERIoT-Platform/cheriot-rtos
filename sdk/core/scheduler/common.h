@@ -145,8 +145,6 @@ namespace sched
 		/// The trusted stack for this thread. This field should be sealed by
 		/// the loader and contain populated PCC, CGP and CSP caps.
 		TrustedStack *trustedStack;
-		/// Thread ID. Certain compartments need to know which thread it is in.
-		uint16_t threadid;
 		/// Thread priority. The higher the more prioritised.
 		uint16_t priority;
 	};
