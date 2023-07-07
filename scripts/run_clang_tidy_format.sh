@@ -37,12 +37,14 @@ echo Sources: ${SOURCES}
 rm -f tidy-*.fail
 
 # sh syntax is -c "string" [name [args ...]], so "tidy" here is the name and not included in "$@"
-echo ${HEADERS} ${SOURCES} | xargs -P${PARALLEL_JOBS} -n5 sh -c "${CLANG_TIDY} -export-fixes=\$(mktemp -p. tidy.fail-XXXX) \$@" tidy
-if [ $(find . -maxdepth 1 -name 'tidy.fail-*' -size +0 | wc -l) -gt 0 ] ; then
-	# clang-tidy put non-empty output in one of the tidy-*.fail files
-	cat tidy.fail-*
-	exit 1
-fi
+[ -n "${CHERIOT_SKIP_CLANG_TIDY-}" ] || {
+	echo ${HEADERS} ${SOURCES} | xargs -P${PARALLEL_JOBS} -n5 sh -c "${CLANG_TIDY} -export-fixes=\$(mktemp -p. tidy.fail-XXXX) \$@" tidy
+	if [ $(find . -maxdepth 1 -name 'tidy.fail-*' -size +0 | wc -l) -gt 0 ] ; then
+		# clang-tidy put non-empty output in one of the tidy-*.fail files
+		cat tidy.fail-*
+		exit 1
+	fi
+}
 
 ${CLANG_FORMAT} -i ${HEADERS} ${SOURCES}
 if git diff --exit-code ${HEADERS} ${SOURCES} ; then
