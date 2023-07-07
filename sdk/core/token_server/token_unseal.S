@@ -94,7 +94,7 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
   cret
 
 /* TODO: Eventually this goes away, when the assembler can generate it for us */
-CHERIOT_EXPORT_FUNCTION \
+CHERIOT_EXPORT_LIBCALL \
   _Z16token_obj_unsealP10SKeyStructP10SObjStruct, \
   0 /* No stack usage */, \
   0b00010010 /* IRQs deferred, zero two registers */
