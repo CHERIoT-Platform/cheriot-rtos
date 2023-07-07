@@ -639,7 +639,7 @@ target("cheriot.loader")
 		target:set('cherimcu.debug-name', "loader")
 		local config = {
 			-- Size in bytes of the trusted stack.
-			loader_trusted_stack_size = 224,
+			loader_trusted_stack_size = 184,
 			-- Size in bytes of the loader's stack.
 			loader_stack_size = 1024
 		}

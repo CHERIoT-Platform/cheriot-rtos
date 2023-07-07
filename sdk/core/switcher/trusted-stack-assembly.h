@@ -37,21 +37,17 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwmb, (17 * 8) + 4)
 #endif
 // The basic trusted stack is the size of the save area, 8 bytes of state for
 // unwinding information, and then a single trusted stack frame used for the
-// unwind state of the initial thread. (7 * 8) is the size of TrustedStackFrame
+// unwind state of the initial thread. (8 * 3) is the size of TrustedStackFrame
 // and will match the value below.
-EXPORT_ASSEMBLY_SIZE(TrustedStack, TSTACK_REGFRAME_SZ + TSTACK_HEADER_SZ + (8 * 8))
+EXPORT_ASSEMBLY_SIZE(TrustedStack, TSTACK_REGFRAME_SZ + TSTACK_HEADER_SZ + (8 * 3))
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, frames, TSTACK_REGFRAME_SZ + TSTACK_HEADER_SZ)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, frameoffset, TSTACK_REGFRAME_SZ)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, inForcedUnwind, TSTACK_REGFRAME_SZ + 2)
 
-EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, pcc, 0)
-EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, cgp, 8)
-EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, csp, 16)
-EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, cs0, 24)
-EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, cs1, 32)
-EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, calleeExportTable, 40)
-EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, errorHandlerCount, 48)
-EXPORT_ASSEMBLY_SIZE(TrustedStackFrame, (8 * 8))
+EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, csp, 0)
+EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, calleeExportTable, 8)
+EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, errorHandlerCount, 16)
+EXPORT_ASSEMBLY_SIZE(TrustedStackFrame, (8 * 3))
 
 #define TSTACKOFFSET_FIRSTFRAME                                                \
 	(TrustedStack_offset_frameoffset + TSTACK_HEADER_SZ)

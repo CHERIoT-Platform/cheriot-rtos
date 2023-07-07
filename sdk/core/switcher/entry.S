@@ -20,6 +20,12 @@
 
 #define MAX_FAULTS_PER_COMPARTMENT_CALL 1024
 
+#define SPILL_SLOT_cs0 0
+#define SPILL_SLOT_cs1 8
+#define SPILL_SLOT_cgp 16
+#define SPILL_SLOT_pcc 24
+#define SPILL_SLOT_SIZE 32
+
 # Global for the sealing key.  Stored in the switcher's code section.
 	.section .text, "ax", @progbits
 	.globl compartment_switcher_sealing_key
@@ -144,6 +150,11 @@ switcher_scheduler_entry_csp:
 	.p2align 2
 	.type compartment_switcher_entry,@function
 compartment_switcher_entry:
+	cincoffset        csp, csp, -SPILL_SLOT_SIZE
+	csc               cs0, SPILL_SLOT_cs0(csp)
+	csc               cs1, SPILL_SLOT_cs1(csp)
+	csc               cgp, SPILL_SLOT_cgp(csp)
+	csc               cra, SPILL_SLOT_pcc(csp)
 	// before we access any privileged state, we can verify the
 	// compartment's csp is valid. If not, force unwind.
 	// Note that this check is purely to protect the callee, not the switcher
@@ -165,11 +176,7 @@ compartment_switcher_entry:
 	cspecialr          ct2, mtdc
 	// ctp points to the current available trusted stack frame.
 	cincoffset         ctp, ct2, tp
-	csc                cra, TrustedStackFrame_offset_pcc(ctp)
-	csc                cgp, TrustedStackFrame_offset_cgp(ctp)
 	csc                csp, TrustedStackFrame_offset_csp(ctp)
-	csc                cs0, TrustedStackFrame_offset_cs0(ctp)
-	csc                cs1, TrustedStackFrame_offset_cs1(ctp)
 	// We have just entered this call, so no faults triggered during this call
 	// yet.
 	csh                zero, TrustedStackFrame_offset_errorHandlerCount(ctp)
@@ -736,13 +743,23 @@ exception_entry_asm:
 	cspecialr          ctp, mtdc
 	addi               t2, t2, -TrustedStackFrame_size
 	cincoffset         ct1, ctp, t2
-	clc                ca2, TrustedStackFrame_offset_pcc(ct1)
-	clc                cgp, TrustedStackFrame_offset_cgp(ct1)
+	// Restore the stack pointer.  All other spilled values are spilled there.
 	clc                csp, TrustedStackFrame_offset_csp(ct1)
-	clc                cs0, TrustedStackFrame_offset_cs0(ct1)
-	clc                cs1, TrustedStackFrame_offset_cs1(ct1)
 	// Update the current frame offset.
 	csw                t2, TrustedStack_offset_frameoffset(ctp)
+	// Do the loads *after* moving the trusted stack pointer.  In theory, the
+	// checks in `check_compartment_stack_integrity` make it impossible for
+	// this to fault, but if we do fault here then we'd end up in an infinite
+	// loop trying repeatedly to pop the same trusted stack frame.  This would
+	// be bad.  Instead, we move the trusted stack pointer *first* and so, if
+	// the accesses to the untrusted stack fault, we will detect a fault in the
+	// switcher, enter the force-unwind path, and pop the frame for the
+	// compartment that gave us a malicious csp.
+	clc                cs0, SPILL_SLOT_cs0(csp)
+	clc                cs1, SPILL_SLOT_cs1(csp)
+	clc                ca2, SPILL_SLOT_pcc(csp)
+	clc                cgp, SPILL_SLOT_cgp(csp)
+	cincoffset         csp, csp, SPILL_SLOT_SIZE
 #ifndef CONFIG_NO_SWITCHER_SAFETY
 #ifdef CONFIG_MSHWM
 	// read and align the stack high water mark
