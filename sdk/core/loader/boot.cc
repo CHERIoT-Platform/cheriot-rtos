@@ -511,6 +511,20 @@ namespace
 					return createLibCall(build_pcc(lib));
 				}
 			}
+			for (auto &compartment : image.privilegedCompartments)
+			{
+				if (!compartment.is_privileged_library())
+				{
+					continue;
+				}
+				if (contains<ExportEntry>(compartment.exportTable,
+				                          possibleLibcall))
+				{
+					// TODO: Privileged library export tables should be moved
+					// to the end of the image as well.
+					return createLibCall(build_pcc(compartment));
+				}
+			}
 			// We also use the library calling convention for local callbacks,
 			// so see if this points to our own export table.
 			if (contains<ExportEntry>(sourceCompartment.exportTable,
