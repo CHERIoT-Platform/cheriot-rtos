@@ -76,7 +76,7 @@ SObj __cheri_compartment("alloc")
  * @return unsealed obj if key and obj are valid and they match. nullptr
  * otherwise
  */
-[[cheri::interrupt_state(disabled)]] void *__cheri_compartment("alloc")
+[[cheri::interrupt_state(disabled)]] void *__cheri_compartment("token_server")
   token_obj_unseal(SKey, SObj);
 
 /**

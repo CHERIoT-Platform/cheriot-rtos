@@ -1,25 +1,16 @@
 #include <compartment-macros-asm.S>
 #include <cheri-builtins.h>
-#include "token.h"
+#include "../allocator/token.h"
 
 /*
  * An in-assembler, libcall-able implementation of
  *
- * [[cheri::interrupt_state(disabled)]] void *__cheri_compartment("alloc")
+ * [[cheri::interrupt_state(disabled)]] void *__cheri_compartment("token_server")
  * token_obj_unseal(struct SKeyStruct *, struct SObjStruct *);
  *
  * The name has been manually mangled as per the C++ rules.
  */
 
-CHERIOT_EXPORT_FUNCTION \
-  _Z16token_obj_unsealP10SKeyStructP10SObjStruct, \
-  0 /* No stack usage */, \
-  0b00010010 /* IRQs deferred, zero two registers */
-
-/*
- * A little more ado before the function itself.  Put us in .text, align us, and
- * give the visibility and type.
- */
 	.section .text._Z16token_obj_unsealP10SKeyStructP10SObjStruct,"axG", \
 		@progbits,_Z16token_obj_unsealP10SKeyStructP10SObjStruct,comdat
 
@@ -28,7 +19,6 @@ CHERIOT_EXPORT_FUNCTION \
 	.p2align 1
 	.type    _Z16token_obj_unsealP10SKeyStructP10SObjStruct,@function
 
-/* And at long last... */
 _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
   /*
    * Register allocation:
@@ -102,3 +92,10 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
   /* Failure; clobber potential sensitive state in ca0 and return null */
   cmove ca0, cnull
   cret
+
+/* TODO: Eventually this goes away, when the assembler can generate it for us */
+CHERIOT_EXPORT_FUNCTION \
+  _Z16token_obj_unsealP10SKeyStructP10SObjStruct, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, zero two registers */
+

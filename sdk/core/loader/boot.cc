@@ -1079,7 +1079,9 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	switcherKey.address()     = SealedImportTableEntries;
 	switcherKey.bounds()      = 1;
 	setSealingKey(imgHdr.scheduler(), Scheduler);
-	setSealingKey(imgHdr.allocator(), Allocator);
+	setSealingKey(imgHdr.allocator(), Allocator); // TODO: remove from allocator
+	setSealingKey(imgHdr.token_server(),
+	              Allocator); // TODO: rename sealing type
 	constexpr size_t DynamicSealingLength =
 	  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
 

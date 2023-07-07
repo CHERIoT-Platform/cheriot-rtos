@@ -501,6 +501,8 @@ namespace loader
 				Scheduler,
 				/// The memory allocator
 				Allocator,
+				/// The token server
+				TokenServer,
 #ifdef SOFTWARE_REVOKER
 				/// The software revoker.  This privileged compartment is
 				/// optional.
@@ -530,6 +532,11 @@ namespace loader
 			[[nodiscard]] const PrivilegedCompartment &allocator() const
 			{
 				return compartments[Allocator];
+			}
+
+			[[nodiscard]] const PrivilegedCompartment &token_server() const
+			{
+				return compartments[TokenServer];
 			}
 
 #ifdef SOFTWARE_REVOKER
@@ -576,6 +583,11 @@ namespace loader
 		[[nodiscard]] const PrivilegedCompartment &allocator() const
 		{
 			return privilegedCompartments.allocator();
+		}
+
+		[[nodiscard]] const PrivilegedCompartment &token_server() const
+		{
+			return privilegedCompartments.token_server();
 		}
 
 		/**

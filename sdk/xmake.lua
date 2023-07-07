@@ -37,6 +37,7 @@ end
 debugOption("loader")
 debugOption("scheduler")
 debugOption("allocator")
+debugOption("token_server")
 
 -- Force -Oz irrespective of build config.  At -O0, we blow out our stack and
 -- require much stronger alignment.
@@ -194,12 +195,18 @@ target("cherimcu.switcher")
 target("cherimcu.allocator")
 	add_rules("cherimcu.privileged-compartment", "cherimcu.component-debug")
 	add_files(path.join(coredir, "allocator/main.cc"))
-	add_files(path.join(coredir, "allocator/token_unseal.S"))
 	on_load(function (target)
 		target:set("cherimcu.compartment", "alloc")
 		target:set('cherimcu.debug-name', "allocator")
 	end)
 
+target("cheriot.token_server")
+	add_rules("cherimcu.privileged-compartment", "cherimcu.component-debug")
+	add_files(path.join(coredir, "token_server/token_unseal.S"))
+	on_load(function (target)
+		target:set("cherimcu.compartment", "token_server")
+		target:set('cherimcu.debug-name', "token_server")
+	end)
 
 target("cherimcu.software_revoker")
 	set_default(false)
@@ -684,6 +691,7 @@ function firmware(name)
 		add_rules("firmware")
 		-- TODO: Make linking the allocator optional.
 		add_deps(name .. ".scheduler", "cheriot.loader", "cherimcu.switcher", "cherimcu.allocator")
+		add_deps("cheriot.token_server")
 		-- The firmware linker script will be populated based on the set of
 		-- compartments.
 		add_configfiles(path.join(scriptdir, "firmware.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.ldscript"})

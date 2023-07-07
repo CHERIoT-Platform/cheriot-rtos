@@ -32,6 +32,10 @@ SECTIONS
 		*/cherimcu.allocator.compartment(.compartment_export_table);
 		.allocator_export_table_end = .;
 
+		.token_server_export_table = ALIGN(8);
+		*/cheriot.token_server.compartment(.compartment_export_table);
+		.token_server_export_table_end = .;
+
 		@compartment_exports@
 	}
 
@@ -63,6 +67,16 @@ SECTIONS
 		*/cherimcu.allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
 	}
 	.allocator_end = .;
+
+	token_server_code : CAPALIGN
+	{
+		.token_server_start = .;
+		*/cheriot.token_server.compartment(.compartment_import_table);
+		.token_server_import_end = .;
+		token_server.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/cheriot.token_server.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+	}
+	.token_server_end = .;
 
 	@software_revoker_code@
 
@@ -184,6 +198,20 @@ SECTIONS
 		LONG(.allocator_export_table);
 		# Size of the allocator export table
 		SHORT(.allocator_export_table_end - .allocator_export_table);
+
+		# Token server compartment header
+		# Code
+		LONG(.token_server_start);
+		SHORT(.token_server_end - .token_server_start);
+		# No data segment
+		LONG(0);
+		SHORT(0);
+		# Size of the token server import table
+		SHORT(.token_server_import_end - .token_server_start);
+		# Address of the token server export table
+		LONG(.token_server_export_table);
+		# Size of the token server export table
+		SHORT(.token_server_export_table_end - .token_server_export_table);
 
 		@software_revoker_header@
 
