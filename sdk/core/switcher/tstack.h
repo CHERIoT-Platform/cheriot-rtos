@@ -10,19 +10,8 @@
 
 struct TrustedStackFrame
 {
-	/// caller's PCC of a compartment call
-	void *pcc;
-	/// caller's globals
-	void *cgp;
 	/// caller's stack
 	void *csp;
-	/**
-	 * Caller's callee saved registers. It's convenient to save it in the
-	 * trusted stack frame, but a generic way should save them on the caller's
-	 * stack, especially when the ABI has a lot of callee saved registers.
-	 */
-	void *cs0;
-	void *cs1;
 	/**
 	 * The callee's export table.  This is stored here so that we can find the
 	 * compartment's error handler, if we need to invoke the error handler
@@ -37,8 +26,6 @@ struct TrustedStackFrame
 	 * will forcibly unwind the stack.
 	 */
 	uint16_t errorHandlerCount;
-	// padding to make up to multiple of 16 bytes
-	uint16_t padding[7];
 };
 
 template<size_t NFrames>
@@ -90,16 +77,6 @@ struct TrustedStackGeneric
 using TrustedStack = TrustedStackGeneric<0>;
 
 #include "trusted-stack-assembly.h"
-
-// Require the trusted stack to be a multiple of 16 bytes. We could get away
-// without this except that the loader rounds the stack size up to a multiple of
-// 16 bytes and it confuses the overflow check in the switcher if the allocated
-// stack length does not match the expected length.
-static_assert((sizeof(TrustedStack) % 16) == 0);
-// We don't want the above to depend on the number of trusted stack frames
-// allocated so we'd better make sure TrustedStackFrame is also a multiple of 16
-// bytes.
-static_assert((sizeof(TrustedStackFrame) % 16) == 0);
 
 static_assert(
   CheckSize<COMPARTMENT_STACK_PERMISSIONS,
