@@ -479,6 +479,15 @@ namespace loader
 			{
 				return code.start();
 			}
+
+			/**
+			 * Privileged libraries are privileged compartments without data
+			 * segments.
+			 */
+			[[nodiscard]] bool is_privileged_library() const
+			{
+				return (data.start() == 0) && (data.size() == 0);
+			}
 		};
 
 		class __packed
