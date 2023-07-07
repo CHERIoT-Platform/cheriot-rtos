@@ -1084,6 +1084,11 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	switcherKey.bounds()      = 1;
 	setSealingKey(imgHdr.scheduler(), Scheduler);
 	setSealingKey(imgHdr.allocator(), Allocator);
+	setSealingKey(imgHdr.token_library(),
+	              Allocator,
+	              1,
+	              0,
+	              PermissionSet{Permission::Global, Permission::Unseal});
 	constexpr size_t DynamicSealingLength =
 	  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
 
