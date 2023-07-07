@@ -154,6 +154,7 @@ rule("cherimcu.compartment")
 	after_load(function (target)
 		local compartment = target:get("cherimcu.compartment") or target:name()
 		target:add("cxflags", "-cheri-compartment=" .. compartment, {force=true})
+		target:add("asflags", "-cheri-compartment=" .. compartment, {force=true})
 	end)
 
 -- Privileged compartments are built as compartments, but with a slightly
