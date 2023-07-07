@@ -292,16 +292,15 @@ namespace
 	PrivateAllocatorCapabilityState *
 	malloc_capability_unseal(SealedAllocation in)
 	{
-		Capability type = STATIC_SEALING_TYPE(MallocKey);
-		Capability key{SEALING_CAP()};
-		in.unseal(key);
-		if (!in.is_valid() || (in->type != type.address()))
+		auto  key = STATIC_SEALING_TYPE(MallocKey);
+		auto *capability =
+		  token_unseal<PrivateAllocatorCapabilityState>(key, in.get());
+		if (!capability)
 		{
 			Debug::log("Invalid malloc capability {}", in);
 			return nullptr;
 		}
-		auto *capability =
-		  reinterpret_cast<PrivateAllocatorCapabilityState *>(&in->data);
+
 		// Assign an identifier if this is the first time that we've seen this.
 		if (capability->identifier == 0)
 		{
