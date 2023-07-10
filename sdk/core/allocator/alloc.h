@@ -1173,7 +1173,7 @@ class MState
 		 * window in which preemption could allow a store through a copy of
 		 * the user capability (or its progeny) that undid our work of zeroing!
 		 */
-		revoker.shadow_paint_range(mem.address(), chunk.cell_next(), true);
+		revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
 
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk
@@ -2346,8 +2346,8 @@ class MState
 			heapQuarantineSize -= foreHeader->size_get();
 
 			/* Clear the shadow bits that marked this region as quarantined */
-			revoker.shadow_paint_range(
-			  foreHeader->body().address(), foreHeader->cell_next(), false);
+			revoker.shadow_paint_range<false>(foreHeader->body().address(),
+			                                  foreHeader->cell_next());
 
 			mspace_free_internal(foreHeader);
 			dequeued++;

@@ -146,9 +146,10 @@ namespace Revocation
 		 * @brief Set or clear the shadow bits for all addresses within [base,
 		 * top).
 		 *
-		 * @param fill true to set, false to clear the bits
+		 * @param Fill true to set, false to clear the bits
 		 */
-		void shadow_paint_range(ptraddr_t base, ptraddr_t top, bool fill)
+		template<bool Fill>
+		__always_inline void shadow_paint_range(ptraddr_t base, ptraddr_t top)
 		{
 			size_t baseCapOffset = shadow_offset_bits(base);
 			size_t topCapOffset  = shadow_offset_bits(top);
@@ -167,7 +168,7 @@ namespace Revocation
 				 * respective ends of the word.
 				 */
 				WordT mask = maskHi & maskLo;
-				if (fill)
+				if (Fill)
 				{
 					shadowCap[baseWordIx] |= mask;
 				}
@@ -196,7 +197,7 @@ namespace Revocation
 			 * no interior pointers (outside the allocator, anyway) to worry us.
 			 */
 			WordT midWord;
-			if (fill)
+			if constexpr (Fill)
 			{
 				shadowCap[topWordIx] |= maskHi;
 				midWord = ~WordT(0);
@@ -217,7 +218,7 @@ namespace Revocation
 				shadowCap[shadowWordIx] = midWord;
 			}
 
-			if (fill)
+			if constexpr (Fill)
 			{
 				shadowCap[baseWordIx] |= maskLo;
 			}
