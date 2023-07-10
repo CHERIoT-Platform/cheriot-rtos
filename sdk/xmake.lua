@@ -405,10 +405,19 @@ rule("firmware")
 			"\n\t\tbootTStack = .;" ..
 			"\n\t\t. += " .. loader_trusted_stack_size .. ";" ..
 			"\n\t}\n"
+		-- Stacks must be less than this size or truncating them in compartment
+		-- switch will encounter precision errors.
+		local stack_size_limit = 8176
 		for i, thread in ipairs(threads) do
 			thread.mangled_entry_point = string.format("__export_%s__Z%d%sv", thread.compartment, string.len(thread.entry_point), thread.entry_point)
 			thread.thread_id = i
 			thread.trusted_stack_size = loader_trusted_stack_size + (64 * thread.trusted_stack_frames)
+
+			if thread.stack_size > stack_size_limit then
+				raise("thread " .. i .. " requested a " .. thread.stack_size ..
+				" stack.  Stacks over " .. stack_size_limit ..
+				" are not yet supported in the compartment switcher.")
+			end
 
 			thread_stacks = thread_stacks .. string.gsub(thread_stack_template, "${([_%w]*)}", thread)
 			thread_trusted_stacks = thread_trusted_stacks .. string.gsub(thread_trusted_stack_template, "${([_%w]*)}", thread)
