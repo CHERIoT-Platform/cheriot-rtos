@@ -201,7 +201,7 @@ target("cherimcu.allocator")
 	end)
 
 target("cheriot.token_server")
-	add_rules("cherimcu.privileged-compartment", "cherimcu.component-debug")
+	add_rules("cherimcu.privileged-library", "cherimcu.component-debug")
 	add_files(path.join(coredir, "token_server/token_unseal.S"))
 	on_load(function (target)
 		target:set("cherimcu.compartment", "token_server")
