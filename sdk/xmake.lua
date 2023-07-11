@@ -167,6 +167,17 @@ rule("cherimcu.privileged-compartment")
 		target:add("defines", "CHERIOT_AVOID_CAPRELOCS")
 	end)
 
+rule("cherimcu.privileged-library")
+	add_deps("cherimcu.component")
+	on_load(function (target)
+		-- Mark this target as a CHERIoT compartment.
+		target:set("cherimcu.type", "compartment")
+		target:set("extension", ".compartment")
+		target:set("cherimcu.ldscript", "privileged-compartment.ldscript")
+		target:set("cherimcu.type", "privileged compartment")
+		target:add("defines", "CHERIOT_AVOID_CAPRELOCS")
+	end)
+
 -- Build the switcher as an object file that we can import into the final
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
