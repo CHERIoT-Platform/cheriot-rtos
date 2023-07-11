@@ -38,6 +38,8 @@ __BEGIN_DECLS
  */
 SKey __cheri_compartment("alloc") token_key_new(void);
 
+typedef __cheri_callback void *(*Token_Allocator)(Timeout *, SObj, size_t);
+
 /**
  * Allocate a new object with size `sz`.
  *
@@ -49,12 +51,13 @@ SKey __cheri_compartment("alloc") token_key_new(void);
  *
  * On error, this returns `INVALID_SOBJ`.
  */
-SObj __cheri_compartment("alloc")
-  token_sealed_unsealed_alloc(Timeout           *timeout,
-                              struct SObjStruct *heapCapability,
-                              SKey               key,
-                              size_t             sz,
-                              void             **unsealed);
+SObj __cheri_libcall
+token_sealed_unsealed_alloc(Token_Allocator    alloc,
+                            Timeout           *timeout,
+                            struct SObjStruct *heapCapability,
+                            SKey               key,
+                            size_t             sz,
+                            void             **unsealed);
 
 /**
  * Same as token_sealed_unsealed_alloc() without getting the unsealed
@@ -62,11 +65,11 @@ SObj __cheri_compartment("alloc")
  *
  * The key must have the permit-seal permission.
  */
-SObj __cheri_compartment("alloc")
-  token_sealed_alloc(Timeout           *timeout,
-                     struct SObjStruct *heapCapability,
-                     SKey,
-                     size_t);
+SObj __cheri_libcall token_sealed_alloc(Token_Allocator    alloc,
+                                        Timeout           *timeout,
+                                        struct SObjStruct *heapCapability,
+                                        SKey,
+                                        size_t);
 
 /**
  * Unseal the obj given the key.
@@ -143,7 +146,13 @@ token_allocate(Timeout *timeout, struct SObjStruct *heapCapability, SKey key)
 {
 	void *unsealed;
 	SObj  sealed = token_sealed_unsealed_alloc(
-	   timeout, heapCapability, key, sizeof(T), &unsealed);
+	   /* XXX: This cast is working around a compiler bug */
+      reinterpret_cast<Token_Allocator>(heap_allocate),
+      timeout,
+      heapCapability,
+      key,
+      sizeof(T),
+      &unsealed);
 	return {static_cast<T *>(unsealed), Sealed<T>{sealed}};
 }
 

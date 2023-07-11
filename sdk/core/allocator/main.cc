@@ -873,60 +873,6 @@ namespace
 		return in.is_valid() ? in : SealedAllocation{nullptr};
 	}
 
-	/**
-	 * Helper that allocates a sealed object and returns the sealed and
-	 * unsealed capabilities to the object.  Requires that the sealing key have
-	 * all of the permissions in `permissions`.
-	 */
-	std::pair<SObj, void *>
-	  __noinline allocate_sealed_unsealed(Timeout      *timeout,
-	                                      SObj          heapCapability,
-	                                      SealingKey    key,
-	                                      size_t        sz,
-	                                      PermissionSet permissions)
-	{
-		if (!check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
-		      timeout))
-		{
-			return {nullptr, nullptr};
-		}
-		if (!permissions.can_derive_from(key.permissions()))
-		{
-			Debug::log(
-			  "Operation requires {}, cannot derive from {}", permissions, key);
-			return {nullptr, nullptr};
-		}
-
-		if (sz > 0xfe8 - ObjHdrSize)
-		{
-			Debug::log("Cannot allocate sealed object of {} bytes, too large",
-			           sz);
-			// TODO: Properly handle imprecision.
-			return {nullptr, nullptr};
-		}
-
-		LockGuard g{lock};
-		auto     *capability = malloc_capability_unseal(heapCapability);
-		if (capability == nullptr)
-		{
-			return {nullptr, nullptr};
-		}
-		SealedAllocation obj{static_cast<SObj>(
-		  malloc_internal(sz + ObjHdrSize, std::move(g), capability, timeout))};
-		if (obj == nullptr)
-		{
-			Debug::log("Underlying allocation failed for sealed object");
-			return {nullptr, nullptr};
-		}
-
-		obj->type   = key.address();
-		auto sealed = obj;
-		sealed.seal(SEALING_CAP());
-		obj.address() += ObjHdrSize; // Exclude the header.
-		obj.bounds() = obj.length() - ObjHdrSize;
-		Debug::log("Allocated sealed {}, unsealed {}", sealed, obj);
-		return {sealed, obj};
-	}
 } // namespace
 
 SKey token_key_new()
@@ -950,37 +896,6 @@ SKey token_key_new()
 		return key;
 	}
 	return nullptr;
-}
-
-SObj token_sealed_unsealed_alloc(Timeout *timeout,
-                                 SObj     heapCapability,
-                                 SKey     key,
-                                 size_t   sz,
-                                 void   **unsealed)
-{
-	auto [sealed, obj] = allocate_sealed_unsealed(
-	  timeout, heapCapability, key, sz, {Permission::Seal, Permission::Unseal});
-	{
-		LockGuard g{lock};
-		if (check_pointer<PermissionSet{
-		      Permission::Store, Permission::LoadStoreCapability}>(unsealed))
-		{
-			*unsealed = obj;
-			return sealed;
-		}
-	}
-	heap_free(heapCapability, obj);
-	return INVALID_SOBJ;
-}
-
-SObj token_sealed_alloc(Timeout *timeout,
-                        SObj     heapCapability,
-                        SKey     rawKey,
-                        size_t   sz)
-{
-	return allocate_sealed_unsealed(
-	         timeout, heapCapability, rawKey, sz, {Permission::Seal})
-	  .first;
 }
 
 /**

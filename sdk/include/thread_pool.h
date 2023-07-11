@@ -154,11 +154,13 @@ namespace thread_pool
 			// type.
 			Timeout t{UnlimitedTimeout};
 			void   *sealed = token_sealed_unsealed_alloc(
-			    &t,
-			    MALLOC_CAPABILITY,
-			    detail::sealing_key_for_type<LambdaType>(),
-			    sizeof(lambda),
-			    &buffer);
+			    /* XXX: This cast is working around a compiler bug */
+              reinterpret_cast<Token_Allocator>(heap_allocate),
+              &t,
+              MALLOC_CAPABILITY,
+              detail::sealing_key_for_type<LambdaType>(),
+              sizeof(lambda),
+              &buffer);
 			// Copy the lambda into the new allocation.
 			// Note: We silence a warning here because we *do* want to
 			// explicitly move, not forward.
