@@ -146,9 +146,10 @@ namespace Revocation
 		 * @brief Set or clear the shadow bits for all addresses within [base,
 		 * top).
 		 *
-		 * @param fill true to set, false to clear the bits
+		 * @param Fill true to set, false to clear the bits
 		 */
-		void shadow_paint_range(ptraddr_t base, ptraddr_t top, bool fill)
+		template<bool Fill>
+		__always_inline void shadow_paint_range(ptraddr_t base, ptraddr_t top)
 		{
 			size_t baseCapOffset = shadow_offset_bits(base);
 			size_t topCapOffset  = shadow_offset_bits(top);
@@ -167,7 +168,7 @@ namespace Revocation
 				 * respective ends of the word.
 				 */
 				WordT mask = maskHi & maskLo;
-				if (fill)
+				if (Fill)
 				{
 					shadowCap[baseWordIx] |= mask;
 				}
@@ -183,25 +184,47 @@ namespace Revocation
 			 * Otherwise, there are at least two words of the bitmap that need
 			 * to be updated with the masks, and possibly some in between that
 			 * just need to be set wholesale.
+			 *
+			 * We paint ranges "backwards", from highest address to lowest, so
+			 * that we never create a window in which an interior pointer has a
+			 * clear shadow bit while the lower adjacent address has an asserted
+			 * shadow bit, as that would open the door to confusing the interior
+			 * pointer with a pointer to the start of an object (recall that
+			 * object headers are marked in the shadow bitmap).
+			 *
+			 * When clearing ranges, the order matters less.  A correct
+			 * allocator will have run revocation first, and so there should be
+			 * no interior pointers (outside the allocator, anyway) to worry us.
 			 */
 			WordT midWord;
-			if (fill)
+			if constexpr (Fill)
 			{
-				shadowCap[baseWordIx] |= maskLo;
 				shadowCap[topWordIx] |= maskHi;
 				midWord = ~WordT(0);
 			}
 			else
 			{
-				shadowCap[baseWordIx] &= ~maskLo;
 				shadowCap[topWordIx] &= ~maskHi;
 				midWord = 0;
 			}
 
-			for (size_t shadowWordIx = baseWordIx + 1; shadowWordIx < topWordIx;
-			     shadowWordIx++)
+			/*
+			 * This loop is underflow-safe, since topWordIx is strictly greater
+			 * than baseWordIx after the test for equality above.
+			 */
+			for (size_t shadowWordIx = topWordIx - 1; baseWordIx < shadowWordIx;
+			     shadowWordIx--)
 			{
 				shadowCap[shadowWordIx] = midWord;
+			}
+
+			if constexpr (Fill)
+			{
+				shadowCap[baseWordIx] |= maskLo;
+			}
+			else
+			{
+				shadowCap[baseWordIx] &= ~maskLo;
 			}
 		}
 
