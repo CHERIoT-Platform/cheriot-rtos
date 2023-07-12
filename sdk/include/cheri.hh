@@ -64,17 +64,17 @@ namespace CHERI
 		 */
 		Execute = 8,
 		/**
-		 * This capability may be used to seal other capabilities.  The
-		 * 'address' range is in the sealing type namespace and not in the
-		 * memory namespace.
-		 */
-		Seal = 9,
-		/**
 		 * This capability may be used to unseal other capabilities.  The
 		 * 'address' range is in the sealing type namespace and not in the
 		 * memory namespace.
 		 */
-		Unseal = 10,
+		Unseal = 9,
+		/**
+		 * This capability may be used to seal other capabilities.  The
+		 * 'address' range is in the sealing type namespace and not in the
+		 * memory namespace.
+		 */
+		Seal = 10,
 		/**
 		 * Software defined permission bit, no architectural meaning.
 		 */
