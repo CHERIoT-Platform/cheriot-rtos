@@ -406,7 +406,7 @@ rule("firmware")
 			"\n\t\t. += " .. loader_trusted_stack_size .. ";" ..
 			"\n\t}\n"
 		-- Stacks must be less than this size or truncating them in compartment
-		-- switch will encounter precision errors.
+		-- switch may encounter precision errors.
 		local stack_size_limit = 8176
 		for i, thread in ipairs(threads) do
 			thread.mangled_entry_point = string.format("__export_%s__Z%d%sv", thread.compartment, string.len(thread.entry_point), thread.entry_point)
