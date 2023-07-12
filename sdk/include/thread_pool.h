@@ -88,8 +88,7 @@ namespace thread_pool
 		__cheri_callback void wrap_callback_lambda(void *rawFn)
 		{
 			auto key = sealing_key_for_type<T>();
-			T   *fn =
-			  static_cast<T *>(token_obj_unseal(key, static_cast<SObj>(rawFn)));
+			auto fn  = token_unseal(key, Sealed(static_cast<T *>(rawFn)));
 			if (fn == nullptr)
 			{
 				return;
