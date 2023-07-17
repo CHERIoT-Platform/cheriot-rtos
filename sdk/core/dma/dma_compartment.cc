@@ -5,8 +5,11 @@
 #include <cheri.hh>
 #include <compartment-macros.h>
 #include <utils.hh>
-
 #include <thread_pool.h>
+
+#if __has_include(<platform-dma.hh>)
+#	include <platform-dma.hh>
+#endif
 
 using thread_pool::async;
 /**
@@ -19,8 +22,33 @@ DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(dmaDriverHeap, 8144);
 
 SObjStruct *dmaHeap;
 
-int claim_dma(uint32_t *sourceAddress, uint32_t *targetAddress)
+Ibex::PlatformDMA platformDma;
+
+void free_dma(uint32_t *sourceAddress, uint32_t *targetAddress)
+{
+    int sourceStatus = heap_free(dmaHeap, sourceAddress);
+    int targetStatus = heap_free(dmaHeap, targetAddress);
+
+    /**
+     *  ideally, free should not fail if claim was successful
+     *  todo: but in case, assert a Debug::Assert() for heap_free() later
+     */    
+}
+
+int dma_compartment(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
+                        uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
 {    
+    /**
+     *  return if sufficient permissions are not present 
+     *  and if not long enough 
+     */
+
+    if (!check_pointer<PermissionSet{Permission::Read, Permission::Global}>(sourceAddress, lengthInBytes) ||
+           !check_pointer<PermissionSet{Permission::Write, Permission::Global}>(targetAddress, lengthInBytes) )
+    {
+        return -1;
+    }
+
     /**
      *  create a heap capability for dma below. 
      */
@@ -56,20 +84,23 @@ int claim_dma(uint32_t *sourceAddress, uint32_t *targetAddress)
         return -1;
     } 
 
+    platformDma::write_strides(sourceStrides, targetStrides);
+    platformDma::byte_swap_en(byteSwapAmount);
+        
+    platformDma::start_dma();            
+
+    // todo: need to check for status via polling maybe from here
+    // or for the mvp, we can just check or cancel after some timeout
+
+    // todo: eventually we need some interrupt support and the futex call here
+    
+    free_dma(sourceAddress, targetAddress);
+
+    platformDma::reset_dma();
+
     /**
      *  return here, if both claims are successful 
      */
     return 0;
 
-}
-
-void free_dma(uint32_t *sourceAddress, uint32_t *targetAddress)
-{
-    int sourceStatus = heap_free(dmaHeap, sourceAddress);
-    int targetStatus = heap_free(dmaHeap, targetAddress);
-
-    /**
-     *  ideally, free should not fail if claim was successful
-     *  todo: but in case, assert a Debug::Assert() for heap_free() later
-     */    
 }
