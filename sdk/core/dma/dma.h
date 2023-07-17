@@ -44,7 +44,7 @@ namespace DMA
 			PlatformDMA<WordT, TCMBaseAddr>::init();
 		}
 
-        void write_conf(uint32_t sourceAddress, uint32_t targetAddress, uint32_t lengthInBytes)
+        void write_conf(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes)
         {
             /**
 		     * Claim the DMA-able addresses first.
