@@ -14,17 +14,17 @@
 namespace DMA 
 {
     template<typename T>
-	concept IsDmaDevice = requires(T device)
+	concept IsDmaDevice = requires(T device, uint32_t *sourceAddress, uint32_t *destinationAddress, size_t length)
 	{
 		{device.init()};
 		{
-			device.write_conf()
+			device.write_conf(sourceAddress, destinationAddress, length)
 			} -> std::same_as<void>;
 		{
 			device.start_dma()
 			} -> std::same_as<void>;
         {
-			device.reset_dma()
+			device.reset_dma(sourceAddress, destinationAddress)
 			} -> std::same_as<void>;
 	};
 
