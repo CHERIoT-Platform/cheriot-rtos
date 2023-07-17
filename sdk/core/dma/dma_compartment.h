@@ -7,12 +7,6 @@
  * A function below claims the source and target addresses of the DMA interface.
  * While, DMA is in progress, these addresses should not be freed
  */
-__cheri_compartment("dma") int claim_dma(uint32_t *sourceAddress, 
-                                                        uint32_t *targetAddress);
+__cheri_compartment("dma") int dma_compartment(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
+                                                    uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount);
 
-/**
- * The function below frees the source and target addresses of the DMA interface.
- * It should be called once the DMA operation is completed.
- */
-__cheri_compartment("dma") void free_dma(uint32_t *sourceAddress, 
-                                                        uint32_t *targetAddress);

@@ -58,14 +58,12 @@ namespace Ibex {
             uint32_t targetStrides;
         };
 
-        volatile DMAInterface *dmaInterface;
+        __always_inline volatile DMAInterface &device()
+        {
+            return *MMIO_CAPABILITY(DMAInterface, dma);
+        }
 
         public:
-
-        void init()
-        {
-            dmaInterface = MMIO_CAPABILITY(DMAInterface, dma);
-        }
 
         uint32_t read_status()
         {   
@@ -73,41 +71,41 @@ namespace Ibex {
              *  this statement returns the less signifance bit 
              *  to show the halted status
              */
-            return dmaInterface->status & 0x1;
+            return device().status & 0x1;
         }
 
         void write_conf(uint32_t sourceAddress, uint32_t targetAddress, uint32_t lengthInBytes)
         {
             /**
-             *  filling source and target addresses, and length fields
+             *  Setting source and target addresses, and length fields
              */
-            dmaInterface->sourceAddress = sourceAddress;
-            dmaInterface->targetAddress = targetAddress;
-            dmaInterface->lengthInBytes = lengthInBytes;
+            device().sourceAddress = sourceAddress;
+            device().targetAddress = targetAddress;
+            device().lengthInBytes = lengthInBytes;
 
         }
 
         void write_strides(uint32_t sourceStrides, uint32_t targetStrides)
         {
             /**
-             *  filling source and target strides
+             *  Setting source and target strides
              */
-            dmaInterface->sourceStrides = sourceStrides;
-            dmaInterface->targetStrides = targetStrides;
+            device().sourceStrides = sourceStrides;
+            device().targetStrides = targetStrides;
         }
 
         int byte_swap_en(uint32_t swapAmount)
         {
             /**
-             *  filling byte swaps
+             *  Setting byte swaps
              */
 
             if (swapAmount == 2) 
             {
-                dmaInterface->control = 0x2;
+                device().control = 0x2;
             } else if (swapAmount == 4)
             {
-                dmaInterface->control = 0x4;
+                device().control = 0x4;
             } else 
             {
                 return -1;
@@ -119,17 +117,19 @@ namespace Ibex {
         void start_dma()
         {
             /**
-             *  setting a start bit
+             *  Setting a start bit
              */
-            dmaInterface->control = 0x1;
+            device().control = 0x1;
         }
 
         void reset_dma()
         {
             /**
-             *  setting a reset bit, which is bit 3
+             *  Setting a reset bit, which is bit 3.
+             *  this clears all the registers, 
+             *  but do not transfer the current transfer status anywhere
              */
-            dmaInterface->control = 0x8;
+            device().control = 0x8;
 
         }
 

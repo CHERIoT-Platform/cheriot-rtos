@@ -14,11 +14,12 @@
 namespace DMA 
 {
     template<typename T>
-	concept IsDmaDevice = requires(T device, uint32_t *sourceAddress, uint32_t *destinationAddress, size_t length)
+	concept IsDmaDevice = requires(T device, uint32_t *sourceAddress, uint32_t *targetAddress, size_t lengthInBytes,
+                                        uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
 	{
 		{device.init()};
 		{
-			device.write_conf(sourceAddress, destinationAddress, length)
+			device.write_conf(sourceAddress, destinationAddress, lengthInBytes)
 			} -> std::same_as<void>;
 		{
 			device.start_dma()
@@ -35,40 +36,15 @@ namespace DMA
 	{
 		public:
 
-		/**
-		 * Initialise a DMA device.
-		 */
-
-		void init()
-		{
-			PlatformDMA<WordT, TCMBaseAddr>::init();
-		}
-
-        void write_conf(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes)
+        int configure_and_launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
+                        uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
         {
-            /**
-		     * Claim the DMA-able addresses first.
-             * If successful, then call an original 
-             * dma write configuration function
-		     */
-
-            int claimStatus = claim_dma(sourceAddress, targetAddress);
-
-            if (claimStatus == 0)
-            {
-                PlatformDMA::write_conf(sourceAddress, targetAddress, lengthInBytes);
-            }
-            
-        }
-
-        void reset_dma(uint32_t sourceAddress, uint32_t targetAddress)
-        {
-            free_dma(sourceAddress, targetAddress);
-
-            PlatformDMA::reset_dma();
+            return dma_compartment(sourceAddress, targetAddress, lengthInBytes,
+                        sourceStrides, targetStrides, byteSwapAmount)
         }
 
 	};
 
-    using DMA = GenericDMA<uint32_t, REVOKABLE_MEMORY_START, PlatformDMA>;
+    using DMA = GenericDMA<uint32_t, OtherInformation, PlatformDMA>;
 }
+
