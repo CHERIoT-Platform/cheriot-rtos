@@ -11,6 +11,9 @@
 #	include <platform-dma.hh>
 #endif
 
+// Import some useful things from the CHERI namespace.
+using namespace CHERI;
+
 using thread_pool::async;
 /**
  *  creating a global heap below.
@@ -43,8 +46,8 @@ int dma_compartment(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t l
      *  and if not long enough 
      */
 
-    if (!check_pointer<PermissionSet{Permission::Read, Permission::Global}>(sourceAddress, lengthInBytes) ||
-           !check_pointer<PermissionSet{Permission::Write, Permission::Global}>(targetAddress, lengthInBytes) )
+    if (!check_pointer<PermissionSet{Permission::Load, Permission::Global}>(sourceAddress, lengthInBytes) ||
+           !check_pointer<PermissionSet{Permission::Store, Permission::Global}>(targetAddress, lengthInBytes) )
     {
         return -1;
     }

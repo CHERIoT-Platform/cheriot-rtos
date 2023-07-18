@@ -74,13 +74,13 @@ namespace Ibex {
             return device().status & 0x1;
         }
 
-        void write_conf(uint32_t sourceAddress, uint32_t targetAddress, uint32_t lengthInBytes)
+        void write_conf(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes)
         {
             /**
              *  Setting source and target addresses, and length fields
              */
-            device().sourceAddress = sourceAddress;
-            device().targetAddress = targetAddress;
+            device().sourceAddress = *sourceAddress;
+            device().targetAddress = *targetAddress;
             device().lengthInBytes = lengthInBytes;
 
         }
@@ -136,5 +136,5 @@ namespace Ibex {
     };
 } // namespace Ibex
 
-template<typename WordT, size_t TCMBaseAddr>
+// template<typename WordT, size_t TCMBaseAddr>
 using PlatformDMA = Ibex::PlatformDMA;
