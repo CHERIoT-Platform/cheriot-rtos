@@ -3,6 +3,7 @@
 #include <compartment-macros.h>
 #include <cstdio>
 #include <utils.hh>
+#include <cheri.hh>
 
 namespace Ibex {
     class PlatformDMA {
@@ -63,28 +64,6 @@ namespace Ibex {
             return *MMIO_CAPABILITY(DMAInterface, dma);
         }
 
-        public:
-
-        uint32_t read_status()
-        {   
-            /**
-             *  this statement returns the less signifance bit 
-             *  to show the halted status
-             */
-            return device().status & 0x1;
-        }
-
-        void write_conf(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes)
-        {
-            /**
-             *  Setting source and target addresses, and length fields
-             */
-            device().sourceAddress = *sourceAddress;
-            device().targetAddress = *targetAddress;
-            device().lengthInBytes = lengthInBytes;
-
-        }
-
         void write_strides(uint32_t sourceStrides, uint32_t targetStrides)
         {
             /**
@@ -94,7 +73,7 @@ namespace Ibex {
             device().targetStrides = targetStrides;
         }
 
-        int byte_swap_en(uint32_t swapAmount)
+        int enable_byte_swap(uint32_t swapAmount)
         {
             /**
              *  Setting byte swaps
@@ -120,6 +99,32 @@ namespace Ibex {
              *  Setting a start bit
              */
             device().control = 0x1;
+        }
+
+        public:
+
+        uint32_t read_status()
+        {   
+            /**
+             *  this statement returns the less signifance bit 
+             *  to show the halted status
+             */
+            return device().status & 0x1;
+        }
+
+        void write_conf_and_start(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
+                                    uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
+        {
+            /**
+             *  Setting source and target addresses, and length fields
+             */
+            device().sourceAddress = CHERI::Capability{sourceAddress}.address();
+            device().targetAddress = CHERI::Capability{targetAddress}.address();
+            device().lengthInBytes = lengthInBytes;
+
+            write_strides(sourceStrides, targetStrides);
+            enable_byte_swap(byteSwapAmount);
+            start_dma();    
         }
 
         void reset_dma()
