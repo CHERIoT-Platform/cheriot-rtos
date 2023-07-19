@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <memory>
 #define MALLOC_QUOTA 0x100000
 
 #include <cheri.hh>
@@ -30,10 +32,16 @@ int dma_compartment(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t l
     /**
      *  claim the memory with default malloc capability,
      *  as declaring another heap capability is an extra entry 
-     *  that leaves the default capability let unused
+     *  that leaves the default capability let unused.
+     *
+     *  unique pointers are used to avoid explicit heap_free() calls.
+     *  when this pointer is not used anymore, it is automatically deleted
      */
     
-    size_t sourceClaimSize = heap_claim(MALLOC_CAPABILITY, sourceAddress);
+    std::unique_ptr<uint32_t> uniqueSourceAddress(sourceAddress);
+    std::unique_ptr<uint32_t> uniqueTargetAddress(targetAddress);
+
+    size_t sourceClaimSize = heap_claim(MALLOC_CAPABILITY, static_cast<void*>(uniqueSourceAddress.get()));
 
     /**
      *  return with failure if 
@@ -45,7 +53,7 @@ int dma_compartment(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t l
         return -1;
     } 
 
-    size_t targetClaimSize = heap_claim(MALLOC_CAPABILITY, targetAddress);
+    size_t targetClaimSize = heap_claim(MALLOC_CAPABILITY, static_cast<void*>(uniqueTargetAddress.get()));
 
     if (targetClaimSize == 0) 
     {   
@@ -80,7 +88,7 @@ int dma_compartment(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t l
     // todo: eventually, we wanna separate this free and reset dma 
     // logics from the start dma as well    
     
-    free_dma(sourceAddress, targetAddress);
+    // free_dma(sourceAddress, targetAddress);
 
     platformDma.reset_dma();
 
