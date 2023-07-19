@@ -1,15 +1,9 @@
-#pragma once
-
 #include "dma_compartment.h"
-#include "platform/ibex/platform-dma.hh"
+#include "platform-dma.hh"
 #include <concepts>
 #include <cstddef>
 #include <stdint.h>
 #include <utils.hh>
-
-#if __has_include(<platform-dma.hh>)
-#	include <platform-dma.hh>
-#endif
 
 namespace DMA 
 {
@@ -18,10 +12,8 @@ namespace DMA
                                         uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
 	{
 		{
-			device.write_conf(sourceAddress, targetAddress, lengthInBytes)
-			} -> std::same_as<void>;
-		{
-			device.start_dma()
+			device.write_conf_and_start(sourceAddress, targetAddress, lengthInBytes,
+											sourceStrides, targetStrides, byteSwapAmount)
 			} -> std::same_as<void>;
         {
 			device.reset_dma()
