@@ -17,10 +17,13 @@ option("board")
 compartment("dma-app")
     add_files("dma_test.cc")
 
+compartment("dma")
+    add_files("../../sdk/core/dma/dma_compartment.cc")
+
 -- Firmware image for the example.
 firmware("dma_test")
     add_deps("crt", "freestanding", "atomic_fixed")
-    add_deps("dma-app")
+    add_deps("dma-app", "dma")
     on_load(function(target)
         target:values_set("board", "$(board)")
         target:values_set("threads", {

@@ -1,8 +1,7 @@
-#pragma once
+#define MALLOC_QUOTA 0x100000
 
 #include <cstdint>
 #include <memory>
-#define MALLOC_QUOTA 0x100000
 
 #include <cheri.hh>
 #include <compartment-macros.h>
