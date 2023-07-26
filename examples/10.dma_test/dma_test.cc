@@ -14,7 +14,7 @@
 using Debug = ConditionalDebug<true, "Simple DMA request compartment">;
 
 /// Thread entry point.
-void __cheri_compartment("dma") dma_request()
+void __cheri_compartment("dma-app") dma_request()
 {
 	Debug::log("DMA request app entered!");
 
