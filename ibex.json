@@ -1,0 +1,71 @@
+{
+	"devices" :
+	{
+		"hspTimer" : {
+			"start"  : 0x8f000800,
+			"length" : 0x20
+		},
+		"hspInteruptController" : {
+			"start"  : 0x8f000600,
+			"length" : 0x14
+		},
+		"uart" : {
+			"start" : 0x8f00b000,
+			"length": 0x100
+		},
+		"shadow" : {
+			"start" : 0x200f0000,
+			"end"   : 0x200f1800
+		},
+		"revoker" : {
+			"start" : 0x8f000000,
+			"length": 0xc
+		},
+		"dmb" : {
+			"start" : 0x8f0f0000,
+			"length": 0x400
+		},
+		"ethernet" : {
+			"start" : 0x98000000,
+			"length": 0x204
+		},
+		"LEDs" : {
+			"start" : 0x8f00 f004,
+			"end": 0x2020_0040
+		},
+		"dma" : {
+			"start" : 0x2020_0000,
+			"end"   : 0x2020_0040	  
+		}
+	},
+	"instruction_memory" : {
+		"start" : 0x20000080,
+		"end"   : 0x20060000
+	},
+	"heap" : {
+		"end"   : 0x20060000
+	},
+	"revokable_memory_start" : 0x20000000,
+	"interrupts": [
+		{
+			"name": "Ethernet",
+			"number": 16,
+			"priority": 0
+		}
+	],
+	"defines" : [
+		"IBEX",
+		"IBEX_SHADOW_BASE=0x200f0000U",
+		"IBEX_SHADOW_SIZE=0x1800U"
+	],
+	"driver_includes" : [
+		"../include/",
+		"${sdk}/include/platform/ibex",
+		"${sdk}/include/platform/generic-riscv"
+	],
+	"timer_hz" : 20000000,
+	"tickrate_hz" : 100,
+	"stack_high_water_mark" : true,
+	"revoker" : "hardware",
+	"simulator" : "${board}/../scripts/deploy-ibex-fpga.sh"
+}
