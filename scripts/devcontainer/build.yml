@@ -13,7 +13,7 @@ jobs:
 - job:
   displayName: Build DevContainer
   pool:
-    vmImage: ubuntu-20.04
+    vmImage: ubuntu-22.04
   timeoutInMinutes: 10
   steps:
   - checkout: self
