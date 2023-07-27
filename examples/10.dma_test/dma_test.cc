@@ -8,13 +8,13 @@
 #include <utils.hh>
 
 #include <fail-simulator-on-error.h>
-#include <../core/dma/dma.h>
+#include <../../sdk/core/dma/dma.h>
 
 /// Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "Simple DMA request compartment">;
 
 /// Thread entry point.
-void __cheri_compartment("dma-app") dma_request()
+void __cheri_compartment("dma_app") dma_request()
 {
 	Debug::log("DMA request app entered!");
 

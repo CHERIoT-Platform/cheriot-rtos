@@ -1,5 +1,6 @@
 #define MALLOC_QUOTA 0x100000
 
+#include "dma_compartment.hh"
 #include <cstdint>
 #include <memory>
 
@@ -24,7 +25,7 @@ void free_dma(uint32_t *sourceAddress, uint32_t *targetAddress)
      */    
 }
 
-int dma_compartment(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
+int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
                         uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
 {    
 

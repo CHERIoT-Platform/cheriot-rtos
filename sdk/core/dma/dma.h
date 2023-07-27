@@ -1,4 +1,4 @@
-#include "dma_compartment.h"
+#include "dma_compartment.hh"
 #include "platform-dma.hh"
 #include <concepts>
 #include <cstddef>
@@ -31,8 +31,10 @@ namespace DMA
         int configure_and_launch(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
                         uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
         {
-            return dma_compartment(sourceAddress, targetAddress, lengthInBytes,
+            launch_dma(sourceAddress, targetAddress, lengthInBytes,
                         sourceStrides, targetStrides, byteSwapAmount);
+
+			return 0;
         }
 
 	};
