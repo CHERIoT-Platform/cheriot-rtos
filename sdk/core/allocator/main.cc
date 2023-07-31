@@ -435,9 +435,8 @@ namespace
 			 */
 			Iterator &operator++()
 			{
-				Claim *next = **this;
-				encodedNextPointer =
-				  next != nullptr ? &next->encodedNext : nullptr;
+				Claim *next        = **this;
+				encodedNextPointer = &next->encodedNext;
 				return *this;
 			}
 
@@ -635,7 +634,8 @@ namespace
 	                MChunkHeader                    &chunk,
 	                bool                             reallyDrop)
 	{
-		Debug::log("Dropping claim with {} ({})", owner.identifier, &owner);
+		Debug::log(
+		  "Trying to drop claim with {} ({})", owner.identifier, &owner);
 		auto [next, claim] = claim_find(owner.identifier, chunk);
 		// If there is no claim, fail.
 		if (claim == nullptr)
@@ -656,6 +656,52 @@ namespace
 			Claim::destroy(owner, claim);
 		}
 		return true;
+	}
+
+	/**
+	 * Having found a chunk, try to free it with the provided owner.  The size
+	 * of the chunk is provided by the caller as `bodySize`.  If `isPrecise` is
+	 * false then this will drop a claim but will not free the object as the
+	 * owner.  If `reallyFree` is false then this will not actually perform the
+	 * operation it will simply report whether it *would* succeed.
+	 *
+	 * Returns 0 on success, `-EPERM` if the provided owner cannot free this
+	 * chunk.
+	 */
+	__noinline int heap_free_chunk(PrivateAllocatorCapabilityState &owner,
+	                               MChunkHeader                    &chunk,
+	                               size_t                           bodySize,
+	                               bool isPrecise  = true,
+	                               bool reallyFree = true)
+	{
+		// If this is a precise allocation, see if we can free it as the
+		// original owner.  You may drop claims with a capability that is a
+		// subset of the original but you may not free an object with a subset.
+		if (isPrecise && (chunk.owner() == owner.identifier))
+		{
+			if (!reallyFree)
+			{
+				return 0;
+			}
+			owner.quota += chunk.size_get();
+			if (chunk.claims == 0)
+			{
+				return gm->mspace_free(chunk, bodySize);
+			}
+			chunk.ownerID = 0;
+			return 0;
+		}
+		// If this is an interior (but valid) pointer, see if we can drop a
+		// claim.
+		if (claim_drop(owner, chunk, reallyFree))
+		{
+			if ((chunk.claims == 0) && (chunk.ownerID == 0))
+			{
+				return gm->mspace_free(chunk, bodySize);
+			}
+			return 0;
+		}
+		return -EPERM;
 	}
 
 	__noinline int
@@ -683,34 +729,8 @@ namespace
 		size_t    bodySize = gm->chunk_body_size(*chunk);
 		// Is the pointer that we're freeing a pointer to the entire allocation?
 		bool isPrecise = (start == mem.base()) && (bodySize == mem.length());
-		// If this is a precise allocation, see if we can free it as the
-		// original owner.  You may drop claims with a capability that is a
-		// subset of the original but you may not free an object with a subset.
-		if (isPrecise && (chunk->owner() == capability->identifier))
-		{
-			if (!reallyFree)
-			{
-				return 0;
-			}
-			capability->quota += chunk->size_get();
-			if (chunk->claims == 0)
-			{
-				return gm->mspace_free(*chunk, bodySize);
-			}
-			chunk->ownerID = 0;
-			return 0;
-		}
-		// If this is an interior (but valid) pointer, see if we can drop a
-		// claim.
-		if (claim_drop(*capability, *chunk, reallyFree))
-		{
-			if ((chunk->claims == 0) && (chunk->ownerID == 0))
-			{
-				return gm->mspace_free(*chunk, bodySize);
-			}
-			return 0;
-		}
-		return -EPERM;
+		return heap_free_chunk(
+		  *capability, *chunk, bodySize, isPrecise, reallyFree);
 	}
 
 } // namespace
@@ -810,6 +830,44 @@ int heap_free(SObj heapCapability, void *rawPointer)
 	}
 
 	return 0;
+}
+
+ssize_t heap_free_all(SObj heapCapability)
+{
+	LockGuard g{lock};
+	auto     *capability = malloc_capability_unseal(heapCapability);
+	if (capability == nullptr)
+	{
+		Debug::log("Invalid heap capability {}", heapCapability);
+		return -EPERM;
+	}
+
+	auto      chunk   = gm->heapStart.cast<MChunkHeader>();
+	ptraddr_t heapEnd = chunk.top();
+	ssize_t   freed   = 0;
+	do
+	{
+		if (chunk->is_in_use())
+		{
+			auto size = chunk->size_get();
+			if (heap_free_chunk(
+			      *capability, *chunk, gm->chunk_body_size(*chunk)) == 0)
+			{
+				freed += size;
+			}
+		}
+		chunk = static_cast<MChunkHeader *>(chunk->cell_next());
+	} while (chunk.address() < heapEnd);
+
+	// If there are any threads blocked allocating memory, wake them up.
+	if ((freeFutex > 0) && (freed > 0))
+	{
+		Debug::log("Some threads are blocking on allocations, waking them");
+		freeFutex = 0;
+		futex_wake(&freeFutex, -1);
+	}
+
+	return freed;
 }
 
 void *heap_allocate_array(Timeout *timeout,

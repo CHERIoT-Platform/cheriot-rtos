@@ -16,6 +16,7 @@
 
 using thread_pool::async;
 DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(secondHeap, 1024);
+#define SECOND_HEAP STATIC_SEALED_VALUE(secondHeap)
 
 namespace
 {
@@ -300,6 +301,34 @@ namespace
 		     alloc);
 	}
 
+	/**
+	 * Test heap_free_all.  Make sure that we can reclaim all memory associated
+	 * with a single quota.
+	 */
+	void test_free_all()
+	{
+		ssize_t allocated = 0;
+		// Allocate and leak some things:
+		for (size_t i = 16; i < 256; i <<= 1)
+		{
+			allocated += i;
+			TEST(heap_allocate(&noWait, SECOND_HEAP, i) != nullptr,
+			     "Allocating {} bytes failed",
+			     i);
+		}
+		int freed = heap_free_all(SECOND_HEAP);
+		// We can free more than we think the requested size doesn't include
+		// object headers.
+		TEST(freed > allocated,
+		     "Allocated {} bytes but heap_free_all freed {}",
+		     allocated,
+		     freed);
+		auto quotaLeft = heap_quota_remaining(SECOND_HEAP);
+		TEST(quotaLeft == 1024,
+		     "After alloc and free from 1024-byte quota, {} bytes left",
+		     quotaLeft);
+	}
+
 } // namespace
 
 /**
@@ -311,7 +340,8 @@ void test_allocator()
 
 	// Make sure that free works only on memory owned by the caller.
 	Timeout t{5};
-	void   *ptr = heap_allocate(&t, STATIC_SEALED_VALUE(secondHeap), 32);
+	test_free_all();
+	void *ptr = heap_allocate(&t, STATIC_SEALED_VALUE(secondHeap), 32);
 	TEST(ptr, "Failed to allocate 32 bytes");
 	TEST(heap_address_is_valid(ptr) == true,
 	     "Heap object incorrectly reported as not heap address");
