@@ -155,6 +155,15 @@ int __cheri_compartment("alloc")
   heap_free(struct SObjStruct *heapCapability, void *ptr);
 
 /**
+ * Free all allocations owned by this capability.
+ *
+ * Returns the number of bytes freed or `-EPERM` if this is not a valid heap
+ * capability.
+ */
+ssize_t __cheri_compartment("alloc")
+  heap_free_all(struct SObjStruct *heapCapability);
+
+/**
  * Returns 0 if the allocation can be freed with the given capability, a
  * negated errno value otherwise.
  */
