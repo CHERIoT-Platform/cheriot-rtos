@@ -31,10 +31,9 @@ namespace DMA
         int configure_and_launch(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
                         uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
         {
-            launch_dma(sourceAddress, targetAddress, lengthInBytes,
+            return launch_dma(sourceAddress, targetAddress, lengthInBytes,
                         sourceStrides, targetStrides, byteSwapAmount);
 
-			return 0;
         }
 
 	};

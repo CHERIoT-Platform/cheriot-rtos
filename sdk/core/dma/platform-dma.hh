@@ -4,6 +4,10 @@
 #include <cstdio>
 #include <utils.hh>
 #include <cheri.hh>
+#include <debug.hh>
+
+/// Expose debugging features unconditionally for this compartment.
+using Debug = ConditionalDebug<true, "Simple DMA request compartment">;
 
 namespace Ibex {
     class PlatformDMA {
@@ -70,7 +74,9 @@ namespace Ibex {
              *  Setting source and target strides
              */
             device().sourceStrides = sourceStrides;
+            Debug::log("after s stride addr");
             device().targetStrides = targetStrides;
+            Debug::log("after t stride addr");
         }
 
         int enable_byte_swap(uint32_t swapAmount)
@@ -79,16 +85,17 @@ namespace Ibex {
              *  Setting byte swaps
              */
 
+            Debug::log("byte swap entered");
+
             if (swapAmount == 2) 
             {
                 device().control = 0x2;
             } else if (swapAmount == 4)
             {
                 device().control = 0x4;
-            } else 
-            {
-                return -1;
             }
+
+            Debug::log("after byte swap addr");
 
             return 0;
         }
@@ -98,7 +105,9 @@ namespace Ibex {
             /**
              *  Setting a start bit
              */
-            device().control = 0x1;
+            Debug::log("before");
+            device().control = 1;
+            Debug::log("after");
         }
 
         public:
@@ -119,12 +128,17 @@ namespace Ibex {
              *  Setting source and target addresses, and length fields
              */
             device().sourceAddress = CHERI::Capability{sourceAddress}.address();
+            Debug::log("after source addr");
             device().targetAddress = CHERI::Capability{targetAddress}.address();
+            Debug::log("after target addr");
             device().lengthInBytes = lengthInBytes;
+            Debug::log("after length addr");
 
             write_strides(sourceStrides, targetStrides);
             enable_byte_swap(byteSwapAmount);
-            start_dma();    
+            Debug::log("before start dma");  
+            start_dma();  
+            Debug::log("after start dma");  
         }
 
         void reset_dma()

@@ -3,11 +3,16 @@
 #include "dma_compartment.hh"
 #include <cstdint>
 #include <memory>
+#include <debug.hh>
 
 #include <cheri.hh>
 #include <compartment-macros.h>
 #include <utils.hh>
 #include "platform-dma.hh"
+#include <errno.h>
+
+/// Expose debugging features unconditionally for this compartment.
+using Debug = ConditionalDebug<true, "Simple DMA request compartment">;
 
 // Import some useful things from the CHERI namespace.
 using namespace CHERI;
@@ -38,34 +43,25 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
      *  when this pointer is not used anymore, it is automatically deleted
      */
     
-    std::unique_ptr<uint32_t> uniqueSourceAddress(sourceAddress);
-    std::unique_ptr<uint32_t> uniqueTargetAddress(targetAddress);
-
-    size_t sourceClaimSize = heap_claim(MALLOC_CAPABILITY, static_cast<void*>(uniqueSourceAddress.get()));
-
-    /**
-     *  return with failure if 
-     *  no claim is available 
-     */
-
-    if (sourceClaimSize == 0) 
+    auto claim = [](void  *ptr) -> std::unique_ptr<char>
     {
-        return -1;
-    } 
+        if (heap_claim(MALLOC_CAPABILITY, ptr) == 0)
+        {
+            return {nullptr};
+        }
+        
+        return std::unique_ptr<char> { static_cast<char*>(ptr)};
+    };
+    
+    auto claimedSource = claim(sourceAddress);
+    auto claimedDestination = claim(targetAddress);
+   
+    if (!claimedSource || !claimedDestination)
+    {
+        return -EINVAL;
+    }
 
-    size_t targetClaimSize = heap_claim(MALLOC_CAPABILITY, static_cast<void*>(uniqueTargetAddress.get()));
-
-    if (targetClaimSize == 0) 
-    {   
-        /**
-         *  if the first claim was successful, but this one failed,
-         *  then free the first claim and exit the function
-         *  todo: assert a Debug::Assert() for heap_free() result later
-         */
-        int sourceStatus = heap_free(MALLOC_CAPABILITY, sourceAddress);
-
-        return -1;
-    } 
+    Debug::log("after claim check");
 
     /**
      *  return if sufficient permissions are not present 
@@ -78,8 +74,12 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
         return -1;
     }
 
+    Debug::log("after right check");
+
     platformDma.write_conf_and_start(sourceAddress, targetAddress, lengthInBytes, 
                                         sourceStrides, targetStrides, byteSwapAmount);         
+
+    Debug::log("after conf write");
 
     // todo: need to check for status via polling maybe from here
     // or for the mvp, we can just check or cancel after some timeout
@@ -92,6 +92,8 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
 
     platformDma.reset_dma();
 
+    Debug::log("after reset write");
+    
     /**
      *  return here, if both claims are successful 
      */
