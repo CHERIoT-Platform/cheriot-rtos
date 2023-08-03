@@ -19,24 +19,27 @@ void __cheri_compartment("dma_app") dma_request()
 	Debug::log("DMA request app entered!");
 
 	// This is a dma process between two different memory addresses
-	uint32_t *sourceAddress =(uint32_t*) malloc(4);
-	uint32_t *targetAddress =(uint32_t*) malloc(4);
+	uint32_t *sourceAddress =(uint32_t*) malloc(16);
+	uint32_t *targetAddress =(uint32_t*) malloc(16);
 
-	// for (int i=0; i<4; i++)
-	// {
-	// 	*(sourceAddress + i) = i + 100;
-	// 	*(targetAddress + i) = i + 200;
-	// }
+	for (int i=0; i<4; i++)
+	{
+		*(sourceAddress + i) = i + 100;
+		*(targetAddress + i) = 0;
 
-	Debug::log("Source Address BEFORE: {}", *(sourceAddress));
-	Debug::log("Target Address BEFORE: {}", *(sourceAddress));
+		Debug::log("Ind: {}, Source values BEFORE dma: {}", i, *(sourceAddress + i));
+		Debug::log("Ind: {}, Dest-n values BEFORE dma: {}", i, *(targetAddress + i));
+	}
 
 	DMA::Device dmaDevice;
 
-	int ret = dmaDevice.configure_and_launch(sourceAddress, targetAddress, 4, 0, 0, 0);
-	
-	Debug::log("Source Address AFTER: {}", *(sourceAddress));
-	Debug::log("Target Address AFTER: {}", *(sourceAddress));
+	int ret = dmaDevice.configure_and_launch(sourceAddress, targetAddress, 16, 0, 0, 0);
+
+	for (int i=0; i<4; i++)
+	{
+		Debug::log("Ind: {}, Source values AFTER dma: {}", i, *(sourceAddress + i));
+		Debug::log("Ind: {}, Dest-n values AFTER dma: {}", i, *(targetAddress + i));
+	};
 
 	Debug::log("ret: {}", ret);
 }
