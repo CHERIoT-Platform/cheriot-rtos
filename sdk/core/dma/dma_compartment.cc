@@ -81,22 +81,28 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
 
     Debug::log("after conf write");
 
-    // todo: need to check for status via polling maybe from here
-    // or for the mvp, we can just check or cancel after some timeout
+    /**
+     *  return here, if both claims are successful 
+     */
+    return 0;
 
+}
+
+int reset_and_clear_dma(uint32_t interruptStatus)
+{
     // todo: eventually we need some interrupt support and the futex call here
     // todo: eventually, we wanna separate this free and reset dma 
     // logics from the start dma as well    
     
     // free_dma(sourceAddress, targetAddress);
 
-    platformDma.reset_dma();
+    if (interruptStatus)
+    {
+        platformDma.reset_dma();
+        Debug::log("after reset write");
 
-    Debug::log("after reset write");
-    
-    /**
-     *  return here, if both claims are successful 
-     */
-    return 0;
-
+        return 0;
+    } 
+   
+    return -EINVAL;
 }
