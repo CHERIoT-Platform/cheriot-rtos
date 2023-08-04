@@ -41,37 +41,34 @@ namespace DMA
 
 			
 			// once dma is launched, we need to check for the interrupt status
+			// no need for validity and permissions checks for the scheduler once futex is created as well
 			const uint32_t *dmaFutex = interrupt_futex_get(STATIC_SEALED_VALUE(dmaInterruptCapability));
 
-			// todo: do some checks as well for below and the validity
-			// if (dmaFutex.permissions().contains(Permission::Store))
+			uint32_t previous = *dmaFutex;
+			Debug::log("intc futex val: {}", previous);
 
-			uint32_t last = *dmaFutex;
+			// sleep until interrupt fires with futex_wait
+			futex_wait(dmaFutex, previous);
 
-			do
+			// Handle the interrupt here
+			// dma interrupt means that the dma operation is finished 
+			// and it is time to reset and clear the dma configurations
+			
+			// non 0 return means fail
+			int resetFailed = reset_and_clear_dma(previous);
+
+			// Acknowledging interrupt here
+			interrupt_complete(STATIC_SEALED_VALUE(dmaInterruptCapability));
+			// todo: once interrupt is served we just return?
+
+			if (resetFailed)
 			{
-				last = *dmaFutex;
-				// Handle interrupt here
-				// dma interrupt means that the dma operation is finished 
-				// and it is time to reset and clear the dma configurations
-				Debug::log("intc futex val: {}", last);
-				
-				// non 0 return means fail
-				int resetFailed = reset_and_clear_dma(last);
+				return -EINVAL;
+			} 
 
-				if (resetFailed)
-				{
-					return -EINVAL;
-				}
-
-				// Acknowledging interrupt here
-				interrupt_complete(STATIC_SEALED_VALUE(dmaInterruptCapability));
-
-				// todo: once interrupt is served we just return?
-				return 0;
-			} while (futex_wait(dmaFutex, last) == 0);
 
 			return 0;
+			
 		}
 
 	};
