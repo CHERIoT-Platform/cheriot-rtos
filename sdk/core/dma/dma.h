@@ -57,9 +57,8 @@ namespace DMA
 			// non 0 return means fail
 			int resetFailed = reset_and_clear_dma(previous);
 
-			// Acknowledging interrupt here
+			// Acknowledging interrupt here irrespective of the reset status
 			interrupt_complete(STATIC_SEALED_VALUE(dmaInterruptCapability));
-			// todo: once interrupt is served we just return?
 
 			if (resetFailed)
 			{
