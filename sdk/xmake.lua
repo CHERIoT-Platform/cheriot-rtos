@@ -78,6 +78,7 @@ toolchain("cheriot-clang")
 			"-fno-builtin",
 			"-fno-exceptions",
 			"-fno-asynchronous-unwind-tables",
+			"-fno-c++-static-destructors",
 			"-fno-rtti",
 			"-Werror",
 			"-I" .. path.join(include_directory, "c++-config"),
