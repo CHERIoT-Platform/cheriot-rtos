@@ -19,16 +19,12 @@ using namespace CHERI;
 
 Ibex::PlatformDMA platformDma;
 
-void free_dma(uint32_t *sourceAddress, uint32_t *targetAddress)
-{
-    int sourceStatus = heap_free(MALLOC_CAPABILITY, sourceAddress);
-    int targetStatus = heap_free(MALLOC_CAPABILITY, targetAddress);
+namespace {
 
-    /**
-     *  ideally, free should not fail if claim was successful
-     *  todo: but in case, assert a Debug::Assert() for heap_free() later
-     */    
-}
+    std::unique_ptr<char> claimedSource;
+    std::unique_ptr<char> claimedDestination;
+
+} // namespace
 
 int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t lengthInBytes,
                         uint32_t sourceStrides, uint32_t targetStrides, uint32_t byteSwapAmount)
@@ -53,8 +49,8 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
         return std::unique_ptr<char> { static_cast<char*>(ptr)};
     };
     
-    auto claimedSource = claim(sourceAddress);
-    auto claimedDestination = claim(targetAddress);
+    claimedSource = claim(sourceAddress);
+    claimedDestination = claim(targetAddress);
    
     if (!claimedSource || !claimedDestination)
     {
@@ -69,7 +65,7 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
     if (!check_pointer<PermissionSet{Permission::Load, Permission::Global}>(sourceAddress, lengthInBytes) ||
            !check_pointer<PermissionSet{Permission::Store, Permission::Global}>(targetAddress, lengthInBytes) )
     {
-        return -1;
+        return -EINVAL;
     }
 
     platformDma.write_conf_and_start(sourceAddress, targetAddress, lengthInBytes, 
@@ -83,12 +79,19 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
 }
 
 void reset_and_clear_dma()
-{
-    // todo: eventually we need some interrupt support and the futex call here
-    // todo: eventually, we wanna separate this free and reset dma 
-    // logics from the start dma as well    
+{   
+    // Resetting the claim pointers 
+    // and cleaning up the dma registers.
     
-    // free_dma(sourceAddress, targetAddress);
+    // Claim registers are meant to be 
+    // cleared by every DMA operation,
+    // that is why we are explicitely resetting 
+    // them at this exit function.
+    
+    Debug::log("before dropping claims");
+
+    claimedSource.reset();
+    claimedDestination.reset();
 
     platformDma.reset_dma();
 
