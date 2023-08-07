@@ -1,13 +1,14 @@
 #pragma once
 
 #include <compartment-macros.h>
+#include <cstdint>
 #include <cstdio>
 #include <utils.hh>
 #include <cheri.hh>
 #include <debug.hh>
 
-/// Expose debugging features unconditionally for this compartment.
-using Debug = ConditionalDebug<true, "Simple DMA request compartment">;
+// Expose debugging features unconditionally for this compartment.
+using Debug = ConditionalDebug<true, "DMA Compartment">;
 
 namespace Ibex {
     class PlatformDMA {
@@ -74,41 +75,42 @@ namespace Ibex {
              *  Setting source and target strides
              */
             device().sourceStrides = sourceStrides;
-            Debug::log("after s stride addr");
             device().targetStrides = targetStrides;
-            Debug::log("after t stride addr");
         }
 
-        int enable_byte_swap(uint32_t swapAmount)
+        int swap_bytes_and_start_dma(uint32_t swapAmount)
         {
             /**
-             *  Setting byte swaps
+             *  Setting byte swaps 
+             *  and start bit.
+             *
+             *  Swap amount can be equal to 
+             *  only either 2 or 4.
              */
 
-            Debug::log("byte swap entered");
-
-            if (swapAmount == 2) 
+            if (swapAmount != 2) 
             {
-                device().control = 0x2;
-            } else if (swapAmount == 4)
-            {
-                device().control = 0x4;
+                if (swapAmount != 4)
+                {
+                    swapAmount = 0;
+                } 
             }
 
-            Debug::log("after byte swap addr");
+            uint32_t controlConfiguration = swapAmount | 0x1; 
+
+            device().control = controlConfiguration;
+
 
             return 0;
         }
 
-        void start_dma()
-        {
-            /**
-             *  Setting a start bit
-             */
-            Debug::log("before");
-            device().control = 1;
-            Debug::log("after");
-        }
+        // void start_dma()
+        // {
+        //     /**
+        //      *  Setting a start bit
+        //      */
+        //     device().control = 1;
+        // }
 
         public:
 
@@ -128,17 +130,12 @@ namespace Ibex {
              *  Setting source and target addresses, and length fields
              */
             device().sourceAddress = CHERI::Capability{sourceAddress}.address();
-            Debug::log("after source addr");
             device().targetAddress = CHERI::Capability{targetAddress}.address();
-            Debug::log("after target addr");
             device().lengthInBytes = lengthInBytes;
-            Debug::log("after length addr");
 
             write_strides(sourceStrides, targetStrides);
-            enable_byte_swap(byteSwapAmount);
-            Debug::log("before start dma");  
-            start_dma();  
-            Debug::log("after start dma");  
+
+            swap_bytes_and_start_dma(byteSwapAmount);    
         }
 
         void reset_dma()

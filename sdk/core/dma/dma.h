@@ -45,26 +45,17 @@ namespace DMA
 			const uint32_t *dmaFutex = interrupt_futex_get(STATIC_SEALED_VALUE(dmaInterruptCapability));
 
 			uint32_t previous = *dmaFutex;
-			Debug::log("intc futex val: {}", previous);
 
 			// sleep until interrupt fires with futex_wait
-			futex_wait(dmaFutex, previous);
+			futex_wait(dmaFutex, 0);
 
-			// Handle the interrupt here
-			// dma interrupt means that the dma operation is finished 
+			// Handle the interrupt here, once dmaFutex woke up via scheduler.
+			// DMA interrupt means that the dma operation is finished 
 			// and it is time to reset and clear the dma configurations
-			
-			// non 0 return means fail
-			int resetFailed = reset_and_clear_dma(previous);
+			reset_and_clear_dma();
 
 			// Acknowledging interrupt here irrespective of the reset status
 			interrupt_complete(STATIC_SEALED_VALUE(dmaInterruptCapability));
-
-			if (resetFailed)
-			{
-				return -EINVAL;
-			} 
-
 
 			return 0;
 			

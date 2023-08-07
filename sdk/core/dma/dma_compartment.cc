@@ -11,8 +11,8 @@
 #include "platform-dma.hh"
 #include <errno.h>
 
-/// Expose debugging features unconditionally for this compartment.
-using Debug = ConditionalDebug<true, "Simple DMA request compartment">;
+// Expose debugging features unconditionally for this compartment.
+using Debug = ConditionalDebug<true, "DMA Compartment">;
 
 // Import some useful things from the CHERI namespace.
 using namespace CHERI;
@@ -61,8 +61,6 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
         return -EINVAL;
     }
 
-    Debug::log("after claim check");
-
     /**
      *  return if sufficient permissions are not present 
      *  and if not long enough 
@@ -74,12 +72,8 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
         return -1;
     }
 
-    Debug::log("after right check");
-
     platformDma.write_conf_and_start(sourceAddress, targetAddress, lengthInBytes, 
                                         sourceStrides, targetStrides, byteSwapAmount);         
-
-    Debug::log("after conf write");
 
     /**
      *  return here, if both claims are successful 
@@ -88,7 +82,7 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
 
 }
 
-int reset_and_clear_dma(uint32_t interruptStatus)
+void reset_and_clear_dma()
 {
     // todo: eventually we need some interrupt support and the futex call here
     // todo: eventually, we wanna separate this free and reset dma 
@@ -96,13 +90,6 @@ int reset_and_clear_dma(uint32_t interruptStatus)
     
     // free_dma(sourceAddress, targetAddress);
 
-    if (interruptStatus)
-    {
-        platformDma.reset_dma();
-        Debug::log("after reset write");
+    platformDma.reset_dma();
 
-        return 0;
-    } 
-   
-    return -EINVAL;
 }

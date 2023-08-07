@@ -10,36 +10,38 @@
 #include <fail-simulator-on-error.h>
 #include <../../sdk/core/dma/dma.h>
 
-/// Expose debugging features unconditionally for this compartment.
-using Debug = ConditionalDebug<true, "Simple DMA request compartment">;
+// Expose debugging features unconditionally for this compartment.
+using Debug = ConditionalDebug<true, "DMA Compartment">;
 
 /// Thread entry point.
 void __cheri_compartment("dma_app") dma_request()
 {
-	Debug::log("DMA request app entered!");
+	Debug::log("DMA app entered!");
 
 	// This is a dma process between two different memory addresses
-	uint32_t *sourceAddress =(uint32_t*) malloc(16);
-	uint32_t *targetAddress =(uint32_t*) malloc(16);
+	uint32_t bytes = 1024;
+	uint32_t words = bytes/4;
+	uint32_t byteSwap = 4;
 
-	for (int i=0; i<4; i++)
+	uint32_t *sourceAddress =(uint32_t*) malloc(bytes);
+	uint32_t *targetAddress =(uint32_t*) malloc(bytes);
+
+	for (int i=0; i < words; i++)
 	{
-		*(sourceAddress + i) = i + 100;
+		*(sourceAddress + i) = i + 200;
 		*(targetAddress + i) = 0;
 
-		Debug::log("Ind: {}, Source values BEFORE dma: {}", i, *(sourceAddress + i));
-		Debug::log("Ind: {}, Dest-n values BEFORE dma: {}", i, *(targetAddress + i));
 	}
+
+	Debug::log("Ind: 0 and last, Source values BEFORE dma: {}, {}", *(sourceAddress), *(sourceAddress + words -1 ));
+	Debug::log("Ind: 0 and last, Dest-n values BEFORE dma: {}, {}", *(targetAddress),  *(targetAddress + words -1 ));
 
 	DMA::Device dmaDevice;
 
-	int ret = dmaDevice.configure_and_launch(sourceAddress, targetAddress, 16, 0, 0, 0);
+	int ret = dmaDevice.configure_and_launch(sourceAddress, targetAddress, bytes, 0, 0, byteSwap);
 
-	for (int i=0; i<4; i++)
-	{
-		Debug::log("Ind: {}, Source values AFTER dma: {}", i, *(sourceAddress + i));
-		Debug::log("Ind: {}, Dest-n values AFTER dma: {}", i, *(targetAddress + i));
-	};
+	Debug::log("Ind: 0 and last, Source values AFTER dma: {}, {}", *(sourceAddress), *(sourceAddress + words -1 ));
+	Debug::log("Ind: 0 and last, Dest-n values AFTER dma: {}, {}", *(targetAddress),  *(targetAddress + words -1 ));
 
 	Debug::log("ret: {}", ret);
 }

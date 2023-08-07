@@ -14,4 +14,4 @@ int __cheri_compartment("dma") launch_dma(uint32_t *sourceAddress, uint32_t *tar
 
 
  
-int __cheri_compartment("dma") reset_and_clear_dma(uint32_t interruptStatus);
+void __cheri_compartment("dma") reset_and_clear_dma();
