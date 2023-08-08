@@ -44,4 +44,11 @@ void __cheri_compartment("dma_app") dma_request()
 	Debug::log("Ind: 0 and last, Dest-n values AFTER dma: {}, {}", *(targetAddress),  *(targetAddress + words -1 ));
 
 	Debug::log("ret: {}", ret);
+
+	ret = dmaDevice.configure_and_launch(targetAddress, sourceAddress, bytes, 0, 0, 0);
+
+	Debug::log("Ind: 0 and last, Source values AFTER dma: {}, {}", *(sourceAddress), *(sourceAddress + words -1 ));
+	Debug::log("Ind: 0 and last, Dest-n values AFTER dma: {}, {}", *(targetAddress),  *(targetAddress + words -1 ));
+
+	Debug::log("ret: {}", ret);
 }
