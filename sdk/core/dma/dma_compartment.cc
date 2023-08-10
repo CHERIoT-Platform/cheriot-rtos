@@ -32,7 +32,7 @@ namespace {
 	FlagLock dmaOwnershipLock;
 
     uint32_t dmaIsLaunched = 0;
-    uint32_t previousInterruptCounter = 0;
+    uint32_t expectedValue = 0;
 
     /**
      * Claims pointers so that the following 
@@ -48,10 +48,8 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
 {    
 
 	/** 
-     *  Before launching a dma, check whether dma
-	 *  is occupied by another thread, 
-     *  else lock the ownership and start the dma
-     *  via LockGuard.
+     *  Lock this compartment via LockGuard, 
+     *  to prevent data race. 
      * 
      *  This lock automatically unlocks at the end of this function.
      */	
@@ -65,31 +63,25 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
     
 	const uint32_t *dmaFutex = interrupt_futex_get(STATIC_SEALED_VALUE(dmaInterruptCapability));
     uint32_t currentInterruptCounter = *dmaFutex;
-    
-    /** 
-     * sleep a bit, so that dmaIsLaunched can be flipped successfully
-     * in the worst case, the caller thread will fail too
+
+    /**
+     *  If dma is already running, check for the
+     *  expected and current interrupt values. 
+     *  If they do not match, wait for the interrupt.
+     * 
+     *  Expected Value is expected to be incremented only per thread,
+     *  assuming that every thread enters the launch_dma()
+     *  only once per each transfer 
      */
-
-    if (dmaIsLaunched)
-    {
-        /**
-         *  If dma is already running and interrupt has not been received yet, 
-         *  return the negative incremented interrupt value,
-         *  so that it can wait for timeout via passing this value  
-         */
-        if (previousInterruptCounter == currentInterruptCounter) 
-        {
-            return -(currentInterruptCounter + 1);
-        } 
-
-        /*
-         *  Potentially, redundant futex wait and context switch
-         *  todo: do we wanna remove it and let the thread pass?
-         */
-        uint32_t *dmaIsLaunchedPtr = &dmaIsLaunched;
-        futex_wait(dmaIsLaunchedPtr, dmaIsLaunched);
         
+    expectedValue++;
+
+    if (expectedValue != currentInterruptCounter) 
+    {
+        Timeout t{10};
+        futex_timed_wait(&t, dmaFutex, currentInterruptCounter);
+
+        reset_and_clear_dma(currentInterruptCounter);
     } 
 
     /**
@@ -143,14 +135,22 @@ int launch_dma(uint32_t *sourceAddress, uint32_t *targetAddress, uint32_t length
                                         sourceStrides, targetStrides, byteSwapAmount);         
 
     /**
+	 *  Handle the interrupt here, once dmaFutex woke up via scheduler.
+	 *  DMA interrupt means that the dma operation is finished 
+	 *  and it is time to reset and clear the dma configuration registers.
+	 *  Unlike with futex wait of other threads, as an occupying thread we 
+	 *  wait indefinitely as much as needed for the dma completion			
+	 */
+	futex_wait(dmaFutex, currentInterruptCounter);
+
+    reset_and_clear_dma(currentInterruptCounter);
+
+    /**
      *  return here, if all operations 
      *  were successful.
-     *  Save the current interrupt counter to the previous one
-     *  to differentiate betweent the start and end afterwards 
      */
     
-    previousInterruptCounter = currentInterruptCounter;
-    return currentInterruptCounter;;
+    return 0;
 
 }
 
@@ -167,30 +167,24 @@ void reset_and_clear_dma(uint32_t interruptNumber)
      */
 
     /**
-     *  Flip the dmaIsRunnning value to show that launch is finished,
-     *  in case finishing thread wakes from the interrupt first 
+     *  However, clear only if the addresses are not reset yet.
+     *  Because this function can be called from two different points
      */
-    dmaIsLaunched = 0;
-    
-    /**
-     *  sleep until fired interrupt is fired with futex_wait
-     */
+    if (!claimedSource && !claimedDestination)
+    {
+        Debug::log("before dropping claims");
+        claimedSource.reset();
+        claimedDestination.reset();
 
-    Debug::log("before dropping claims");
+        /**
+         *  Resetting the dma registers
+         */
+        platformDma.reset_dma();
 
-    claimedSource.reset();
-    claimedDestination.reset();
-
-    /**
-     *  Resetting the dma registers
-     */
-    platformDma.reset_dma();
-
-    /**
-     *  Acknowledging interrupt here irrespective of the reset status
-     */
-    interrupt_complete(STATIC_SEALED_VALUE(dmaInterruptCapability));
-
-    
+        /**
+         *  Acknowledging interrupt here irrespective of the reset status
+         */
+        interrupt_complete(STATIC_SEALED_VALUE(dmaInterruptCapability));
+    }
 
 }

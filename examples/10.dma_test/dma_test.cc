@@ -35,7 +35,7 @@ void __cheri_compartment("dma_app") dma_request()
 	for (int i=0; i < words; i++)
 	{
 		*(sourceAddress + i) = i + 100;
-		*(sourceAddress + i) = i + 200;
+		*(alternateAddress + i) = i + 200;
 		*(targetAddress + i) = 0;
 
 	}

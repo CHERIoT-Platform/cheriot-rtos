@@ -55,40 +55,8 @@ namespace DMA
 			
 			int dmaInterruptReturn = launch_dma(sourceAddress, targetAddress, lengthInBytes,
                         sourceStrides, targetStrides, byteSwapAmount);
+		
 			
-			/**
-			 *  Negative interrupt return is for 
-			 *  the failed dma launch and forces to wait for the interrupt.
-			 *  However, wait only until timeout elapses
-			 */
-
-			Timeout t{10};
-
-			while (dmaInterruptReturn < 0)
-			{	
-				uint32_t realInterruptNumber = -(dmaInterruptReturn)-1;
-
-				futex_timed_wait(&t, dmaFutex, realInterruptNumber);
-
-				dmaInterruptReturn = launch_dma(sourceAddress, targetAddress, lengthInBytes,
-                        sourceStrides, targetStrides, byteSwapAmount);
-
-				if (!t.remaining)
-				{
-					return -EINVAL;
-				}
-			}
-
-			/**
-			 *  Handle the interrupt here, once dmaFutex woke up via scheduler.
-			 *  DMA interrupt means that the dma operation is finished 
-			 *  and it is time to reset and clear the dma configuration registers.
-			 *  Unlike with futex wait of other threads, as an occupying thread we 
-			 *  wait indefinitely as much as needed for the dma completion			
-			 */
-			futex_wait(dmaFutex, dmaInterruptReturn);
-
-    		reset_and_clear_dma(dmaInterruptReturn);
 
 			return 0;
 		}

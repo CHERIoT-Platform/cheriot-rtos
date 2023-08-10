@@ -8,8 +8,10 @@ set_toolchains("cheriot-clang")
 
 -- Support libraries
 includes(path.join(sdkdir, "lib/freestanding"),
+         path.join(sdkdir, "lib/cxxrt"),
          path.join(sdkdir, "lib/atomic"),
-         path.join(sdkdir, "lib/crt"))
+         path.join(sdkdir, "lib/crt"),
+         path.join(sdkdir, "lib/thread_pool"))
 
 option("board")
     set_default("sail")
@@ -22,9 +24,8 @@ compartment("dma_app")
 
 -- Firmware image for the example.
 firmware("dma_test")
-    add_deps("crt", "freestanding", "atomic_fixed")
+    add_deps("crt", "cxxrt", "freestanding", "atomic_fixed", "thread_pool")
     add_deps("dma", "dma_app")
-    -- add_deps("dma_app")
     on_load(function(target)
         target:values_set("board", "$(board)")
         target:values_set("threads", {
