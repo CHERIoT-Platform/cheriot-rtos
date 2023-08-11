@@ -31,10 +31,24 @@ firmware("dma_test")
         target:values_set("threads", {
             {
                 compartment = "dma_app",
-                priority = 1,
+                priority = 2,
                 entry_point = "dma_request",
                 stack_size = 0x400,
-                trusted_stack_frames = 2
+                trusted_stack_frames = 9
+            },
+            {
+                compartment = "thread_pool",
+                priority = 1,
+                entry_point = "thread_pool_run",
+                stack_size = 0x600,
+                trusted_stack_frames = 8
+            },
+            {
+                compartment = "thread_pool",
+                priority = 1,
+                entry_point = "thread_pool_run",
+                stack_size = 0x600,
+                trusted_stack_frames = 8
             }
         }, {expand = false})
     end)
