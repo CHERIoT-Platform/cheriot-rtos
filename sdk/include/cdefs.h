@@ -26,8 +26,15 @@
 /// Helper to use C++ in headers only in C++ mode.
 #ifdef __cplusplus
 #	define __if_cxx(x) x
+#	define __if_c(x)
 #else
 #	define __if_cxx(x)
+#	define __if_c(x) x
+#endif
+
+/// Allow the C99 spelling of bool in C++
+#ifdef __cplusplus
+using _Bool = bool;
 #endif
 
 #if defined(__cplusplus)

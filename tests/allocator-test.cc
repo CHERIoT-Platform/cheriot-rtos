@@ -313,6 +313,8 @@ void test_allocator()
 	Timeout t{5};
 	void   *ptr = heap_allocate(&t, STATIC_SEALED_VALUE(secondHeap), 32);
 	TEST(ptr, "Failed to allocate 32 bytes");
+	TEST(heap_address_is_valid(ptr) == true,
+	     "Heap object incorrectly reported as not heap address");
 	int ret = heap_free(MALLOC_CAPABILITY, ptr);
 	TEST(
 	  ret == -EPERM,
@@ -328,6 +330,11 @@ void test_allocator()
 	     "After alloc and free from 1024-byte quota, {} bytes left",
 	     quotaLeft);
 	test_claims();
+
+	TEST(heap_address_is_valid(&t) == false,
+	     "Stack object incorrectly reported as heap address");
+	TEST(heap_address_is_valid(&noWait) == false,
+	     "Global object incorrectly reported as heap address");
 
 	test_blocking_allocator();
 	test_revoke();
