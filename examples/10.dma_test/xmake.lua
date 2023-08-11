@@ -33,7 +33,7 @@ firmware("dma_test")
                 compartment = "dma_app",
                 priority = 2,
                 entry_point = "dma_request",
-                stack_size = 0x400,
+                stack_size = 0x1000,
                 trusted_stack_frames = 9
             },
             {

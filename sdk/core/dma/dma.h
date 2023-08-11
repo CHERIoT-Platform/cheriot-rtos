@@ -61,13 +61,21 @@ namespace DMA
 			 *  - automatically resets the claims and the dma registers
 			 *    at the end of the transfer.
 			 */
-
+			Debug::log("before launch dma");
+			
 			uint32_t dmaInterruptReturn = launch_dma(sourceAddress,
 			                                    targetAddress,
 			                                    lengthInBytes,
 			                                    sourceStrides,
 			                                    targetStrides,
 			                                    byteSwapAmount);
+
+			Debug::log("launch dma return: {}", dmaInterruptReturn);
+
+			if (dmaInterruptReturn < 0) 
+			{
+				return -EINVAL;
+			}
 
 			wait_and_reset_dma(dmaInterruptReturn);
 
