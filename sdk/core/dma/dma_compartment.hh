@@ -16,4 +16,4 @@ int __cheri_compartment("dma") launch_dma(uint32_t *sourceAddress,
                                           uint32_t  targetStrides,
                                           uint32_t  byteSwapAmount);
 
-void __cheri_compartment("dma") reset_and_clear_dma();
+void __cheri_compartment("dma") wait_and_reset_dma(uint32_t interruptNumber);

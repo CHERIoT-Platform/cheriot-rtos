@@ -47,9 +47,9 @@ void __cheri_compartment("dma_app") dma_request()
 	           *(targetAddress),
 	           *(targetAddress + words - 1));
 
-	DMA::Device dmaDevice;
+	static DMA::Device dmaDevice;
 
-	async([&]() {
+	async([=]() {
 		Debug::log("Thread 1, start");
 
 		int ret = dmaDevice.configure_and_launch(
@@ -65,7 +65,7 @@ void __cheri_compartment("dma_app") dma_request()
 		Debug::log("Thread 1, ret: {}", ret);
 	});
 
-	async([&]() {
+	async([=]() {
 		Debug::log("Thread 2, start");
 
 		int ret = dmaDevice.configure_and_launch(

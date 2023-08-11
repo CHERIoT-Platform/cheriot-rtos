@@ -62,12 +62,14 @@ namespace DMA
 			 *    at the end of the transfer.
 			 */
 
-			int dmaInterruptReturn = launch_dma(sourceAddress,
+			uint32_t dmaInterruptReturn = launch_dma(sourceAddress,
 			                                    targetAddress,
 			                                    lengthInBytes,
 			                                    sourceStrides,
 			                                    targetStrides,
 			                                    byteSwapAmount);
+
+			wait_and_reset_dma(dmaInterruptReturn);
 
 			return 0;
 		}

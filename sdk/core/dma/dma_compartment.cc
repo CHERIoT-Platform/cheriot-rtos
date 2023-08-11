@@ -6,7 +6,6 @@
 #include <debug.hh>
 #include <memory>
 
-
 #include "platform-dma.hh"
 #include <cheri.hh>
 #include <compartment-macros.h>
@@ -14,7 +13,6 @@
 #include <interrupt.h>
 #include <locks.hh>
 #include <utils.hh>
-
 
 // Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "DMA Compartment">;
@@ -37,7 +35,6 @@ namespace
 	 */
 	FlagLock dmaOwnershipLock;
 
-	uint32_t dmaIsLaunched = 0;
 	uint32_t expectedValue = 0;
 
 	/**
@@ -48,6 +45,8 @@ namespace
 	std::unique_ptr<char> claimedDestination;
 
 } // namespace
+
+void internal_wait_and_reset_dma(uint32_t interruptNumber);
 
 int launch_dma(uint32_t *sourceAddress,
                uint32_t *targetAddress,
@@ -70,7 +69,7 @@ int launch_dma(uint32_t *sourceAddress,
 	 *  once futex is created
 	 */
 
-	const uint32_t *dmaFutex =
+	static const uint32_t *dmaFutex =
 	  interrupt_futex_get(STATIC_SEALED_VALUE(dmaInterruptCapability));
 
 	uint32_t currentInterruptCounter = *dmaFutex;
@@ -84,14 +83,15 @@ int launch_dma(uint32_t *sourceAddress,
 	 *  assuming that every thread enters the launch_dma()
 	 *  only once per each transfer
 	 */
-	
+
 	if (expectedValue != currentInterruptCounter)
 	{
-		Timeout t{10};
-		futex_timed_wait(&t, dmaFutex, expectedValue - 1);
-
-		reset_and_clear_dma();
+		internal_wait_and_reset_dma(currentInterruptCounter);
 	}
+
+	Debug::Assert(
+	  expectedValue == *dmaFutex,
+	  "ExpectedValue is not equal to the current interrupt counter!");
 
 	/**
 	 *  After acquiring a ownership over lock,
@@ -143,33 +143,22 @@ int launch_dma(uint32_t *sourceAddress,
 	                                 byteSwapAmount);
 
 	/**
-	 *  Increment the expected value only when 
+	 *  Increment the expected value only when
 	 *  dma has started to avoid the potential deadlock
 	 *  of this function is returned with failure earlier
 	 */
 	expectedValue++;
 
 	/**
-	 *  Handle the interrupt here, once dmaFutex woke up via scheduler.
-	 *  DMA interrupt means that the dma operation is finished
-	 *  and it is time to reset and clear the dma configuration registers.
-	 *  Unlike with futex wait of other threads, as an occupying thread we
-	 *  wait indefinitely as much as needed for the dma completion
-	 */
-	futex_wait(dmaFutex, currentInterruptCounter);
-
-	reset_and_clear_dma();
-
-	/**
 	 *  return here, if all operations
 	 *  were successful.
 	 */
 
-	return 0;
+	return currentInterruptCounter;
 }
 
-void reset_and_clear_dma()
-{
+void internal_wait_and_reset_dma(uint32_t interruptNumber)
+{	
 	/**
 	 *  Resetting the claim pointers
 	 *  and cleaning up the dma registers.
@@ -185,8 +174,20 @@ void reset_and_clear_dma()
 	 *  Because this function can be called from two different points
 	 */
 
-	LockGuard g{dmaOwnershipLock};
+	/**
+	 *  Also, handle the interrupt here, once dmaFutex woke up via scheduler.
+	 *  DMA interrupt means that the dma operation is finished
+	 *  and it is time to reset and clear the dma configuration registers.
+	 *  Unlike with futex wait of other threads, as an occupying thread we
+	 *  wait indefinitely as much as needed for the dma completion
+	 */
 
+	static const uint32_t *dmaFutex =
+	  interrupt_futex_get(STATIC_SEALED_VALUE(dmaInterruptCapability));
+
+	Timeout t{10};
+	futex_timed_wait(&t, dmaFutex, interruptNumber);
+		
 	if (claimedSource || claimedDestination)
 	{
 		Debug::log("before dropping claims");
@@ -197,10 +198,20 @@ void reset_and_clear_dma()
 		 *  Resetting the dma registers
 		 */
 		platformDma.reset_dma();
-		
+
 		/**
 		 *  Acknowledging interrupt here irrespective of the reset status
 		 */
 		interrupt_complete(STATIC_SEALED_VALUE(dmaInterruptCapability));
 	}
+}
+
+void wait_and_reset_dma(uint32_t interruptNumber)
+{	
+	/**
+	 *  This lock is to avoid the data race as well	
+	 */
+	LockGuard g{dmaOwnershipLock};
+
+	internal_wait_and_reset_dma(interruptNumber);	
 }
