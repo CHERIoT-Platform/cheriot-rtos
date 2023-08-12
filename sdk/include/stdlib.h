@@ -191,8 +191,13 @@ __if_c(static) inline _Bool heap_address_is_valid(void *object)
 {
 	ptraddr_t heap_start = LA_ABS(__export_mem_heap);
 	ptraddr_t heap_end   = LA_ABS(__export_mem_heap_end);
-	ptraddr_t address    = (ptraddr_t)object;
-	return (address >= heap_start) && (address <= heap_end);
+	// The heap allocator has the only capability to the heap region.  Any
+	// capability is either (transitively) derived from the heap capability or
+	// derived from something else and so it is sufficient to check that the
+	// base is within the range of the heap.  Anything derived from a non-heap
+	// capability must have a base outside of that range.
+	ptraddr_t address = __builtin_cheri_base_get(object);
+	return (address >= heap_start) && (address < heap_end);
 }
 
 static inline void __dead2 abort()
