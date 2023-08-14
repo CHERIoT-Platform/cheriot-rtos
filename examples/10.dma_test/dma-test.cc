@@ -24,7 +24,7 @@ using DebugErrorHandler = ConditionalDebug<true, "Error handler">;
 
 int crashes = 0;
 
-extern "C" enum ErrorRecoveryBehaviour
+extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 {
 	Debug::log("Test saw error for PCC {}", frame->pcc);
@@ -41,7 +41,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 }
 
 // Thread entry point.
-void __cheri_compartment("dma_app") dma_request()
+void __cheri_compartment("dma_test") test_dma()
 {
 	Debug::log("DMA app entered, v2!");
 
@@ -68,7 +68,7 @@ void __cheri_compartment("dma_app") dma_request()
 	           *(targetAddress),
 	           *(targetAddress + words - 1));
 
-	static DMA::Device dmaDevice;
+	// static DMA::Device dmaDevice;
 
 	async([=]() {
 		Debug::log("Thread 1, start");

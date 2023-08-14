@@ -15,6 +15,7 @@ __cheri_compartment("multiwaiter_test") void test_multiwaiter();
 __cheri_compartment("stack_test") void test_stack();
 __cheri_compartment("compartment_calls_test") void test_compartment_call();
 __cheri_compartment("static_sealing_test") void test_static_sealing();
+__cheri_compartment("dma_test") void test_dma();
 
 // Simple tests don't need a separate compartment.
 void test_global_constructors();

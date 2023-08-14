@@ -19,20 +19,20 @@ option("board")
 compartment("dma")
     add_files(path.join(sdkdir, "core/dma/dma_compartment.cc"))
 
-compartment("dma_app")
-    add_files("dma_test.cc")
+compartment("dma_test")
+    add_files("dma-test.cc")
 
 -- Firmware image for the example.
-firmware("dma_test")
+firmware("dma-test")
     add_deps("crt", "cxxrt", "freestanding", "atomic_fixed", "thread_pool")
-    add_deps("dma", "dma_app")
+    add_deps("dma", "dma_test")
     on_load(function(target)
         target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
-                compartment = "dma_app",
+                compartment = "dma_test",
                 priority = 2,
-                entry_point = "dma_request",
+                entry_point = "test_dma",
                 stack_size = 0x1000,
                 trusted_stack_frames = 9
             },
