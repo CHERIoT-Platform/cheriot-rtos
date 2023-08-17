@@ -37,6 +37,7 @@ end
 debugOption("loader")
 debugOption("scheduler")
 debugOption("allocator")
+debugOption("token_library")
 
 -- Force -Oz irrespective of build config.  At -O0, we blow out our stack and
 -- require much stronger alignment.
@@ -167,6 +168,13 @@ rule("cherimcu.privileged-compartment")
 		target:add("defines", "CHERIOT_AVOID_CAPRELOCS")
 	end)
 
+rule("cherimcu.privileged-library")
+	add_deps("cherimcu.library")
+	on_load(function (target)
+		target:set("cherimcu.type", "privileged library")
+		target:set("cherimcu.ldscript", "privileged-compartment.ldscript")
+	end)
+
 -- Build the switcher as an object file that we can import into the final
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
@@ -188,6 +196,12 @@ target("cherimcu.allocator")
 		target:set('cherimcu.debug-name', "allocator")
 	end)
 
+target("cheriot.token_library")
+	add_rules("cherimcu.privileged-library", "cherimcu.component-debug")
+	add_files(path.join(coredir, "token_library/token_unseal.S"))
+	on_load(function (target)
+		target:set('cherimcu.debug-name', "token_library")
+	end)
 
 target("cherimcu.software_revoker")
 	set_default(false)
@@ -616,7 +630,8 @@ rule("firmware")
 		for name, dep in table.orderpairs(target:deps()) do
 			if (dep:get("cherimcu.type") == "library") or
 				(dep:get("cherimcu.type") == "compartment") or
-				(dep:get("cherimcu.type") == "privileged compartment") then
+				(dep:get("cherimcu.type") == "privileged compartment") or
+				(dep:get("cherimcu.type") == "privileged library") then
 				table.insert(objects, dep:targetfile())
 			end
 		end
@@ -681,6 +696,7 @@ function firmware(name)
 		add_rules("firmware")
 		-- TODO: Make linking the allocator optional.
 		add_deps(name .. ".scheduler", "cheriot.loader", "cherimcu.switcher", "cherimcu.allocator")
+		add_deps("cheriot.token_library")
 		-- The firmware linker script will be populated based on the set of
 		-- compartments.
 		add_configfiles(path.join(scriptdir, "firmware.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.ldscript"})

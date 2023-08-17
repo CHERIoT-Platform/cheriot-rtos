@@ -479,6 +479,15 @@ namespace loader
 			{
 				return code.start();
 			}
+
+			/**
+			 * Privileged libraries are privileged compartments without data
+			 * segments.
+			 */
+			[[nodiscard]] bool is_privileged_library() const
+			{
+				return (data.start() == 0) && (data.size() == 0);
+			}
 		};
 
 		class __packed
@@ -492,6 +501,8 @@ namespace loader
 				Scheduler,
 				/// The memory allocator
 				Allocator,
+				/// The fast token unsealer
+				TokenLibrary,
 #ifdef SOFTWARE_REVOKER
 				/// The software revoker.  This privileged compartment is
 				/// optional.
@@ -521,6 +532,14 @@ namespace loader
 			[[nodiscard]] const PrivilegedCompartment &allocator() const
 			{
 				return compartments[Allocator];
+			}
+
+			/**
+			 * Returns a reference to the object-fast-paths library's header.
+			 */
+			[[nodiscard]] const PrivilegedCompartment &token_library() const
+			{
+				return compartments[TokenLibrary];
 			}
 
 #ifdef SOFTWARE_REVOKER
@@ -567,6 +586,15 @@ namespace loader
 		[[nodiscard]] const PrivilegedCompartment &allocator() const
 		{
 			return privilegedCompartments.allocator();
+		}
+
+		/**
+		 * Convenience function to get the header for the object-fast-paths
+		 * library.
+		 */
+		[[nodiscard]] const PrivilegedCompartment &token_library() const
+		{
+			return privilegedCompartments.token_library();
 		}
 
 		/**

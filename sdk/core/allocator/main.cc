@@ -292,16 +292,15 @@ namespace
 	PrivateAllocatorCapabilityState *
 	malloc_capability_unseal(SealedAllocation in)
 	{
-		Capability type = STATIC_SEALING_TYPE(MallocKey);
-		Capability key{SEALING_CAP()};
-		in.unseal(key);
-		if (!in.is_valid() || (in->type != type.address()))
+		auto  key = STATIC_SEALING_TYPE(MallocKey);
+		auto *capability =
+		  token_unseal<PrivateAllocatorCapabilityState>(key, in.get());
+		if (!capability)
 		{
 			Debug::log("Invalid malloc capability {}", in);
 			return nullptr;
 		}
-		auto *capability =
-		  reinterpret_cast<PrivateAllocatorCapabilityState *>(&in->data);
+
 		// Assign an identifier if this is the first time that we've seen this.
 		if (capability->identifier == 0)
 		{
@@ -1066,20 +1065,6 @@ __noinline static SealedAllocation unseal_internal(SKey rawKey, SObj obj)
 		return nullptr;
 	}
 
-	return unsealed;
-}
-
-void *token_obj_unseal(SKey rawKey, SObj obj)
-{
-	LockGuard g{lock};
-	auto      unsealed = unseal_internal(rawKey, obj);
-	if (unsealed == nullptr)
-	{
-		return nullptr;
-	}
-	size_t newSize = unsealed.length() - ObjHdrSize;
-	unsealed.address() += ObjHdrSize;
-	unsealed.bounds() = newSize;
 	return unsealed;
 }
 

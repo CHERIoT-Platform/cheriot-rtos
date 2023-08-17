@@ -511,6 +511,20 @@ namespace
 					return createLibCall(build_pcc(lib));
 				}
 			}
+			for (auto &compartment : image.privilegedCompartments)
+			{
+				if (!compartment.is_privileged_library())
+				{
+					continue;
+				}
+				if (contains<ExportEntry>(compartment.exportTable,
+				                          possibleLibcall))
+				{
+					// TODO: Privileged library export tables should be moved
+					// to the end of the image as well.
+					return createLibCall(build_pcc(compartment));
+				}
+			}
 			// We also use the library calling convention for local callbacks,
 			// so see if this points to our own export table.
 			if (contains<ExportEntry>(sourceCompartment.exportTable,
@@ -1028,32 +1042,36 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	switcherPCC.address() = imgHdr.switcher.entry_point();
 	switcherPCC           = seal_entry(switcherPCC, InterruptStatus::Disabled);
 
-	auto setSealingKey = [](const auto &compartment,
-	                        SealingType lower,
-	                        size_t      length = 1,
-	                        size_t      offset = 0) {
-		Debug::log("Creating sealing key {}+{} to store at {} ({}-{})",
-		           lower,
-		           length,
-		           compartment.sealing_key() + offset,
-		           compartment.code.start(),
-		           compartment.code.start() + compartment.code.size());
-		// Writeable version of the compartment's PCC, for filling in the
-		// sealing key.
-		void **location = build<void *, Root::Type::RWStoreL>(
-		  compartment.code, compartment.sealing_key() + offset);
-		Debug::log("Sealing key location: {}", location);
-		// Derive a sealing capability of the required length.
-		void *key = build<void, Root::Type::Seal>(lower, length);
-		// FIXME: Some compartments need only permit-unseal (e.g. the
-		// compartment switcher).  Drop permit-seal and keep only
-		// permit-unseal once these are separated.
-		Debug::log("Sealing key: {}", key);
-		*location = key;
-		return key;
-	};
+	auto setSealingKey =
+	  [](const auto   &compartment,
+	     SealingType   lower,
+	     size_t        length      = 1,
+	     size_t        offset      = 0,
+	     PermissionSet permissions = PermissionSet{
+	       Permission::Global, Permission::Seal, Permission::Unseal}) {
+		  Debug::log("Creating sealing key {}+{} to store at {} ({}-{})",
+		             lower,
+		             length,
+		             compartment.sealing_key() + offset,
+		             compartment.code.start(),
+		             compartment.code.start() + compartment.code.size());
+		  // Writeable version of the compartment's PCC, for filling in the
+		  // sealing key.
+		  void **location = build<void *, Root::Type::RWStoreL>(
+		    compartment.code, compartment.sealing_key() + offset);
+		  Debug::log("Sealing key location: {}", location);
+		  // Derive a sealing capability of the required length.
+		  auto key =
+		    CHERI::Capability{build<void, Root::Type::Seal>(lower, length)};
+		  key.permissions() &= permissions;
+		  // FIXME: Some compartments need only permit-unseal (e.g. the
+		  // compartment switcher).  Drop permit-seal and keep only
+		  // permit-unseal once these are separated.
+		  Debug::log("Sealing key: {}", key);
+		  *location = key;
+		  return key;
+	  };
 
-	Debug::log("switcherKey: {}", &switcherKey);
 	// Set up the sealing keys for the privileged components.
 	switcherKey =
 	  setSealingKey(imgHdr.switcher, Sentry, SealedTrustedStacks - Sentry + 1);
@@ -1066,6 +1084,11 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	switcherKey.bounds()      = 1;
 	setSealingKey(imgHdr.scheduler(), Scheduler);
 	setSealingKey(imgHdr.allocator(), Allocator);
+	setSealingKey(imgHdr.token_library(),
+	              Allocator,
+	              1,
+	              0,
+	              PermissionSet{Permission::Global, Permission::Unseal});
 	constexpr size_t DynamicSealingLength =
 	  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
 
