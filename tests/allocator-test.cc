@@ -5,6 +5,7 @@
 #define MALLOC_QUOTA 0x100000
 #define TEST_NAME "Allocator"
 #include "tests.hh"
+#include <cheriot-atomic.hh>
 #include <debug.hh>
 #include <ds/xoroshiro.h>
 #include <errno.h>
@@ -97,7 +98,7 @@ namespace
 		allocations.clear();
 	}
 
-	uint32_t freeStart;
+	cheriot::atomic<uint32_t> freeStart;
 	/**
 	 * Test that we can do a long-running blocking allocation in one thread and
 	 * a free in another thread and make forward progress.
@@ -109,7 +110,7 @@ namespace
 		async([]() {
 			// Make sure that we reach the blocking free.
 			debug_log("Deallocation thread sleeping");
-			futex_wait(&freeStart, 0);
+			freeStart.wait(0);
 			// One extra sleep to make sure that we're really in the blocking
 			// sleep.
 			Timeout t{1};
@@ -126,7 +127,7 @@ namespace
 			}
 			// Notify the parent thread that we're done.
 			freeStart = 2;
-			futex_wake(&freeStart, 1);
+			freeStart.notify_one();
 		});
 
 		bool memoryExhausted = false;
@@ -154,7 +155,9 @@ namespace
 		     "allocation");
 		// Wake up the thread that will free memory
 		freeStart = 1;
-		futex_wake(&freeStart, 1);
+		debug_log("Notifying deallocation thread to start with futex {}",
+		          &freeStart);
+		freeStart.notify_one();
 		debug_log("Entering blocking malloc");
 		Timeout t{AllocTimeout};
 		void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, BigAllocSize);
@@ -164,7 +167,7 @@ namespace
 		     ptr);
 		free(ptr);
 		// Wait until the background thread has freed everything.
-		futex_wait(&freeStart, 1);
+		freeStart.wait(1);
 		allocations.clear();
 	}
 
@@ -337,6 +340,16 @@ namespace
 void test_allocator()
 {
 	GlobalConstructors::run();
+
+	const ptraddr_t HeapStart = LA_ABS(__export_mem_heap);
+	const ptraddr_t HeapEnd   = LA_ABS(__export_mem_heap_end);
+
+	const size_t HeapSize = HeapEnd - HeapStart;
+	TEST(BigAllocSize < HeapSize,
+	     "Big allocation size is too large for our heap ({} >= {})",
+	     BigAllocSize,
+	     BigAllocSize);
+	debug_log("Heap size is {} bytes", HeapSize);
 
 	// Make sure that free works only on memory owned by the caller.
 	Timeout t{5};
