@@ -60,6 +60,76 @@ namespace
 	sched::Thread *futexWaitingList;
 
 	/**
+	 * The value used for priority-boosting futexes that are not actually
+	 * boosting a thread currently.
+	 */
+	constexpr uint16_t FutexBoostNotThread =
+	  std::numeric_limits<uint16_t>::max();
+
+	/**
+	 * Returns the boosted priority provided by waiters on a futex.
+	 *
+	 * This finds the maximum priority of all threads that are priority
+	 * boosting the thread identified by `threadID`.  Callers may be about to
+	 * add a new thread to that list and so another priority can be provided,
+	 * which will be used if it is larger than any of the priorities of the
+	 * other waiters.
+	 */
+	uint8_t priority_boost_for_thread(uint16_t threadID, uint8_t priority = 0)
+	{
+		sched::Thread::walk_thread_list(
+		  futexWaitingList, [&](sched::Thread *thread) {
+			  if ((thread->futexPriorityInheriting) &&
+			      (thread->futexPriorityBoostedThread == threadID))
+			  {
+				  priority = std::max(priority, thread->priority_get());
+			  }
+		  });
+		return priority;
+	}
+
+	/**
+	 * If a new futex_wait has come in with an updated owner for a lock, update
+	 * all of the blocking threads to boost the new owner.
+	 */
+	void priority_boost_update(ptraddr_t key, uint16_t threadID)
+	{
+		sched::Thread::walk_thread_list(
+		  futexWaitingList, [&](sched::Thread *thread) {
+			  if ((thread->futexPriorityInheriting) &&
+			      (thread->futexWaitAddress = key))
+			  {
+				  thread->futexPriorityBoostedThread = threadID;
+			  }
+		  });
+	}
+
+	/**
+	 * Reset the boosting thread for all threads waiting on the current futex
+	 * to not boosting anything when the owning thread wakes.
+	 *
+	 * There is a potential race here because the `futex_wait` call happens
+	 * after unlocking the futex.  This means that another thread may come in
+	 * and acquire a lock and set itself as the owner before the update.  We
+	 * therefore need to update waiting threads only if they are boosting the
+	 * thread that called wake, not any other thread.
+	 */
+	void priority_boost_reset(ptraddr_t key, uint16_t threadID)
+	{
+		sched::Thread::walk_thread_list(
+		  futexWaitingList, [&](sched::Thread *thread) {
+			  if ((thread->futexPriorityInheriting) &&
+			      (thread->futexWaitAddress = key))
+			  {
+				  if (thread->futexPriorityBoostedThread == threadID)
+				  {
+					  thread->futexPriorityBoostedThread = FutexBoostNotThread;
+				  }
+			  }
+		  });
+	}
+
+	/**
 	 * Constant value used to represent an unbounded sleep.
 	 */
 	static constexpr auto UnboundedSleep = std::numeric_limits<uint32_t>::max();
@@ -67,12 +137,21 @@ namespace
 	/**
 	 * Helper that wakes a set of up to `count` threads waiting on the futex
 	 * whose address is given by the `key` parameter.
+	 *
+	 * The return values are:
+	 *
+	 *  - Whether a higher-priority thread has been woken, which would trigger
+	 *    an immediate yield.
+	 *  - Whether this futex was using priority inheritance and so should be
+	 *    dropped back to the previous priority.
+	 *  - The number of sleeper that were awoken.
 	 */
-	std::pair<bool, int>
+	std::tuple<bool, bool, int>
 	futex_wake(ptraddr_t key,
 	           uint32_t  count = std::numeric_limits<uint32_t>::max())
 	{
-		bool shouldYield = false;
+		bool shouldYield                    = false;
+		bool shouldRecalculatePriorityBoost = false;
 		// The number of threads that we've woken, this is the return value on
 		// success.
 		int woke = 0;
@@ -81,6 +160,8 @@ namespace
 		  [&](sched::Thread *thread) {
 			  if (thread->futexWaitAddress == key)
 			  {
+				  shouldRecalculatePriorityBoost |=
+				    thread->futexPriorityInheriting;
 				  shouldYield = thread->ready(sched::Thread::WakeReason::Futex);
 				  count--;
 				  woke++;
@@ -96,7 +177,7 @@ namespace
 			woke += multiwaitersWoken;
 			shouldYield |= (multiwaitersWoken > 0);
 		}
-		return {shouldYield, woke};
+		return {shouldYield, shouldRecalculatePriorityBoost, woke};
 	}
 
 } // namespace
@@ -111,6 +192,18 @@ namespace sched
 	 */
 	using ThreadSpace = char[sizeof(Thread)];
 	alignas(Thread) ThreadSpace threadSpaces[CONFIG_THREADS_NUM];
+
+	/**
+	 * Return the thread pointer for the specified thread ID.
+	 */
+	Thread *get_thread(uint16_t threadId)
+	{
+		if (threadId > CONFIG_THREADS_NUM)
+		{
+			return nullptr;
+		}
+		return &(reinterpret_cast<Thread *>(threadSpaces))[threadId - 1];
+	}
 
 	[[cheri::interrupt_state(disabled)]] void __cheri_compartment("sched")
 	  scheduler_entry(const ThreadLoaderInfo *info)
@@ -193,8 +286,9 @@ namespace sched
 					  // the way into the scheduler sleeping on its old value
 					  // will still see this update.
 					  word++;
-					  // Wake anyone sleeping on this futex.
-					  std::tie(schedNeeded, std::ignore) =
+					  // Wake anyone sleeping on this futex.  Interrupt futexes
+					  // are not priority inheriting.
+					  std::tie(schedNeeded, std::ignore, std::ignore) =
 					    futex_wake(Capability{&word}.address());
 				  });
 				break;
@@ -539,7 +633,8 @@ int __cheri_compartment("sched")
 
 int futex_timed_wait(Timeout        *timeout,
                      const uint32_t *address,
-                     uint32_t        expected)
+                     uint32_t        expected,
+                     FutexWaitFlags  flags)
 {
 	if (!check_timeout_pointer(timeout) ||
 	    !check_pointer<PermissionSet{Permission::Load}>(address))
@@ -553,14 +648,48 @@ int futex_timed_wait(Timeout        *timeout,
 		return 0;
 	}
 	Thread *currentThread = Thread::current_get();
-	Debug::log("{} waiting on futex {} for {} ticks",
-	           currentThread,
+	Debug::log("Thread {} waiting on futex {} for {} ticks",
+	           currentThread->id_get(),
 	           address,
 	           timeout->remaining);
-	currentThread->futexWaitAddress = Capability{address}.address();
+	bool      isPriorityInheriting         = flags & FutexPriorityInheritance;
+	ptraddr_t key                          = Capability{address}.address();
+	currentThread->futexWaitAddress        = key;
+	currentThread->futexPriorityInheriting = isPriorityInheriting;
+	Thread  *owningThread                  = nullptr;
+	uint16_t owningThreadID;
+	if (isPriorityInheriting)
+	{
+		// For PI futexes, the low 16 bits store the thread ID.
+		owningThreadID = *address;
+		owningThread   = get_thread(owningThreadID);
+		// If we try to block ourself, that's a mistake.
+		if ((owningThread == currentThread) || (owningThread == nullptr))
+		{
+			return -EINVAL;
+		}
+		Debug::log("Thread {} boosting priority of {} for futex {}",
+		           currentThread->id_get(),
+		           owningThread->id_get(),
+		           key);
+		// If other threads are boosting either the wrong thread or are
+		// priority boosting but haven't managed to acquire the lock, update
+		// their target.
+		priority_boost_update(key, owningThreadID);
+		owningThread->priority_boost(priority_boost_for_thread(
+		  owningThreadID, currentThread->priority_get()));
+	}
 	currentThread->suspend(timeout, &futexWaitingList);
 	bool timedout                   = currentThread->futexWaitAddress == 0;
 	currentThread->futexWaitAddress = 0;
+	if (isPriorityInheriting)
+	{
+		Debug::log("Undoing priority boost of {} by {}",
+		           owningThread->id_get(),
+		           currentThread->id_get());
+		// Recalculate the priority boost from the remaining waiters, if any.
+		owningThread->priority_boost(priority_boost_for_thread(owningThreadID));
+	}
 	// If we woke up from a timer, report timeout.
 	if (timedout)
 	{
@@ -572,7 +701,10 @@ int futex_timed_wait(Timeout        *timeout,
 	{
 		return -EINVAL;
 	}
-	Debug::log("{} woke after waiting on futex {}", currentThread, address);
+	Debug::log("Thread {} ({}) woke after waiting on futex {}",
+	           currentThread->id_get(),
+	           currentThread,
+	           address);
 	return 0;
 }
 
@@ -584,7 +716,29 @@ int futex_wake(uint32_t *address, uint32_t count)
 	}
 	ptraddr_t key = Capability{address}.address();
 
-	auto [shouldYield, woke] = futex_wake(key, count);
+	auto [shouldYield, shouldResetPrioirity, woke] = futex_wake(key, count);
+
+	// If this futex wake is dropping a priority boost, reset the boost.
+	if (shouldResetPrioirity)
+	{
+		Thread *currentThread = Thread::current_get();
+		// We are removing ourself from the priority boost from *this* futex,
+		// we may still be boosted by another futex, but we have just dropped
+		// the lock and so we should not be boosted so clear this thread as the
+		// target for other priority boosts.
+		priority_boost_reset(key, currentThread->id_get());
+		// If we have nested priority-inheriting locks, we may have dropped the
+		// inner one but still hold the outer one.  In this case, we need to
+		// keep the priority boost.  Similarly, if we've done a notify-one
+		// operation but two threads were blocked on a priority-inheriting
+		// futex, then we need to keep the priority boost from the other
+		// threads.
+		currentThread->priority_boost(
+		  priority_boost_for_thread(currentThread->id_get()));
+		// If we have dropped priority below that of another runnable thread, we
+		// should yield now.
+		shouldYield |= !currentThread->is_highest_priority();
+	}
 
 	if (shouldYield)
 	{

@@ -4,6 +4,7 @@
 #define TEST_NAME "Futex"
 #include "tests.hh"
 #include <cheri.hh>
+#include <cheriot-atomic.hh>
 #include <errno.h>
 #include <futex.h>
 #include <interrupt.h>
@@ -108,4 +109,68 @@ void test_futex()
 	TEST(interrupt_complete(nullptr) != 0,
 	     "interrupt_complete returned success unexpectedly");
 #endif
+
+	debug_log("Starting priority inheritance test");
+	futex = 0;
+	static cheriot::atomic<int> state;
+	auto                        priorityBug = []() {
+        if (thread_id_get_fast() == 2)
+        {
+            debug_log("Medium-priority task starting");
+            // We are the high priority thread, wait for the futex to be
+            // acquired and then spin and never yield.
+            while (state != 1)
+            {
+                Timeout t{3};
+                thread_sleep(&t);
+            }
+            debug_log("Consuming all CPU on medium-priority thread");
+            state = 2;
+            while (state != 4) {}
+            debug_log("Finishing medium-priority task");
+        }
+        else
+        {
+            debug_log("Low-priority task starting");
+            futex = thread_id_get_fast();
+            state = 1;
+            debug_log("Low-priority thread acquired futex, yielding");
+            // Now the high priority thread should run.
+            while (state != 3)
+            {
+                yield();
+            }
+            debug_log("Low-priority thread finished, unlocking");
+            state = 4;
+            futex = 0;
+            futex_wake(&futex, 1);
+        }
+	};
+	async(priorityBug);
+	async(priorityBug);
+	debug_log("Waiting for background threads to enter the right state");
+	while (state != 2)
+	{
+		Timeout t{3};
+		thread_sleep(&t);
+	}
+	debug_log("High-priority thread attempting to acquire futex owned by "
+	          "low-priority thread without priority propagation");
+	state       = 3;
+	t.remaining = 1;
+	futex_timed_wait(&t, &futex, futex, FutexNone);
+	TEST(futex != 0, "Made progress surprisingly!");
+	debug_log("High-priority thread attempting to acquire futex owned by "
+	          "low-priority thread with priority propagation");
+	t.remaining = 4;
+	futex_timed_wait(&t, &futex, futex, FutexPriorityInheritance);
+	TEST(futex == 0, "Failed to make progress!");
+
+	futex       = 1234;
+	t.remaining = 1;
+	ret         = futex_timed_wait(&t, &futex, futex, FutexPriorityInheritance);
+	TEST(ret == -EINVAL,
+	     "PI futex with an invalid thread ID returned {}, should be {}",
+	     ret,
+	     -EINVAL);
 }

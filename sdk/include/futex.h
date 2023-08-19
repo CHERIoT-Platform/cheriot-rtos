@@ -6,6 +6,16 @@
 #include <stdint.h>
 #include <timeout.h>
 
+enum [[clang::flag_enum]] FutexWaitFlags{
+  /// No flags
+  FutexNone = 0,
+  /**
+   * This futex uses priority inheritance.  The low 16 bits of the futex word
+   * are assumed to hold the thread ID of the thread that currently holds the
+   * lock.
+   */
+  FutexPriorityInheritance};
+
 /**
  * Compare the value at `address` to `expected` and, if they match, sleep the
  * thread until a wake event is sent with `futex_wake` or until this the thread
@@ -17,13 +27,19 @@
  * The `address` argument must permit loading four bytes of data after the
  * address.
  *
+ * The `flags` argument contains flags that may control the behaviour of the
+ * call.
+ *
  * This returns:
  *  - 0 on success.
  *  - `-EINVAL` if the arguments are invalid.
  *  - `-ETIMEOUT` if the timeout expires.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  futex_timed_wait(Timeout *ticks, const uint32_t *address, uint32_t expected);
+  futex_timed_wait(Timeout                  *ticks,
+                   const uint32_t           *address,
+                   uint32_t                  expected,
+                   enum FutexWaitFlags flags __if_cxx(= FutexNone));
 
 /**
  * Compare the value at `address` to `expected` and, if they match, sleep the
@@ -38,7 +54,7 @@ __always_inline static int futex_wait(const uint32_t *address,
                                       uint32_t        expected)
 {
 	Timeout t = {0, UnlimitedTimeout};
-	return futex_timed_wait(&t, address, expected);
+	return futex_timed_wait(&t, address, expected, FutexNone);
 }
 
 /**

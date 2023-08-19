@@ -3,8 +3,10 @@
 #include <cdefs.h>
 #include <cheriot-atomic.hh>
 #include <debug.hh>
+#include <errno.h>
 #include <futex.h>
 #include <semaphore.h>
+#include <thread.h>
 
 __clang_ignored_warning_push("-Watomic-alignment")
 
@@ -34,7 +36,8 @@ using LockDebug = ConditionalDebug<DebugLocks, "Locking">;
  * an using a lock manager compartment with an API that returns a single-use
  * capability to unlock on any lock call.
  */
-class FlagLock
+template<bool IsPriorityInherited>
+class FlagLockGeneric
 {
 	/**
 	 * States used in the futex word.
@@ -42,15 +45,28 @@ class FlagLock
 	enum Flag : uint32_t
 	{
 		/// The lock is not held.
-		Unlocked,
+		Unlocked = 0,
 		/// The lock is held.
-		Locked,
+		Locked = 1 << 16,
 		/// The lock is held and one or more threads are waiting on it.
-		LockedWithWaiters
+		LockedWithWaiters = 1 << 17
 	};
 
 	/// The lock word.
-	cheriot::atomic<Flag> flag = Flag::Unlocked;
+	cheriot::atomic<uint32_t> flag = Flag::Unlocked;
+
+	/**
+	 * Returns the bits to use as the thread ID.  For priority inherited locks,
+	 * this is the real current thread ID, otherwise it is simply 0.
+	 */
+	__always_inline uint16_t thread_id()
+	{
+		if constexpr (IsPriorityInherited)
+		{
+			return thread_id_get_fast();
+		}
+		return 0;
+	}
 
 	public:
 	/**
@@ -59,29 +75,43 @@ class FlagLock
 	 */
 	bool try_lock(Timeout *timeout)
 	{
-		Flag old = Flag::Unlocked;
-		if (flag.compare_exchange_strong(old, Flag::Locked))
+		uint32_t old        = Flag::Unlocked;
+		auto     threadBits = thread_id();
+		uint32_t desired    = Flag::Locked | threadBits;
+		if (flag.compare_exchange_strong(old, desired))
 		{
 			return true;
 		}
+		// Next time, try to acquire, acquire with waiters so that we don't
+		// lose wakes if we win a race.
+		desired = Flag::LockedWithWaiters | threadBits;
 		while (timeout->remaining > 0)
 		{
-			// If there are already waiters, don't bother with the atomic call.
-			if (old != Flag::LockedWithWaiters)
+			// If there are not already waiters, set the waiters flag.
+			if ((old & Flag::LockedWithWaiters) == 0)
 			{
-				LockDebug::Assert(
-				  old == Flag::Locked, "Unexpected flag value: {}", old);
-				flag.compare_exchange_strong(old, Flag::LockedWithWaiters);
+				LockDebug::Assert((old & 0xffff0000) == Flag::Locked,
+				                  "Unexpected flag value: {}",
+				                  old);
+				uint32_t addedWaiters = Flag::LockedWithWaiters;
+				if constexpr (IsPriorityInherited)
+				{
+					addedWaiters |= (old & 0xffff);
+				}
+				flag.compare_exchange_strong(old, addedWaiters);
 			}
 			if (old != Flag::Unlocked)
 			{
-				LockDebug::log("hitting slow path wait for {}", &flag);
-				flag.wait(timeout, old);
+				LockDebug::log("Hitting slow path wait for {}", &flag);
+				FutexWaitFlags flags =
+				  IsPriorityInherited ? FutexPriorityInheritance : FutexNone;
+				if (flag.wait(timeout, old, flags) == -EINVAL)
+				{
+					return false;
+				}
 			}
 			old = Flag::Unlocked;
-			// Try to acquire, acquire with waiters so that we don't lose wakes
-			// if we win a race.
-			if (flag.compare_exchange_strong(old, Flag::LockedWithWaiters))
+			if (flag.compare_exchange_strong(old, desired))
 			{
 				return true;
 			}
@@ -114,10 +144,10 @@ class FlagLock
 	 */
 	void unlock()
 	{
-		Flag old = flag.exchange(Flag::Unlocked);
+		auto old = flag.exchange(Flag::Unlocked);
 		LockDebug::Assert(old != Flag::Unlocked, "Double-unlocking {}", &flag);
-		// If there are waiters, wake one.
-		if (old == Flag::LockedWithWaiters)
+		// If there are waiters, wake them all up.
+		if ((old & Flag::LockedWithWaiters) != 0)
 		{
 			LockDebug::log("hitting slow path wake for {}", &flag);
 			flag.notify_all();
@@ -151,13 +181,16 @@ class TicketLock
 	void lock()
 	{
 		uint32_t ticket = next++;
+		LockDebug::log("Ticket {} issued", ticket);
 		do
 		{
 			uint32_t currentSnapshot = current;
 			if (currentSnapshot == ticket)
 			{
+				LockDebug::log("Ticket {} proceeding", ticket);
 				return;
 			}
+			LockDebug::log("Ticket {} waiting for {}", ticket, currentSnapshot);
 			current.wait(currentSnapshot);
 		} while (true);
 	}
@@ -212,6 +245,9 @@ class NoLock
 	void unlock() {}
 };
 
+using FlagLock                  = FlagLockGeneric<false>;
+using FlagLockPriorityInherited = FlagLockGeneric<true>;
+
 template<typename T>
 concept Lockable = requires(T l)
 {
@@ -229,6 +265,7 @@ concept TryLockable = Lockable<T> && requires(T l, Timeout *t)
 
 static_assert(TryLockable<NoLock>);
 static_assert(TryLockable<FlagLock>);
+static_assert(TryLockable<FlagLockPriorityInherited>);
 static_assert(Lockable<TicketLock>);
 
 /**
