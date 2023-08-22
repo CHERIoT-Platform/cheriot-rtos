@@ -41,6 +41,22 @@ namespace Revocation
 	};
 
 	/**
+	 * If this revoker supports an interrupt to notify of completion then it
+	 * must have a method that blocks waiting for the interrupt to fire.  This
+	 * method should return true if the epoch has been reached or false if the
+	 * timeout expired.
+	 */
+	template<typename T>
+	concept SupportsInterruptNotification = requires(T        v,
+	                                                 Timeout *timeout,
+	                                                 uint32_t epoch)
+	{
+		{
+			v.wait_for_completion(timeout, epoch)
+			} -> std::same_as<bool>;
+	};
+
+	/**
 	 * Class for interacting with the shadow bitmap.  This bitmap controls the
 	 * behaviour of a hardware load barrier, which will invalidate capabilities
 	 * in the register file if they point revoked memory.  Only memory that is

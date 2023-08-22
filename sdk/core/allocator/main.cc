@@ -129,6 +129,65 @@ namespace
 		return (Capability{timeout}.is_valid() && timeout->may_block());
 	}
 
+	template<typename T = Revocation::Revoker>
+	bool wait_for_background_revoker(
+	  Timeout                   *timeout,
+	  uint32_t                   epoch,
+	  LockGuard<decltype(lock)> &g,
+	  T &r = revoker) requires(Revocation::SupportsInterruptNotification<T>)
+	{
+		// Wait for the revocation sweep to finish and then
+		// reacquire the lock.  If either fails, give up
+		// and return nullptr.
+		if (!r.wait_for_completion(timeout, epoch) ||
+		    !with_interrupts_disabled([&]() {
+			    if (Capability{timeout}.is_valid())
+			    {
+				    return g.try_lock(timeout);
+			    }
+			    return false;
+		    }))
+		{
+			return false;
+		}
+		return true;
+	}
+
+	template<typename T = Revocation::Revoker>
+	bool wait_for_background_revoker(
+	  Timeout                   *timeout,
+	  uint32_t                   epoch,
+	  LockGuard<decltype(lock)> &g,
+	  T &r = revoker) requires(!Revocation::SupportsInterruptNotification<T>)
+	{
+		// Yield while until a revocation pass has finished.
+		while (!revoker.has_revocation_finished_for_epoch<true>(epoch))
+		{
+			g.unlock();
+			Timeout smallSleep{1};
+			thread_sleep(&smallSleep);
+			// It's possible that, while we slept,
+			// `*timeout` was freed.  Check that the pointer
+			// is still valid so that we don't fault if this
+			// happens. We are not holding the lock at this
+			// point and so we must do the check with
+			// interrupts disabled to protect against
+			// concurrent free.
+			if (!with_interrupts_disabled([&]() {
+				    if (Capability{timeout}.is_valid())
+				    {
+					    timeout->elapse(smallSleep.elapsed);
+					    return g.try_lock(timeout);
+				    }
+				    return false;
+			    }))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	/**
 	 * Malloc implementation.  Allocates `bytes` bytes of memory.  If `timeout`
 	 * is greater than zero, may block for that many ticks.  If `timeout` is the
@@ -185,32 +244,8 @@ namespace
 
 					if constexpr (Revocation::Revoker::IsAsynchronous)
 					{
-						// Yield while until a revocation pass has finished.
-						while (!revoker.has_revocation_finished_for_epoch<true>(
-						  needsRevocation->waitingEpoch))
-						{
-							g.unlock();
-							Timeout smallSleep{1};
-							thread_sleep(&smallSleep);
-							// It's possible that, while we slept,
-							// `*timeout` was freed.  Check that the pointer
-							// is still valid so that we don't fault if this
-							// happens. We are not holding the lock at this
-							// point and so we must do the check with
-							// interrupts disabled to protect against
-							// concurrent free.
-							if (!with_interrupts_disabled([&]() {
-								    if (Capability{timeout}.is_valid())
-								    {
-									    timeout->elapse(smallSleep.elapsed);
-									    return g.try_lock(timeout);
-								    }
-								    return false;
-							    }))
-							{
-								return nullptr;
-							}
-						}
+						revoker.system_bg_revoker_kick();
+						wait_for_background_revoker(timeout, needsRevocation->waitingEpoch, g);
 					}
 					else
 					{
