@@ -87,6 +87,8 @@ namespace Ibex
 #endif
 		}
 
+		static const uint32_t *interruptFutex;
+
 		public:
 		/**
 		 * This is an asynchronous hardware revoker.
@@ -122,6 +124,9 @@ namespace Ibex
 			                 base,
 			                 top);
 #endif
+			// Get a pointer to the futex that we use to wait for interrupts.
+			interruptFutex = interrupt_futex_get(
+			  STATIC_SEALED_VALUE(revokerInterruptCapability));
 		}
 
 		/**
@@ -173,14 +178,12 @@ namespace Ibex
 		 */
 		bool wait_for_completion(Timeout *timeout, uint32_t epoch)
 		{
-			static const uint32_t *futex = interrupt_futex_get(
-			  STATIC_SEALED_VALUE(revokerInterruptCapability));
 			uint32_t interruptValue;
 			do
 			{
 				// Read the current interrupt futex word.  We want to retry if
 				// an interrupt happens after this point.
-				interruptValue = *futex;
+				interruptValue = *interruptFutex;
 				// Make sure that the compiler doesn't reorder the read of the
 				// futex word with respect to the read of the revocation epoch.
 				__c11_atomic_signal_fence(__ATOMIC_SEQ_CST);
@@ -191,9 +194,32 @@ namespace Ibex
 				}
 				// If the epoch hasn't finished, wait for an interrupt to fire
 				// and retry.
-			} while (futex_timed_wait(timeout, futex, interruptValue) == 0);
+			} while (wait_for_interrupt(timeout, interruptValue));
 			// Futex wait failed.  This could be a timeout or an invalid
 			// timeout parameter, we fail either way.
+			return false;
+		}
+
+		private:
+		/**
+		 * Wait for an interrupt to complete.  Returns true if the interrupt
+		 * fired, false on error or timeout.
+		 */
+		bool wait_for_interrupt(Timeout *timeout, uint32_t interruptValue)
+		{
+			if (futex_timed_wait(timeout, interruptFutex, interruptValue) == 0)
+			{
+				// Don't acknowledge the interrupt if another thread has
+				// already.  It doesn't matter if we acknowledge an interrupt
+				// twice but it's a good idea to avoid the cross-compartment
+				// call if we don't need it.
+				if (*interruptFutex == interruptValue + 1)
+				{
+					interrupt_complete(
+					  STATIC_SEALED_VALUE(revokerInterruptCapability));
+				}
+				return true;
+			}
 			return false;
 		}
 	};
