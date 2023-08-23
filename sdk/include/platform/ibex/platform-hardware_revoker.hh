@@ -15,6 +15,11 @@
 #	error Memory map was not configured with a revoker device
 #endif
 
+#if defined(CLANG_TIDY)
+static constexpr auto RevokerInterrupt =
+  static_cast<enum InterruptName>(42);
+#endif
+
 DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(revokerInterruptCapability,
                                         RevokerInterrupt,
                                         true,
