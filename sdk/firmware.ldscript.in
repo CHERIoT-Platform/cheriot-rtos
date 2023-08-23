@@ -101,12 +101,19 @@ SECTIONS
 	}
 	.scheduler_globals_end = .;
 
+	.allocator_sealed_objects : CAPALIGN
+	{
+		.allocator_sealed_objects = .;
+		*/cherimcu.allocator.compartment(.sealed_objects)
+	}
+	.allocator_sealed_objects_end = .;
+
 	.allocator_globals : CAPALIGN
 	{
 		.allocator_globals = .;
 		*/cherimcu.allocator.compartment(.data .data.* .sdata .sdata.*);
 		.allocator_bss_start = .;
-		*/cherimcu.allocator.compartment(.sbss .sbss.* .bss .bss.*)
+		*/cherimcu.allocator.compartment(.sbss .sbss.* .bss .bss.*);
 	}
 	.allocator_globals_end = .;
 
@@ -204,8 +211,8 @@ SECTIONS
 		# Size of the allocator export table
 		SHORT(.allocator_export_table_end - .allocator_export_table);
 		# No sealed objects
-		LONG(0);
-		SHORT(0));
+		LONG(.allocator_sealed_objects);
+		SHORT(SIZEOF(.allocator_sealed_objects));
 
 		# sdk/core/loader/types.h:/PrivilegedCompartment
 		# Token server compartment header
