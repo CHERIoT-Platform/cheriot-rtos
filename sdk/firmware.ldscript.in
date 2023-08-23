@@ -210,7 +210,7 @@ SECTIONS
 		LONG(.allocator_export_table);
 		# Size of the allocator export table
 		SHORT(.allocator_export_table_end - .allocator_export_table);
-		# No sealed objects
+		# The allocator may have sealed objects
 		LONG(.allocator_sealed_objects);
 		SHORT(SIZEOF(.allocator_sealed_objects));
 
