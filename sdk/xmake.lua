@@ -591,7 +591,9 @@ rule("firmware")
 				-- 0.
 				"\n\t\tSHORT(16)" ..
 				"\n\t\tLONG(.software_revoker_export_table);" ..
-				"\n\t\tSHORT(.software_revoker_export_table_end - .software_revoker_export_table);\n"
+				"\n\t\tSHORT(.software_revoker_export_table_end - .software_revoker_export_table);\n" ..
+				"\n\t\tLONG(0);" ..
+				"\n\t\tSHORT(0);\n"
 		end
 
 

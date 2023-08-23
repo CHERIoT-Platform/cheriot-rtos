@@ -57,6 +57,10 @@ SECTIONS
 		*(.bss .bss.*);
 		*(.sbss .sbss.*);
 	}
+	.sealed_objects :
+	{
+		*(.sealed_objects .sealed_objects.*);
+	}
 	# Throw some stuff away that we don't need.
 	/DISCARD/ :
 	{

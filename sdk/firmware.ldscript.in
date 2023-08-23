@@ -169,6 +169,7 @@ SECTIONS
 		# Switcher's copy of the scheduler's CSP
 		SHORT(switcher_scheduler_entry_csp - .compartment_switcher_start);
 
+		# sdk/core/loader/types.h:/PrivilegedCompartment
 		# Scheduler code start address
 		LONG(.scheduler_start);
 		# Scheduler code end
@@ -183,7 +184,11 @@ SECTIONS
 		LONG(.scheduler_export_table);
 		# Size of the scheduler export table
 		SHORT(.scheduler_export_table_end - .scheduler_export_table);
+		# No sealed objects
+		LONG(0);
+		SHORT(0);
 
+		# sdk/core/loader/types.h:/PrivilegedCompartment
 		# Allocator code start address
 		LONG(.allocator_start);
 		# Allocator code end
@@ -198,7 +203,11 @@ SECTIONS
 		LONG(.allocator_export_table);
 		# Size of the allocator export table
 		SHORT(.allocator_export_table_end - .allocator_export_table);
+		# No sealed objects
+		LONG(0);
+		SHORT(0));
 
+		# sdk/core/loader/types.h:/PrivilegedCompartment
 		# Token server compartment header
 		# Code
 		LONG(.token_library_start);
@@ -212,6 +221,9 @@ SECTIONS
 		LONG(.token_library_export_table);
 		# Size of the token server export table
 		SHORT(.token_library_export_table_end - .token_library_export_table);
+		# No sealed objects
+		LONG(0);
+		SHORT(0);
 
 		@software_revoker_header@
 

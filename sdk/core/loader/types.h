@@ -461,6 +461,12 @@ namespace loader
 			AddressRange exportTable;
 
 			/**
+			 * The range of statically allocated sealed objects for this
+			 * compartment.
+			 */
+			AddressRange sealedObjects;
+
+			/**
 			 * Returns the range of the import table.
 			 */
 			[[nodiscard]] AddressRange import_table() const
