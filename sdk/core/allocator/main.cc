@@ -163,8 +163,9 @@ namespace
 			}
 			// If there is enough memory in the quarantine to fulfil this
 			// allocation, try dequeing some things and retry.
-			if (std::holds_alternative<
-			      MState::AllocationFailureRevocationNeeded>(ret))
+			auto *needsRevocation =
+			  std::get_if<MState::AllocationFailureRevocationNeeded>(&ret);
+			if (needsRevocation)
 			{
 				// If we are able to dequeue some objects from quarantine then
 				// retry immediately, otherwise yield.
@@ -180,15 +181,13 @@ namespace
 					Debug::log("Quarantine has enough memory to satisfy "
 					           "allocation, kicking revoker");
 
-					// Drop and reacquire the lock while yielding.
-					// Sleep for a single tick.
+					revoker.system_bg_revoker_kick();
+
 					if constexpr (Revocation::Revoker::IsAsynchronous)
 					{
-						auto epoch = revoker.system_epoch_get();
-						revoker.system_bg_revoker_kick();
 						// Yield while until a revocation pass has finished.
 						while (!revoker.has_revocation_finished_for_epoch<true>(
-						  epoch))
+						  needsRevocation->waitingEpoch))
 						{
 							g.unlock();
 							Timeout smallSleep{1};
@@ -215,7 +214,8 @@ namespace
 					}
 					else
 					{
-						revoker.system_bg_revoker_kick();
+						// Drop and reacquire the lock while yielding.
+						// Sleep for a single tick.
 						g.unlock();
 						Timeout smallSleep{0};
 						thread_sleep(&smallSleep);
