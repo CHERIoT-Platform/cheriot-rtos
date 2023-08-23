@@ -87,7 +87,7 @@ namespace Ibex
 #endif
 		}
 
-		static const uint32_t *interruptFutex;
+		static inline const uint32_t *interruptFutex;
 
 		public:
 		/**
