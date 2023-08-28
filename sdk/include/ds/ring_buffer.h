@@ -107,6 +107,15 @@ namespace ds::ring_buffer
 		}
 
 		/**
+		 * Retrieve the head index while bypassing the emptiness check.  The
+		 * caller must have reason to believe that the ring is not empty.
+		 */
+		Ix head_get_unsafe()
+		{
+			return head;
+		}
+
+		/**
 		 * Discard the element at the index returned by head_get().
 		 *
 		 * Do not call this unless there was a matching call to

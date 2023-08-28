@@ -848,7 +848,9 @@ class MState
 	/*
 	 * Chunks may be enqueued into quarantine in at most three different epochs.
 	 * The opening of a fourth epoch necessarily implies that the eldest of the
-	 * three being tracked is finished.
+	 * three being tracked is finished.  Moreover, at least two of those three
+	 * will exit quarantine at the same time, so we track up to two sets of
+	 * chunks still in quarantine.
 	 *
 	 * Each pending quarantine ring has a sentinel and an epoch.  The rings are
 	 * threaded through MChunk::ring-s.  We don't struct-ure these together to
@@ -1007,6 +1009,7 @@ class MState
 	 */
 	struct AllocationFailureRevocationNeeded
 	{
+		size_t waitingEpoch;
 	};
 
 	/**
@@ -1072,7 +1075,10 @@ class MState
 			if (heapQuarantineSize > 0 &&
 			    (heapQuarantineSize + heapFreeSize) >= neededSize)
 			{
-				return AllocationFailureRevocationNeeded{};
+				/* Quarantine is nonempty; there must be an eldest epoch. */
+				return AllocationFailureRevocationNeeded{
+				  quarantinePendingEpoch[quarantinePendingRing
+				                           .head_get_unsafe()]};
 			}
 			if (heapTotalSize < neededSize)
 			{
