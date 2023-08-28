@@ -81,6 +81,10 @@ The name is used to refer to this in software and must be a valid C identifier.
 The number is the interrupt number.
 The priority is the priority with which this interrupt will be configured in the interrupt controller.
 
+Interrupts may optionally have an `edge_triggered` property (if this is omitted, it is assumed to be false).
+If this exists and is set to true then the interrupt is assumed to fire when a condition first holds, rather than to remain raised as long as a condition holds.
+Interrupts that are edge triggered are automatically completed by the scheduler; they do not require a call to `interrupt_complete`.
+
 Hardware features
 -----------------
 

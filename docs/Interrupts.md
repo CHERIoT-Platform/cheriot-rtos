@@ -45,6 +45,10 @@ An interrupt will not be delivered again until it has been acknowledged.
 Multiple threads can wait on a single interrupt source but it **must** be acknowledged by precisely one.
 Interrupt capabilities (described in the next section) separate the permission to wait and the permission to acknowledge and it is good practice to ensure that the permission to acknowledge a specific interrupt is given to precisely one compartment.
 
+Edge triggered interrupts (those that have `edge_triggered = true` in the board's JSON description) are automatically marked as completed.
+They do not need to be explicitly completed.
+Level triggered interrupts will continue to fire until the condition that caused them to fire has been addressed and so require explicit acknowledgement.
+
 Interrupt capabilities
 ----------------------
 

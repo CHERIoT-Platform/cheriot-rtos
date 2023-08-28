@@ -357,14 +357,20 @@ rule("firmware")
 		end
 		
 		if board.interrupts then
+			-- The macro used to provide the interrupt enumeration in the public header
 			local interruptNames = "CHERIOT_INTERRUPT_NAMES="
+			-- Define the macro that's used to initialise the scheduler's interrupt configuration.
 			local interruptConfiguration = "CHERIOT_INTERRUPT_CONFIGURATION="
 			for _, interrupt in ipairs(board.interrupts) do
 				interruptNames = interruptNames .. interrupt.name .. "=" .. math.floor(interrupt.number) .. ", "
-				interruptConfiguration = interruptConfiguration .. "{" .. math.floor(interrupt.number) .. "," .. math.floor(interrupt.priority) .. "},"
+				interruptConfiguration = interruptConfiguration .. "{"
+					.. math.floor(interrupt.number) .. ","
+					.. math.floor(interrupt.priority) .. ","
+					.. (interrupt.edge_triggered and "true" or "false")
+					.. "},"
 			end
 			add_defines(interruptNames)
-			add_defines(interruptConfiguration)
+			target:deps()[target:name() .. ".scheduler"]:add('defines', interruptConfiguration)
 		end
 
 		local loader = target:deps()['cheriot.loader'];
