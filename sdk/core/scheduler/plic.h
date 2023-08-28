@@ -71,6 +71,12 @@ namespace sched
 			 * The priority for this interrupt.
 			 */
 			uint32_t priority;
+			/**
+			 * True if this interrupt is edge triggered, false otherwise.  Edge
+			 * triggered interrupts are automatically acknowledged, level
+			 * triggered interrupts must be explicitly acknowledged.
+			 */
+			bool isEdgeTriggered;
 		};
 
 		/**
@@ -131,7 +137,11 @@ namespace sched
 		/**
 		 * If source corresponds to a valid interrupt, return a reference to
 		 * it, otherwise return an invalid value.
+		 *
+		 * If the template parameter is true then this completes the interrupt
+		 * if it is edge triggered.
 		 */
+		template<bool CompleteInterruptIfEdgeTriggered = false>
 		utils::OptionalReference<uint32_t>
 		futex_word_for_source(SourceID source)
 		{
@@ -139,6 +149,13 @@ namespace sched
 			{
 				if (ConfiguredInterrupts[i].number == uint32_t(source))
 				{
+					if constexpr (CompleteInterruptIfEdgeTriggered)
+					{
+						if (ConfiguredInterrupts[i].isEdgeTriggered)
+						{
+							master().interrupt_complete(source);
+						}
+					}
 					return {futexWords[i]};
 				}
 			}
@@ -187,7 +204,8 @@ namespace sched
 				return nullptr;
 			}
 
-			return futex_word_for_source(*src);
+			return futex_word_for_source<
+			  /*Complete edge triggered interrupt*/ true>(*src);
 		}
 
 		void interrupt_complete(SourceID id)
