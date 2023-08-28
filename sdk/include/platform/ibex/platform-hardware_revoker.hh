@@ -48,6 +48,21 @@ namespace Ibex
 			 * start the revoker.
 			 */
 			uint32_t control;
+			/**
+			 * Padding to ensure that the later fields are at the correct
+			 * location
+			 */
+			uint32_t unused;
+			/**
+			 * Interrupt status word.  Reading this will return 0 if an
+			 * interrupt has not been requested, 1 otherwise.
+			 */
+			uint32_t interruptStatus;
+			/**
+			 * Interrupt request word.  Writing 1 here requests an interrupt to
+			 * fire when the current revocation has completed.
+			 */
+			uint32_t interruptRequested;
 		};
 
 		/**
@@ -197,34 +212,21 @@ namespace Ibex
 				{
 					return true;
 				}
+				// Request the interrupt
+				revoker_device().interruptRequested = 1;
+				// There is a possible race: if the revocation pass finished
+				// before we requested the interrupt, we won't get the
+				// interrupt.  Check again before we wait.
+				if (has_revocation_finished_for_epoch<true>(epoch))
+				{
+					return true;
+				}
 				// If the epoch hasn't finished, wait for an interrupt to fire
 				// and retry.
-			} while (wait_for_interrupt(timeout, interruptValue));
+			} while (
+			  futex_timed_wait(timeout, interruptFutex, interruptValue) == 0);
 			// Futex wait failed.  This could be a timeout or an invalid
 			// timeout parameter, we fail either way.
-			return false;
-		}
-
-		private:
-		/**
-		 * Wait for an interrupt to complete.  Returns true if the interrupt
-		 * fired, false on error or timeout.
-		 */
-		bool wait_for_interrupt(Timeout *timeout, uint32_t interruptValue)
-		{
-			if (futex_timed_wait(timeout, interruptFutex, interruptValue) == 0)
-			{
-				// Don't acknowledge the interrupt if another thread has
-				// already.  It doesn't matter if we acknowledge an interrupt
-				// twice but it's a good idea to avoid the cross-compartment
-				// call if we don't need it.
-				if (*interruptFutex == interruptValue + 1)
-				{
-					interrupt_complete(
-					  STATIC_SEALED_VALUE(revokerInterruptCapability));
-				}
-				return true;
-			}
 			return false;
 		}
 	};
