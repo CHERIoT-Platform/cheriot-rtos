@@ -16,8 +16,7 @@
 #endif
 
 #if defined(CLANG_TIDY)
-static constexpr auto RevokerInterrupt =
-  static_cast<enum InterruptName>(42);
+static constexpr auto RevokerInterrupt = static_cast<enum InterruptName>(42);
 #endif
 
 DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(revokerInterruptCapability,

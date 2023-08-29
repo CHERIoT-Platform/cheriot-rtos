@@ -179,7 +179,7 @@ namespace
 		// Wait for the interrupt to fire, then try to reacquire the lock if
 		// the epoch is passed.
 		return r.wait_for_completion(timeout, epoch) &&
-				reacquire_lock(timeout, g);
+		       reacquire_lock(timeout, g);
 	}
 
 	/**
