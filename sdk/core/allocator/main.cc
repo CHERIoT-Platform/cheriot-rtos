@@ -129,6 +129,44 @@ namespace
 		return (Capability{timeout}.is_valid() && timeout->may_block());
 	}
 
+	/**
+	 * Helper to reacquire the lock after sleeping.  This assumes that
+	 * `timeout` *was* valid but may have been freed and so checks only that it
+	 * has not been invalidated across yielding.  If `timeout` remains valid
+	 * then this adds any time passed as `elapsed` to the timeout and then
+	 * tries to reacquire the lock, blocking for no longer than the remaining
+	 * time on this timeout.
+	 *
+	 * This runs with interrupts disabled to ensure that the timeout remains
+	 * valid in between checking that it is valid and reacquiring the lock.
+	 * Once the lock is held, the timeout cannot be freed concurrently.
+	 *
+	 * Returns `true` if the lock has been successfully reacquired, `false`
+	 * otherwise.
+	 */
+	[[cheri::interrupt_state(disabled)]] bool
+	reacquire_lock(Timeout                   *timeout,
+	               LockGuard<decltype(lock)> &g,
+	               Ticks                      elapsed = 0)
+	{
+		if (Capability{timeout}.is_valid())
+		{
+			timeout->elapse(elapsed);
+			return g.try_lock(timeout);
+		}
+		return false;
+	}
+
+	/**
+	 * Wait for the background revoker, if the revoker supports
+	 * interrupt-driven notifications.
+	 *
+	 * Waits until either `timeout` expires or `epoch` has finished and then
+	 * tries to reacquire the lock. Returns true if the epoch has passed and the
+	 * lock has been reacquired, returns false and does *not* reacquire the lock
+	 * in the case of any error.
+	 *
+	 */
 	template<typename T = Revocation::Revoker>
 	bool wait_for_background_revoker(
 	  Timeout                   *timeout,
@@ -136,23 +174,25 @@ namespace
 	  LockGuard<decltype(lock)> &g,
 	  T &r = revoker) requires(Revocation::SupportsInterruptNotification<T>)
 	{
-		// Wait for the revocation sweep to finish and then
-		// reacquire the lock.  If either fails, give up
-		// and return nullptr.
-		if (!r.wait_for_completion(timeout, epoch) ||
-		    !with_interrupts_disabled([&]() {
-			    if (Capability{timeout}.is_valid())
-			    {
-				    return g.try_lock(timeout);
-			    }
-			    return false;
-		    }))
-		{
-			return false;
-		}
-		return true;
+		// Release the lock before sleeping
+		g.unlock();
+		// Wait for the interrupt to fire, then try to reacquire the lock if
+		// the epoch is passed.
+		return r.wait_for_completion(timeout, epoch) &&
+				reacquire_lock(timeout, g);
 	}
 
+	/**
+	 * Wait for the background revoker, if the revoker does not support
+	 * interrupt-driven notifications.  This will yield and retry if the revoker
+	 * has not yet finished.
+	 *
+	 * Waits until either `timeout` expires or `epoch` has finished and then
+	 * tries to reacquire the lock. Returns true if the epoch has passed and the
+	 * lock has been reacquired, returns false and does *not* reacquire the lock
+	 * in the case of any error.
+	 *
+	 */
 	template<typename T = Revocation::Revoker>
 	bool wait_for_background_revoker(
 	  Timeout                   *timeout,
@@ -163,24 +203,11 @@ namespace
 		// Yield while until a revocation pass has finished.
 		while (!revoker.has_revocation_finished_for_epoch<true>(epoch))
 		{
+			// Release the lock before sleeping
 			g.unlock();
 			Timeout smallSleep{1};
 			thread_sleep(&smallSleep);
-			// It's possible that, while we slept,
-			// `*timeout` was freed.  Check that the pointer
-			// is still valid so that we don't fault if this
-			// happens. We are not holding the lock at this
-			// point and so we must do the check with
-			// interrupts disabled to protect against
-			// concurrent free.
-			if (!with_interrupts_disabled([&]() {
-				    if (Capability{timeout}.is_valid())
-				    {
-					    timeout->elapse(smallSleep.elapsed);
-					    return g.try_lock(timeout);
-				    }
-				    return false;
-			    }))
+			if (!reacquire_lock(timeout, g, smallSleep.elapsed))
 			{
 				return false;
 			}
@@ -244,8 +271,8 @@ namespace
 
 					if constexpr (Revocation::Revoker::IsAsynchronous)
 					{
-						revoker.system_bg_revoker_kick();
-						wait_for_background_revoker(timeout, needsRevocation->waitingEpoch, g);
+						wait_for_background_revoker(
+						  timeout, needsRevocation->waitingEpoch, g);
 					}
 					else
 					{
@@ -254,21 +281,7 @@ namespace
 						g.unlock();
 						Timeout smallSleep{0};
 						thread_sleep(&smallSleep);
-						// It's possible that, while we slept,
-						// `*timeout` was freed.  Check that the pointer
-						// is still valid so that we don't fault if this
-						// happens. We are not holding the lock at this
-						// point and so we must do the check with
-						// interrupts disabled to protect against
-						// concurrent free.
-						if (!with_interrupts_disabled([&]() {
-							    if (Capability{timeout}.is_valid())
-							    {
-								    timeout->elapse(smallSleep.elapsed);
-								    return g.try_lock(timeout);
-							    }
-							    return false;
-						    }))
+						if (!reacquire_lock(timeout, g, smallSleep.elapsed))
 						{
 							return nullptr;
 						}
@@ -300,13 +313,7 @@ namespace
 					return nullptr;
 				}
 				Debug::log("Woke from futex wake");
-				if (!with_interrupts_disabled([&]() {
-					    if (Capability{timeout}.is_valid())
-					    {
-						    return g.try_lock(timeout);
-					    }
-					    return false;
-				    }))
+				if (!reacquire_lock(timeout, g))
 				{
 					return nullptr;
 				}
