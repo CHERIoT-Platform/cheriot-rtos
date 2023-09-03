@@ -56,7 +56,7 @@ test("thread_pool")
 --     add_files("compartment_calls_inner_with_handler.cc")
 -- test("compartment_calls")
 compartment("dma")
-    add_files(path.join(sdkdir, "core/dma/dma_compartment.cc"))
+    add_files(path.join(sdkdir, "core/dma-v2/dma_compartment.cc"))
 
 test("dma")
 
@@ -110,13 +110,13 @@ firmware("test-suite")
                 entry_point = "thread_pool_run",
                 stack_size = 0x600,
                 trusted_stack_frames = 8
-            },
-            {
-                compartment = "thread_pool",
-                priority = 1,
-                entry_point = "thread_pool_run",
-                stack_size = 0x600,
-                trusted_stack_frames = 8
             }
+            -- {
+            --     compartment = "thread_pool",
+            --     priority = 1,
+            --     entry_point = "thread_pool_run",
+            --     stack_size = 0x600,
+            --     trusted_stack_frames = 8
+            -- }
         }, {expand = false})
     end)

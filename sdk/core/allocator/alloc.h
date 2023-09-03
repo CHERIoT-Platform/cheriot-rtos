@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "../dma-v2/platform-dma.hh"
 #include "alloc_config.h"
 #include "revoker.h"
 #include <algorithm>
@@ -20,6 +21,8 @@
 #include <strings.h>
 
 extern Revocation::Revoker revoker;
+
+Ibex::PlatformDMA platformDma;
 
 /// Do we have temporal safety support in hardware?
 constexpr bool HasTemporalSafety =
@@ -1161,6 +1164,8 @@ class MState
 	 */
 	int mspace_free(MChunkHeader &chunk, size_t bodySize)
 	{
+		Debug::log("Entered mspace");
+
 		// Expand the bounds of the freed object to the whole heap and set the
 		// address that we're looking at to the base of the requested
 		// capability.
@@ -1174,6 +1179,13 @@ class MState
 		 * the user capability (or its progeny) that undid our work of zeroing!
 		 */
 		revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
+		
+		/**
+		 * notify the DMA, so it can stop the transfer if its the DMA's source
+		 * and destination addresses that are freed. 
+		 */
+		platformDma.notify_the_dma();
+		Debug::log("freed address: {}", mem.address());
 
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk

@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <utils.hh>
 
+// Expose debugging features unconditionally for this compartment.
+using Debug = ConditionalDebug<true, "DMA Compartment">;
 
 DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(dmaInterruptCapability,
                                         dma,

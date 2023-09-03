@@ -7,10 +7,6 @@
 #include <debug.hh>
 #include <utils.hh>
 
-
-// Expose debugging features unconditionally for this compartment.
-using Debug = ConditionalDebug<true, "DMA Compartment">;
-
 namespace Ibex
 {
 	class PlatformDMA
@@ -71,6 +67,16 @@ namespace Ibex
 			 * we can fetch and transfer the data at different stride rates
 			 */
 			uint32_t targetStrides;
+			/**
+			 * Below is the capability for source and target addresses
+			 */
+			uint32_t sourceCapability;
+			uint32_t targetCapability;
+			/**
+			 * Below is the MMIO interface to tell the DMA that free() 
+			 * call occurred at the allocator compartment 
+			 */
+			uint32_t callFromMalloc;
 		};
 
 		__always_inline volatile DMAInterface &device()
@@ -135,10 +141,17 @@ namespace Ibex
 			device().sourceAddress = CHERI::Capability{sourceAddress}.address();
 			device().targetAddress = CHERI::Capability{targetAddress}.address();
 			device().lengthInBytes = lengthInBytes;
+			device().sourceCapability = CHERI::Capability{sourceAddress}.base();
+			device().targetCapability = CHERI::Capability{targetAddress}.base();
 
 			write_strides(sourceStrides, targetStrides);
 
 			swap_bytes_and_start_dma(byteSwapAmount);
+		}
+		
+		void notify_the_dma()
+		{
+			device().callFromMalloc = 1;
 		}
 
 		void reset_dma()

@@ -61,8 +61,10 @@ int launch_dma(uint32_t *sourceAddress,
 	 *
 	 *  This lock automatically unlocks at the end of this function.
 	 */
-	LockGuard g{dmaOwnershipLock};
 
+	LockGuard g{dmaOwnershipLock};
+	Debug::log("dma v1");
+	
 	/**
 	 *  If dma is already launched, we need to check for the interrupt status.
 	 *  No need for validity and permissions checks though for the scheduler
@@ -160,9 +162,12 @@ int launch_dma(uint32_t *sourceAddress,
 void internal_wait_and_reset_dma(uint32_t interruptNumber)
 {	
 	/**
-	 *  Resetting the claim pointers
-	 *  and cleaning up the dma registers.
-	 *
+	 *  Handle the interrupt here, once dmaFutex woke up via scheduler.
+	 *  DMA interrupt means that the dma operation is finished
+	 *  and it is time to reset and clear the dma configuration registers.
+	 */
+
+	/**
 	 *  Claim registers are meant to be
 	 *  cleared by every DMA operation,
 	 *  that is why we are explicitely resetting
@@ -172,14 +177,6 @@ void internal_wait_and_reset_dma(uint32_t interruptNumber)
 	/**
 	 *  However, clear only if the addresses are not reset yet.
 	 *  Because this function can be called from two different points
-	 */
-
-	/**
-	 *  Also, handle the interrupt here, once dmaFutex woke up via scheduler.
-	 *  DMA interrupt means that the dma operation is finished
-	 *  and it is time to reset and clear the dma configuration registers.
-	 *  Unlike with futex wait of other threads, as an occupying thread we
-	 *  wait indefinitely as much as needed for the dma completion
 	 */
 
 	static const uint32_t *dmaFutex =

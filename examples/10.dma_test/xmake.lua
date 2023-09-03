@@ -10,21 +10,20 @@ set_toolchains("cheriot-clang")
 includes(path.join(sdkdir, "lib/freestanding"),
          path.join(sdkdir, "lib/cxxrt"),
          path.join(sdkdir, "lib/atomic"),
-         path.join(sdkdir, "lib/crt"),
-         path.join(sdkdir, "lib/thread_pool"))
+         path.join(sdkdir, "lib/crt"))
 
 option("board")
     set_default("sail")
 
 compartment("dma")
-    add_files(path.join(sdkdir, "core/dma/dma_compartment.cc"))
+    add_files(path.join(sdkdir, "core/dma-v2/dma_compartment.cc"))
 
 compartment("dma_test")
-    add_files("dma-test.cc")
+    add_files("dma-test-v2.cc")
 
 -- Firmware image for the example.
-firmware("dma-test")
-    add_deps("crt", "cxxrt", "freestanding", "atomic_fixed", "thread_pool")
+firmware("dma-test-v2")
+    add_deps("crt", "cxxrt", "freestanding", "atomic_fixed")
     add_deps("dma", "dma_test")
     on_load(function(target)
         target:values_set("board", "$(board)")
@@ -35,20 +34,6 @@ firmware("dma-test")
                 entry_point = "test_dma",
                 stack_size = 0x1000,
                 trusted_stack_frames = 9
-            },
-            {
-                compartment = "thread_pool",
-                priority = 1,
-                entry_point = "thread_pool_run",
-                stack_size = 0x600,
-                trusted_stack_frames = 8
-            },
-            {
-                compartment = "thread_pool",
-                priority = 1,
-                entry_point = "thread_pool_run",
-                stack_size = 0x600,
-                trusted_stack_frames = 8
             }
         }, {expand = false})
     end)
