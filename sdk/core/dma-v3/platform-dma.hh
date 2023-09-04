@@ -15,39 +15,29 @@ namespace Ibex
 		struct DMAInterface
 		{
 			/**
-			 * Below is DMA control register address:
-			 *  - includes start('b0), endianness conversion('b1 and 2) and
-			 * reset bits('b3)
-			 *  - bit of index 1 and 2 are for enabling 2 and 4 byte swaps
-			 * respectively
-			 *  - start bit is meant to be set at the end while programming
-			 */
-			uint32_t control;
-			/**
-			 * Below is DMA status register address
-			 *  - first bit refers to halted status
-			 *  - 0 is for idle, and 1 for running
-			 */
-			uint32_t status;
-			/**
-			 * Below is DMA source address register address:
+			 * Below is DMA source capability register address:
 			 *  - here source address is where FROM the DMA should transfer the
 			 * data
 			 *  - it can be either memory buffer or MMAP-ed I/O device (i.e. any
 			 * peripheral or accelerator)
+			 *  - this capability also includes the both address and the access bits
+			 *  - regs 0 and 1 at hw
 			 */
-			uint32_t sourceAddress;
+			void* sourceCapability;
 			/**
-			 * Below is DMA target address register address:
+			 * Below is DMA target capability register address:
 			 *  - here target address is where TO the DMA should transfer the
 			 * data
 			 *  - it can be either memory buffer or MMAP-ed I/O device (i.e. any
 			 * peripheral or accelerator)
+			 *  - this capability also includes the both address and the access bits
+			 *  - regs 2 and 3 at hw
 			 */
-			uint32_t targetAddress;
+			void* targetCapability;
 			/**
 			 * Below is the amount of data IN BYTES that DMA should transfer
 			 * between the source and a target
+			 *  - regs 4 at hw
 			 */
 			uint32_t lengthInBytes;
 			/**
@@ -59,22 +49,37 @@ namespace Ibex
 			 *  - 1 is for 1 word skippal, and 2 for 2 before the next address
 			 *  - todo: more fine grain stride configurability (in term of
 			 * bytes) for the future?
+			 *  - regs 5 at hw
 			 */
 			uint32_t sourceStrides;
 			/**
 			 * Below is the amount of strides IN 4 BYTE WORDS for a target
 			 * address. The same as above but just for a target address. So that
 			 * we can fetch and transfer the data at different stride rates
+			 *  - regs 6 at hw
 			 */
 			uint32_t targetStrides;
 			/**
-			 * Below is the capability for source and target addresses
+			 * Below is DMA control register address:
+			 *  - includes start('b0), endianness conversion('b1 and 2) and
+			 * reset bits('b3)
+			 *  - bit of index 1 and 2 are for enabling 2 and 4 byte swaps
+			 * respectively
+			 *  - start bit is meant to be set at the end while programming
+			 *  - regs 7 at hw
 			 */
-			void* sourceCapability;
-			void* targetCapability;
+			uint32_t control;
+			/**
+			 * Below is DMA status register address
+			 *  - first bit refers to halted status
+			 *  - 0 is for idle, and 1 for running
+			 *  - regs 8 at hw
+			 */
+			uint32_t status;
 			/**
 			 * Below is the MMIO interface to tell the DMA that free() 
 			 * call occurred at the allocator compartment 
+			 *  - regs 9 at hw
 			 */
 			uint32_t callFromMalloc;
 		};
@@ -138,11 +143,9 @@ namespace Ibex
 			/**
 			 *  Setting source and target addresses, and length fields
 			 */
-			device().sourceAddress = CHERI::Capability{sourceAddress}.address();
-			device().targetAddress = CHERI::Capability{targetAddress}.address();
-			device().lengthInBytes = lengthInBytes;
 			device().sourceCapability = (void*) sourceAddress;
 			device().targetCapability = (void*) targetAddress;
+			device().lengthInBytes = lengthInBytes;
 
 			write_strides(sourceStrides, targetStrides);
 

@@ -1164,8 +1164,6 @@ class MState
 	 */
 	int mspace_free(MChunkHeader &chunk, size_t bodySize)
 	{
-		Debug::log("Entered mspace");
-
 		// Expand the bounds of the freed object to the whole heap and set the
 		// address that we're looking at to the base of the requested
 		// capability.
@@ -1184,7 +1182,7 @@ class MState
 		 * notify the DMA, so it can stop the transfer if its the DMA's source
 		 * and destination addresses that are freed. 
 		 */
-		platformDma.notify_the_dma();
+		// platformDma.notify_the_dma();
 		Debug::log("freed address: {}", mem.address());
 
 		/*

@@ -8,7 +8,7 @@
 #include <debug.hh>
 #include <utils.hh>
 
-#include <../../sdk/core/dma-v2/dma.h>
+#include <../../sdk/core/dma-v3/dma.h>
 
 // Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "DMA Compartment">;
@@ -16,7 +16,7 @@ using Debug = ConditionalDebug<true, "DMA Compartment">;
 // Thread entry point.
 void __cheri_compartment("dma_test") test_dma()
 {
-	Debug::log("DMA app entered, v3.3!");
+	Debug::log("DMA app entered, v3.0!");
 
 	// This is a dma process between two different memory addresses
 	uint32_t bytes    = 8096;
