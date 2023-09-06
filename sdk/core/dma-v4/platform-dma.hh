@@ -130,6 +130,7 @@ namespace Ibex
 			 *
 			 *  DMA controller should be able to fetch the data on its own
 			 */
+			dmaDescriptorPointer->control = 1;
 			device().dmaDescriptorPointer = dmaDescriptorPointer;
 		}
 		
@@ -138,7 +139,7 @@ namespace Ibex
 			device().callFromMalloc = 1;
 		}
 
-		void reset_dma(DMADescriptor *updatedDescriptorPointer)
+		void reset_dma(DMADescriptor *originalDescriptorPointer)
 		{
 			/**
 			 *  Setting a reset bit, which is bit 3.
@@ -151,7 +152,8 @@ namespace Ibex
 			 *  HW will check whether initiator and reset descriptor pointer
 			 *  are similar to guarantee the correctness
 			 */
-			device().dmaDescriptorPointer = updatedDescriptorPointer;
+			originalDescriptorPointer->control = 8;
+			device().dmaDescriptorPointer = originalDescriptorPointer;
 		}
 	};
 } // namespace Ibex

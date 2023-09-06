@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #define MALLOC_QUOTA 0x10000000
 
+#include <../../sdk/core/dma-v4/platform-dma.hh>
 #include <compartment.h>
 #include <cstdint>
 #include <cstdlib>
@@ -11,7 +12,9 @@
 #include <../../sdk/core/dma-v4/dma.h>
 
 // Expose debugging features unconditionally for this compartment.
-using Debug = ConditionalDebug<true, "DMA Compartment">;
+using Debug = ConditionalDebug<true, "DMA Driver">;
+
+using namespace Ibex;
 
 // Thread entry point.
 void __cheri_compartment("dma_test") test_dma()
@@ -32,6 +35,19 @@ void __cheri_compartment("dma_test") test_dma()
 		*(targetAddress + i)    = 0;
 	}
 
+	DMADescriptor *dmaDescriptorPointer = (DMADescriptor *) malloc(sizeof(DMADescriptor));
+
+	/**
+	 *  Set the configurations here,
+	 *  before sending the descriptor to the DMA
+	 */
+	dmaDescriptorPointer->sourceCapability = sourceAddress;
+	dmaDescriptorPointer->targetCapability = targetAddress;
+	dmaDescriptorPointer->lengthInBytes    = bytes;
+	dmaDescriptorPointer->sourceStrides    = 0;
+	dmaDescriptorPointer->targetStrides    = 0;
+	dmaDescriptorPointer->byteSwaps		   = byteSwap;
+
 	Debug::log("M:Ind: 0 and last, Source values BEFORE dma: {}, {}",
 	           *(sourceAddress),
 	           *(sourceAddress + words - 1));
@@ -41,8 +57,7 @@ void __cheri_compartment("dma_test") test_dma()
 
 	static DMA::Device dmaDevice;
 
-	int ret = dmaDevice.configure_and_launch(
-	sourceAddress, targetAddress, bytes, 0, 0, byteSwap);
+	int ret = dmaDevice.configure_and_launch(dmaDescriptorPointer);
 
 	Debug::log("Main, ret: {}", ret);
 

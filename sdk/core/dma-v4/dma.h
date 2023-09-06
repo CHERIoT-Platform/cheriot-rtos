@@ -1,4 +1,3 @@
-#include "dma_compartment.hh"
 #include "futex.h"
 #include "platform-dma.hh"
 #include <concepts>
@@ -9,7 +8,7 @@
 #include <utils.hh>
 
 // Expose debugging features unconditionally for this compartment.
-using Debug = ConditionalDebug<true, "DMA Compartment">;
+using Debug = ConditionalDebug<true, "DMA Driver">;
 
 DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(dmaInterruptCapability,
                                         dma,
@@ -17,6 +16,8 @@ DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(dmaInterruptCapability,
                                         true);
 
 using namespace Ibex;
+
+Ibex::PlatformDMA platformDma;
 
 namespace DMA
 {
@@ -40,12 +41,7 @@ namespace DMA
 	class GenericDMA : public PlatformDMA
 	{
 		public:
-		int configure_and_launch(void *sourceAddress,
-		                         void *targetAddress,
-		                         uint32_t  lengthInBytes,
-		                         uint32_t  sourceStrides,
-		                         uint32_t  targetStrides,
-		                         uint32_t  byteSwapAmount)
+		int configure_and_launch(DMADescriptor *dmaDescriptorPointer)
 		{
 			/**
 			 *  Dma launch call:
@@ -56,37 +52,46 @@ namespace DMA
 			 *    at the end of the transfer.
 			 */
 			Debug::log("before launch");
+
+			platformDma.write_conf_and_start(dmaDescriptorPointer);
+
+			static const uint32_t *dmaFutex =
+	  		interrupt_futex_get(STATIC_SEALED_VALUE(dmaInterruptCapability));
+
+			uint32_t currentInterruptCounter = *dmaFutex;
+
+			Debug::log("after launch: {}", currentInterruptCounter);
 			
-			DMADescriptor *dmaDescriptorPointer;
-
-			/**
-			 *  Set the configurations here,
-			 *  before sending the descriptor to the DMA
-			 */
-			dmaDescriptorPointer->sourceCapability = sourceAddress;
-			dmaDescriptorPointer->targetCapability = targetAddress;
-			dmaDescriptorPointer->lengthInBytes    = lengthInBytes;
-			dmaDescriptorPointer->sourceStrides    = sourceStrides;
-			dmaDescriptorPointer->targetStrides    = targetStrides;
-			dmaDescriptorPointer->byteSwaps		   = byteSwapAmount;
-
-			int dmaInterruptReturn = launch_dma(dmaDescriptorPointer);
-
-			Debug::log("after launch: {}", dmaInterruptReturn);
-
-			int freeStatus;
-			freeStatus = free(sourceAddress);
-			Debug::log("driver, freeStatus: {}", freeStatus);
-
-			if (dmaInterruptReturn < 0) 
-			{
-				return -EINVAL;
-			}
+			// int freeStatus;
+			// freeStatus = free(sourceAddress);
+			// Debug::log("driver, freeStatus: {}", freeStatus);
 
 			// todo: implement a do-while loop later in case!
-			int restartReturn = wait_and_reset_dma(dmaInterruptReturn, dmaDescriptorPointer);
 
-			Debug::log("after restart: {}", restartReturn);
+			Timeout t{10};
+			futex_timed_wait(&t, dmaFutex, currentInterruptCounter);
+
+			int startedStatus = dmaDescriptorPointer->status;
+
+			if (startedStatus == 1)
+			{
+				/**
+				*  Resetting the dma registers
+				*  todo: we need some check here to avoid double checks
+				*/
+				Debug::log("inside the reset condition");
+
+				platformDma.reset_dma(dmaDescriptorPointer);
+
+				/**
+				*  Acknowledging interrupt here irrespective of the reset status
+				*/
+				interrupt_complete(STATIC_SEALED_VALUE(dmaInterruptCapability));
+
+				return 0;
+			}
+
+			Debug::log("after restart");
 
 			return 0;
 		}
