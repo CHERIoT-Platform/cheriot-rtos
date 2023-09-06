@@ -89,22 +89,12 @@ int launch_dma(uint32_t *sourceAddress,
 	  "ExpectedValue is not equal to the current interrupt counter!");
 
 	/**
-	 *  return if sufficient permissions are not present
-	 *  and if not long enough
+	 *  No checks at the driver at this version.
+	 *
+	 *  So, once returned after interrupt and reset, if any,
+	 *  we write to the DMA and start the transfer 
 	 */
 
-	if (!check_pointer<PermissionSet{Permission::Load, Permission::Global}>(
-	      sourceAddress, lengthInBytes) ||
-	    !check_pointer<PermissionSet{Permission::Store, Permission::Global}>(
-	      targetAddress, lengthInBytes))
-	{
-		return -EINVAL;
-	}
-
-	/**
-	 *  After passing all the checks,
-	 *  we can reset the alreadyReset value
-	 */
 	alreadyReset = 0;
 
 	platformDma.write_conf_and_start(sourceAddress,
