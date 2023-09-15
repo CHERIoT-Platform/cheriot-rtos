@@ -1025,21 +1025,28 @@ namespace CHERI
 		 * for each call site and a direct call.  In a future version, this may
 		 * be moved to a separate library to further reduce code size.
 		 */
+		template<bool CheckStack>
 		__noinline inline bool check_pointer_internal(const void *ptr,
 		                                              size_t      space,
 		                                              uint32_t rawPermissions)
 		{
 			auto permissions = PermissionSet::from_raw(rawPermissions);
 			Capability<const void> cap{ptr};
-			void                  *csp;
-			__asm__ volatile("cmove %0, csp" : "=C"(csp));
-			Capability<void> stack{csp};
-			bool             isValid = cap.is_valid() && !cap.is_sealed();
-			// The base of the capability is <= the top, so as long as either
-			// the top is below the current stack or the base is above, then it
-			// is in bounds.
-			isValid &=
-			  (cap.top() <= stack.base()) || (cap.base() >= stack.top());
+			bool                   isValid = cap.is_valid() && !cap.is_sealed();
+			// Skip the stack check if we're requiring a global capability.  By
+			// construction, such a thing cannot be derived from the stack
+			// pointer.
+			if constexpr (CheckStack)
+			{
+				void *csp;
+				__asm__ volatile("cmove %0, csp" : "=C"(csp));
+				Capability<void> stack{csp};
+				// The base of the capability is <= the top, so as long as
+				// either the top is below the current stack or the base is
+				// above, then it is in bounds.
+				isValid &=
+				  (cap.top() <= stack.base()) || (cap.base() >= stack.top());
+			}
 			isValid &= cap.bounds() >= space;
 			// Check that we have, at least, the required permissions
 			isValid &= permissions.can_derive_from(cap.permissions());
@@ -1056,7 +1063,8 @@ namespace CHERI
 	         typename T                = void>
 	__always_inline inline bool check_pointer(T *ptr, size_t space = sizeof(T))
 	{
-		return detail::check_pointer_internal(ptr, space, Permissions.as_raw());
+		return detail::check_pointer_internal<!Permissions.contains(
+		  Permission::Global)>(ptr, space, Permissions.as_raw());
 	}
 
 	/**
