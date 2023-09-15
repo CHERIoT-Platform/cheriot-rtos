@@ -27,7 +27,10 @@ namespace sched
 		 *
 		 * This count does not include the idle thread.
 		 */
-		inline static int threadCount = CONFIG_THREADS_NUM;
+		inline static uint16_t threadCount = CONFIG_THREADS_NUM;
+
+		static_assert(CONFIG_THREADS_NUM <
+		              std::numeric_limits<decltype(threadCount)>::max());
 
 		public:
 		struct EventBits
@@ -105,6 +108,21 @@ namespace sched
 			current = priorityList[highestPriority];
 			if (current)
 			{
+				Debug::Assert(highestPriority == current->priority,
+				              "Thread {} is on the run queue for priority {}, "
+				              "but is currently priority {} (originally {})",
+				              current->threadId,
+				              highestPriority,
+				              current->priority,
+				              current->OriginalPriority);
+				if (current->priority != current->OriginalPriority)
+				{
+					Debug::log(
+					  "Running thread {} with boosted priority ({} from {})",
+					  current->id_get(),
+					  current->priority,
+					  current->OriginalPriority);
+				}
 				currentThreadId = current->threadId;
 				return current->tStackPtr;
 			}
@@ -183,11 +201,14 @@ namespace sched
 		ThreadImpl(TrustedStack *tstack, uint16_t threadid, uint16_t priority)
 		  : threadId(threadid),
 		    priority(priority),
+		    OriginalPriority(priority),
 		    expiryTime(-1),
 		    state(ThreadState::Suspended),
 		    sleepQueue(nullptr),
 		    tStackPtr(tstack)
 		{
+			static_assert(NPrios <
+			              std::numeric_limits<decltype(priority)>::max());
 			// All threads are created in blocked state.
 			timer_list_insert(&waitingList);
 		}
@@ -280,23 +301,7 @@ namespace sched
 			              state);
 			list_remove(&priorityList[priority]);
 			state = ThreadState::Suspended;
-			if (priorityList[priority] == nullptr)
-			{
-				// We just suspended the last ready thread at this priority.
-				priorityMap &= ~(1U << priority);
-				if (priorityMap == 0)
-				{
-					highestPriority = 0;
-				}
-				else
-				{
-					// clz is only for 32-bit.
-					static_assert(NPrios == 32);
-					uint16_t topZeroes = clz(priorityMap);
-
-					highestPriority = NPrios - 1 - topZeroes;
-				}
-			}
+			priority_map_remove();
 			if (newSleepQueue != nullptr)
 			{
 				list_insert(newSleepQueue);
@@ -306,6 +311,53 @@ namespace sched
 			  (waitTicks == UINT32_MAX ? -1 : ticksSinceBoot + waitTicks);
 
 			timer_list_insert(&waitingList);
+		}
+
+		/**
+		 * Boost the thread's thread to `newPriority` if that is larger than
+		 * the original priority or reset to the original priority if not.
+		 */
+		void priority_boost(uint8_t newPriority)
+		{
+			newPriority = std::max(newPriority, OriginalPriority);
+			if (newPriority == priority)
+			{
+				return;
+			}
+			// If this thread is currently runnable, move it to the right run
+			// queue.
+			if (state == ThreadState::Ready)
+			{
+				list_remove(&priorityList[priority]);
+				list_insert(&priorityList[newPriority]);
+				priorityMap |= 1U << newPriority;
+				priority_map_remove();
+			}
+			// Sleep queues are sorted by priority.  If we're on a sleep queue,
+			// remove ourself and add ourself back in the right place.
+			if (sleepQueue != nullptr)
+			{
+				list_remove(sleepQueue);
+			}
+			priority = newPriority;
+			if (sleepQueue != nullptr)
+			{
+				list_insert(sleepQueue);
+			}
+		}
+
+		/**
+		 * Returns true if this thread is running with the highest priority of
+		 * any runnable threads.
+		 */
+		bool is_highest_priority()
+		{
+			Debug::Assert(priority <= highestPriority,
+			              "Priority ({}) should not be higher than the highest "
+			              "priority ({})!",
+			              priority,
+			              highestPriority);
+			return priority == highestPriority;
 		}
 
 		/**
@@ -470,7 +522,7 @@ namespace sched
 			return threadId;
 		}
 
-		uint16_t priority_get()
+		uint8_t priority_get()
 		{
 			return priority;
 		}
@@ -512,11 +564,25 @@ namespace sched
 			/// right after waking up (but before clearing the bits if
 			/// clearOnExit is set). 0 if it's woken up due to timer expiry.
 			EventBits eventWaitBits;
-			/**
-			 * If this thread is blocked on a futex, this holds the address of
-			 * the futex.  This is set to 0 if woken via timeout.
-			 */
-			ptraddr_t futexWaitAddress;
+			/// State associated with waiting on a futex.
+			struct
+			{
+				/**
+				 * If this thread is blocked on a futex, this holds the address
+				 * of the futex.  This is set to 0 if woken via timeout.
+				 */
+				ptraddr_t futexWaitAddress;
+				/**
+				 * The thread that we're priority boosting.  This is ignored if
+				 * `futexPriorityInheriting` is false.
+				 */
+				uint16_t futexPriorityBoostedThread : 16;
+				/**
+				 * If this thread is waiting on a futex, should it be priority
+				 * boosting the current holder of the futex?
+				 */
+				bool futexPriorityInheriting : 1;
+			};
 			/**
 			 * If this thread is blocked on a multiwaiter, this holds the
 			 * address of the multiwaiter object.
@@ -538,6 +604,32 @@ namespace sched
 		}
 
 		private:
+		/**
+		 * Helper to remove a thread from the priority map and update the
+		 * highest priority, if it was the last runnable thread at that
+		 * priority level.
+		 */
+		void priority_map_remove()
+		{
+			if (priorityList[priority] == nullptr)
+			{
+				// We just removed the last ready thread at this priority.
+				priorityMap &= ~(1U << priority);
+				if (priorityMap == 0)
+				{
+					highestPriority = 0;
+				}
+				else
+				{
+					// clz is only for 32-bit.
+					static_assert(NPrios <= 32);
+					uint_fast16_t topZeroes = clz(priorityMap);
+
+					highestPriority = NPrios - 1 - topZeroes;
+				}
+			}
+		}
+
 		/// the current runnning thread
 		static inline ThreadImpl *current;
 		/// The ID of the current thread.
@@ -550,9 +642,15 @@ namespace sched
 		/// the highest priority of all the current threads that are ready
 		static inline uint16_t highestPriority;
 
-		uint16_t    threadId;
-		uint16_t    priority;
-		ThreadState state;
+		uint16_t threadId;
+		/**
+		 * The current priority level for this thread.  This may be influenced
+		 * by priority inheritance.
+		 */
+		uint8_t priority;
+		/// The original priority level for this thread.  This never changes.
+		const uint8_t OriginalPriority;
+		ThreadState   state;
 	};
 
 	using Thread = ThreadImpl<ThreadPrioNum>;

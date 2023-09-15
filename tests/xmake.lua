@@ -91,7 +91,7 @@ firmware("test-suite")
         target:values_set("threads", {
             {
                 compartment = "test_runner",
-                priority = 2,
+                priority = 3,
                 entry_point = "run_tests",
                 stack_size = 0x600,
                 -- This must be an odd number for the trusted stack exhaustion
@@ -100,7 +100,7 @@ firmware("test-suite")
             },
             {
                 compartment = "thread_pool",
-                priority = 1,
+                priority = 2,
                 entry_point = "thread_pool_run",
                 stack_size = 0x600,
                 trusted_stack_frames = 8

@@ -82,22 +82,22 @@ class RingBuffer
 	 */
 	void push(Message &&message)
 	{
-		LockGuard g{pushLock};
-		// Wait for the queue to not be full
-		while (is_full())
+		bool wasEmpty;
 		{
-			futex_wait(reinterpret_cast<uint32_t *>(&consumer),
-			           producer - BufferSize);
+			LockGuard g{pushLock};
+			// Wait for the queue to not be full
+			while (is_full())
+			{
+				consumer.wait(producer - BufferSize);
+			}
+			auto i   = counter_to_index(producer);
+			ring[i]  = std::move(message);
+			wasEmpty = is_empty();
+			producer++;
 		}
-		auto i        = counter_to_index(producer);
-		ring[i]       = std::move(message);
-		bool wasEmpty = is_empty();
-		producer++;
-		g.unlock();
 		if (wasEmpty)
 		{
-			futex_wake(reinterpret_cast<uint32_t *>(&producer),
-			           std::numeric_limits<uint32_t>::max());
+			producer.notify_all();
 		}
 	}
 
@@ -106,22 +106,23 @@ class RingBuffer
 	 */
 	Message pop()
 	{
-		Message   result;
-		LockGuard g{popLock};
-		// Wait for the queue to not be full
-		while (is_empty())
+		Message result;
+		bool    wasFull;
 		{
-			futex_wait(reinterpret_cast<uint32_t *>(&producer), consumer);
+			LockGuard g{popLock};
+			// Wait for the queue to not be empty
+			while (is_empty())
+			{
+				producer.wait(consumer);
+			}
+			auto i  = counter_to_index(consumer);
+			result  = std::move(ring[i]);
+			wasFull = is_full();
+			consumer++;
 		}
-		auto i       = counter_to_index(consumer);
-		result       = std::move(ring[i]);
-		bool wasFull = is_full();
-		consumer++;
-		g.unlock();
 		if (wasFull)
 		{
-			futex_wake(reinterpret_cast<uint32_t *>(&consumer),
-			           std::numeric_limits<uint32_t>::max());
+			consumer.notify_all();
 		}
 		return result;
 	}

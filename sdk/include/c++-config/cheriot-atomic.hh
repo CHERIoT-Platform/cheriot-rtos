@@ -256,16 +256,25 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace cheriot
 				           reinterpret_cast<uint32_t>(as_underlying(old)));
 			}
 
-			__always_inline void
-			wait(Timeout     *timeout,
-			     T            old,
-			     memory_order order = memory_order::seq_cst) const noexcept
+			__always_inline int
+			wait(Timeout       *timeout,
+			     T              old,
+			     memory_order   order = memory_order::seq_cst,
+			     FutexWaitFlags flags = FutexNone) const noexcept
 			  requires(sizeof(T) == sizeof(uint32_t))
 			{
-				futex_timed_wait(
+				return futex_timed_wait(
 				  timeout,
 				  reinterpret_cast<const uint32_t *>(&value),
-				  reinterpret_cast<uint32_t>(as_underlying(old)));
+				  static_cast<uint32_t>(as_underlying(old)),
+				  flags);
+			}
+
+			__always_inline int
+			wait(Timeout *timeout, T old, FutexWaitFlags flags) const noexcept
+			  requires(sizeof(T) == sizeof(uint32_t))
+			{
+				return wait(timeout, old, memory_order::seq_cst, flags);
 			}
 
 			__always_inline void
@@ -289,7 +298,8 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace cheriot
 			__always_inline void notify_all() noexcept
 			  requires(sizeof(T) == sizeof(uint32_t))
 			{
-				futex_wake(&value, std::numeric_limits<uint32_t>::max());
+				futex_wake(reinterpret_cast<uint32_t *>(&value),
+				           std::numeric_limits<uint32_t>::max());
 			}
 			__always_inline void notify_all() volatile noexcept
 			  requires(sizeof(T) == sizeof(uint32_t))

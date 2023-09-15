@@ -51,7 +51,7 @@ namespace
 	 * allocation fails for transient reasons then the lock will be dropped and
 	 * reacquired over the yield.
 	 */
-	FlagLock lock;
+	FlagLockPriorityInherited lock;
 
 	/**
 	 * @brief Take a memory region and initialise a memory space for it. The
@@ -115,7 +115,7 @@ namespace
 	 * Futex value to allow a thread to wait for another thread to free an
 	 * object.
 	 */
-	uint32_t freeFutex;
+	cheriot::atomic<int32_t> freeFutex = -1;
 
 	/**
 	 * Helper that returns true if the timeout value permits sleeping.
@@ -297,15 +297,17 @@ namespace
 				Debug::log("Not enough free space to handle {}-byte "
 				           "allocation, sleeping",
 				           bytes);
+				// Use the current free space as the sleep futex value.  This
+				// means that the `wait` call will fail if the amount of free
+				// memory changes between dropping the lock and waiting, unless
+				// a matched number of allocations and frees happen (in which
+				// case, we're happy to sleep because we still can't manage
+				// this allocation).
+				auto expected = gm->heapFreeSize;
+				freeFutex     = expected;
 				// Drop the lock while yielding
 				g.unlock();
-				auto err = futex_timed_wait(timeout, &freeFutex, ++freeFutex);
-				Debug::Assert(
-				  err != -EINVAL,
-				  "Invalid arguments to futex_timed_wait({}, {}, {})",
-				  &freeFutex,
-				  freeFutex,
-				  timeout);
+				auto err = freeFutex.wait(timeout, expected);
 				// If we timed out, we don't need to reacquire the lock, just
 				// exit
 				if (err == -ETIMEDOUT)
@@ -863,11 +865,11 @@ int heap_free(SObj heapCapability, void *rawPointer)
 	}
 
 	// If there are any threads blocked allocating memory, wake them up.
-	if (freeFutex > 0)
+	if (freeFutex != -1)
 	{
 		Debug::log("Some threads are blocking on allocations, waking them");
-		freeFutex = 0;
-		futex_wake(&freeFutex, -1);
+		freeFutex = -1;
+		freeFutex.notify_all();
 	}
 
 	return 0;
@@ -905,7 +907,7 @@ ssize_t heap_free_all(SObj heapCapability)
 	{
 		Debug::log("Some threads are blocking on allocations, waking them");
 		freeFutex = 0;
-		futex_wake(&freeFutex, -1);
+		freeFutex.notify_all();
 	}
 
 	return freed;

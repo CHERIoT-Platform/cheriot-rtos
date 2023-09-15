@@ -76,7 +76,11 @@ __END_DECLS
  */
 inline uint16_t thread_id_get_fast()
 {
-	static auto *ptr = thread_id_get_pointer();
+	static uint16_t *ptr;
+	if (!ptr)
+	{
+		ptr = thread_id_get_pointer();
+	}
 	return *ptr;
 }
 #endif
