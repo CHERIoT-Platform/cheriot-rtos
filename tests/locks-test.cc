@@ -15,8 +15,9 @@ using namespace thread_pool;
 namespace
 {
 
-	FlagLock   flagLock;
-	TicketLock ticketLock;
+	FlagLock                  flagLock;
+	FlagLockPriorityInherited flagLockPriorityInherited;
+	TicketLock                ticketLock;
 
 	cheriot::atomic<bool> modified;
 	cheriot::atomic<int>  counter;
@@ -58,7 +59,10 @@ namespace
 		Timeout t{1};
 		TEST(lock.try_lock(&t) == false,
 		     "Trying to acquire lock spuriously succeeded");
-		TEST(t.elapsed >= 1, "Sleep slept for {} ticks", t.elapsed);
+		if constexpr (!std::is_same_v<Lock, FlagLockPriorityInherited>)
+		{
+			TEST(t.elapsed >= 1, "Sleep slept for {} ticks", t.elapsed);
+		}
 	}
 
 } // namespace
@@ -66,9 +70,12 @@ namespace
 void test_locks()
 {
 	test_lock(flagLock);
+	test_lock(flagLockPriorityInherited);
 	test_lock(ticketLock);
 	test_trylock(flagLock);
+	test_trylock(flagLockPriorityInherited);
 
+	debug_log("Starting ticket-lock ordering tests");
 	// Test that the ticket lock gives the ordering guarantees that it should.
 	{
 		LockGuard g{ticketLock};
