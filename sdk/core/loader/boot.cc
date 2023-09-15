@@ -538,10 +538,6 @@ namespace
 			return buildMMIO();
 		}
 
-		// Privileged compartments don't have sealed objects.
-		if constexpr (!std::is_same_v<
-		                std::remove_cvref_t<decltype(sourceCompartment)>,
-		                ImgHdr::PrivilegedCompartment>)
 		{
 			if (contains(sourceCompartment.sealedObjects, target, size))
 			{

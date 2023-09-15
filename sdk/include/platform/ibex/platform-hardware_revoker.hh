@@ -5,6 +5,8 @@
 
 #include <cdefs.h>
 #include <compartment-macros.h>
+#include <futex.h>
+#include <interrupt.h>
 #include <riscvreg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -13,6 +15,10 @@
 #	error Memory map was not configured with a revoker device
 #endif
 
+DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(revokerInterruptCapability,
+                                        RevokerInterrupt,
+                                        true,
+                                        true);
 namespace Ibex
 {
 	class HardwareRevoker
@@ -37,6 +43,21 @@ namespace Ibex
 			 * start the revoker.
 			 */
 			uint32_t control;
+			/**
+			 * Padding to ensure that the later fields are at the correct
+			 * location
+			 */
+			uint32_t unused;
+			/**
+			 * Interrupt status word.  Reading this will return 0 if an
+			 * interrupt has not been requested, 1 otherwise.
+			 */
+			uint32_t interruptStatus;
+			/**
+			 * Interrupt request word.  Writing 1 here requests an interrupt to
+			 * fire when the current revocation has completed.
+			 */
+			uint32_t interruptRequested;
 		};
 
 		/**
@@ -81,6 +102,8 @@ namespace Ibex
 #endif
 		}
 
+		static inline const uint32_t *interruptFutex;
+
 		public:
 		/**
 		 * This is an asynchronous hardware revoker.
@@ -116,6 +139,9 @@ namespace Ibex
 			                 base,
 			                 top);
 #endif
+			// Get a pointer to the futex that we use to wait for interrupts.
+			interruptFutex = interrupt_futex_get(
+			  STATIC_SEALED_VALUE(revokerInterruptCapability));
 		}
 
 		/**
@@ -160,6 +186,43 @@ namespace Ibex
 			// The epoch has started, don't bother asking the device for a new
 			// value because we know it will be the last value + 1.
 			epoch++;
+		}
+
+		/**
+		 * Block until the revocation epoch specified by `epoch` has completed.
+		 */
+		bool wait_for_completion(Timeout *timeout, uint32_t epoch)
+		{
+			uint32_t interruptValue;
+			do
+			{
+				// Read the current interrupt futex word.  We want to retry if
+				// an interrupt happens after this point.
+				interruptValue = *interruptFutex;
+				// Make sure that the compiler doesn't reorder the read of the
+				// futex word with respect to the read of the revocation epoch.
+				__c11_atomic_signal_fence(__ATOMIC_SEQ_CST);
+				// If the requested epoch has finished, return success.
+				if (has_revocation_finished_for_epoch<true>(epoch))
+				{
+					return true;
+				}
+				// Request the interrupt
+				revoker_device().interruptRequested = 1;
+				// There is a possible race: if the revocation pass finished
+				// before we requested the interrupt, we won't get the
+				// interrupt.  Check again before we wait.
+				if (has_revocation_finished_for_epoch<true>(epoch))
+				{
+					return true;
+				}
+				// If the epoch hasn't finished, wait for an interrupt to fire
+				// and retry.
+			} while (
+			  futex_timed_wait(timeout, interruptFutex, interruptValue) == 0);
+			// Futex wait failed.  This could be a timeout or an invalid
+			// timeout parameter, we fail either way.
+			return false;
 		}
 	};
 } // namespace Ibex
