@@ -312,8 +312,13 @@ rule("firmware")
 			add_defines("SIMULATION")
 		end
 
+		local loader = target:deps()['cheriot.loader'];
+
 		if board.stack_high_water_mark then
 			add_defines("CONFIG_MSHWM")
+		else
+			-- If we don't have the stack high watermark, the trusted stack is smaller.
+			loader:set('loader_trusted_stack_size', 168)
 		end
 
 		-- Build the MMIO space for the board
@@ -373,13 +378,12 @@ rule("firmware")
 			target:deps()[target:name() .. ".scheduler"]:add('defines', interruptConfiguration)
 		end
 
-		local loader = target:deps()['cheriot.loader'];
 		local loader_stack_size = loader:get('loader_stack_size')
 		local loader_trusted_stack_size = loader:get('loader_trusted_stack_size')
+		loader:add('defines', "CHERIOT_LOADER_TRUSTED_STACK_SIZE=" .. loader_trusted_stack_size)
 
 		-- Get the threads config and prepare the predefined macros that describe them
 		local threads = target:values("threads")
-
 
 		-- Declare space and start and end symbols for a thread's C stack
 		local thread_stack_template =
@@ -674,7 +678,6 @@ target("cheriot.loader")
 			-- Size in bytes of the loader's stack.
 			loader_stack_size = 1024
 		}
-		target:add('defines', "CHERIOT_LOADER_TRUSTED_STACK_SIZE=" .. config.loader_trusted_stack_size)
 		target:add('defines', "CHERIOT_LOADER_STACK_SIZE=" .. config.loader_stack_size)
 		target:set('cheriot_loader_config', config)
 		for k, v in pairs(config) do
