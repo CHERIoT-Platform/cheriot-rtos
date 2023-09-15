@@ -310,8 +310,11 @@ namespace Revocation
 		static constexpr bool IsAsynchronous = false;
 		void                  init() {}
 		void                  shadow_paint_single(size_t, bool) {}
-		void                  shadow_paint_range(size_t, size_t, bool) {}
-		uint32_t              system_epoch_get()
+		template<bool Fill>
+		void shadow_paint_range(size_t, size_t)
+		{
+		}
+		uint32_t system_epoch_get()
 		{
 			return 0;
 		}
