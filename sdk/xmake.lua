@@ -375,8 +375,16 @@ rule("firmware")
 
 		local loader = target:deps()['cheriot.loader'];
 
+		if board.fast_stack_zeroing and not board.stack_high_water_mark then
+			error("Fast stack zeroing requires the stack high-water mark")
+		end
 		if board.stack_high_water_mark then
-			add_defines("CONFIG_MSHWM")
+			add_defines("CHERIOT_HAS_MSHWM")
+			if (board.fast_stack_zeroing) then
+				add_defines("CHERIOT_HAS_ZTOP")
+				-- If we have ztop, we need space to spill and reload it.
+				loader:set('loader_trusted_stack_size', loader:get('loader_trusted_stack_size') + 8)
+			end
 		else
 			-- If we don't have the stack high watermark, the trusted stack is smaller.
 			loader:set('loader_trusted_stack_size', 176)

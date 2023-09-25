@@ -873,7 +873,7 @@ namespace
 			threadTStack->mstatus =
 			  (priv::MSTATUS_MPIE |
 			   (priv::MSTATUS_PRV_M << priv::MSTATUS_MPP_SHIFT));
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 			threadTStack->mshwm  = stack.top();
 			threadTStack->mshwmb = stack.base();
 #endif

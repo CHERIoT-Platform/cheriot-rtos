@@ -20,14 +20,21 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStack, c13, 13 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, c14, 14 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, c15, 15 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, hazardPointers, 16 * 8)
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, mstatus, 17 * 8)
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, mcause, (17 * 8) + 4)
-#ifdef CONFIG_MSHWM
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwm, 18 * 8)
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwmb, (18 * 8) + 4)
-
+#ifdef CHERIOT_HAS_ZTOP
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, ztop, 17 * 8)
+#	define TSTACK_ZTOP_WORDS 1
+#else
+#	define TSTACK_ZTOP_WORDS 0
+#endif
+EXPORT_ASSEMBLY_OFFSET(TrustedStack,
+                       mstatus,
+                       (17 + TSTACK_ZTOP_WORDS) * 8)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mcause, TrustedStack_offset_mstatus + 4)
+#ifdef CHERIOT_HAS_MSHWM
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwm, (18 + TSTACK_ZTOP_WORDS) * 8)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwmb, TrustedStack_offset_mshwm + 4)
 // Size of everything up to this point
-#	define TSTACK_REGFRAME_SZ (19 * 8)
+#	define TSTACK_REGFRAME_SZ ((19 + TSTACK_ZTOP_WORDS) * 8)
 // frameoffset, inForcedUnwind and padding
 #	define TSTACK_HEADER_SZ 16
 #else

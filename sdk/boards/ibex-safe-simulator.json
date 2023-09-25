@@ -47,6 +47,7 @@
     "tickrate_hz" : 10,
     "revoker" : "hardware",
     "stack_high_water_mark" : true,
+    "fast_stack_zeroing" : true,
     "simulation": true,
     "simulator" : "${sdk}/../scripts/run-ibex-safe-sim.sh"
 }
