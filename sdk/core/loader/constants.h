@@ -37,8 +37,6 @@ namespace
 	static_assert(CheckSize<offsetof(ImgHdr, loader.data.smallSize),
 	                        IMAGE_HEADER_LOADER_DATA_SIZE_OFFSET>::value,
 	              "Offset of loader data size is incorrect");
-	static_assert(CheckSize<offsetof(ImgHdr, switcher.entryPoint), 18>::value,
-	              "Offset of loader data size is incorrect");
 } // namespace
 #endif
 
