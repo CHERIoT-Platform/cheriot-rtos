@@ -1061,9 +1061,17 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 
 	auto switcherPCC = build<void, Root::Type::Execute, SwitcherPccPermissions>(
 	  imgHdr.switcher.code);
+	// The switcher entry point is currently not an import table entry in
+	// compartments, the linker script inserts it as the first element.  Making
+	// it a normal import will require a small compiler change.  It is now
+	// exposed as a normal export, which enables exporting other things from
+	// the switcher later.
 	Debug::log("Setting compartment switcher");
-	switcherPCC.address() = imgHdr.switcher.entry_point();
-	switcherPCC           = seal_entry(switcherPCC, InterruptStatus::Disabled);
+	auto switcherEntry = build<ExportEntry>(imgHdr.switcher.exportTable.start() + 20, imgHdr.switcher.exportTable.size());
+	switcherPCC.address() =
+	  switcherPCC.base() + switcherEntry->functionStart;
+	Debug::log("Setting compartment switcher address: {}", switcherPCC.address());
+	switcherPCC = seal_entry(switcherPCC, InterruptStatus::Disabled);
 
 	auto setSealingKey =
 	  [](const auto   &compartment,
@@ -1124,7 +1132,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 
 	// Helper to construct a writeable pointer to an export table.
 	auto getExportTableHeader = [](const auto &range) {
-		auto header = build<ExportTableHeader>(range);
+		auto header = build<ExportTable>(range);
 		Debug::Invariant(((header.address()) & 0x7) == 0,
 		                 "Export table {} is not capability aligned\n",
 		                 header);

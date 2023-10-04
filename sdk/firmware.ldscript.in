@@ -36,6 +36,10 @@ SECTIONS
 		*/cheriot.token_library.library(.compartment_export_table);
 		.token_library_export_table_end = .;
 
+		.switcher_export_table = ALIGN(8);
+		*/switcher/entry.S.o(.compartment_export_table);
+		.switcher_export_table_end = .;
+
 		@compartment_exports@
 	}
 
@@ -45,7 +49,7 @@ SECTIONS
 	compartment_switcher_code : CAPALIGN
 	{
 		.compartment_switcher_start = .;
-		*/switcher/*.o(.text);
+		*/switcher/entry.S.o(.text);
 	}
 	.compartment_switcher_end = .;
 
@@ -68,6 +72,7 @@ SECTIONS
 	}
 	.allocator_end = .;
 
+
 	token_library_code : CAPALIGN
 	{
 		.token_library_start = .;
@@ -77,6 +82,7 @@ SECTIONS
 		*/cheriot.token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
 	}
 	.token_library_end = .;
+
 
 	@software_revoker_code@
 
@@ -165,8 +171,6 @@ SECTIONS
 		LONG(.compartment_switcher_start);
 		# Compartment switcher end
 		SHORT(.compartment_switcher_end - .compartment_switcher_start);
-		# Compartment switcher entry point offset
-		SHORT(compartment_switcher_entry - .compartment_switcher_start);
 		# Compartment switcher sealing key
 		SHORT(compartment_switcher_sealing_key - .compartment_switcher_start);
 		# Switcher's copy of the scheduler's PCC.
@@ -175,6 +179,10 @@ SECTIONS
 		SHORT(switcher_scheduler_entry_cgp - .compartment_switcher_start);
 		# Switcher's copy of the scheduler's CSP
 		SHORT(switcher_scheduler_entry_csp - .compartment_switcher_start);
+		# Address of switcher export table
+		LONG(.switcher_export_table);
+		# Size of the switcher export table
+		SHORT(.switcher_export_table_end - .switcher_export_table);
 
 		# sdk/core/loader/types.h:/PrivilegedCompartment
 		# Scheduler code start address
@@ -234,8 +242,12 @@ SECTIONS
 
 		@software_revoker_header@
 
-		# Magic number
-		LONG(0x43f6af90);
+		# sdk/core/loader/types.h:/is_magic_valid
+		# Magic number, used to detect mismatches between linker script and
+		# loader versions.
+		# New versions of this can be generated with:
+		# head /dev/random | shasum | cut -c 0-8
+		LONG(0x6cef3879);
 		# Number of library headers.
 		SHORT(@library_count@);
 		# Number of compartment headers.

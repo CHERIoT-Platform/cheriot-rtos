@@ -146,10 +146,10 @@ switcher_scheduler_entry_csp:
 .endm
 
 	.section .text, "ax", @progbits
-	.globl compartment_switcher_entry
+	.globl __Z26compartment_switcher_entryz
 	.p2align 2
-	.type compartment_switcher_entry,@function
-compartment_switcher_entry:
+	.type __Z26compartment_switcher_entryz,@function
+__Z26compartment_switcher_entryz:
 	cincoffset        csp, csp, -SPILL_SLOT_SIZE
 	csc               cs0, SPILL_SLOT_cs0(csp)
 	csc               cs1, SPILL_SLOT_cs1(csp)
@@ -779,3 +779,16 @@ exception_entry_asm:
 #endif
 #endif // CONFIG_NO_SWITCHER_SAFETY
 	cret
+
+	.section	.compartment_export_table,"a",@progbits
+	.type	__export_switcher__Z26compartment_switcher_entryz,@object
+	.globl	__export_switcher__Z26compartment_switcher_entryz
+	.p2align	2
+__export_switcher__Z26compartment_switcher_entryz:
+	.half	__Z26compartment_switcher_entryz-compartment_switcher_sealing_key
+	// Number of registers to clear (ignored for library exports)
+	.byte	0
+	// Interrupts disabled.
+	.byte	16
+	.size	__export_switcher__Z26compartment_switcher_entryz, 4
+

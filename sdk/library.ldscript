@@ -6,10 +6,10 @@ SECTIONS
 	. = 0;
 	.compartment_export_table : ALIGN(8)
 	{
-		# Space for the compartment's PCC and GDC
+		# Space for the compartment's PCC and GDC.
 		. = . + 16;
-		# Space for the compartment's ID
-		. = . + 2;
+		# Space for the error handler.
+		. = . + 4;
 		# Array of compartment exports
 		*(.compartment_exports);
 	}

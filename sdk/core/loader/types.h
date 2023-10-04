@@ -4,6 +4,7 @@
 #pragma once
 
 #include "../switcher/tstack.h"
+#include "assembly-helpers.h"
 #include "defines.h"
 #include <cdefs.h>
 #include <cheri.hh>
@@ -362,11 +363,6 @@ namespace loader
 			AddressRange code;
 
 			/**
-			 * The offset relative to the PCC of the switcher's entry point.
-			 */
-			uint16_t entryPoint;
-
-			/**
 			 * The PCC-relative location of the sealing key, which the
 			 * compartment switcher will use to unseal import table entries.
 			 */
@@ -392,12 +388,10 @@ namespace loader
 			uint16_t schedulerCSP;
 
 			/**
-			 * The entry point as a full address.
+			 * Export table start location.  The first export is the
+			 * compartment switcher entry point.
 			 */
-			[[nodiscard]] ptraddr_t entry_point() const
-			{
-				return code.start() + entryPoint;
-			}
+			AddressRange exportTable;
 
 			/**
 			 * The location of the sealing key as a full address.
@@ -618,7 +612,7 @@ namespace loader
 			// This is a random 32-bit number and should be changed whenever
 			// the compartment header layout changes to provide some sanity
 			// checking.
-			return magic == 0x43f6af90;
+			return magic == 0x6cef3879;
 		}
 
 		/**
@@ -905,8 +899,10 @@ namespace loader
 
 	/**
 	 * The header of an export table.
+	 *
+	 * This is followed by an array of `ExportEntry`.
 	 */
-	struct ExportTableHeader
+	struct ExportTable
 	{
 		/**
 		 * The compartment's $pcc.
@@ -1011,17 +1007,6 @@ namespace loader
 		}
 	};
 
-	/**
-	 * Export table.  This is the full export table, including the header and
-	 * the entries.
-	 */
-	struct ExportTable : public ExportTableHeader
-	{
-		/**
-		 * The export entries in this table.
-		 */
-		ExportEntry entries[];
-	};
 
 #include "../switcher/export-table-assembly.h"
 } // namespace loader
