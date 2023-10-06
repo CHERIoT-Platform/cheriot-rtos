@@ -26,6 +26,8 @@
 #define SPILL_SLOT_pcc 24
 #define SPILL_SLOT_SIZE 32
 
+switcher_code_start:
+
 # Global for the sealing key.  Stored in the switcher's code section.
 	.section .text, "ax", @progbits
 	.globl compartment_switcher_sealing_key
@@ -369,7 +371,8 @@ exception_entry_asm:
 
 	// TODO: On an ecall, we don't need to save any caller-save registers
 
-	// At this point, guest state is completely saved. Now prepare the scheduler context.
+	// At this point, thread state is completely saved. Now prepare the
+	// scheduler context.
 	// Function signature of the scheduler entry point:
 	// TrustedStack *exception_entry(TrustedStack *sealedTStack,
 	//     size_t mcause, size_t mepc, size_t mtval)
@@ -406,8 +409,6 @@ exception_entry_asm:
 	li                 gp, 10
 	csetaddr           ct0, ct0, gp
 	cunseal            csp, ca0, ct0
-	// Environment call from M-mode is exception code 11.
-	// We need to skip the ecall instruction to avoid an infinite loop.
 	clw                t0, TrustedStack_offset_mcause(csp)
 
 	// Only now that we have done something that actually requires the tag of
@@ -419,7 +420,15 @@ exception_entry_asm:
 	// mret, so reentrancy is no longer a concern.
 	cspecialw          mtdc, csp
 
-	// Back to your regularly scheduled program (testing for ecall from M mode)
+	// If mcause is 25, then we will jump into the error handler: another
+	// thread has signalled that this thread should be interrupted.  25 is a
+	// reserved exception number that we repurpose to indicate explicit
+	// interruption.
+	li                 t1, 25
+	beq                t0, t1, .Lhandle_injected_error
+
+	// Environment call from M-mode is exception code 11.
+	// We need to skip the ecall instruction to avoid an infinite loop.
 	li                 t1, 11
 	clc                ct2, TrustedStack_offset_mepcc(csp)
 	bne                t0, t1, .Linstall_context
@@ -699,6 +708,15 @@ exception_entry_asm:
 	cmove              csp, ct1
 	j                  .Linstall_context
 
+.Lhandle_injected_error:
+#ifdef CONFIG_MSHWM
+	clw                x1, TrustedStack_offset_mshwm(csp)
+	csrw               CSR_MSHWM, x1
+	clw                x1, TrustedStack_offset_mshwmb(csp)
+	csrw               CSR_MSHWMB, x1
+#endif
+	j                  .Lhandle_error
+
 
 // We have reached the end of the stack.  If we are in a forced unwind then we
 // just install the context, if we've gone off the top of the stack then we
@@ -781,6 +799,130 @@ exception_entry_asm:
 	cret
 
 
+
+/*******************************************************************************
+ * Switcher-exported library functions.
+ *
+ * These all provide some reflection on the switcher's state.
+ *
+ * At the moment, all of these avoid touching any registers except the argument
+ * registers, which means that we can define an alternative calling convention
+ * for them in the future to allow the compiler to preserve values in the
+ * temporary registers across calls.
+ *
+ * These are all part of the switcher's PCC and so will be covered by the same
+ * defence that the switcher has against being made to trap at unexpected
+ * times: any trap in the switcher will force unwind the caller's trusted stack
+ * frame.  As such, no trap here can leak data.
+ *
+ * These functions must not use the stack and must ensure that the clobber all
+ * registers that hold sensitive state on the way out.
+ ******************************************************************************/
+
+// Returns whether the trusted stack has space for N more calls.
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z23trusted_stack_has_spacei,@function
+__Z23trusted_stack_has_spacei:
+	li                 a2, TrustedStackFrame_size
+	mul                a2, a0, a2
+	// Load the trusted stack into a register that we will clobber on the way
+	// out.
+	cspecialr          ca0, mtdc
+	clhu               a1, TrustedStack_offset_frameoffset(ca0)
+	cgetlen            a0, ca0
+	sub                a0, a0, a1
+	sltu               a0, a2, a0
+	cret
+
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z22switcher_recover_stackv,@function
+__Z22switcher_recover_stackv:
+	// Load the trusted stack pointer into a register that we will clobber in
+	// two instructions.
+	cspecialr          ca0, mtdc
+	clhu               a1, TrustedStack_offset_frameoffset(ca0)
+	cincoffset         ca0, ca0, a1
+	clc                ca0, TrustedStackFrame_offset_csp(ca0)
+	cret
+
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z30trusted_stack_interrupt_threadPv,@function
+__Z25switcher_interrupt_threadPv:
+	// Load the unsealing key into a register that we will clobber two
+	// instructions later.
+	LoadCapPCC         ca1, compartment_switcher_sealing_key
+	li                 a2, 10
+	csetaddr           ca1, ca1, a2
+	// The target capability is in ct1. Unseal, check tag and load the entry point offset.
+	cunseal            ca1, ca0, ca1
+	cgettag            a0, ca1
+	// a0 (return register) now contains the tag.  We return false on failure
+	// so can just branch to the place where we zero non-return registers from
+	// here and it will contain faluse on failure.
+	beqz               a0, .Lreturn
+
+	// A thread can't interrupt itself, return failure if it tries.
+	cspecialr          ca2, mtdc
+	li                 a0, 0
+	beq                a2, a1, .Lreturn
+
+	// ca1 now contains the unsealed capability for the target thread.  We
+	// allow the target thread to be interrupted if (and only if) the caller is
+	// in the same compartment as the interrupted thread.  We will determine
+	// this by checking if the base of the two export table entries from the
+	// top of the trusted stack frames match.
+
+// Helper macro that loads the export table from the register containing the
+// trusted stack.  The two arguments must be different registers.
+.macro LoadExportTable result, trustedStack
+	clhu               \result, TrustedStack_offset_frameoffset(\trustedStack)
+	addi               \result, \result, -TrustedStackFrame_size
+	cincoffset         c\result, \trustedStack, \result
+	clc                c\result, TrustedStackFrame_offset_calleeExportTable(c\result)
+	cgetbase           \result, c\result
+.endm
+
+	LoadExportTable    a3, ca1
+	cspecialr          ca0, mtdc
+	LoadExportTable    a2, ca0
+
+	// ca1 now contains the unsealed capability for the target thread, a3
+	// contains the base of the export table entry for that thread, a2 the base
+	// of the export table for our thread.
+	li                 a0, 42
+
+	// If the two export table entries differ, return.
+	bne                a2, a3, .Lreturn
+	// After this point, we no longer care about the values in a0, a2, and a3.
+
+	// Mark the thread as interrupted.
+	// Store a magic value in mcause
+	li                 a2, 25
+	csw                a2, TrustedStack_offset_mcause(ca1)
+	// Return success
+	li                 a0, 1
+.Lreturn:
+	zeroRegisters      a1, a2, a3
+	cret
+
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z23switcher_current_threadv,@function
+__Z23switcher_current_threadv:
+	LoadCapPCC         ca0, compartment_switcher_sealing_key
+	li                 a1, 10
+	csetaddr           ca0, ca0, a1
+	cspecialr          ca1, mtdc
+	cseal              ca0, ca1, ca0
+	li                 a1, 0
+	cret
+
+
+
+
 // The linker expects export tables to start with space for cgp and pcc, then
 // the compartment error handler.  We should eventually remove that requirement
 // for library export tables, but since they don't consume RAM after loading
@@ -789,14 +931,26 @@ exception_entry_asm:
 export_table_start:
 .space 20, 0
 
-	.type	__export_switcher__Z26compartment_switcher_entryz,@object
-	.globl	__export_switcher__Z26compartment_switcher_entryz
+/**
+ * Helper that exports a switcher function as a library call.
+ */
+.macro export function, prefix=__library_export_libcalls
+	.type	\prefix\function,@object
+	.globl	\prefix\function
 	.p2align	2
-__export_switcher__Z26compartment_switcher_entryz:
-	.half	__Z26compartment_switcher_entryz-compartment_switcher_sealing_key
+\prefix\function:
+	.half	\function-switcher_code_start
 	// Number of registers to clear (ignored for library exports)
 	.byte	0
 	// Interrupts disabled.
 	.byte	16
-	.size	__export_switcher__Z26compartment_switcher_entryz, 4
+	.size	\prefix\function, 4
+.endm
 
+// Switcher entry point must be first.
+// We mangle the switcher export as if it were a compartment call.
+export __Z26compartment_switcher_entryz, __export_switcher
+export __Z23trusted_stack_has_spacei
+export __Z22switcher_recover_stackv
+export __Z25switcher_interrupt_threadPv
+export __Z23switcher_current_threadv

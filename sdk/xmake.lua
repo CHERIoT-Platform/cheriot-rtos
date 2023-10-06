@@ -436,7 +436,9 @@ rule("firmware")
 		for i, thread in ipairs(threads) do
 			thread.mangled_entry_point = string.format("__export_%s__Z%d%sv", thread.compartment, string.len(thread.entry_point), thread.entry_point)
 			thread.thread_id = i
-			thread.trusted_stack_size = loader_trusted_stack_size + (64 * thread.trusted_stack_frames)
+			-- Trusted stack frame is 24 bytes.  If this size is too small, the
+			-- loader will fail.  If it is too big, we waste space.
+			thread.trusted_stack_size = loader_trusted_stack_size + (24 * thread.trusted_stack_frames)
 
 			if thread.stack_size > stack_size_limit then
 				raise("thread " .. i .. " requested a " .. thread.stack_size ..

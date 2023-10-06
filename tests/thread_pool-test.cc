@@ -1,9 +1,12 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+#include <cstdint>
 #define TEST_NAME "Thread pool"
 #include "tests.hh"
 #include <cheri.hh>
+#include <cheriot-atomic.hh>
+#include <switcher.h>
 #include <thread.h>
 #include <thread_pool.h>
 
@@ -11,6 +14,35 @@ int counter;
 
 using CHERI::with_interrupts_disabled;
 using namespace thread_pool;
+
+cheriot::atomic<bool> errorHandled     = false;
+cheriot::atomic<bool> interruptStarted = false;
+cheriot::atomic<int>  interruptThreadNumber;
+
+extern "C" ErrorRecoveryBehaviour
+compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
+{
+	debug_log("Thread {} error handler invoked with mcause {}.  PCC: {}",
+	          thread_id_get_fast(),
+	          mcause,
+	          frame->pcc);
+	if (mcause != 25)
+	{
+		return ErrorRecoveryBehaviour::ForceUnwind;
+	}
+	if (thread_id_get_fast() != interruptThreadNumber)
+	{
+		debug_log(
+		  "Explicit thread interrupt delivered on the wrong thread (thread {}, "
+		  "expected {})",
+		  thread_id_get_fast(),
+		  interruptThreadNumber.load());
+		return ErrorRecoveryBehaviour::ForceUnwind;
+	}
+	errorHandled = true;
+	debug_log("Expected software interrupt, installing context");
+	return ErrorRecoveryBehaviour::InstallContext;
+}
 
 void test_thread_pool()
 {
@@ -65,4 +97,66 @@ void test_thread_pool()
 		     slow);
 		TEST(fast != 1, "Thread ID for thread pool thread should not be 1");
 	});
+
+	CHERI::Capability<void> mainThread{switcher_current_thread()};
+	TEST(mainThread.is_sealed(), "Thread should be sealed: {}", mainThread);
+	TEST(mainThread.type() == 10,
+	     "Thread should be sealed with otype 10: {}",
+	     mainThread);
+	TEST(!switcher_interrupt_thread(mainThread),
+	     "Interrupting the current thread should fail");
+	TEST(!switcher_interrupt_thread(nullptr),
+	     "Interrupting null thread should fail");
+	TEST(!switcher_interrupt_thread(&sleeps),
+	     "Interrupting invalid thread should fail");
+
+	static void *asyncThread;
+	static bool  interrupted;
+	async([=]() mutable {
+		interruptThreadNumber = thread_id_get_fast();
+		asyncThread           = switcher_current_thread();
+		while (!interruptStarted)
+		{
+			yield();
+		}
+		TEST(errorHandled,
+		     "Worker thread was not interrupted from higher-priority one");
+		interrupted = true;
+	});
+
+	for (int i = 0; i < 3; i++)
+	{
+		if (!asyncThread)
+		{
+			Timeout t{1};
+			thread_sleep(&t);
+		}
+	}
+	TEST(asyncThread, "Worker thread did not provide thread pointer");
+	debug_log("Interrupting other thread");
+	bool ret         = switcher_interrupt_thread(asyncThread);
+	interruptStarted = true;
+	TEST(ret, "Interrupting worker thread failed: {}", ret);
+	Timeout t{3};
+	thread_sleep(&t);
+	TEST(interrupted, "Worker thread was not interrupted");
+	return;
+	static cheriot::atomic<uint32_t> barrier{3};
+	auto                             barrierWait = []() {
+        uint32_t value = barrier--;
+        if (value == 0)
+        {
+            barrier.notify_all();
+        }
+        while (value != 0)
+        {
+            barrier.wait(value);
+            value = barrier;
+        }
+	};
+	// Make sure that the thread pool threads have both finished.
+	async(barrierWait);
+	async(barrierWait);
+	barrierWait();
+	debug_log("Thread pool quiesced");
 }
