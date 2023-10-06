@@ -525,6 +525,19 @@ namespace
 					return createLibCall(build_pcc(compartment));
 				}
 			}
+			// The switcher is a special case, it needs a richer set of
+			// permission (access system register) than other compartments, but
+			// is exposed as a library.
+			if (contains<ExportEntry>(image.switcher.exportTable,
+			                          possibleLibcall))
+			{
+				auto ent = build<ExportEntry>(possibleLibcall);
+				auto pcc =
+				  build<void, Root::Type::Execute, SwitcherPccPermissions>(
+				    image.switcher.code);
+				pcc.address() += ent->functionStart;
+				return seal_entry(pcc, ent->interrupt_status());
+			}
 			// We also use the library calling convention for local callbacks,
 			// so see if this points to our own export table.
 			if (contains<ExportEntry>(sourceCompartment.exportTable,
