@@ -519,7 +519,7 @@ rule("firmware")
 				"\n\t\tSHORT(.${compartment}_sealed_objects_end - .${compartment}_sealed_objects_start);\n",
 			pcc_ld = compartment_templates.pcc_ld,
 			gdc_ld = "",
-			compartment_exports = compartment_templates.compartment_exports,
+			library_exports = compartment_templates.compartment_exports,
 			cap_relocs = compartment_templates.cap_relocs,
 			sealed_objects = compartment_templates.sealed_objects
 		}
@@ -527,6 +527,7 @@ rule("firmware")
 		-- script.  Initialised as empty strings.
 		local ldscript_substitutions = {
 			compartment_exports="",
+			library_exports="",
 			cap_relocs="",
 			compartment_headers="",
 			pcc_ld="",

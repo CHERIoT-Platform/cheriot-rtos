@@ -780,7 +780,15 @@ exception_entry_asm:
 #endif // CONFIG_NO_SWITCHER_SAFETY
 	cret
 
+
+// The linker expects export tables to start with space for cgp and pcc, then
+// the compartment error handler.  We should eventually remove that requirement
+// for library export tables, but since they don't consume RAM after loading
+// it's not urgent.
 	.section	.compartment_export_table,"a",@progbits
+export_table_start:
+.space 20, 0
+
 	.type	__export_switcher__Z26compartment_switcher_entryz,@object
 	.globl	__export_switcher__Z26compartment_switcher_entryz
 	.p2align	2
