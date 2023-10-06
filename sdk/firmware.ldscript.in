@@ -21,8 +21,6 @@ SECTIONS
 
 	.compartment_export_tables : ALIGN(8)
 	{
-		__compart_exports = .;
-
 		# The scheduler and allocator's export tables are at the start.
 		.scheduler_export_table = .;
 		*.scheduler.compartment(.compartment_export_table);
@@ -31,14 +29,6 @@ SECTIONS
 		.allocator_export_table = ALIGN(8);
 		*/cherimcu.allocator.compartment(.compartment_export_table);
 		.allocator_export_table_end = .;
-
-		.token_library_export_table = ALIGN(8);
-		*/cheriot.token_library.library(.compartment_export_table);
-		.token_library_export_table_end = .;
-
-		.switcher_export_table = ALIGN(8);
-		*/switcher/entry.S.o(.compartment_export_table);
-		.switcher_export_table_end = .;
 
 		@compartment_exports@
 	}
@@ -283,6 +273,19 @@ SECTIONS
 		*/loader/boot.cc.o(.data .data.* .sdata .sdata.* .sbss .sbss.* .bss .bss.*);
 	}
 	.loader_data_end = .;
+
+	.library_export_tables : ALIGN(8)
+	{
+		.token_library_export_table = ALIGN(8);
+		*/cheriot.token_library.library(.compartment_export_table);
+		.token_library_export_table_end = .;
+
+		.switcher_export_table = ALIGN(8);
+		*/switcher/entry.S.o(.compartment_export_table);
+		.switcher_export_table_end = .;
+
+		@library_exports@
+	}
 
 }
 # No symbols should be exported

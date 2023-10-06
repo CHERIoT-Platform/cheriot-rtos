@@ -1067,10 +1067,12 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	// exposed as a normal export, which enables exporting other things from
 	// the switcher later.
 	Debug::log("Setting compartment switcher");
-	auto switcherEntry = build<ExportEntry>(imgHdr.switcher.exportTable.start() + 20, imgHdr.switcher.exportTable.size());
-	switcherPCC.address() =
-	  switcherPCC.base() + switcherEntry->functionStart;
-	Debug::log("Setting compartment switcher address: {}", switcherPCC.address());
+	auto switcherEntry =
+	  build<ExportEntry>(imgHdr.switcher.exportTable.start() + 20,
+	                     imgHdr.switcher.exportTable.size());
+	switcherPCC.address() = switcherPCC.base() + switcherEntry->functionStart;
+	Debug::log("Setting compartment switcher address: {}",
+	           switcherPCC.address());
 	switcherPCC = seal_entry(switcherPCC, InterruptStatus::Disabled);
 
 	auto setSealingKey =

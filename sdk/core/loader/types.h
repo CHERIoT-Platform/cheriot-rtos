@@ -1007,6 +1007,5 @@ namespace loader
 		}
 	};
 
-
 #include "../switcher/export-table-assembly.h"
 } // namespace loader
