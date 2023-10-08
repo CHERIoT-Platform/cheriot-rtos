@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
     runs-on: ubuntu-latest
     container:
-      image: cheriot.azurecr.io/cheriot/devcontainer
+      image: ghcr.io/cheriot-platform/devcontainer:latest
       options: --user 1001
     steps:
     - name: Checkout repository and submodules
@@ -59,7 +59,7 @@ jobs:
     name: Check coding conventions
     runs-on: ubuntu-latest
     container:
-      image: cheriot.azurecr.io/cheriot/devcontainer
+      image: ghcr.io/cheriot-platform/devcontainer:latest
       options: --user 1001
     steps:
     - name: Checkout repository and submodules
