@@ -420,15 +420,15 @@ rule("firmware")
 			"\n\t. = ALIGN(8);" ..
 			"\n\t.loader_trusted_stack : CAPALIGN" ..
 			"\n\t{" ..
-			"\n\t\tbootStack = .;" ..
-			"\n\t\t. += " .. loader_stack_size .. ";" ..
+			"\n\t\tbootTStack = .;" ..
+			"\n\t\t. += " .. loader_trusted_stack_size .. ";" ..
 			"\n\t}\n"
 		local thread_stacks =
 			"\n\t. = ALIGN(16);" ..
 			"\n\t.loader_stack : CAPALIGN" ..
 			"\n\t{" ..
-			"\n\t\tbootTStack = .;" ..
-			"\n\t\t. += " .. loader_trusted_stack_size .. ";" ..
+			"\n\t\tbootStack = .;" ..
+			"\n\t\t. += " .. loader_stack_size .. ";" ..
 			"\n\t}\n"
 		-- Stacks must be less than this size or truncating them in compartment
 		-- switch may encounter precision errors.

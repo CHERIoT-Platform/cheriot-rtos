@@ -779,6 +779,33 @@ namespace
 			        Root::Permissions<Root::Type::TrustedStack>.without(
 			          Permission::Global),
 			        false>(config.stack);
+
+			// Make sure that the thread's stack doesn't overlap the loader's
+			// stack (which will become the scheduler's stack).
+			Capability<void> csp = ({
+				register void *cspRegister asm("csp");
+				asm("" : "=C"(cspRegister));
+				cspRegister;
+			});
+			if (stack.top() <= csp.top())
+			{
+				Debug::Invariant(
+				  stack.top() <= csp.base(),
+				  "Thread stack {} for thread {} overlaps loader stack {}",
+				  stack,
+				  i,
+				  csp);
+			}
+			if (stack.base() >= csp.base())
+			{
+				Debug::Invariant(
+				  stack.base() >= csp.top(),
+				  "Thread stack {} for thread {} overlaps loader stack {}",
+				  stack,
+				  i,
+				  csp);
+			}
+
 			// Stack pointer points to the top of the stack.
 			stack.address() += config.stack.size();
 			threadTStack->csp = stack;
