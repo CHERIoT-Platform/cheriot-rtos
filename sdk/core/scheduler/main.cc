@@ -41,8 +41,13 @@ volatile uint32_t tohost[2];
  */
 void simulation_exit(uint32_t code)
 {
+	// If this is using the standard RISC-V to-host mechanism, this will exit.
 	tohost[0] = 0x1 | (code << 1);
 	tohost[1] = 0;
+	// If we didn't exit with to-host, try writing a non-ASCII character to the
+	// UART.  This is how we exit the CHERIoT Ibex simulator for the SAFE
+	// platform.
+	MMIO_CAPABILITY(Uart, uart)->blocking_write(0x80 + code);
 }
 
 #endif

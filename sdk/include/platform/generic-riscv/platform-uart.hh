@@ -95,7 +95,13 @@ class Uart16550
 	 */
 	__always_inline bool can_write() volatile
 	{
+#ifdef SIMULATION
+		// If we're in a simulator, we're running *much* slower than the thing
+		// handling the UART, so assume that you can always write to the UART.
+		return true;
+#else
 		return LineStatus & (1 << 5);
+#endif
 	}
 
 	/**
