@@ -76,8 +76,22 @@ class StandardClint : private utils::NoCopyNoMove
 	}
 
 	private:
+#ifdef IBEX_SAFE
+	/**
+	 * The Ibex-SAFE platform doesn't implement a complete CLINT, only the
+	 * timer part (which is all that we use).  Its offsets within the CLINT
+	 * region are different.
+	 */
+	static constexpr size_t ClintMtime    = 0x10;
+	static constexpr size_t ClintMtimecmp = 0x18;
+#else
+	/**
+	 * The standard RISC-V CLINT is a large memory-mapped device and places the
+	 * timers a long way in.
+	 */
 	static constexpr size_t ClintMtimecmp = 0x4000U;
 	static constexpr size_t ClintMtime    = 0xbff8U;
+#endif
 
 	static inline volatile uint32_t *pmtimercmp;
 	static inline volatile uint32_t *pmtimer;

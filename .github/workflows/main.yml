@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix: 
         build-type: [ debug, release ]
-        board: [ sail ]
+        board: [ sail, ibex-safe-simulator ]
         include:
           - build-type: debug
             build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=y -m debug
@@ -36,7 +36,7 @@ jobs:
     - name: Run tests
       run: |
         cd tests
-        /cheriot-tools/bin/cheriot_sim -p --no-trace build/cheriot/cheriot/${{ matrix.build-type }}/test-suite
+        xmake run
     - name: Build examples
       run: |
         set -e
@@ -52,7 +52,9 @@ jobs:
         for example_dir in $PWD/examples/*/; do
           cd $example_dir
           echo Running $example_dir
-          xmake run
+          if [ ${{ matrix.board }} = sail ]; then
+            xmake run
+          fi
         done
 
   check-format:
