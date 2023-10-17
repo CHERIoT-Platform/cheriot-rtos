@@ -58,7 +58,15 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		  frame->get_register_value<CHERI::RegisterNumber::CRA>()};
 		if (registerNumber == CHERI::RegisterNumber::CRA &&
 		    returnCapability.address() == 0 &&
+		// Ibex currently has a bug with exception priorities and so
+		// reports these with the wrong error code.  Check for for the other
+		// exception cause if we're targeting Ibex.  Once this starts failing
+		// with Ibex, remove this work around.
+#ifdef IBEX
+		    exceptionCode == CHERI::CauseCode::BoundsViolation &&
+#else
 		    exceptionCode == CHERI::CauseCode::TagViolation &&
+#endif
 		    stackCapability.top() == stackCapability.address())
 		{
 			// looks like thread exit -- just log it then ForceUnwind
