@@ -38,19 +38,19 @@ namespace Ibex
 			 */
 			uint32_t top;
 			/**
-			 * The control word.  The top 8 bits should be 0x55.  The next
-			 * lower 8 bits are the current epoch.  The low bit is used to
-			 * start the revoker.
+			 * The control word.  The top 16 bits should be 0x5500.  Writing to
+			 * the low bit will start the revoker.
 			 */
 			uint32_t control;
 			/**
-			 * Padding to ensure that the later fields are at the correct
-			 * location
+			 * The revocation epoch.  Low bit indicates that the revoker is
+			 * running.
 			 */
-			uint32_t unused;
+			uint32_t epoch;
 			/**
 			 * Interrupt status word.  Reading this will return 0 if an
-			 * interrupt has not been requested, 1 otherwise.
+			 * interrupt has not been requested, 1 otherwise.  Writing 1 clears
+			 * any pending interrupt.
 			 */
 			uint32_t interruptStatus;
 			/**
@@ -61,45 +61,11 @@ namespace Ibex
 		};
 
 		/**
-		 * The Ibex revoker provides an 8-bit epoch.  Elsewhere, we rely on
-		 * 32-bit overflow behaviour, so we maintain an internal version.
-		 */
-		uint32_t epoch;
-
-		/**
 		 * Get a reference to the revoker device.
 		 */
 		__always_inline volatile RevokerInterface &revoker_device()
 		{
 			return *MMIO_CAPABILITY(RevokerInterface, revoker);
-		}
-
-		/**
-		 * Synchronise the epoch value with the version exported from the
-		 * device.
-		 *
-		 * The cached epoch is updated before and after starting the revoker to
-		 * ensure that the cached epoch is never more than off by one.
-		 */
-		void epoch_update()
-		{
-			// Get the current device epoch.
-			auto deviceEpoch = [&]() {
-				return (revoker_device().control & 0xff00) >> 8;
-			};
-			// If the low bits are out of sync,
-			if (deviceEpoch() != (epoch & 0xff))
-			{
-				epoch++;
-			}
-			// Clang tidy is checking headers as stand-alone compilation units
-			// and so doesn't know what Debug is defined to.
-#ifndef CLANG_TIDY
-			Debug::Assert(
-			  [&]() { return deviceEpoch() == (epoch & 0xff); },
-			  "Device epoch is off by more than one from cached value {}",
-			  epoch);
-#endif
 		}
 
 		static inline const uint32_t *interruptFutex;
@@ -130,7 +96,7 @@ namespace Ibex
 			// Clang tidy is checking headers as stand-alone compilation units
 			// and so doesn't know what Debug is defined to.
 #ifndef CLANG_TIDY
-			Debug::Assert((device.control >> 24) == 0x55,
+			Debug::Assert((device.control >> 16) == 0x5500,
 			              "Device not present: {} (should be 0x55000000)",
 			              device.control);
 			Debug::Invariant(base < top,
@@ -150,8 +116,7 @@ namespace Ibex
 		 */
 		uint32_t system_epoch_get()
 		{
-			epoch_update();
-			return epoch;
+			return revoker_device().epoch;
 		}
 
 		/**
@@ -177,15 +142,9 @@ namespace Ibex
 			{
 				return;
 			}
-			// If we reach here, the call to `system_epoch_get()` will have
-			// updated the cached epoch to the previous-revocation-sweep-passed
-			// state.
 			auto &device   = revoker_device();
 			device.control = 0;
 			device.control = 1;
-			// The epoch has started, don't bother asking the device for a new
-			// value because we know it will be the last value + 1.
-			epoch++;
 		}
 
 		/**
