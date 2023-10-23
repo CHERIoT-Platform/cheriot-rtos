@@ -2,8 +2,9 @@
 
 # Instructions
 
-Make a copy of this file and name it exactly `microvium_port.h`. Put the copy somewhere
-in your project where it is accessible by a `#include "microvium_port.h"` directive.
+Make a copy of this file and name it exactly `microvium_port.h`. Put the copy
+somewhere in your project where it is accessible by a `#include
+"microvium_port.h"` directive.
 
 Customize your copy of the port file with platform-specific configurations.
 
@@ -14,11 +15,12 @@ fixes and improvement from the original github or npm repository.
 */
 #pragma once
 
-#include <stdbool.h>
-#include <string.h>
 #include <assert.h>
-#include <stdint.h>
+#include <cheri-builtins.h>
 #include <compartment.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 
 /**
  * The version of the port interface that this file is implementing.
@@ -89,12 +91,12 @@ fixes and improvement from the original github or npm repository.
  * this may need to be `long double` or whatever the equivalent 64-bit type is
  * on your system.
  */
-#define MVM_FLOAT64 double
+#	define MVM_FLOAT64 double
 
 /**
  * Value to use for NaN
  */
-#define MVM_FLOAT64_NAN ((MVM_FLOAT64)(INFINITY * 0.0))
+#	define MVM_FLOAT64_NAN ((MVM_FLOAT64)(INFINITY * 0.0))
 
 #endif // MVM_SUPPORT_FLOAT
 
@@ -143,7 +145,7 @@ fixes and improvement from the original github or npm repository.
  * Microvium doesn't access data through pointers of this type directly -- it
  * does so through macro operations in this port file.
  */
-#define MVM_LONG_PTR_TYPE void*
+#define MVM_LONG_PTR_TYPE void *
 
 /**
  * Convert a normal pointer to a long pointer
@@ -155,7 +157,7 @@ fixes and improvement from the original github or npm repository.
  *
  * This will only be invoked on pointers to VM RAM data.
  */
-#define MVM_LONG_PTR_TRUNCATE(p) ((void*)p)
+#define MVM_LONG_PTR_TRUNCATE(p) ((void *)p)
 
 /**
  * Add an offset `s` in bytes onto a long pointer `p`. The result must be a
@@ -165,13 +167,14 @@ fixes and improvement from the original github or npm repository.
  *
  * Offset may be negative
  */
-#define MVM_LONG_PTR_ADD(p, s) ((MVM_LONG_PTR_TYPE)((uint8_t*)p + (intptr_t)s))
+#define MVM_LONG_PTR_ADD(p, s)                                                 \
+	((MVM_LONG_PTR_TYPE)((uint8_t *)p + (ptrdiff_t)s))
 
 /**
  * Subtract two long pointers to get an offset. The result must be a signed
  * 16-bit integer of p2 - p1 (where p2 is the FIRST param).
  */
-#define MVM_LONG_PTR_SUB(p2, p1) ((int16_t)((uint8_t*)p2 - (uint8_t*)p1))
+#define MVM_LONG_PTR_SUB(p2, p1) ((int16_t)((uint8_t *)p2 - (uint8_t *)p1))
 
 /*
  * Read memory of 1 or 2 bytes
@@ -223,20 +226,22 @@ fixes and improvement from the original github or npm repository.
  * needs to be a long pointer type. If you don't want the overhead of validating
  * the CRC, just return `true`.
  */
-#define MVM_CHECK_CRC16_CCITT(lpData, size, expected) (crc16(lpData, size) == expected)
+#define MVM_CHECK_CRC16_CCITT(lpData, size, expected)                          \
+	(crc16(lpData, size) == expected)
 
-static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size) {
-  uint16_t r = 0xFFFF;
-  while (size--)
-  {
-    r  = (uint8_t)(r >> 8) | (r << 8);
-    r ^= MVM_READ_LONG_PTR_1(lp);
-    lp = MVM_LONG_PTR_ADD(lp, 1);
-    r ^= (uint8_t)(r & 0xff) >> 4;
-    r ^= (r << 8) << 4;
-    r ^= ((r & 0xff) << 4) << 1;
-  }
-  return r;
+static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size)
+{
+	uint16_t r = 0xFFFF;
+	while (size--)
+	{
+		r = (uint8_t)(r >> 8) | (r << 8);
+		r ^= MVM_READ_LONG_PTR_1(lp);
+		lp = MVM_LONG_PTR_ADD(lp, 1);
+		r ^= (uint8_t)(r & 0xff) >> 4;
+		r ^= (r << 8) << 4;
+		r ^= ((r & 0xff) << 4) << 1;
+	}
+	return r;
 }
 
 /**
@@ -255,7 +260,7 @@ static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size) {
  *
  * Unlike MVM_CHECK_CRC16_CCITT, pData here is a pointer to RAM.
  */
-#define MVM_CALC_CRC16_CCITT(pData, size) (crc16(pData, size))
+#	define MVM_CALC_CRC16_CCITT(pData, size) (crc16(pData, size))
 #endif // MVM_INCLUDE_SNAPSHOT_CAPABILITY
 
 /**
@@ -274,7 +279,7 @@ static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size) {
  * Address of the RAM page to use, such that all pointers to RAM are between
  * MVM_RAM_PAGE_ADDR and (MVM_RAM_PAGE_ADDR + 0xFFFF)
  */
-#define MVM_RAM_PAGE_ADDR 0x12340000
+#	define MVM_RAM_PAGE_ADDR 0x12340000
 #endif
 
 /// All public functions are exported from the library.
@@ -291,10 +296,72 @@ static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size) {
  * The `context` passed to these macros is whatever value that the host passes
  * to `mvm_restore`. It can be any value that fits in a pointer.
  */
-#define MVM_CONTEXTUAL_MALLOC(size, context) ({ Timeout t = {0, 0}; heap_allocate(&t, context, size); })
+#define MVM_CONTEXTUAL_MALLOC(size, context)                                   \
+	({                                                                         \
+		Timeout t = {0, 0};                                                    \
+		heap_allocate(&t, context, size);                                      \
+	})
 #define MVM_CONTEXTUAL_FREE(ptr, context) heap_free(context, ptr)
 
 /**
  * Expose the timeout APIs.
  */
 #define MVM_GAS_COUNTER
+
+/**
+ * Helper for Microvium to convert strings to integers.
+ *
+ * This is used only in the int to string coercion function, so is marked as
+ * always inline to ensure that we don't get a function call.
+ */
+__always_inline static int mvm_int_to_string_helper(char    buffer[12],
+                                                    int32_t value)
+{
+	char *insert = buffer;
+
+	// If this is negative, add a minus sign and negate it.
+	if (value < 0)
+	{
+		*(insert++) = '-';
+		value       = 0 - value;
+	}
+	const char Digits[] = "0123456789";
+	// To skip leading zeroes, write the value backwards into this buffer and
+	// then scan it forward, skipping zeroes, inserting into the output buffer.
+	char tmp[10];
+	for (int i = sizeof(tmp) - 1; i >= 0; i--)
+	{
+		tmp[i] = Digits[value % 10];
+		value /= 10;
+	}
+	bool skipZero = true;
+	for (int i = 0; i < sizeof(tmp); i++)
+	{
+		char c = tmp[i];
+		if (skipZero && (c == '0'))
+		{
+			continue;
+		}
+		skipZero    = false;
+		*(insert++) = c;
+	}
+	if (skipZero)
+	{
+		*(insert++) = '0';
+	}
+	return insert - buffer;
+}
+
+#define MVM_INT32TOSTRING(buffer, i) mvm_int_to_string_helper(buffer, i)
+
+/**
+ * Apply bounds to the buffer.
+ */
+#define MVM_POINTER_SET_BOUNDS(ptr, bounds)                                    \
+	__builtin_cheri_bounds_set(ptr, bounds)
+
+/**
+ * Remove all permissions except load and global.
+ */
+#define MVM_POINTER_MAKE_IMMUTABLE(ptr)                                        \
+	__builtin_cheri_perms_and(ptr, CHERI_PERM_GLOBAL | CHERI_PERM_LOAD)
