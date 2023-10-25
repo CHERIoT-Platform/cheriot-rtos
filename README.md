@@ -8,7 +8,7 @@ It is not yet in a state where it should be used in production: in particular, s
 To use this, you will also some dependencies.
 The [getting started guide](docs/GettingStarted.md) describes in detail how to build these:
 
- - A version of LLVM with CHERIoT support, [currently in the cheriot branch of CHERI LLVM](https://github.com/CTSRD-CHERI/llvm-project/tree/cheriot)
+ - A [version of LLVM with CHERIoT support](https://github.com/CHERIoT-Platform/llvm-project/tree/cheriot)
  - An implementation of the ISA (e.g. [CHERIoT-Ibex](https://github.com/Microsoft/cheriot-ibex) or the emulator generated from [the formal model](https://github.com/Microsoft/cheriot-sail)))
 
 These dependencies are pre-installed in the dev container that will be automatically downloaded if you open this repository in Visual Studio Code or by hitting `.` to open it in GitHub Code Spaces.
