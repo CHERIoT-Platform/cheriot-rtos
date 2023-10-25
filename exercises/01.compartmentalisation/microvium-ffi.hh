@@ -1,7 +1,12 @@
 #pragma once
 
+#include "secret.h"
+#include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <microvium/microvium.h>
+#include <tuple>
+#include <debug.hh>
+
 /**
  * Code related to the JavaScript interpreter.
  */

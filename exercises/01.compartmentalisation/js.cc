@@ -7,9 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <debug.hh>
-#include <functional>
 #include <riscvreg.h>
-#include <tuple>
 #include <type_traits>
 #include <vector>
 
