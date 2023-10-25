@@ -99,13 +99,13 @@ On FreeBSD:
 # pkg ins cmake ninja
 ```
 
-The version of LLVM that you need is in the `cheriot` branch of the [CHERI LLVM repository](https://github.com/CTSRD-CHERI/llvm-project/tree/cheriot).
+The version of LLVM that you need is in the `cheriot` branch of the [CHERI LLVM repository](https://github.com/CHERIoT-Platform/llvm-project/tree/cheriot).
 This branch is temporary and will eventually be merged into the main CHERI LLVM branch and upstreamed to LLVM.
 
 First, clone this repo somewhere convenient:
 
 ```sh
-$ git clone --depth 1 https://github.com/CTSRD-CHERI/llvm-project cheriot-llvm
+$ git clone --depth 1 https://github.com/CHERIoT-Platform/llvm-project cheriot-llvm
 $ cd cheriot-llvm
 $ git checkout cheriot
 $ export LLVM_PATH=$(pwd)
