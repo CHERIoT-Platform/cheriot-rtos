@@ -2,7 +2,7 @@
 import * as host from "./cheri.js"
 
 // Change this address to whatever address was logged at the start of execution.
-const SecretAddress = 0x2004ca4c
+const SecretAddress = 0x2004cc8c
 
 function run()
 {
