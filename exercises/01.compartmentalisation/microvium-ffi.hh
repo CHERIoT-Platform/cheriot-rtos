@@ -1,11 +1,11 @@
 #pragma once
 
 #include "secret.h"
+#include <debug.hh>
 #include <functional>
 #include <magic_enum/magic_enum.hpp>
 #include <microvium/microvium.h>
 #include <tuple>
-#include <debug.hh>
 
 /**
  * Code related to the JavaScript interpreter.
@@ -160,6 +160,20 @@ namespace
 	 */
 	template<typename R, typename... Args>
 	struct FunctionSignature<R(Args...)>
+	{
+		/**
+		 * A tuple type containing all of the argument types of the function
+		 * whose type is being extracted.
+		 */
+		using ArgumentType = std::tuple<Args...>;
+	};
+
+	/**
+	 * The concrete specialisation that decomposes the function type for a cross
+	 * compartment call.
+	 */
+	template<typename R, typename... Args>
+	struct FunctionSignature<R __attribute__((cheri_ccall)) (Args...)>
 	{
 		/**
 		 * A tuple type containing all of the argument types of the function
