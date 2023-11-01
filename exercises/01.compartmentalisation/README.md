@@ -28,7 +28,7 @@ First we need to configure the `xmake` build to run on the Ibex simulator and bu
 If you are using the [dev container](../../docs/GettingStarted.md) you should run:
 
 ```
-xmake config --sdk=/cheriot-tools/ --board=ibex-safe-simulator
+xmake config --sdk=/cheriot-tools/
 ```
 
 There are two shell scripts that are useful for testing.
