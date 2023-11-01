@@ -119,7 +119,7 @@ Exercise 1: Confidentiality
 ---------------------------
 
 First, we want to protect the secret.
-For the this exercise, we want to move it into a separate comparment from the JavaScript interpreter: we want to minimise the attack surface of the compartment that handles the secret, so we definitely don't want it to share with the potentially vulnerable interpreter.
+For the this exercise, we want to move it into a separate comparment so that it is isolated from problems that might occur in the rest of the system.
 
 This will involve moving some code, since each compartment is one or more source files: individual source files end up in one compartment.
 The current compartment is defined in the [`xmake.lua`](xmake.lua) file like this:
