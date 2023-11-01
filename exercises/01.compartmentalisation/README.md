@@ -8,11 +8,11 @@ This simulates an attacker building a code-reuse attack, with a lot more power t
 The attacker can:
 
  - Read the stack capability, global capability, and program counter capability into any of eight (virtual) register slots.
- - Read the permissions, bounds, address, and length of a capability.
- - Read capabilities from memory via any of its eight capabilities.
- - Read 32-bit words from memory via any of its eight capabilities.
- - Set the address of a capability in its set.
- - Write capabilities from its set of eight via any of that set.
+ - Read the permissions, bounds, address, and length of a capability in a register.
+ - Read capabilities from memory via any of its eight capabilities registers into a register.
+ - Read 32-bit words from memory via any of its eight capabilities registers into a register.
+ - Set the address of a capability in any of the registers.
+ - Write a capability from a register into memory via a capability in any of the registers.
  - Run arbitrary JavaScript to perform any of the above actions, intermixed with other computation.
 
 This is the equivalent of the one of the most powerful weird machines that it is possible to create on a CHERI system from code reuse attacks.
@@ -23,6 +23,13 @@ The goal of this exercise is to apply compartmentalisation to limit the damage t
 
 Running the exercise
 --------------------
+
+First we need to configure the `xmake` build to run on the Ibex simulator and build with the CHERIoT toolchain.
+If you are using the [dev container](../../docs/GettingStarted.md) you should run:
+
+```
+xmake config --sdk=/cheriot-tools/
+```
 
 There are two shell scripts that are useful for testing.
 The first, `run_simulator.sh`, will compile and run the firmware in the CHERIoT Ibex simulator, with the UART connected to a named pipe.
@@ -50,7 +57,7 @@ Hello world
 
 Don't worry if the numbers don't match exactly.
 
-The lines that start with magenta `JavaScript compartment' are debugging lines that are produced by `Debug::log` calls in C++.
+The lines that start with magenta `JavaScript compartment` are debugging lines that are produced by `Debug::log` calls in C++.
 Output from JavaScript does not have this prefix.
 
 Compiling the JavaScript to bytecode requires Node.js and npm.
@@ -112,7 +119,7 @@ Exercise 1: Confidentiality
 ---------------------------
 
 First, we want to protect the secret.
-For the this exercise, we want to move the 
+For the this exercise, we want to move it into a separate comparment so that it is isolated from problems that might occur in the rest of the system.
 
 This will involve moving some code, since each compartment is one or more source files: individual source files end up in one compartment.
 The current compartment is defined in the [`xmake.lua`](xmake.lua) file like this:
@@ -164,6 +171,7 @@ This is where the `js` compartment is added to the firmware image.
 
 For the first exercise, you should move `secret.cc` into a different compartment.
 This will require modifying `xmake.lua` to build it in a separate compartment and modifying the prototype in `secret.h` to indicate the compartment from which the functions are exposed.
+You might find [this example](../../examples/02.hello_compartment/README.md) a useful reference.
 
 Once you have completed this exercise, try modifying the `leak.js` script to see if you can make it work.
 You shouldn't be able to.
