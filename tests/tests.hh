@@ -15,6 +15,14 @@ __cheri_compartment("multiwaiter_test") void test_multiwaiter();
 __cheri_compartment("stack_test") void test_stack();
 __cheri_compartment("compartment_calls_test") void test_compartment_call();
 __cheri_compartment("static_sealing_test") void test_static_sealing();
+__cheri_compartment("mibench_crc32_test") void test_mibench_crc32();
+__cheri_compartment("mibench_bitcount_test") void test_mibench_bitcount();
+__cheri_compartment("mibench_dijkstra_test") void test_mibench_dijkstra();
+__cheri_compartment("mibench_qsort_test") void test_mibench_qsort();
+__cheri_compartment("mibench_sha_test") void test_mibench_sha();
+__cheri_compartment("mibench_stringsearch_test") void test_mibench_stringsearch();
+__cheri_compartment("mibench_adpcm_test") void test_mibench_adpcm();
+__cheri_compartment("mibench_aes_test") void test_mibench_aes();
 
 // Simple tests don't need a separate compartment.
 void test_global_constructors();

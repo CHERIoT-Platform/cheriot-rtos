@@ -46,6 +46,22 @@ test("crash_recovery")
 test("multiwaiter")
 -- Test that C code can compile
 test_c("ccompile")
+-- MiBench CRC32
+test("mibench_crc32")
+-- MiBench bitcount
+test("mibench_bitcount")
+-- MiBench dijkastra
+test("mibench_dijkstra")
+-- MiBench qsort
+test("mibench_qsort")
+-- MiBench sha
+test("mibench_sha")
+-- MiBench stringsearch
+test("mibench_stringsearch")
+-- MiBench adpcm
+test("mibench_adpcm")
+-- MiBench AES
+test("mibench_aes")
 -- Test stacks
 compartment("stack_integrity_thread")
     add_files("stack_integrity_thread.cc")
@@ -79,6 +95,14 @@ firmware("test-suite")
     add_deps("futex_test")
     add_deps("queue_test")
     add_deps("locks_test")
+    add_deps("mibench_crc32_test")
+    add_deps("mibench_bitcount_test")
+    add_deps("mibench_dijkstra_test")
+    add_deps("mibench_qsort_test")
+    add_deps("mibench_sha_test")
+    add_deps("mibench_stringsearch_test")
+    add_deps("mibench_adpcm_test")
+    add_deps("mibench_aes_test")
     add_deps("static_sealing_test", "static_sealing_inner")
     add_deps("crash_recovery_test", "crash_recovery_inner", "crash_recovery_outer")
     add_deps("multiwaiter_test")

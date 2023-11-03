@@ -92,6 +92,14 @@ void __cheri_compartment("test_runner") run_tests()
 	}
 
 	run_timed("All tests", []() {
+		run_timed("MiBench CRC32", test_mibench_crc32);
+		run_timed("MiBench bitcount", test_mibench_bitcount);
+		run_timed("MiBench dijkstra", test_mibench_dijkstra);
+		run_timed("MiBench qsort", test_mibench_qsort);
+		run_timed("MiBench SHA", test_mibench_sha);
+		run_timed("MiBench stringsearch", test_mibench_stringsearch);
+		run_timed("MiBench adpcm", test_mibench_adpcm);
+		run_timed("MiBench AES", test_mibench_aes);
 		run_timed("Static sealing", test_static_sealing);
 		run_timed("Crash recovery", test_crash_recovery);
 		run_timed("Compartment calls", test_compartment_call);
