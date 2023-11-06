@@ -210,10 +210,12 @@ Just before the JavaScript VM starts, the simulator will report a line like this
 JavaScript compartment: 0xbf8 bytes of heap available
 ```
 
-If you have correctly moved the JavaScript code to a new compartment, then you may notice that this number goes down every time you load the `crash.js` script.
-This number is not the total amount of available heap memory, it is the amount that the compartment containing the JavaScript interpreter is authorised to allocate.
+This number is not the total amount of available heap memory, it is the amount that the compartment that logs the message is authorised to allocate.
 If this is exhausted, other compartments may still allocate memory from their quotas.
 This means that our leak still has a constrained blast radius but it's still a problem.
+
+If you have correctly moved the JavaScript code to a new compartment, then that compartment will leak some memory every time you load the `crash.js` script.
+If you have moved (or copied) this line into the compartment that runs the JavaScript interpreter then you will see the amount of memory available for that compartment go down each time that `crash.js` runs.
 
 Memory quotas are implemented via a capability model.
 Each compartment may hold zero or more capabilities that authorise allocating memory, with different quotas.
