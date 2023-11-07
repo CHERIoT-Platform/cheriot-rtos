@@ -139,7 +139,7 @@ class Uart16550
 		// Disable interrupts
 		intrEnable = 0x00;
 		// Set the divisor latch (we're going to write the divisor) and set the
-		// character width to 8 bits.
+		// character width to 8 bits, one stop bit, no parity.
 		lineControl = 0x83;
 		// Set the divisor
 		data       = divisor & 0xff;
@@ -149,7 +149,12 @@ class Uart16550
 		// Clear the divisor latch
 		lineControl = 0x03;
 		// Enable the FIFO and reset
-		intrIDandFifo = 0x01;
+		// Enabled bits:
+		// 0 - Enable FIFOs
+		// 1 - Clear receive FIFO
+		// 2 - Clear send FIFO
+		// 5 - 64-byte FIFO (if available)
+		intrIDandFifo = 0x1;
 	}
 };
 
