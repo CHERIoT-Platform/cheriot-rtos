@@ -1,0 +1,62 @@
+{
+    "devices": {
+        "clint": {
+            "start": 0x14001000,
+            "length": 0x1000
+        },
+        "plic": {
+            "start": 0x10000000,
+            "end": 0x10400000
+        },
+        "revoker": {
+            "start": 0x14000000,
+            "length": 0x1000
+        },
+        "uart": {
+            "start": 0x8f00b000,
+            "end":   0x8f00b100
+        },
+        "shadow" : {
+            "start": 0x200fe000,
+            "length": 0x2000
+        },
+        "gpio_led0" : {
+            "start": 0x8f00f000,
+            "length": 0x800
+        }
+    },
+    "instruction_memory": {
+        "start": 0x20040000,
+        "end": 0x20080000
+    },
+    "heap": {
+        "end": 0x20080000
+    },
+    "interrupts": [
+        {
+            "name": "RevokerInterrupt",
+            "number": 1,
+            "priority": 2
+        },
+        {
+            "name": "UARTInterrupt",
+            "number": 2,
+            "priority": 3,
+            "edge_triggered": true
+        }
+    ],
+    "defines" : [
+        "IBEX",
+        "IBEX_SAFE"
+    ],
+    "driver_includes" : [
+        "${sdk}/include/platform/arty-a7",
+        "${sdk}/include/platform/synopsis",
+        "${sdk}/include/platform/ibex",
+        "${sdk}/include/platform/generic-riscv"
+    ],
+    "timer_hz" : 20000000,
+    "tickrate_hz" : 100,
+    "revoker" : "hardware",
+    "stack_high_water_mark" : true
+}
