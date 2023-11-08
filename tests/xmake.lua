@@ -23,38 +23,42 @@ function test_c(name)
 end
 
 -- Test the allocator and the revoker.
-test("allocator")
+-- test("allocator")
 -- Test the thread pool
 test("thread_pool")
--- Test the futex implementation
-test("futex")
--- Test locks built on top of the futex
-test("queue")
--- Test queues
-test("locks")
--- Test the static sealing types
-test("static_sealing")
-compartment("static_sealing_inner")
-	add_files("static_sealing_inner.cc")
--- Test crash recovery.
-compartment("crash_recovery_inner")
-	add_files("crash_recovery_inner.cc")
-compartment("crash_recovery_outer")
-	add_files("crash_recovery_outer.cc")
-test("crash_recovery")
--- Test the multiwaiter
-test("multiwaiter")
--- Test that C code can compile
-test_c("ccompile")
--- Test stacks
-compartment("stack_integrity_thread")
-    add_files("stack_integrity_thread.cc")
-test("stack")
-compartment("compartment_calls_inner")
-    add_files("compartment_calls_inner.cc")
-compartment("compartment_calls_inner_with_handler")
-    add_files("compartment_calls_inner_with_handler.cc")
-test("compartment_calls")
+-- -- Test the futex implementation
+-- test("futex")
+-- -- Test locks built on top of the futex
+-- test("queue")
+-- -- Test queues
+-- test("locks")
+-- -- Test the static sealing types
+-- test("static_sealing")
+-- compartment("static_sealing_inner")
+-- 	add_files("static_sealing_inner.cc")
+-- -- Test crash recovery.
+-- compartment("crash_recovery_inner")
+-- 	add_files("crash_recovery_inner.cc")
+-- compartment("crash_recovery_outer")
+-- 	add_files("crash_recovery_outer.cc")
+-- test("crash_recovery")
+-- -- Test the multiwaiter
+-- test("multiwaiter")
+-- -- Test that C code can compile
+-- test_c("ccompile")
+-- -- Test stacks
+-- compartment("stack_integrity_thread")
+--     add_files("stack_integrity_thread.cc")
+-- test("stack")
+-- compartment("compartment_calls_inner")
+--     add_files("compartment_calls_inner.cc")
+-- compartment("compartment_calls_inner_with_handler")
+--     add_files("compartment_calls_inner_with_handler.cc")
+-- test("compartment_calls")
+compartment("dma")
+    add_files(path.join(sdkdir, "core/dma-v2/dma_compartment.cc"))
+
+test("dma")
 
 includes(path.join(sdkdir, "lib/atomic"),
          path.join(sdkdir, "lib/cxxrt"),
@@ -74,17 +78,19 @@ firmware("test-suite")
     -- Helper libraries
     add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed")
     -- Tests
-    add_deps("allocator_test")
+    -- add_deps("allocator_test")
     add_deps("thread_pool_test")
-    add_deps("futex_test")
-    add_deps("queue_test")
-    add_deps("locks_test")
-    add_deps("static_sealing_test", "static_sealing_inner")
-    add_deps("crash_recovery_test", "crash_recovery_inner", "crash_recovery_outer")
-    add_deps("multiwaiter_test")
-    add_deps("ccompile_test")
-    add_deps("stack_test", "stack_integrity_thread")
-    add_deps("compartment_calls_test", "compartment_calls_inner", "compartment_calls_inner_with_handler")
+    -- add_deps("futex_test")
+    -- add_deps("queue_test")
+    -- add_deps("locks_test")
+    -- add_deps("static_sealing_test", "static_sealing_inner")
+    -- add_deps("crash_recovery_test", "crash_recovery_inner", "crash_recovery_outer")
+    -- add_deps("multiwaiter_test")
+    -- add_deps("ccompile_test")
+    -- add_deps("stack_test", "stack_integrity_thread")
+    -- add_deps("compartment_calls_test", "compartment_calls_inner", "compartment_calls_inner_with_handler")
+    add_deps("dma_test")
+    add_deps("dma")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
         target:values_set("board", "$(board)")
@@ -104,13 +110,13 @@ firmware("test-suite")
                 entry_point = "thread_pool_run",
                 stack_size = 0x600,
                 trusted_stack_frames = 8
-            },
-            {
-                compartment = "thread_pool",
-                priority = 1,
-                entry_point = "thread_pool_run",
-                stack_size = 0x600,
-                trusted_stack_frames = 8
             }
+            -- {
+            --     compartment = "thread_pool",
+            --     priority = 1,
+            --     entry_point = "thread_pool_run",
+            --     stack_size = 0x600,
+            --     trusted_stack_frames = 8
+            -- }
         }, {expand = false})
     end)

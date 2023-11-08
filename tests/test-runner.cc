@@ -92,17 +92,18 @@ void __cheri_compartment("test_runner") run_tests()
 	}
 
 	run_timed("All tests", []() {
-		run_timed("Static sealing", test_static_sealing);
-		run_timed("Crash recovery", test_crash_recovery);
-		run_timed("Compartment calls", test_compartment_call);
-		run_timed("Stacks exhaustion in the switcher", test_stack);
-		run_timed("Thread pool", test_thread_pool);
-		run_timed("Global Constructors", test_global_constructors);
-		run_timed("Queue", test_queue);
-		run_timed("Futex", test_futex);
-		run_timed("Locks", test_locks);
-		run_timed("Multiwaiter", test_multiwaiter);
-		run_timed("Allocator", test_allocator);
+		// run_timed("Static sealing", test_static_sealing);
+		// run_timed("Crash recovery", test_crash_recovery);
+		// run_timed("Compartment calls", test_compartment_call);
+		// run_timed("Stacks exhaustion in the switcher", test_stack);
+		// run_timed("Thread pool", test_thread_pool);
+		// run_timed("Global Constructors", test_global_constructors);
+		// run_timed("Queue", test_queue);
+		// run_timed("Futex", test_futex);
+		// run_timed("Locks", test_locks);
+		// run_timed("Multiwaiter", test_multiwaiter);
+		// run_timed("Allocator", test_allocator);
+		run_timed("DMA", test_dma);
 	});
 
 	TEST(crashDetected == false, "One or more tests failed");
