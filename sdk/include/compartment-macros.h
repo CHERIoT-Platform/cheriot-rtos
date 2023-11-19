@@ -5,32 +5,77 @@
 #include <cdefs.h>
 
 /**
- * Provide a capability of the type `volatile type *` referring to the MMIO
- * region exported in the linker script with `name` as its name.  This macro
- * can be used only in code (it cannot be used to initialise a global).
+ * Helper macro, should not be used directly.
  */
-#define MMIO_CAPABILITY(type, name)                                            \
+#define MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                          \
+                                                name,                          \
+                                                mangledName,                   \
+                                                permitLoad,                    \
+                                                permitStore,                   \
+                                                permitLoadStoreCapabilities,   \
+                                                permitLoadMutable)             \
 	({                                                                         \
 		volatile type *ret; /* NOLINT(bugprone-macro-parentheses) */           \
-		__asm(".ifndef __import_mem_" #name "\n"                               \
-		      "  .type     __import_mem_" #name ",@object\n"                   \
+		__asm(".ifndef " mangledName "\n"                                      \
+		      "  .type     " mangledName ",@object\n"                          \
 		      "  .section  .compartment_imports." #name                        \
 		      ",\"awG\",@progbits," #name ",comdat\n"                          \
-		      "  .globl    __import_mem_" #name "\n"                           \
-		      "  .p2align  3\n"                                                \
-		      "__import_mem_" #name ":\n"                                      \
+		      "  .globl    " mangledName "\n"                                  \
+		      "  .p2align  3\n" mangledName ":\n"                              \
 		      "  .word __export_mem_" #name "\n"                               \
-		      "  .word __export_mem_" #name "_end - __export_mem_" #name "\n"  \
-		      "  .size __import_mem_" #name ", 8\n"                            \
+		      "  .word __export_mem_" #name "_end - __export_mem_" #name       \
+		      " + %c1\n"                                                       \
+		      "  .size " mangledName ", 8\n"                                   \
 		      " .previous\n"                                                   \
 		      ".endif\n"                                                       \
 		      "1:"                                                             \
 		      "  auipcc  %0,"                                                  \
-		      "      %%cheri_compartment_pccrel_hi(__import_mem_" #name ")\n"  \
+		      "      %%cheri_compartment_pccrel_hi(" mangledName ")\n"         \
 		      "  clc     %0, %%cheri_compartment_pccrel_lo(1b)(%0)\n"          \
-		      : "=C"(ret));                                                    \
+		      : "=C"(ret)                                                      \
+		      : "i"(((permitLoad) ? (1 << 31) : 0) +                           \
+		            ((permitStore) ? (1 << 30) : 0) +                          \
+		            ((permitLoadStoreCapabilities) ? (1 << 29) : 0) +          \
+		            ((permitLoadMutable) ? (1 << 28) : 0)));                   \
 		ret;                                                                   \
 	})
+
+/**
+ * Provide a capability of the type `volatile type *` referring to the MMIO
+ * region exported in the linker script with `name` as its name.  This macro
+ * can be used only in code (it cannot be used to initialise a global).
+ *
+ * The last arguments specify the set of permissions that this capability
+ * holds.  MMIO capabilities are always global and without store local.  They
+ * may optionally omit additional capabilities.
+ */
+#define MMIO_CAPABILITY_WITH_PERMISSIONS(type,                                 \
+                                         name,                                 \
+                                         permitLoad,                           \
+                                         permitStore,                          \
+                                         permitLoadStoreCapabilities,          \
+                                         permitLoadMutable)                    \
+	MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(                                   \
+	  type,                                                                    \
+	  name,                                                                    \
+	  "__import_mem_" #name "_" #permitLoad "_" #permitStore                   \
+	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
+	  permitLoad,                                                              \
+	  permitStore,                                                             \
+	  permitLoadStoreCapabilities,                                             \
+	  permitLoadMutable)
+
+/**
+ * Provide a capability of the type `volatile type *` referring to the MMIO
+ * region exported in the linker script with `name` as its name.  This macro
+ * can be used only in code (it cannot be used to initialise a global).
+ *
+ * MMIO capabilities produced by this macro have load and store permissions but
+ * cannot hold capabilities.  For richer permissions use
+ * MMIO_CAPABILITY_WITH_PERMISSIONS.
+ */
+#define MMIO_CAPABILITY(type, name)                                            \
+	MMIO_CAPABILITY_WITH_PERMISSIONS(type, name, true, true, false, false)
 
 /**
  * Macro to test whether a device with a specific name exists in the board

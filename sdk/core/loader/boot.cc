@@ -405,36 +405,40 @@ namespace
 	 */
 	void *find_export_target(const ImgHdr &image,
 	                         const auto   &sourceCompartment,
-	                         ptraddr_t     target,
-	                         size_t        size)
+	                         ImportEntry  &entry)
 	{
 		// Build an MMIO capability.
 		auto buildMMIO = [&]() {
-			Debug::log("Building mmio capability {} + {}", target, size);
+			Debug::log("Building mmio capability {} + {} (permissions: {})",
+			           entry.address,
+			           entry.size(),
+			           entry.permissions());
 			if constexpr (std::is_same_v<
 			                std::remove_cvref_t<decltype(sourceCompartment)>,
 			                ImgHdr::PrivilegedCompartment>)
 			{
 				if (&sourceCompartment == &image.allocator())
 				{
-					if (target == LA_ABS(__export_mem_heap) &&
-					    (size == (LA_ABS(__export_mem_heap_end) -
-					              LA_ABS(__export_mem_heap))))
+					if (entry.address == LA_ABS(__export_mem_heap) &&
+					    (entry.size() == (LA_ABS(__export_mem_heap_end) -
+					                      LA_ABS(__export_mem_heap))))
 					{
-						ptraddr_t end = target + size;
+						ptraddr_t end = entry.address + entry.size();
 						Debug::log(
-						  "Rounding heap ({}--{}) region", target, end);
+						  "Rounding heap ({}--{}) region", entry.address, end);
 						size_t sizeMask =
-						  __builtin_cheri_representable_alignment_mask(size);
-						Debug::log("Applying mask {} to size", sizeMask);
-						size_t    roundedSize = size & sizeMask;
+						  __builtin_cheri_representable_alignment_mask(
+						    entry.size());
+						Debug::log("Applying mask {} to entry.size", sizeMask);
+						size_t    roundedSize = entry.size() & sizeMask;
 						ptraddr_t roundedBase = end - roundedSize;
-						Debug::log(
-						  "Rounding heap size down from {} to {} (rounded up "
-						  "to {})",
-						  size,
-						  roundedSize,
-						  __builtin_cheri_round_representable_length(size));
+						Debug::log("Rounding heap entry.size down from {} to "
+						           "{} (rounded up "
+						           "to {})",
+						           entry.size(),
+						           roundedSize,
+						           __builtin_cheri_round_representable_length(
+						             entry.size()));
 						Debug::Invariant(
 						  (end & ~sizeMask) == 0,
 						  "End of heap ({}) is not sufficiently aligned ({})",
@@ -445,9 +449,9 @@ namespace
 						  roundedBase,
 						  roundedBase + roundedSize);
 						Debug::Invariant(
-						  roundedBase >= target,
+						  roundedBase >= entry.address,
 						  "Rounding heap base ({}) up to {} rounded down!",
-						  target,
+						  entry.address,
 						  roundedBase);
 						auto heap = build(roundedBase, roundedSize);
 						Debug::log("Heap: {}", heap);
@@ -459,25 +463,30 @@ namespace
 					}
 				}
 			}
-			Debug::Invariant(target >= LA_ABS(__mmio_region_start),
+			Debug::Invariant(entry.address >= LA_ABS(__mmio_region_start),
 			                 "{} is not in the MMIO range",
-			                 target);
-			Debug::Invariant(target + size <= LA_ABS(__mmio_region_end),
+			                 entry.address);
+			Debug::Invariant(entry.address + entry.size() <=
+			                   LA_ABS(__mmio_region_end),
 			                 "{} is not in the MMIO range",
-			                 target + size);
-			return build(target, size);
+			                 entry.address + entry.size());
+			auto ret = build(entry.address, entry.size());
+			// Remove any permissions that shouldn't be held here.
+			ret.permissions() &= entry.permissions();
+			return ret;
 		};
 
 		// Build an export table entry for the given compartment.
 		auto buildExportEntry = [&](const auto &compartment) {
-			auto exportEntry = build(compartment.exportTable, target)
+			auto exportEntry = build(compartment.exportTable, entry.address)
 			                     .template cast<ExportEntry>();
 			auto interruptStatus = exportEntry->interrupt_status();
 			Debug::Invariant((interruptStatus == InterruptStatus::Enabled) ||
 			                   (interruptStatus == InterruptStatus::Disabled),
 			                 "Functions exported from compartments must have "
 			                 "an explicit interrupt posture");
-			return build(compartment.exportTable, target).seal(switcherKey);
+			return build(compartment.exportTable, entry.address)
+			  .seal(switcherKey);
 		};
 
 		// If the low bit is 1, then this is either an MMIO region or direct
@@ -485,10 +494,10 @@ namespace
 		// (stateless) libraries and explicit interrupt-toggling sentries for
 		// code within the current compartment.
 		// First check if it's a sentry call.
-		if (target & 1)
+		if (entry.address & 1)
 		{
 			// Clear the low bit to give the real address.
-			auto possibleLibcall = target & ~1U;
+			auto possibleLibcall = entry.address & ~1U;
 			// Helper to create the target of a library call.
 			auto createLibCall = [&](Capability<void> pcc) {
 				// Libcall export table entries are just sentry capabilities to
@@ -552,13 +561,14 @@ namespace
 		}
 
 		{
-			if (contains(sourceCompartment.sealedObjects, target, size))
+			if (contains(
+			      sourceCompartment.sealedObjects, entry.address, entry.size()))
 			{
 				auto sealingType =
 				  build<uint32_t,
 				        Root::Type::RWGlobal,
 				        PermissionSet{Permission::Load, Permission::Store}>(
-				    target);
+				    entry.address);
 				// Is the software sealing type owned by the scheduler?  If so,
 				// we're going to seal the object with the scheduler's sealing
 				// type, not the allocator's.  This lets the scheduler export
@@ -607,7 +617,7 @@ namespace
 					                 "Invalid sealed object {}",
 					                 typeAddress);
 				}
-				Capability sealedObject = build(target, size);
+				Capability sealedObject = build(entry.address, entry.size());
 				// Seal with the allocator's sealing key
 				sealedObject.seal(build<void, Root::Type::Seal>(
 				  isSchedulerObject ? Scheduler : Allocator, 1));
@@ -618,7 +628,7 @@ namespace
 
 		for (auto &compartment : image.privilegedCompartments)
 		{
-			if (contains<ExportEntry>(compartment.exportTable, target))
+			if (contains<ExportEntry>(compartment.exportTable, entry.address))
 			{
 				return buildExportEntry(compartment);
 			}
@@ -626,7 +636,7 @@ namespace
 
 		for (auto &compartment : image.compartments())
 		{
-			if (contains<ExportEntry>(compartment.exportTable, target))
+			if (contains<ExportEntry>(compartment.exportTable, entry.address))
 			{
 				return buildExportEntry(compartment);
 			}
@@ -661,7 +671,7 @@ namespace
 		for (int i = 0; i < (importTable.size() / sizeof(void *)) - 1; i++)
 		{
 			ptraddr_t importAddr = impPtr->imports[i].address;
-			size_t    importSize = impPtr->imports[i].size;
+			size_t    importSize = impPtr->imports[i].size();
 			// If the size is not 0, this isn't an import table entry.
 			if (importSize != 0)
 			{
@@ -721,27 +731,24 @@ namespace
 		           importTable.size());
 		// The import table might not have strongly aligned bounds and so we
 		// are happy with an imprecise capability here.
-		auto impPtr = build<ImportTable,
-		                    Root::Type::RWStoreL,
-		                    Root::Permissions<Root::Type::RWStoreL>,
-		                    false>(importTable);
+		auto importTablePointer = build<ImportTable,
+		                                Root::Type::RWStoreL,
+		                                Root::Permissions<Root::Type::RWStoreL>,
+		                                false>(importTable);
 
-		impPtr->switcher = switcher;
+		importTablePointer->switcher = switcher;
 		// FIXME: This should use a range-based for loop
 		for (int i = 0; i < (importTable.size() / sizeof(void *)) - 1; i++)
 		{
 			// If this is a sealing key then we will have initialised it
 			// already, skip it now.
-			if (Capability{impPtr->imports[i].pointer}.is_valid())
+			if (Capability{importTablePointer->imports[i].pointer}.is_valid())
 			{
 				Debug::log("Skipping sealing type import");
 				continue;
 			}
-			ptraddr_t importAddr = impPtr->imports[i].address;
-			size_t    importSize = impPtr->imports[i].size;
-
-			impPtr->imports[i].pointer = find_export_target(
-			  image, sourceCompartment, importAddr, importSize);
+			importTablePointer->imports[i].pointer = find_export_target(
+			  image, sourceCompartment, importTablePointer->imports[i]);
 		}
 	}
 
@@ -753,6 +760,7 @@ namespace
 	{
 		for (size_t i = 0; const auto &config : image.threads())
 		{
+			Debug::log("Creating thread {}", i);
 			auto findCompartment = [&]() -> auto &
 			{
 				for (auto &compartment : image.compartments())
@@ -821,6 +829,7 @@ namespace
 
 			// Stack pointer points to the top of the stack.
 			stack.address() += config.stack.size();
+			Debug::log("Thread's stack is {}", stack);
 			threadTStack->csp = stack;
 			// Enable previous level interrupts and set the previous exception
 			// level to M mode.
@@ -834,6 +843,8 @@ namespace
 			threadTStack->frameoffset = offsetof(TrustedStack, frames[1]);
 			threadTStack->frames[0].calleeExportTable =
 			  build(compartment.exportTable);
+
+			Debug::log("Thread's trusted stack is {}", threadTStack);
 
 			threadTStack.seal(trustedStackKey);
 

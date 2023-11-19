@@ -5,6 +5,7 @@
 #include <debug.hh>
 #include <thread.h>
 
+__cheri_compartment("mmio_test") void test_mmio();
 __cheri_compartment("allocator_test") void test_allocator();
 __cheri_compartment("thread_pool_test") void test_thread_pool();
 __cheri_compartment("futex_test") void test_futex();

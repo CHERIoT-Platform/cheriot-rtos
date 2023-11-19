@@ -22,6 +22,8 @@ function test_c(name)
          add_files(name .. "-test.c")
 end
 
+-- Test MMIO access
+test("mmio")
 -- Test the allocator and the revoker.
 test("allocator")
 -- Test the thread pool
@@ -74,6 +76,7 @@ firmware("test-suite")
     -- Helper libraries
     add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed")
     -- Tests
+    add_deps("mmio_test")
     add_deps("allocator_test")
     add_deps("thread_pool_test")
     add_deps("futex_test")

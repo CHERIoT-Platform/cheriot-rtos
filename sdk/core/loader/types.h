@@ -868,6 +868,30 @@ namespace loader
 	union ImportEntry
 	{
 		/**
+		 * Bit in `sizeAndPermissions` indicating that this import has load
+		 * permission.
+		 */
+		static constexpr size_t PermitLoad = (1UL << 31);
+
+		/**
+		 * Bit in `sizeAndPermissions` indicating that this import has store
+		 * permission.
+		 */
+		static constexpr size_t PermitStore = (1UL << 30);
+
+		/**
+		 * Bit in `sizeAndPermissions` indicating that this import has
+		 * load/store capabilities permission.
+		 */
+		static constexpr size_t PermitLoadStoreCapabilities = (1UL << 29);
+
+		/**
+		 * Bit in `sizeAndPermissions` indicating that this import has
+		 * load-mutable permission.
+		 */
+		static constexpr size_t PermitLoadMutable = (1UL << 28);
+
+		/**
 		 * State on boot.
 		 */
 		struct
@@ -880,15 +904,66 @@ namespace loader
 			ptraddr_t address;
 
 			/**
-			 * The size.  This is currently unused except for MMIO imports.
+			 * The size and permissions.  The size is currently used for static
+			 * sealed objects and MMIO imports.  The permissions part is used
+			 * only for MMIO regions.
+			 *
+			 * The size is stored in the low 24 bits.  We cannot provide
+			 * fine-grained capabilities beyond that size, leaving the top 8
+			 * bits free.  These encode a subset of permissions.  MMIO regions
+			 * cannot be local or executable.
 			 */
-			size_t size;
+			size_t sizeAndPermissions;
 		};
 
 		/**
 		 * The initialised value of this.
 		 */
 		void *pointer;
+
+		/**
+		 * Returns the size.
+		 */
+		[[nodiscard]] size_t size() const
+		{
+			return sizeAndPermissions & 0xffffff;
+		}
+
+		/**
+		 * The permissions requested for this MMIO export.
+		 */
+		[[nodiscard]] CHERI::PermissionSet permissions() const
+		{
+			using CHERI::Permission;
+			// If we dynamically initialise from an initialiser list, we end up
+			// with a memcpy call, which breaks the loader.  A copy construct
+			// from a constexpr version is a simple 32-bit assignment and so
+			// doesn't suffer from this problem.
+			constexpr CHERI::PermissionSet DefaultPermissions{
+			  Permission::Global,
+			  Permission::Load,
+			  Permission::Store,
+			  Permission::LoadStoreCapability,
+			  Permission::LoadMutable};
+			CHERI::PermissionSet p{DefaultPermissions};
+			if ((sizeAndPermissions & PermitLoad) == 0)
+			{
+				p = p.without(Permission::Load);
+			}
+			if ((sizeAndPermissions & PermitStore) == 0)
+			{
+				p = p.without(Permission::Store);
+			}
+			if ((sizeAndPermissions & PermitLoadStoreCapabilities) == 0)
+			{
+				p = p.without(Permission::LoadStoreCapability);
+			}
+			if ((sizeAndPermissions & PermitLoadMutable) == 0)
+			{
+				p = p.without(Permission::LoadMutable);
+			}
+			return p;
+		}
 	};
 
 	struct ImportTable
@@ -943,8 +1018,8 @@ namespace loader
 	struct __packed ExportEntry
 	{
 		/**
-		 * The shift amount to move the bits used to store the interrupt status
-		 * to the low bits of the word.
+		 * The shift amount to move the bits used to store the interrupt
+		 * status to the low bits of the word.
 		 */
 		static constexpr uint8_t InterruptStatusShift = 3;
 
@@ -956,11 +1031,11 @@ namespace loader
 
 		/**
 		 * The flag indicating that this is a fake entry used to identify
-		 * sealing types.  No import table entries should refer to this other
-		 * than from the same compartment, which will be populated with a
-		 * sealing capability. Statically sealed objects will have their first
-		 * word initialised to point to this, the loader will set them up to
-		 * instead hold the value of the sealing key.
+		 * sealing types.  No import table entries should refer to this
+		 * other than from the same compartment, which will be populated
+		 * with a sealing capability. Statically sealed objects will have
+		 * their first word initialised to point to this, the loader will
+		 * set them up to instead hold the value of the sealing key.
 		 */
 		static constexpr uint8_t SealingTypeEntry = uint8_t(0b100000);
 
@@ -970,8 +1045,8 @@ namespace loader
 		 * The offset from the start of this compartment's PCC of the called
 		 * function.
 		 *
-		 * If this is a sealing key, then this will be filled in by the loader
-		 * to indicate the sealing type.
+		 * If this is a sealing key, then this will be filled in by the
+		 * loader to indicate the sealing type.
 		 */
 		uint16_t functionStart;
 

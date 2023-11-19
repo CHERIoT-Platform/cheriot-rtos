@@ -103,7 +103,13 @@ namespace
 	{
 		if (gm == nullptr)
 		{
-			Capability heap = const_cast<void *>(MMIO_CAPABILITY(void, heap));
+			Capability heap = const_cast<void *>(
+			  MMIO_CAPABILITY_WITH_PERMISSIONS(void,
+			                                   heap,
+			                                   /*load*/ true,
+			                                   /*store*/ true,
+			                                   /*capabilities*/ true,
+			                                   /*loadMutable*/ true));
 
 			revoker.init();
 			gm = mstate_init(heap, heap.bounds());

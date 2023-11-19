@@ -47,7 +47,10 @@ start:
 	la_abs			a3, __compart_headers_end
 	sub				a3, a3, a1
 	csetaddr		ca1, ca2, a1 // ca2 still has the G root.
-	csetboundsexact	ca1, ca1, a3
+	// FIXME: This should be a set bounds exact, but we currently don't have a
+	// 'pad to capability alignment' command in the linker script and it needs
+	// to span two sections.
+	csetbounds		ca1, ca1, a3
 	// Set up $cra to be the loader's C++ entry point.
 	// We are safe to clobber $cra here because this is the root function on
 	// the call stack.
