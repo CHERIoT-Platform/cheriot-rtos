@@ -47,6 +47,7 @@ struct TrustedStackGeneric
 	void  *c13;
 	void  *c14;
 	void  *c15;
+	void  *hazardPointers;
 	size_t mstatus;
 	size_t mcause;
 #ifdef CONFIG_MSHWM

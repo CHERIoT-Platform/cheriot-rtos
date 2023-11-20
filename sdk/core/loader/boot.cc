@@ -758,6 +758,20 @@ namespace
 	void boot_threads_create(const ImgHdr            &image,
 	                         sched::ThreadLoaderInfo *threadInfo)
 	{
+		// Two hazard pointers per thread.  More makes free slow, fewer is hard
+		// to use.
+		static constexpr size_t HazardPointersPerThread = 2;
+		Capability<void *>      hazardPointers =
+		  build<void *,
+		        Root::Type::RWGlobal,
+		        PermissionSet{Permission::Store,
+		                      Permission::LoadStoreCapability}>(
+		    LA_ABS(__export_mem_hazard_pointers),
+		    LA_ABS(__export_mem_hazard_pointers_end) -
+		      LA_ABS(__export_mem_hazard_pointers));
+		// Space per thread for hazard pointers.
+		static constexpr size_t HazardPointerSpace =
+		  HazardPointersPerThread * sizeof(void *);
 		for (size_t i = 0; const auto &config : image.threads())
 		{
 			Debug::log("Creating thread {}", i);
@@ -831,6 +845,13 @@ namespace
 			stack.address() += config.stack.size();
 			Debug::log("Thread's stack is {}", stack);
 			threadTStack->csp = stack;
+
+			// Set up the space for hazard pointers.
+			Capability threadHazardPointers{hazardPointers};
+			threadHazardPointers.address() += (i * HazardPointerSpace);
+			threadHazardPointers.bounds() = HazardPointerSpace;
+			threadTStack->hazardPointers  = threadHazardPointers;
+
 			// Enable previous level interrupts and set the previous exception
 			// level to M mode.
 			threadTStack->mstatus =

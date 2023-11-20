@@ -147,6 +147,17 @@ switcher_scheduler_entry_csp:
 2:
 .endm
 
+/**
+ * Clear the hazard pointers associated with this thread.  We don't care about
+ * leaks here (they're store-only from anywhere except the allocator), so just
+ * write a 32-bit zero over half of each one to clobber the tags.
+ */
+.macro clear_hazard_slots trustedStack, scratch
+	clc                \scratch, TrustedStack_offset_hazardPointers(\trustedStack)
+	csw                zero, 0(\scratch)
+	csw                zero, 8(\scratch)
+.endm
+
 	.section .text, "ax", @progbits
 	.globl __Z26compartment_switcher_entryz
 	.p2align 2
@@ -169,6 +180,7 @@ __Z26compartment_switcher_entryz:
 	// XXX: This line is useless, only for mtdc to show up in debugging.
 	cmove              ct2, ct2
 #endif
+	clear_hazard_slots ct2, ctp
 
 	// make sure the trusted stack is still in bounds
 	clhu               tp, TrustedStack_offset_frameoffset(ct2)
@@ -754,6 +766,7 @@ exception_entry_asm:
 	// The below should not fault before returning back to the caller. If a fault occurs there must
 	// be a serious bug elsewhere.
 	cspecialr          ctp, mtdc
+	clear_hazard_slots ctp, ct2
 	// make sure there is a frame left in the trusted stack
 	clhu               t2, TrustedStack_offset_frameoffset(ctp)
 	li                 tp, TrustedStackFrame_size
@@ -920,6 +933,16 @@ __Z23switcher_current_threadv:
 	li                 a1, 0
 	cret
 
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z28switcher_thread_hazard_slotsv,@function
+__Z28switcher_thread_hazard_slotsv:
+	// Load the trusted stack pointer into a register that we will clobber in
+	// two instructions.
+	cspecialr          ca0, mtdc
+	clc                ca0, TrustedStack_offset_hazardPointers(ca0)
+	cret
+
 
 
 
@@ -954,3 +977,4 @@ export __Z23trusted_stack_has_spacei
 export __Z22switcher_recover_stackv
 export __Z25switcher_interrupt_threadPv
 export __Z23switcher_current_threadv
+export __Z28switcher_thread_hazard_slotsv
