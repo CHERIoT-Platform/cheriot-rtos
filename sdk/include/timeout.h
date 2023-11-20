@@ -22,6 +22,11 @@ static __if_cxx(constexpr) const Ticks UnlimitedTimeout = UINT32_MAX;
 /**
  * Structure representing a timeout.  This is intended to allow a single
  * instance to be chained across blocking calls.
+ *
+ * Timeouts *may not be stored in the heap*.  Handling timeout structures that
+ * may disappear between sleeping and waking is very complicated and would
+ * impact a lot of fast paths.  Instead, most functions that take a timeout
+ * will simply fail if the timeout is on the heap.
  */
 typedef struct Timeout
 {

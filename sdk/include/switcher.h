@@ -41,4 +41,11 @@ __cheri_libcall void *switcher_current_thread(void);
  * This should typically be followed by a yielding operation.  The interrupted
  * thread is not woken until the scheduler runs.
  */
-__cheri_libcall _Bool switcher_interrupt_thread(void*);
+__cheri_libcall _Bool switcher_interrupt_thread(void *);
+
+/**
+ * Returns a store-only capability to two hazard pointer slots for the current
+ * thread.  Objects stored here will not be deallocated until (at least) the
+ * next cross-compartment call or until they are explicitly overwritten.
+ */
+__cheri_libcall void **switcher_thread_hazard_slots(void);

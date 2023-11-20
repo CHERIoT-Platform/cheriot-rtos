@@ -1,22 +1,26 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
-
 // Use a large quota for this compartment.
 #define MALLOC_QUOTA 0x100000
 #define TEST_NAME "Allocator"
+
 #include "tests.hh"
 #include <cheriot-atomic.hh>
+#include <cstdlib>
 #include <debug.hh>
 #include <ds/xoroshiro.h>
 #include <errno.h>
 #include <futex.h>
 #include <global_constructors.hh>
+#include <switcher.h>
 #include <thread.h>
 #include <thread_pool.h>
 #include <vector>
 
 using thread_pool::async;
-DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(secondHeap, 1024);
+#define SECOND_HEAP_QUOTA 1024U
+DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(secondHeap, SECOND_HEAP_QUOTA);
+using namespace CHERI;
 #define SECOND_HEAP STATIC_SEALED_VALUE(secondHeap)
 
 namespace
@@ -253,15 +257,20 @@ namespace
 	void test_claims()
 	{
 		debug_log("Beginning tests on claims");
+		size_t quotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
+		TEST(quotaLeft == MALLOC_QUOTA,
+		     "After claim and free from {}-byte quota, {} bytes left before "
+		     "running claims tests",
+		     MALLOC_QUOTA,
+		     quotaLeft);
 		size_t allocSize       = 128;
-		auto  *heap2           = STATIC_SEALED_VALUE(secondHeap);
 		size_t mallocQuotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
 		CHERI::Capability alloc{
 		  heap_allocate(&noWait, MALLOC_CAPABILITY, allocSize)};
 		TEST(alloc.is_valid(), "Allocation failed");
 		int  claimCount = 0;
 		auto claim      = [&]() {
-            size_t claimSize = heap_claim(heap2, alloc);
+            size_t claimSize = heap_claim(SECOND_HEAP, alloc);
             claimCount++;
             TEST(claimSize == allocSize,
 			          "{}-byte allocation claimed as {} bytes (claim number {})",
@@ -270,20 +279,22 @@ namespace
 			          claimCount);
 		};
 		claim();
-		int ret = heap_free(heap2, alloc);
+		int ret = heap_free(SECOND_HEAP, alloc);
 		TEST(ret == 0, "Freeing claimed allocation returned {}", ret);
-		size_t quotaLeft = heap_quota_remaining(heap2);
-		TEST(quotaLeft == 1024,
-		     "After claim and free from 1024-byte quota, {} bytes left",
+		quotaLeft = heap_quota_remaining(SECOND_HEAP);
+		TEST(quotaLeft == SECOND_HEAP_QUOTA,
+		     "After claim and free from {}-byte quota, {} bytes left",
+		     SECOND_HEAP_QUOTA,
 		     quotaLeft);
 		claim();
-		quotaLeft = heap_quota_remaining(heap2);
+		quotaLeft = heap_quota_remaining(SECOND_HEAP);
 		claim();
-		size_t quotaLeftAfterSecondClaim = heap_quota_remaining(heap2);
+		size_t quotaLeftAfterSecondClaim = heap_quota_remaining(SECOND_HEAP);
 		TEST(quotaLeft == quotaLeftAfterSecondClaim,
 		     "Claiming twice reduced quota from {} to {}",
 		     quotaLeft,
 		     quotaLeftAfterSecondClaim);
+		debug_log("Freeing object on malloc capability: {}", alloc);
 		ret = heap_free(MALLOC_CAPABILITY, alloc);
 		TEST(ret == 0, "Failed to free claimed object, return: {}", ret);
 		size_t mallocQuota2 = heap_quota_remaining(MALLOC_CAPABILITY);
@@ -291,11 +302,11 @@ namespace
 		     "Freeing claimed object did not restore quota to {}, quota is {}",
 		     mallocQuotaLeft,
 		     mallocQuota2);
-		ret = heap_free(heap2, alloc);
+		ret = heap_free(SECOND_HEAP, alloc);
 		TEST(ret == 0, "Freeing claimed allocation returned {}", ret);
-		ret = heap_free(heap2, alloc);
+		ret = heap_free(SECOND_HEAP, alloc);
 		TEST(ret == 0, "Freeing claimed (twice) allocation returned {}", ret);
-		quotaLeft = heap_quota_remaining(heap2);
+		quotaLeft = heap_quota_remaining(SECOND_HEAP);
 		TEST(quotaLeft == 1024,
 		     "After claim and free twice from 1024-byte quota, {} bytes left",
 		     quotaLeft);
@@ -311,6 +322,8 @@ namespace
 	void test_free_all()
 	{
 		ssize_t allocated = 0;
+		debug_log("Quota left before allocating: {}",
+		          heap_quota_remaining(SECOND_HEAP));
 		// Allocate and leak some things:
 		for (size_t i = 16; i < 256; i <<= 1)
 		{
@@ -319,6 +332,9 @@ namespace
 			     "Allocating {} bytes failed",
 			     i);
 		}
+		debug_log("Quota left after allocating {} bytes: {}",
+		          allocated,
+		          heap_quota_remaining(SECOND_HEAP));
 		int freed = heap_free_all(SECOND_HEAP);
 		// We can free more than we think the requested size doesn't include
 		// object headers.
@@ -327,9 +343,71 @@ namespace
 		     allocated,
 		     freed);
 		auto quotaLeft = heap_quota_remaining(SECOND_HEAP);
-		TEST(quotaLeft == 1024,
-		     "After alloc and free from 1024-byte quota, {} bytes left",
+		TEST(quotaLeft == SECOND_HEAP_QUOTA,
+		     "After alloc and free from {}-byte quota, {} bytes left",
+		     SECOND_HEAP_QUOTA,
 		     quotaLeft);
+	}
+
+	void test_hazards()
+	{
+		debug_log("Before allocating, quota left: {}",
+		          heap_quota_remaining(SECOND_HEAP));
+		Timeout longTimeout{1000};
+		void   *ptr  = heap_allocate(&longTimeout, SECOND_HEAP, 16);
+		void   *ptr2 = heap_allocate(&longTimeout, SECOND_HEAP, 16);
+		debug_log("After allocating, quota left: {}",
+		          heap_quota_remaining(SECOND_HEAP));
+		static cheriot::atomic<int> state = 0;
+		async([=]() {
+			Timeout t{1};
+			int     claimed = heap_claim_fast(&t, ptr, ptr2);
+			TEST(claimed == 0, "Heap claim failed: {}", claimed);
+			state = 1;
+			while (state.load() == 1) {}
+			debug_log("Releasing hazard pointers");
+			// Exiting this task will cause this closure to be freed, which
+			// will collect dangling hazard pointers.  Wait for long enough for
+			// the heap check to work.
+			t = 1;
+			thread_sleep(&t);
+		});
+		// Allow the async function to run and establish hazards
+		while (state.load() != 1)
+		{
+			Timeout t{1};
+			thread_sleep(&t);
+		}
+		debug_log("Before freeing, quota left: {}",
+		          heap_quota_remaining(SECOND_HEAP));
+		heap_free(SECOND_HEAP, ptr);
+		debug_log("After free 1, quota left: {}",
+		          heap_quota_remaining(SECOND_HEAP));
+		heap_free(SECOND_HEAP, ptr2);
+		debug_log("After free 2, quota left: {}",
+		          heap_quota_remaining(SECOND_HEAP));
+		TEST(Capability{ptr}.is_valid(),
+		     "Pointer in hazard slot was freed: {}",
+		     ptr);
+		TEST(Capability{ptr2}.is_valid(),
+		     "Pointer in hazard slot was freed: {}",
+		     ptr2);
+		state = 2;
+		// Yield to allow the hazards to be dropped.
+		Timeout t{1};
+		thread_sleep(&t);
+		// Try a double free.  This may logically succeed, but should not affect
+		// our quota.
+		heap_free(SECOND_HEAP, ptr);
+		// Sleep again to make sure that the lambda from our async is gone.
+		t.remaining = 1;
+		thread_sleep(&t);
+		auto quotaLeft = heap_quota_remaining(SECOND_HEAP);
+		TEST(quotaLeft == SECOND_HEAP_QUOTA,
+		     "After alloc and free from {}-byte quota, {} bytes left",
+		     SECOND_HEAP_QUOTA,
+		     quotaLeft);
+		debug_log("Hazard pointer tests done");
 	}
 
 } // namespace
@@ -350,6 +428,8 @@ void test_allocator()
 	     BigAllocSize,
 	     BigAllocSize);
 	debug_log("Heap size is {} bytes", HeapSize);
+
+	test_hazards();
 
 	// Make sure that free works only on memory owned by the caller.
 	Timeout t{5};
@@ -385,7 +465,7 @@ void test_allocator()
 	allocations.clear();
 	allocations.shrink_to_fit();
 	quotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
-	TEST(quotaLeft == 0x100000,
+	TEST(quotaLeft == MALLOC_QUOTA,
 	     "After alloc and free from 0x100000-byte quota, {} bytes left",
 	     quotaLeft);
 }

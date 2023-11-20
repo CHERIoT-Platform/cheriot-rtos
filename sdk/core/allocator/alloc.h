@@ -4,10 +4,12 @@
 #pragma once
 
 #include "alloc_config.h"
+#include "compartment-macros.h"
 #include "revoker.h"
 #include <algorithm>
 #include <cdefs.h>
 #include <cheri.hh>
+#include <cheriot-atomic.hh>
 #include <ds/bits.h>
 #include <ds/linked_list.h>
 #include <ds/pointer.h>
@@ -18,8 +20,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <thread.h>
 
 extern Revocation::Revoker revoker;
+using cheriot::atomic;
+using namespace CHERI;
 
 /// Do we have temporal safety support in hardware?
 constexpr bool HasTemporalSafety =
@@ -836,6 +841,12 @@ class MState
 	public:
 	CHERI::Capability<void> heapStart;
 
+	/**
+	 * Array of objects whose lifetime has been extended by hazard pointers,
+	 * but that have been freed.
+	 */
+	Capability<void *> hazardQuarantine;
+
 	using RingSentinel = ds::linked_list::Sentinel<ChunkFreeLink>;
 	/*
 	 * Rings for each small bin size.  Use smallbin_at() for access to
@@ -890,6 +901,31 @@ class MState
 	size_t heapTotalSize;
 	size_t heapFreeSize;
 	size_t heapQuarantineSize;
+
+	/**
+	 * The number of entries currently in the `hazardQuarantine` array.
+	 */
+	size_t hazardQuarantineOccupancy = 0;
+
+	/**
+	 * Returns true if there are no objects in the `hazardQuarantine` array.
+	 */
+	bool hazard_quarantine_is_empty()
+	{
+		return hazardQuarantineOccupancy == 0;
+	}
+
+	/**
+	 * Adds the object to the end of hazard quarantine.  Does not check that
+	 * there is space, it is the responsibility of the caller to ensure that
+	 * the quarantine is always drained before adding new objects.  It is sized
+	 * such that it is not possible (by construction) for there to be more
+	 * objects in quarantine than there are hazard pointers.
+	 */
+	void hazard_quarantine_add(void *ptr)
+	{
+		hazardQuarantine[hazardQuarantineOccupancy++] = ptr;
+	}
 
 	bool is_free_cap_inbounds(CHERI::Capability<void> mem)
 	{
@@ -971,6 +1007,37 @@ class MState
 	}
 
 	/**
+	 * Begin hazard list manipulation.  Returns a guard object that must be
+	 * held until all hazard list manipulation is done.
+	 */
+	[[nodiscard]] __always_inline auto hazard_list_begin()
+	{
+		auto    *lockWord{MMIO_CAPABILITY(uint32_t, allocator_epoch)};
+		uint32_t epoch = *lockWord >> 16;
+		Debug::Invariant(
+		  (epoch & 1) == 0,
+		  "Acquiring hazard lock while lock is already held.  Epoch is {}",
+		  epoch);
+		// Increment the epoch and mark us as waiting.
+		// This happens only with the allocator lock held, so we can avoid any
+		// CAS operations.
+		epoch++;
+		*lockWord = (epoch << 16) | thread_id_get_fast();
+		epoch++;
+		struct Guard
+		{
+			volatile uint32_t *lockWord;
+			uint32_t           epoch;
+			__always_inline ~Guard()
+			{
+				// Release the epoch.
+				*lockWord = (epoch << 16);
+			}
+		};
+		return Guard{lockWord, epoch};
+	}
+
+	/**
 	 * @brief Called when adding the first memory chunk to this MState.
 	 * At the moment we only support one contiguous MChunk for each MState.
 	 *
@@ -1042,6 +1109,11 @@ class MState
 	AllocationResult
 	mspace_dispatch(size_t bytes, size_t &quota, uint16_t identifier)
 	{
+		if (!hazard_quarantine_is_empty())
+		{
+			auto guard = hazard_list_begin();
+			hazard_pointers_recheck();
+		}
 		size_t alignSize =
 		  (CHERI::representable_length(bytes) + MallocAlignMask) &
 		  ~MallocAlignMask;
@@ -1101,15 +1173,18 @@ class MState
 			return AllocationFailureDeallocationNeeded{};
 		}
 
-#ifndef NDEBUG
-		// Periodically sanity check the entire state for this mspace.
-		static size_t sanityCounter = 0;
-		if (sanityCounter % MStateSanityInterval == 0)
+		if constexpr (DEBUG_ALLOCATOR)
 		{
-			ok_malloc_state();
+			// Periodically sanity check the entire state for this mspace.
+			static size_t           sanityCounter        = 0;
+			static constexpr size_t MStateSanityInterval = 128;
+			if (sanityCounter % MStateSanityInterval == 0)
+			{
+				ok_malloc_state();
+			}
+			++sanityCounter;
 		}
-		++sanityCounter;
-#endif
+
 		size_t bodySize = header->size_get() - sizeof(MChunkHeader);
 		header->set_owner(identifier);
 		quota -= header->size_get();
@@ -1161,25 +1236,137 @@ class MState
 	}
 
 	/**
+	 * Check whether `allocation` is in the hazard list.  Returns true if it is.
+	 *
+	 * This must be called in between `hazard_list_begin` and the guard going
+	 * out of scope.
+	 */
+	bool hazard_pointer_check(Capability<void> allocation)
+	{
+		// It is now safe to walk the hazard list.
+		Capability<void *> hazards =
+		  const_cast<void **>(MMIO_CAPABILITY_WITH_PERMISSIONS(
+		    void *, hazard_pointers, true, true, true, false));
+		size_t pointers = hazards.length() / sizeof(void *);
+		for (size_t i = 0; i < pointers; i++)
+		{
+			Capability hazardPointer{hazards[i]};
+			if (hazardPointer.is_valid() &&
+			    hazardPointer.is_subset_of(allocation))
+			{
+				Debug::log("Found hazard pointer for {} (thread: {})",
+				           allocation,
+				           ((i / 2) + 1));
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Recheck all of the pointers in the hazard quarantine and free any that
+	 * are no longer on active hazard lists.
+	 *
+	 * This must be called in between `hazard_list_begin` and the guard that
+	 * `hazard_list_begin` returns going out of scope.
+	 *
+	 * Returns true if `skip` is found in the list, false otherwise.
+	 */
+	bool hazard_pointers_recheck(Capability<void> skip = nullptr)
+	{
+		size_t insert            = 0;
+		bool   foundSkippedValue = false;
+		for (size_t i = 0; i < hazardQuarantineOccupancy; i++)
+		{
+			Capability ptr = hazardQuarantine[i];
+			if (hazard_pointer_check(ptr))
+			{
+				hazardQuarantine[insert++] = ptr;
+			}
+			else
+			{
+				if (ptr == skip)
+				{
+					foundSkippedValue = true;
+					continue;
+				}
+				Debug::log("Found safe-to-free object in hazard list: {}", ptr);
+				// Re-derive a pointer to the chunk.
+				Capability heap{heapStart};
+				heap.address() = ptr.address();
+				auto chunk     = MChunkHeader::from_body(heap);
+				// We know this isn't in the hazard lists (we just checked!) so
+				// free it without doing any hazard pointer checks checks.
+				mspace_free(*chunk, ptr.length(), true);
+			}
+		}
+		hazardQuarantineOccupancy = insert;
+		return foundSkippedValue;
+	}
+
+	/**
 	 * Free a chunk.  The `bodySize` parameter specifies the size of the
 	 * allocated space that must be zeroed.  This must be calculated by the
 	 * caller and so is provided here to avoid recalculating it.
 	 */
-	int mspace_free(MChunkHeader &chunk, size_t bodySize)
+	int mspace_free(MChunkHeader &chunk,
+	                size_t        bodySize,
+	                bool          skipHazardCheck = false)
 	{
 		// Expand the bounds of the freed object to the whole heap and set the
 		// address that we're looking at to the base of the requested
 		// capability.
-		CHERI::Capability mem{chunk.body()};
+		Capability mem{chunk.body()};
 
-		/*
-		 * Paint the shadow bitmap and then zero the memory contents.  These
-		 * must happen in this order, since the allocator is running with
-		 * interrupts enabled.  Were we to zero and then paint, there would be a
-		 * window in which preemption could allow a store through a copy of
-		 * the user capability (or its progeny) that undid our work of zeroing!
-		 */
-		revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
+		bool isDoubleFree = false;
+
+		if (__predict_false(skipHazardCheck))
+		{
+			// Paint before zeroing, see comment on the `else` code path.
+			revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
+		}
+		else
+		{
+			Capability bounded{mem};
+			bounded.bounds() = bodySize;
+
+			// Set the hazard epoch to odd so that no other threads can
+			// successfully add things to the hazard list until we're done.
+			// The epoch will be incremented to even at the end of this scope.
+			auto guard = hazard_list_begin();
+
+			// Free any objects whose lifetimes were extended by hazards,
+			// skipping freeing this one to avoid a double free.
+			// Track if we're freeing an object that has already been freed but
+			// is kept alive by a hazard pointer.
+			isDoubleFree = hazard_pointers_recheck(bounded);
+
+			// If this object is on a live hazard list, capture it and don't
+			// free yet.
+			if (hazard_pointer_check(bounded))
+			{
+				hazard_quarantine_add(bounded);
+				return isDoubleFree ? -EINVAL : 0;
+			}
+			if (!bounded.is_valid())
+			{
+				return -EINVAL;
+			}
+
+			/*
+			 * Paint the shadow bitmap with the hazard epoch odd.  This must
+			 * happen before we increment the epoch so that any threads that saw
+			 * that they are waiting for us to walk the epoch list will block
+			 * until we're done.
+			 *
+			 * It must also happen before zeroing because the allocator is
+			 * running with interrupts enabled.  Were we to zero and then paint,
+			 * there would be a window in which preemption could allow a store
+			 * through a copy of the user capability (or its progeny) that undid
+			 * our work of zeroing!
+			 */
+			revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
+		}
 
 		/*
 		 * Shadow bits have been painted. From now on user caps to this chunk
@@ -1213,7 +1400,7 @@ class MState
 		mspace_qtbin_deqn(3);
 		mspace_bg_revoker_kick();
 
-		return 0;
+		return isDoubleFree ? -EINVAL : 0;
 	}
 
 	/**

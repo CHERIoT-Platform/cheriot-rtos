@@ -318,7 +318,7 @@ rule("firmware")
 			add_defines("CONFIG_MSHWM")
 		else
 			-- If we don't have the stack high watermark, the trusted stack is smaller.
-			loader:set('loader_trusted_stack_size', 168)
+			loader:set('loader_trusted_stack_size', 176)
 		end
 
 		-- Build the MMIO space for the board
@@ -679,7 +679,7 @@ target("cheriot.loader")
 		target:set('cherimcu.debug-name', "loader")
 		local config = {
 			-- Size in bytes of the trusted stack.
-			loader_trusted_stack_size = 184,
+			loader_trusted_stack_size = 192,
 			-- Size in bytes of the loader's stack.
 			loader_stack_size = 1024
 		}

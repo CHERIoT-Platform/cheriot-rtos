@@ -19,19 +19,20 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStack, c12, 12 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, c13, 13 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, c14, 14 * 8)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, c15, 15 * 8)
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, mstatus, 16 * 8)
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, mcause, (16 * 8) + 4)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, hazardPointers, 16 * 8)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mstatus, 17 * 8)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mcause, (17 * 8) + 4)
 #ifdef CONFIG_MSHWM
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwm, 17 * 8)
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwmb, (17 * 8) + 4)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwm, 18 * 8)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwmb, (18 * 8) + 4)
 
 // Size of everything up to this point
-#	define TSTACK_REGFRAME_SZ (18 * 8)
+#	define TSTACK_REGFRAME_SZ (19 * 8)
 // frameoffset, inForcedUnwind and padding
 #	define TSTACK_HEADER_SZ 16
 #else
 // Size of everything up to this point
-#	define TSTACK_REGFRAME_SZ ((16 * 8) + (2 * 4))
+#	define TSTACK_REGFRAME_SZ ((17 * 8) + (2 * 4))
 // frameoffset, inForcedUnwind and padding
 #	define TSTACK_HEADER_SZ 8
 #endif

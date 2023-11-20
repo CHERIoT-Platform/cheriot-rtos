@@ -146,6 +146,27 @@ size_t __cheri_compartment("alloc")
   heap_claim(struct SObjStruct *heapCapability, void *pointer);
 
 /**
+ * Interface to the fast claims mechanism.  This claims two pointers using the
+ * hazard-pointer-inspired lightweight claims mechanism.  If this function
+ * returns zero then the heap pointers are guaranteed not to become invalid
+ * until either the next cross-compartment call or the next call to this
+ * function.
+ *
+ * A null pointer can be used as a not-present value.  This function will
+ * treat operations on null pointers as unconditionally successful.  It returns
+ * `-ETIMEDOUT` if it failed to claim before the timeout expired or `EINVAL` if
+ * one or more of the arguments is neither null nor a valid pointer at the end.
+ *
+ * In the case of failure, neither pointer will have been claimed.
+ *
+ * This function is provided by the compartment_helpers library, which must be
+ * linked for it to be available.
+ */
+int __cheri_libcall heap_claim_fast(Timeout         *timeout,
+                                    const void      *ptr,
+                                    const void *ptr2 __if_cxx(= nullptr));
+
+/**
  * Free a heap allocation.
  *
  * Returns 0 on success, or `-EINVAL` if `ptr` is not a valid pointer to the
@@ -196,7 +217,7 @@ void __cheri_compartment("alloc") heap_quarantine_empty(void);
  * permission then it cannot be claimed, but if this function returns false
  * then it is guaranteed not to go away for the duration of the call.
  */
-__if_c(static) inline _Bool heap_address_is_valid(void *object)
+__if_c(static) inline _Bool heap_address_is_valid(const void *object)
 {
 	ptraddr_t heap_start = LA_ABS(__export_mem_heap);
 	ptraddr_t heap_end   = LA_ABS(__export_mem_heap_end);

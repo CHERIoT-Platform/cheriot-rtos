@@ -87,14 +87,27 @@ namespace
 
 		Capability m{tbase.cast<MState>()};
 
+		size_t hazardQuarantineSize =
+		  Capability{MMIO_CAPABILITY_WITH_PERMISSIONS(
+		               void *, hazard_pointers, true, true, true, false)}
+		    .length();
+
 		m.bounds()            = sizeof(*m);
 		m->heapStart          = tbase;
 		m->heapStart.bounds() = tsize;
-		m->heapStart.address() += msize;
+		m->heapStart.address() += msize + hazardQuarantineSize;
 		m->init_bins();
 
-		m->mspace_firstchunk_add(ds::pointer::offset<void>(tbase.get(), msize),
-		                         tsize - msize);
+		// Carve off the front of the heap space to use for the hazard
+		// quarantine.
+		Capability hazardQuarantine = tbase;
+		hazardQuarantine.address() += msize;
+		hazardQuarantine.bounds() = hazardQuarantineSize;
+		m->hazardQuarantine       = hazardQuarantine.cast<void *>();
+
+		m->mspace_firstchunk_add(
+		  ds::pointer::offset<void>(tbase.get(), msize + hazardQuarantineSize),
+		  tsize - msize - hazardQuarantineSize);
 
 		return m;
 	}
@@ -132,35 +145,23 @@ namespace
 	 */
 	bool may_block(Timeout *timeout)
 	{
-		return (Capability{timeout}.is_valid() && timeout->may_block());
+		return timeout->may_block();
 	}
 
 	/**
-	 * Helper to reacquire the lock after sleeping.  This assumes that
-	 * `timeout` *was* valid but may have been freed and so checks only that it
-	 * has not been invalidated across yielding.  If `timeout` remains valid
-	 * then this adds any time passed as `elapsed` to the timeout and then
-	 * tries to reacquire the lock, blocking for no longer than the remaining
-	 * time on this timeout.
-	 *
-	 * This runs with interrupts disabled to ensure that the timeout remains
-	 * valid in between checking that it is valid and reacquiring the lock.
-	 * Once the lock is held, the timeout cannot be freed concurrently.
+	 * Helper to reacquire the lock after sleeping.  This adds any time passed
+	 * as `elapsed` to the timeout and then tries to reacquire the lock,
+	 * blocking for no longer than the remaining time on this timeout.
 	 *
 	 * Returns `true` if the lock has been successfully reacquired, `false`
 	 * otherwise.
 	 */
-	[[cheri::interrupt_state(disabled)]] bool
-	reacquire_lock(Timeout                   *timeout,
-	               LockGuard<decltype(lock)> &g,
-	               Ticks                      elapsed = 0)
+	bool reacquire_lock(Timeout                   *timeout,
+	                    LockGuard<decltype(lock)> &g,
+	                    Ticks                      elapsed = 0)
 	{
-		if (Capability{timeout}.is_valid())
-		{
-			timeout->elapse(elapsed);
-			return g.try_lock(timeout);
-		}
-		return false;
+		timeout->elapse(elapsed);
+		return g.try_lock(timeout);
 	}
 
 	/**
@@ -184,8 +185,7 @@ namespace
 		g.unlock();
 		// Wait for the interrupt to fire, then try to reacquire the lock if
 		// the epoch is passed.
-		return r.wait_for_completion(timeout, epoch) &&
-		       reacquire_lock(timeout, g);
+		return r.wait_for_completion(timeout, epoch) && g.try_lock(timeout);
 	}
 
 	/**
@@ -311,15 +311,15 @@ namespace
 				// this allocation).
 				auto expected = gm->heapFreeSize;
 				freeFutex     = expected;
+				// If there are things on the hazard list, wake after one tick
+				// and see if they have gone away.  Otherwise, wait until we
+				// have some newly freed objects.
+				Timeout t{gm->hazard_quarantine_is_empty() ? timeout->remaining
+				                                           : 1};
 				// Drop the lock while yielding
 				g.unlock();
-				auto err = freeFutex.wait(timeout, expected);
-				// If we timed out, we don't need to reacquire the lock, just
-				// exit
-				if (err == -ETIMEDOUT)
-				{
-					return nullptr;
-				}
+				freeFutex.wait(&t, expected);
+				timeout->elapse(t.elapsed);
 				Debug::log("Woke from futex wake");
 				if (!reacquire_lock(timeout, g))
 				{
@@ -703,6 +703,9 @@ namespace
 			size_t size = chunk.size_get();
 			owner.quota += size;
 			Claim::destroy(owner, claim);
+			Debug::log("Dropped last claim, refunding {}-byte quota for {}",
+			           size,
+			           chunk.body());
 		}
 		return true;
 	}
@@ -732,12 +735,22 @@ namespace
 			{
 				return 0;
 			}
-			owner.quota += chunk.size_get();
+			size_t chunkSize = chunk.size_get();
+			chunk.ownerID    = 0;
 			if (chunk.claims == 0)
 			{
-				return gm->mspace_free(chunk, bodySize);
+				int ret = gm->mspace_free(chunk, bodySize);
+				// If free fails, don't manipulate the quota.
+				if (ret == 0)
+				{
+					owner.quota += chunkSize;
+				}
+				return ret;
 			}
-			chunk.ownerID = 0;
+			// We've removed the owner, so refund the quota immediately, the
+			// free won't happen until the last claim goes away, but this is no
+			// longer the owner's responsibility.
+			owner.quota += chunkSize;
 			return 0;
 		}
 		// If this is an interior (but valid) pointer, see if we can drop a
@@ -782,6 +795,13 @@ namespace
 		  *capability, *chunk, bodySize, isPrecise, reallyFree);
 	}
 
+	bool timeout_is_valid(Timeout *timeout)
+	{
+		return !heap_address_is_valid(timeout) &&
+		       check_pointer<PermissionSet{Permission::Load,
+		                                   Permission::Store}>(timeout);
+	}
+
 } // namespace
 
 size_t heap_quota_remaining(struct SObjStruct *heapCapability)
@@ -812,6 +832,10 @@ void heap_quarantine_empty()
 
 void *heap_allocate(Timeout *timeout, SObj heapCapability, size_t bytes)
 {
+	if (!timeout_is_valid(timeout))
+	{
+		return nullptr;
+	}
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
@@ -924,6 +948,10 @@ void *heap_allocate_array(Timeout *timeout,
                           size_t   nElements,
                           size_t   elemSize)
 {
+	if (!timeout_is_valid(timeout))
+	{
+		return nullptr;
+	}
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
@@ -1066,6 +1094,10 @@ SObj token_sealed_unsealed_alloc(Timeout *timeout,
                                  size_t   sz,
                                  void   **unsealed)
 {
+	if (!timeout_is_valid(timeout))
+	{
+		return INVALID_SOBJ;
+	}
 	auto [sealed, obj] = allocate_sealed_unsealed(
 	  timeout, heapCapability, key, sz, {Permission::Seal, Permission::Unseal});
 	{
