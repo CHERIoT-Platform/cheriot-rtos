@@ -38,19 +38,11 @@
  */
 enum EventWaiterKind
 {
-	/// Event source is a message queue.
-	EventWaiterQueue,
 	/// Event source is an event channel.
 	EventWaiterEventChannel,
 	/// Event source is a futex.
 	EventWaiterFutex
 };
-
-enum [[clang::flag_enum]] EventWaiterQueueFlags{
-  /// Notify when the queue is not full.
-  EventWaiterQueueSendReady = (1 << 0),
-  /// Notify when the queue is not empty.
-  EventWaiterQueueReceiveReady = (1 << 1)};
 
 enum [[clang::flag_enum]] EventWaiterEventChannelFlags{
   /// Automatically clear the bits we waited on.
@@ -78,9 +70,6 @@ struct EventWaiterSource
 	 * Event-specific configuration.  This field is modified during the wait
 	 * call.  The interpretation of this depends on `kind`:
 	 *
-	 * - `EventWaiterQueue`: this contains a bitmap of `EventWaiterQueueFlags`
-	 *   values indicating the events to watch for.  On return, the bits for
-	 *   the values that have been set will be stored.
 	 * - `EventWaiterEventChannel`: The low 24 bits contain the bits to
 	 *   monitor, the top bit indicates whether this event is triggered if all
 	 *   of the bits are set (true) or some of them (false).  On return, this

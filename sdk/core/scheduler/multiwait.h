@@ -12,7 +12,6 @@
 namespace sched
 {
 	using namespace CHERI;
-	class Queue;
 	class Event;
 
 	/**
@@ -70,7 +69,6 @@ namespace sched
 		 * and the user-provided word describing when it should fire.
 		 */
 		///@{
-		bool reset(Queue *queue, uint32_t conditions);
 		/*
 		 * Event channel reset depends on event->bits_get(), so the definition
 		 * of reset() is in event.h.
@@ -102,7 +100,6 @@ namespace sched
 		 * registered event type.
 		 */
 		///@{
-		bool trigger(Queue *queue);
 		bool trigger(Event *event, uint32_t info);
 
 		bool trigger(ptraddr_t address)
@@ -135,8 +132,6 @@ namespace sched
 		 */
 		template<typename T>
 		static constexpr std::nullptr_t KindFor = nullptr;
-		template<>
-		static constexpr EventWaiterKind KindFor<Queue *> = EventWaiterQueue;
 		template<>
 		static constexpr EventWaiterKind KindFor<Event *> =
 		  EventWaiterEventChannel;
@@ -281,17 +276,6 @@ namespace sched
 				{
 					default:
 						return EventOperationResult::Error;
-					case EventWaiterQueue:
-					{
-						auto *queue = Handle::unseal<Queue>(ptr);
-						if (queue == nullptr)
-						{
-							return EventOperationResult::Error;
-						}
-						eventTriggered |=
-						  events[i].reset(queue, newEvents[i].value);
-						break;
-					}
 					case EventWaiterEventChannel:
 					{
 						auto *event = Handle::unseal<Event>(ptr);

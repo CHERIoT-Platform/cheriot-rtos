@@ -55,7 +55,6 @@ namespace sched
 		enum class WakeReason : uint8_t
 		{
 			Timer,
-			Queue,
 			Event,
 			Futex,
 			/**

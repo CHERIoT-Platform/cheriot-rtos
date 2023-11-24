@@ -20,7 +20,6 @@
 #include <multiwaiter.h>
 #include <queue.h>
 #include <riscvreg.h>
-#include <semaphore.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>

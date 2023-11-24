@@ -2,5 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include <compartment.h>
+#include <cstdlib>
 
-void __cheri_compartment("consumer") set_queue(void *queue);
+void __cheri_compartment("consumer") set_queue(SObjStruct *queueHandle);

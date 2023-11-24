@@ -7,20 +7,21 @@
 #include <futex.h>
 #include <queue.h>
 #include <timeout.hh>
+#include <token.h>
 
 using Debug = ConditionalDebug<true, "Consumer">;
 
 // The queue that we will wait on.
-void *queue;
+SObj queue;
 
 /**
  * Set the queue that the thread in this compartment will use.
  */
-void set_queue(void *newQueue)
+void set_queue(SObj newQueue)
 {
 	// Check that this is a valid queue
 	size_t items;
-	if (queue_items_remaining(newQueue, &items) != 0)
+	if (queue_items_remaining_sealed(newQueue, &items) != 0)
 	{
 		return;
 	}
@@ -43,7 +44,7 @@ void __cheri_compartment("consumer") run()
 	// Get a message from the queue and print it.  This blocks indefinitely.
 	int     value = 0;
 	Timeout t{UnlimitedTimeout};
-	while ((value != 199) && (queue_recv(&t, queue, &value) == 0))
+	while ((value != 199) && (queue_receive_sealed(&t, queue, &value) == 0))
 	{
 		Debug::log("Read {} from queue", value);
 	}

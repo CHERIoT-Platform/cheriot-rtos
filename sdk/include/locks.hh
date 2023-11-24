@@ -5,7 +5,6 @@
 #include <debug.hh>
 #include <errno.h>
 #include <futex.h>
-#include <semaphore.h>
 #include <thread.h>
 
 __clang_ignored_warning_push("-Watomic-alignment")
@@ -288,6 +287,14 @@ class LockGuard
 		wrappedLock->lock();
 	}
 
+	/// Constructor, attempts to acquire the lock with a timeout.
+	[[nodiscard]] explicit LockGuard(Lock &lock, Timeout *timeout) requires(
+	  TryLockable<Lock>)
+	  : wrappedLock(&lock), isOwned(false)
+	{
+		try_lock(timeout);
+	}
+
 	/// Move constructor, transfers ownership of the lock.
 	[[nodiscard]] explicit LockGuard(LockGuard &&guard)
 	  : wrappedLock(guard.wrappedLock), isOwned(guard.isOwned)
@@ -336,6 +343,27 @@ class LockGuard
 		{
 			wrappedLock->unlock();
 		}
+	}
+
+	/**
+	 * Conversion to bool.  Returns true if this guard owns the lock, false
+	 * otherwise.  This allows lock guards to be used with a timeout in
+	 * conditional blocks, such as:
+	 *
+	 * ```
+	 * if (LockGuard g{lock, timeout})
+	 * {
+	 *    // Run this code if we acquired the lock, releasing the lock at the end.
+	 * }
+	 * else
+	 * {
+	 *    // Run this code if we did not acquire the lock.
+	 * }
+	 * ```
+	 */
+	operator bool()
+	{
+		return isOwned;
 	}
 };
 __clang_ignored_warning_pop()
