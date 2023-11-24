@@ -29,11 +29,12 @@ __cheri_libcall void *switcher_recover_stack(void);
 __cheri_libcall void *switcher_current_thread(void);
 
 /**
- * Returns a sealed capability to the current thread.  This can be used with
- * `switcher_interrupt_thread` from another thread to interrupt this thread
- * (invoking its error handler) if and only if the other thread is currently
- * executing in this compartment.  This can be used to implement watchdog
- * events from another thread.
+ * Interrupt given thread (invoke its error handler). This can be used with the
+ * value returned by `switcher_current thread` in another thread to interrupt
+ * that thread if and only if the other thread is currently executing in the
+ * same compartment as this thread. This can be used to implement watchdog
+ * events from another thread. An attempt to interrupt the current thread will
+ * return failure.
  *
  * Returns true on success, false on failure.
  *
