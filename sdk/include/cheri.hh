@@ -1058,13 +1058,23 @@ namespace CHERI
 	 * Checks that `ptr` is valid, unsealed, does not overlap the caller's
 	 * stack, and has at least `Permissions` and has at least `Space` bytes
 	 * after the current offset.
+	 *
+	 * If the permissions do not include Global, then this will also check that
+	 * the capability does not point to the current thread's stack.  This
+	 * behaviour can be disabled (for example, for use in a shared library) by
+	 * passing `false` for `CheckStack`.
 	 */
 	template<PermissionSet Permissions = PermissionSet{Permission::Load},
-	         typename T                = void>
+	         typename T                = void,
+	         bool CheckStack           = true>
 	__always_inline inline bool check_pointer(T *ptr, size_t space = sizeof(T))
 	{
-		return detail::check_pointer_internal<!Permissions.contains(
-		  Permission::Global)>(ptr, space, Permissions.as_raw());
+		// We can skip a stack check if we've asked for Global because the
+		// stack does not have this permission.
+		constexpr bool StackCheckNeeded =
+		  CheckStack && !Permissions.contains(Permission::Global);
+		return detail::check_pointer_internal<StackCheckNeeded>(
+		  ptr, space, Permissions.as_raw());
 	}
 
 	/**

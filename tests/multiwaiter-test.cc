@@ -71,55 +71,56 @@ void test_multiwaiter()
 	TEST(events[0].value == 0, "Futex reports wake but none occurred");
 	TEST(events[1].value == 1, "Futex reports no wake");
 
-	void *queue;
+	QueueHandle queue;
+	void       *queueMemory;
 	t.remaining = 0;
-	ret         = queue_create(&t, MALLOC_CAPABILITY, &queue, sizeof(int), 1);
+	ret =
+	  queue_create(&t, MALLOC_CAPABILITY, &queue, &queueMemory, sizeof(int), 1);
+
 	TEST(ret == 0, "Queue create failed:", ret);
 	int     val = 0;
 	Timeout noWait{0};
-	ret = queue_send(&noWait, queue, &val);
+	ret = queue_send(&noWait, &queue, &val);
 	TEST(ret == 0, "Queue send failed: {}", ret);
 
 	debug_log("Testing queue, blocked on send");
-	async([=]() {
+	async([=]() mutable {
 		sleep(1);
 		int     val;
 		Timeout noWait{0};
-		int     ret = queue_recv(&noWait, queue, &val);
+		int     ret = queue_receive(&noWait, &queue, &val);
 		TEST(ret == 0, "Background receive failed: {}", ret);
 		TEST(val == 0, "Background receive returned incorrect value: {}", ret);
 		debug_log("Background thread made queue ready to send");
 	});
-	events[0]   = {queue, EventWaiterQueue, EventWaiterQueueSendReady};
+	multiwaiter_queue_send_init(&events[0], &queue);
 	t.remaining = 6;
 	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
-	TEST(events[0].value == EventWaiterQueueSendReady,
-	     "Queue reports not ready");
+	TEST(events[0].value == 1, "Queue reports not ready");
 
 	debug_log("Testing queue, blocked on receive");
-	async([=]() {
+	async([=]() mutable {
 		sleep(1);
 		int     val = 1;
 		Timeout noWait{0};
-		int     ret = queue_send(&noWait, queue, &val);
+		int     ret = queue_send(&noWait, &queue, &val);
 		TEST(ret == 0, "Background send failed: {}", ret);
 		debug_log("Background thread made queue ready to receive");
 	});
-	events[0]   = {queue, EventWaiterQueue, EventWaiterQueueReceiveReady};
-	t.remaining = 6;
-	ret         = multiwaiter_wait(&t, mw, events, 1);
+	multiwaiter_queue_receive_init(&events[0], &queue);
+	t   = 10;
+	ret = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
-	TEST(events[0].value == EventWaiterQueueReceiveReady,
-	     "Queue did not return ready to receive");
-	ret = queue_recv(&noWait, queue, &val);
+	TEST(events[0].value == 1, "Queue did not return ready to receive");
+	ret = queue_receive(&noWait, &queue, &val);
 	TEST(ret == 0, "Queue ready to receive but receive returned {}", ret);
-	TEST(val == 1, "Incorrect value returned from queue");
+	TEST(val == 1, "Incorrect value returned from queue: {}", val);
 
 	debug_log("Testing waiting on a queue and a futex");
 	futex = 0;
 	setFutex(&futex, 1);
-	events[0]   = {queue, EventWaiterQueue, EventWaiterQueueReceiveReady};
+	multiwaiter_queue_receive_init(&events[0], &queue);
 	events[1]   = {&futex, EventWaiterFutex, 0};
 	t.remaining = 6;
 	ret         = multiwaiter_wait(&t, mw, events, 2);
@@ -228,6 +229,6 @@ void test_multiwaiter()
 	multiwaiter_wait(&t, mw, events, 1);
 
 	event_delete(MALLOC_CAPABILITY, ev);
-	queue_delete(MALLOC_CAPABILITY, queue);
+	free(queueMemory);
 	multiwaiter_delete(MALLOC_CAPABILITY, mw);
 }

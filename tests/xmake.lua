@@ -64,6 +64,7 @@ includes(path.join(sdkdir, "lib/atomic"),
          path.join(sdkdir, "lib/string"),
          path.join(sdkdir, "lib/crt"),
          path.join(sdkdir, "lib/compartment_helpers"),
+         path.join(sdkdir, "lib/queue"),
          path.join(sdkdir, "lib/thread_pool"))
 
 -- Compartment for the test entry point.
@@ -76,6 +77,7 @@ firmware("test-suite")
     add_deps("test_runner", "thread_pool")
     -- Helper libraries
     add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers")
+    add_deps("message_queue", "message_queue_library")
     -- Tests
     add_deps("mmio_test")
     add_deps("allocator_test")
@@ -97,7 +99,7 @@ firmware("test-suite")
                 compartment = "test_runner",
                 priority = 3,
                 entry_point = "run_tests",
-                stack_size = 0x600,
+                stack_size = 0x800,
                 -- This must be an odd number for the trusted stack exhaustion
                 -- test to fail in the right compartment.
                 trusted_stack_frames = 9
