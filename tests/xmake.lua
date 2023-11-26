@@ -65,6 +65,7 @@ includes(path.join(sdkdir, "lib/atomic"),
          path.join(sdkdir, "lib/crt"),
          path.join(sdkdir, "lib/compartment_helpers"),
          path.join(sdkdir, "lib/queue"),
+         path.join(sdkdir, "lib/locks"),
          path.join(sdkdir, "lib/thread_pool"))
 
 -- Compartment for the test entry point.
@@ -77,7 +78,7 @@ firmware("test-suite")
     add_deps("test_runner", "thread_pool")
     -- Helper libraries
     add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers")
-    add_deps("message_queue", "message_queue_library")
+    add_deps("message_queue", "message_queue_library", "locks")
     -- Tests
     add_deps("mmio_test")
     add_deps("allocator_test")

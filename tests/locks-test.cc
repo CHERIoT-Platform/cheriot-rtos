@@ -65,6 +65,39 @@ namespace
 		}
 	}
 
+	void test_recursive_mutex()
+	{
+		static RecursiveMutexState recursiveMutex;
+		static std::atomic<bool>   done{false};
+		Timeout                    t{UnlimitedTimeout};
+		int ret = recursivemutex_trylock(&t, &recursiveMutex);
+		TEST(ret == 0, "Recursive mutex trylock failed with error {}", ret);
+		ret = recursivemutex_trylock(&t, &recursiveMutex);
+		TEST(ret == 0,
+		     "Recursive mutex trylock failed on mutex owned by this thread "
+		     "with error {}",
+		     ret);
+		async([]() {
+			Timeout t{0};
+			int     ret = recursivemutex_trylock(&t, &recursiveMutex);
+			TEST(ret != 0,
+			     "Recursive mutex trylock succeeded on mutex owned by another "
+			     "thread");
+			t   = UnlimitedTimeout;
+			ret = recursivemutex_trylock(&t, &recursiveMutex);
+			TEST(ret != 0,
+			     "Recursive mutex lock succeeded after mutex was unlocked by "
+			     "another thread");
+		});
+		TEST(
+		  done == true,
+		  "Recursive mutex trylock succeeded on mutex owned by another thread");
+		sleep(5);
+		recursivemutex_unlock(&recursiveMutex);
+		recursivemutex_unlock(&recursiveMutex);
+		done = true;
+	}
+
 } // namespace
 
 void test_locks()

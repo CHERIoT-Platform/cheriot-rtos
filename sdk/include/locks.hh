@@ -5,18 +5,19 @@
 #include <debug.hh>
 #include <errno.h>
 #include <futex.h>
+#include <locks.h>
 #include <thread.h>
 
-__clang_ignored_warning_push("-Watomic-alignment")
-
-  static constexpr bool DebugLocks =
+static constexpr bool DebugLocks =
 #ifdef DEBUG_LOCKS
-    DEBUG_LOCKS
+  DEBUG_LOCKS
 #else
-    false
+  false
 #endif
   ;
 using LockDebug = ConditionalDebug<DebugLocks, "Locking">;
+
+__clang_ignored_warning_push("-Watomic-alignment");
 
 /**
  * A simple flag log, wrapping an atomic word used with the `futex` calls.
@@ -31,97 +32,37 @@ using LockDebug = ConditionalDebug<DebugLocks, "Locking">;
  * access to a mutex's interface (irrespective of the underlying
  * implementation) can cause deadlock by spuriously acquiring a lock or cause
  * data corruption via races by spuriously releasing it.  Anything that
- * requires mutual exclusion in the presence of mutual distrust should consider
- * an using a lock manager compartment with an API that returns a single-use
- * capability to unlock on any lock call.
+ * requires mutual exclusion in the presence of mutual distrust should
+ * consider an using a lock manager compartment with an API that returns a
+ * single-use capability to unlock on any lock call.
  */
 template<bool IsPriorityInherited>
 class FlagLockGeneric
 {
-	/**
-	 * States used in the futex word.
-	 */
-	enum Flag : uint32_t
-	{
-		/// The lock is not held.
-		Unlocked = 0,
-		/// The lock is held.
-		Locked = 1 << 16,
-		/// The lock is held and one or more threads are waiting on it.
-		LockedWithWaiters = 1 << 17
-	};
-
-	/// The lock word.
-	cheriot::atomic<uint32_t> flag = Flag::Unlocked;
-
-	/**
-	 * Returns the bits to use as the thread ID.  For priority inherited locks,
-	 * this is the real current thread ID, otherwise it is simply 0.
-	 */
-	__always_inline uint16_t thread_id()
-	{
-		if constexpr (IsPriorityInherited)
-		{
-			return thread_id_get_fast();
-		}
-		return 0;
-	}
+	FlagLockState state;
 
 	public:
 	/**
 	 * Attempt to acquire the lock, blocking until a timeout specified by the
 	 * `timeout` parameter has expired.
 	 */
-	bool try_lock(Timeout *timeout)
+	__always_inline bool try_lock(Timeout *timeout)
 	{
-		uint32_t old        = Flag::Unlocked;
-		auto     threadBits = thread_id();
-		uint32_t desired    = Flag::Locked | threadBits;
-		if (flag.compare_exchange_strong(old, desired))
+		if constexpr (IsPriorityInherited)
 		{
-			return true;
+			return flaglock_priority_inheriting_trylock(
+			         timeout, &state, thread_id_get_fast()) == 0;
 		}
-		// Next time, try to acquire, acquire with waiters so that we don't
-		// lose wakes if we win a race.
-		desired = Flag::LockedWithWaiters | threadBits;
-		while (timeout->remaining > 0)
+		else
 		{
-			// If there are not already waiters, set the waiters flag.
-			if ((old & Flag::LockedWithWaiters) == 0)
-			{
-				LockDebug::Assert((old & 0xffff0000) == Flag::Locked,
-				                  "Unexpected flag value: {}",
-				                  old);
-				uint32_t addedWaiters = Flag::LockedWithWaiters;
-				if constexpr (IsPriorityInherited)
-				{
-					addedWaiters |= (old & 0xffff);
-				}
-				flag.compare_exchange_strong(old, addedWaiters);
-			}
-			if (old != Flag::Unlocked)
-			{
-				LockDebug::log("Hitting slow path wait for {}", &flag);
-				FutexWaitFlags flags =
-				  IsPriorityInherited ? FutexPriorityInheritance : FutexNone;
-				if (flag.wait(timeout, old, flags) == -EINVAL)
-				{
-					return false;
-				}
-			}
-			old = Flag::Unlocked;
-			if (flag.compare_exchange_strong(old, desired))
-			{
-				return true;
-			}
+			return flaglock_trylock(timeout, &state) == 0;
 		}
-		return false;
 	}
 
 	/**
 	 * Try to acquire the lock, do not block.
 	 */
-	bool try_lock()
+	__always_inline bool try_lock()
 	{
 		Timeout t{0};
 		return try_lock(&t);
@@ -130,7 +71,7 @@ class FlagLockGeneric
 	/**
 	 * Acquire the lock, potentially blocking forever.
 	 */
-	void lock()
+	__always_inline void lock()
 	{
 		Timeout t{UnlimitedTimeout};
 		try_lock(&t);
@@ -141,16 +82,9 @@ class FlagLockGeneric
 	 *
 	 * Note: This does not check that the lock is owned by the calling thread.
 	 */
-	void unlock()
+	__always_inline void unlock()
 	{
-		auto old = flag.exchange(Flag::Unlocked);
-		LockDebug::Assert(old != Flag::Unlocked, "Double-unlocking {}", &flag);
-		// If there are waiters, wake them all up.
-		if ((old & Flag::LockedWithWaiters) != 0)
-		{
-			LockDebug::log("hitting slow path wake for {}", &flag);
-			flag.notify_all();
-		}
+		flaglock_unlock(&state);
 	}
 };
 
@@ -163,35 +97,15 @@ class FlagLockGeneric
  */
 class TicketLock
 {
-	/**
-	 * The value of the current ticket being served.
-	 */
-	cheriot::atomic<uint32_t> current;
-
-	/**
-	 * The next ticket that a caller can take.
-	 */
-	cheriot::atomic<uint32_t> next;
+	TicketLockState state;
 
 	public:
 	/**
 	 * Acquire the lock.
 	 */
-	void lock()
+	__always_inline void lock()
 	{
-		uint32_t ticket = next++;
-		LockDebug::log("Ticket {} issued", ticket);
-		do
-		{
-			uint32_t currentSnapshot = current;
-			if (currentSnapshot == ticket)
-			{
-				LockDebug::log("Ticket {} proceeding", ticket);
-				return;
-			}
-			LockDebug::log("Ticket {} waiting for {}", ticket, currentSnapshot);
-			current.wait(currentSnapshot);
-		} while (true);
+		ticketlock_lock(&state);
 	}
 
 	/**
@@ -199,13 +113,9 @@ class TicketLock
 	 *
 	 * Note: This does not check that the lock is owned by the calling thread.
 	 */
-	void unlock()
+	__always_inline void unlock()
 	{
-		uint32_t currentSnapshot = ++current;
-		if (next > currentSnapshot)
-		{
-			current.notify_all();
-		}
+		ticketlock_unlock(&state);
 	}
 };
 
@@ -353,7 +263,8 @@ class LockGuard
 	 * ```
 	 * if (LockGuard g{lock, timeout})
 	 * {
-	 *    // Run this code if we acquired the lock, releasing the lock at the end.
+	 *    // Run this code if we acquired the lock, releasing the lock at the
+	 * end.
 	 * }
 	 * else
 	 * {
@@ -366,4 +277,5 @@ class LockGuard
 		return isOwned;
 	}
 };
-__clang_ignored_warning_pop()
+
+__clang_ignored_warning_pop();

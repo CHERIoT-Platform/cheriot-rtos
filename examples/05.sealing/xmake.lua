@@ -10,6 +10,7 @@ set_toolchains("cheriot-clang")
 includes(path.join(sdkdir, "lib/freestanding"),
          path.join(sdkdir, "lib/crt"),
          path.join(sdkdir, "lib/atomic"),
+         path.join(sdkdir, "lib/locks"),
          path.join(sdkdir, "lib/cxxrt"))
 
 option("board")
@@ -23,7 +24,7 @@ compartment("caller")
 
 -- Firmware image for the example.
 firmware("sealing")
-    add_deps("crt", "freestanding", "cxxrt", "atomic")
+    add_deps("crt", "freestanding", "cxxrt", "atomic", "locks")
     add_deps("caller", "identifier")
     on_load(function(target)
         target:values_set("board", "$(board)")
