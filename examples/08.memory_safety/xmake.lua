@@ -6,6 +6,7 @@ set_toolchains("cheriot-clang")
 -- Support libraries
 includes(path.join(sdkdir, "lib/freestanding"),
          path.join(sdkdir, "lib/atomic"),
+         path.join(sdkdir, "lib/locks"),
          path.join(sdkdir, "lib/crt"))
 
 option("board")
@@ -19,7 +20,7 @@ compartment("memory_safety_runner")
 
 -- Firmware image for the example.
 firmware("memory_safety")
-    add_deps("crt", "freestanding", "atomic_fixed")
+    add_deps("crt", "freestanding", "atomic_fixed", "locks")
     add_deps("memory_safety_runner", "memory_safety_inner")
     on_load(function(target)
         target:values_set("board", "$(board)")
