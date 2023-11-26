@@ -12,7 +12,6 @@
 #include <compartment.h>
 #include <ctype.h>
 #include <errno.h>
-#include <event.h>
 #include <futex.h>
 #include <interrupt.h>
 #include <inttypes.h>

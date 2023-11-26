@@ -5,7 +5,6 @@
 #include "tests.hh"
 #include <cheri.hh>
 #include <errno.h>
-#include <event.h>
 #include <futex.h>
 #include <multiwaiter.h>
 #include <queue.h>
@@ -129,106 +128,6 @@ void test_multiwaiter()
 	     "Queue reports ready to receive but should be empty.");
 	TEST(events[1].value == 1, "Futex reports no wake");
 
-	void *ev;
-	ret = event_create(&noWait, MALLOC_CAPABILITY, &ev);
-	TEST(ret == 0, "Failed to create event channel");
-
-	debug_log("Testing event channel wait that shouldn't trigger wake");
-	auto setBits = [=](uint32_t newBits) {
-		uint32_t bits;
-		event_bits_set(ev, &bits, newBits);
-		return bits;
-	};
-	async([=]() {
-		sleep(1);
-		setBits(0b1010);
-		debug_log("Set some bits in the background");
-		sleep(1);
-		futex = 1;
-		futex_wake(&futex, 1);
-	});
-	events[0] = {ev, EventWaiterEventChannel, 0b101};
-	futex     = 0;
-	events[1] = {&futex, EventWaiterFutex, 0};
-	// This should not return until the futex fires...
-	t.remaining = 6;
-	ret         = multiwaiter_wait(&t, mw, events, 2);
-	TEST(ret == 0, "Wait for event channel and futex failed: {}", ret);
-	TEST(events[0].value == 0,
-	     "Event channel returned wrong bits: {}",
-	     events[0].value);
-	TEST(
-	  events[1].value == 1, "Futex returned {}, expected 1", events[1].value);
-	uint32_t bits;
-	event_bits_clear(ev, &bits, 0b1111);
-
-	debug_log("Testing event channel wait for all.");
-	async([=]() {
-		sleep(1);
-		setBits(0b1010);
-		debug_log("Set some bits in the background");
-		sleep(1);
-		setBits(0b101);
-	});
-	events[0] = {
-	  ev, EventWaiterEventChannel, EventWaiterEventChannelWaitAll | 0b1111};
-	// This should not return until the second set bits.
-	t.remaining = 6;
-	ret         = multiwaiter_wait(&t, mw, events, 1);
-	TEST(ret == 0, "Wait for event channel failed: {}", ret);
-	TEST(events[0].value == 0b1111,
-	     "Event channel returned wrong bits: {}",
-	     events[0].value);
-	event_bits_clear(ev, &bits, 0b1111);
-
-	debug_log("Testing event channel wait and clear.");
-	async([=]() {
-		sleep(1);
-		setBits(0b1);
-		debug_log("Set some bits in the background");
-	});
-	// Bit 24 is autoclear.
-	events[0] = {
-	  ev, EventWaiterEventChannel, EventWaiterEventChannelClearOnExit | 0b1};
-	// This should not return until the bottom bit is set.
-	t.remaining = 6;
-	ret         = multiwaiter_wait(&t, mw, events, 1);
-	TEST(ret == 0, "Wait for event channel failed: {}", ret);
-	TEST(events[0].value == 0b1,
-	     "Event channel returned wrong bits: {}",
-	     events[0].value);
-	uint32_t testBits;
-	ret = event_bits_get(ev, &testBits);
-	TEST(ret == 0, "Fetching event bits failed: {}", ret);
-	TEST(testBits == 0,
-	     "Event channel bits should have been cleared, but got {}",
-	     testBits);
-
-	debug_log("Testing event channel wait for some");
-	async([=]() {
-		sleep(1);
-		auto v = setBits(0b1010);
-		debug_log("Set some bits in the background ({})", v);
-		sleep(5);
-		debug_log("Set some more bits in the background");
-		setBits(0b101);
-	});
-	events[0] = {ev, EventWaiterEventChannel, 0b1111};
-	// We should be woken up after the first 0b1010 setBits call.
-	t.remaining = 6;
-	ret         = multiwaiter_wait(&t, mw, events, 1);
-	TEST(ret == 0, "Wait for event channel failed: {}", ret);
-	TEST(events[0].value == 0b1010,
-	     "Event channel returned wrong bits: {}, expected {}",
-	     events[0].value,
-	     0b1010U);
-	// Make sure we don't signal the event channel after it's been deallocated
-	// by waiting until the async has completed.
-	events[0].value = EventWaiterEventChannelWaitAll | 0b1111;
-	t.remaining     = 10;
-	multiwaiter_wait(&t, mw, events, 1);
-
-	event_delete(MALLOC_CAPABILITY, ev);
 	free(queueMemory);
 	multiwaiter_delete(MALLOC_CAPABILITY, mw);
 }

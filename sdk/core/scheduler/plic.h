@@ -4,7 +4,6 @@
 #pragma once
 
 #include "common.h"
-#include "event.h"
 #include <compartment.h>
 #include <optional>
 #include <platform-plic.hh>
