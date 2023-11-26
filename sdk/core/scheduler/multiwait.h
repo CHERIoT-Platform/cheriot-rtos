@@ -12,7 +12,6 @@
 namespace sched
 {
 	using namespace CHERI;
-	class Event;
 
 	/**
 	 * Structure describing state for waiting for a single event source.
@@ -31,10 +30,6 @@ namespace sched
 		 * Event-type value.
 		 */
 		uint32_t eventValue = 0;
-		/**
-		 * The kind of event source.
-		 */
-		EventWaiterKind kind : 2;
 		/**
 		 * Event-type-specific flags.
 		 */
@@ -65,22 +60,15 @@ namespace sched
 		}
 
 		/**
-		 * Reset methods.  Each overload takes a pointer to the event source
-		 * and the user-provided word describing when it should fire.
+		 * Reset method.  Takes a pointer to the futex word and the
+		 * user-provided value describing when it should fire.
 		 */
-		///@{
-		/*
-		 * Event channel reset depends on event->bits_get(), so the definition
-		 * of reset() is in event.h.
-		 */
-		bool reset(Event *event, uint32_t bits);
 		bool reset(uint32_t *address, uint32_t value)
 		{
 			eventSource = reinterpret_cast<void *>(
 			  static_cast<uintptr_t>(Capability{address}.address()));
 			eventValue  = value;
 			flags       = 0;
-			kind        = EventWaiterFutex;
 			readyEvents = 0;
 			if (*address != value)
 			{
@@ -89,30 +77,21 @@ namespace sched
 			}
 			return false;
 		}
-		///@}
 
 		/**
-		 * Each of the trigger methods is called when an event source is
-		 * triggered.  They return true if this event has fired (and so the
-		 * corresponding thread should be woken), false otherwise.
-		 *
-		 * Each trigger method does nothing if the argument does not match the
-		 * registered event type.
+		 * Trigger method that is called when a futex is notified.  Checks for
+		 * matches against the address.
 		 */
-		///@{
-		bool trigger(Event *event, uint32_t info);
-
 		bool trigger(ptraddr_t address)
 		{
 			ptraddr_t sourceAddress = Capability{eventSource}.address();
-			if ((kind != EventWaiterFutex) || (sourceAddress != address))
+			if (sourceAddress != address)
 			{
 				return false;
 			}
 			set_ready(1);
 			return true;
 		}
-		///@}
 	};
 
 	static_assert(
@@ -124,26 +103,11 @@ namespace sched
 	 */
 	class MultiWaiter : public Handle
 	{
-		/**
-		 * Helper template for mapping from a type to the EventWaiterKind that
-		 * it corresponds to.  The base case is a different type to trigger
-		 * compile failures if it is used.
-		 *@{
-		 */
-		template<typename T>
-		static constexpr std::nullptr_t KindFor = nullptr;
-		template<>
-		static constexpr EventWaiterKind KindFor<Event *> =
-		  EventWaiterEventChannel;
-		template<>
-		static constexpr EventWaiterKind KindFor<ptraddr_t> = EventWaiterFutex;
-		///@}
-
 		public:
 		/**
 		 * Type marker used for `Handle::unseal_as`.
 		 */
-		static constexpr auto TypeMarker = Handle::Type::Queue;
+		static constexpr auto TypeMarker = Handle::Type::MultiWaiter;
 
 		private:
 		/**
@@ -160,12 +124,6 @@ namespace sched
 		 * The current number of events in this multiwaiter.
 		 */
 		uint8_t usedLength = 0;
-
-		/**
-		 * Bitmap of `1<<EventWaiterKind` values indicating the kinds of object
-		 * that this waiter contains.
-		 */
-		uint8_t containedKinds = 0;
 
 		/**
 		 * Multiwaiters are added to a list in between being triggered
@@ -267,43 +225,16 @@ namespace sched
 		{
 			// Has any event triggered yet?
 			bool eventTriggered = false;
-			// Reset the kinds of event source that this contains.
-			containedKinds = 0;
+			// Reset the events that this contains.
 			for (size_t i = 0; i < count; i++)
 			{
-				void *ptr = newEvents[i].eventSource;
-				switch (newEvents[i].kind)
+				void *ptr     = newEvents[i].eventSource;
+				auto *address = static_cast<uint32_t *>(ptr);
+				if (!check_pointer<PermissionSet{Permission::Load}>(address))
 				{
-					default:
-						return EventOperationResult::Error;
-					case EventWaiterEventChannel:
-					{
-						auto *event = Handle::unseal<Event>(ptr);
-						if (event == nullptr ||
-						    (newEvents[i].value & 0xffffff) == 0)
-						{
-							return EventOperationResult::Error;
-						}
-						eventTriggered |=
-						  events[i].reset(event, newEvents[i].value);
-						break;
-					}
-					case EventWaiterFutex:
-					{
-						auto *address = static_cast<uint32_t *>(ptr);
-						if (!check_pointer<PermissionSet{Permission::Load}>(
-						      address))
-						{
-							return EventOperationResult::Error;
-						}
-						eventTriggered |=
-						  events[i].reset(address, newEvents[i].value);
-						break;
-					}
+					return EventOperationResult::Error;
 				}
-				// If we successfully registered this event, we have at least
-				// one event of this kind.
-				containedKinds |= 1 << newEvents[i].kind;
+				eventTriggered |= events[i].reset(address, newEvents[i].value);
 			}
 			usedLength = count;
 			return eventTriggered ? EventOperationResult::Wake
@@ -366,14 +297,7 @@ namespace sched
 			// have not yet been scheduled.
 			for (auto *mw = wokenMultiwaiters; mw != nullptr; mw = mw->next)
 			{
-				if constexpr (std::is_same_v<T, Event *>)
-				{
-					mw->trigger(source, info);
-				}
-				else
-				{
-					mw->trigger(source);
-				}
+				mw->trigger(source);
 			}
 			// Look at any threads that are waiting on multiwaiters.  This
 			// should happen after waking the multiwaiters so that we don't
@@ -382,16 +306,7 @@ namespace sched
 			Thread::walk_thread_list(
 			  threads,
 			  [&](Thread *thread) {
-				  bool threadReady;
-				  if constexpr (std::is_same_v<T, Event *>)
-				  {
-					  threadReady = thread->multiWaiter->trigger(source, info);
-				  }
-				  else
-				  {
-					  threadReady = thread->multiWaiter->trigger(source);
-				  }
-				  if (threadReady)
+				  if (thread->multiWaiter->trigger(source))
 				  {
 					  thread->ready(Thread::WakeReason::MultiWaiter);
 					  woken++;
@@ -442,23 +357,10 @@ namespace sched
 		template<typename T>
 		bool trigger(T source, uint32_t info = 0)
 		{
-			// If we're not waiting on any of this kind of thing, skip scanning
-			// the list.
-			if ((containedKinds & (1 << KindFor<T>)) == 0)
-			{
-				return false;
-			}
 			bool shouldWake = false;
 			for (auto &registeredSource : *this)
 			{
-				if constexpr (std::is_same_v<T, Event *>)
-				{
-					shouldWake |= registeredSource.trigger(source, info);
-				}
-				else
-				{
-					shouldWake |= registeredSource.trigger(source);
-				}
+				shouldWake |= registeredSource.trigger(source);
 			}
 			return shouldWake;
 		}
@@ -482,5 +384,3 @@ namespace sched
 
 } // namespace sched
 
-#include "event.h"
-#include "queue.h"

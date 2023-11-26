@@ -33,17 +33,6 @@ namespace sched
 		              std::numeric_limits<decltype(threadCount)>::max());
 
 		public:
-		struct EventBits
-		{
-			/// The set of event flags that this thread is waiting for.
-			uint32_t bits : 24;
-			/// Automatically clear the bits we waited on when woken up.
-			bool clearOnExit : 1;
-			uint32_t : 1;
-			/// Wait until all the specified bits are set.
-			bool waitForAll : 1;
-			uint32_t : 5;
-		};
 
 		enum class ThreadState : uint8_t
 		{
@@ -55,7 +44,6 @@ namespace sched
 		enum class WakeReason : uint8_t
 		{
 			Timer,
-			Event,
 			Futex,
 			/**
 			 * Woken because one or more events registered with a multi-waiter
@@ -559,10 +547,6 @@ namespace sched
 
 		union
 		{
-			/// When the thread wakes up from event group, this stores the bits
-			/// right after waking up (but before clearing the bits if
-			/// clearOnExit is set). 0 if it's woken up due to timer expiry.
-			EventBits eventWaitBits;
 			/// State associated with waiting on a futex.
 			struct
 			{

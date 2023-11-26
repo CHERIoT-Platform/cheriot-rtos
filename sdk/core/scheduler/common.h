@@ -60,15 +60,6 @@ namespace sched
 		enum class Type : uint32_t
 		{
 			Invalid = 0,
-			/**
-			 * Scheduler queue object.
-			 */
-			Queue,
-
-			/**
-			 * Scheduler event channel type.
-			 */
-			Event,
 
 			/**
 			 * Multiwaiter type.
