@@ -714,6 +714,11 @@ interrupt_complete(struct SObjStruct *sealed)
 	return -EPERM;
 }
 
+uint16_t thread_count()
+{
+	return CONFIG_THREADS_NUM;
+}
+
 #ifdef SCHEDULER_ACCOUNTING
 [[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
 {
