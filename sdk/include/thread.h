@@ -67,12 +67,23 @@ __cheri_compartment("sched") uint64_t thread_elapsed_cycles_idle(void);
  */
 __cheri_compartment("sched") uint64_t thread_elapsed_cycles_current(void);
 
+/**
+ * Returns the number of threads, including threads that have exited.
+ *
+ * This API never fails, but if the trusted stack is exhausted  and it cannot
+ * be called then it will return -1.  Callers that have not probed the trusted
+ * stack should check for this value.
+ *
+ * The result of this is safe to cache: it will never change over time.
+ */
+__cheri_compartment("sched") uint16_t thread_count();
+
 __END_DECLS
 #ifdef __cplusplus
 /**
  * Helper function that returns the current thread ID.  This will do a
- * cross-compartment call the first time it is called but not on any subsequent
- * calls.
+ * cross-compartment call the first time it is called but not on any
+ * subsequent calls.
  */
 inline uint16_t thread_id_get_fast()
 {
