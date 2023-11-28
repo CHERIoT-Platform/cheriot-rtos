@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <type_traits>
 
-namespace sched
+namespace
 {
 	using namespace CHERI;
 
@@ -101,7 +101,7 @@ namespace sched
 	/**
 	 * Multiwaiter object.  This contains space for all of the triggers.
 	 */
-	class MultiWaiter : public Handle
+	class MultiWaiterInternal : public Handle
 	{
 		public:
 		/**
@@ -128,7 +128,7 @@ namespace sched
 		/**
 		 * Multiwaiters are added to a list in between being triggered
 		 */
-		MultiWaiter *next = nullptr;
+		MultiWaiterInternal *next = nullptr;
 
 		/**
 		 * The array of events that we're waiting for.  This is variable sized
@@ -177,12 +177,13 @@ namespace sched
 		 * failure, sets `error` to the errno constant corresponding to the
 		 * failure reason and return `nullptr`.
 		 */
-		static HeapObject<MultiWaiter> create(Timeout           *timeout,
-		                                      struct SObjStruct *heapCapability,
-		                                      size_t             length,
-		                                      int               &error)
+		static HeapObject<MultiWaiterInternal>
+		create(Timeout           *timeout,
+		       struct SObjStruct *heapCapability,
+		       size_t             length,
+		       int               &error)
 		{
-			static_assert(sizeof(MultiWaiter) <= 2 * sizeof(void *),
+			static_assert(sizeof(MultiWaiterInternal) <= 2 * sizeof(void *),
 			              "Header for event queue is too large");
 			if (length > MaxMultiWaiterSize)
 			{
@@ -191,7 +192,7 @@ namespace sched
 			}
 			void *q = heap_allocate(timeout,
 			                        heapCapability,
-			                        sizeof(MultiWaiter) +
+			                        sizeof(MultiWaiterInternal) +
 			                          (length * sizeof(EventWaiter)));
 			if (q == nullptr)
 			{
@@ -199,7 +200,7 @@ namespace sched
 				return {};
 			}
 			error = 0;
-			return {heapCapability, new (q) MultiWaiter(length)};
+			return {heapCapability, new (q) MultiWaiterInternal(length)};
 		}
 
 		/**
@@ -244,7 +245,7 @@ namespace sched
 		/**
 		 * Destructor, ensures that nothing is waiting on this.
 		 */
-		~MultiWaiter()
+		~MultiWaiterInternal()
 		{
 			// Remove from the pending-wake list
 			remove_from_pending_wake_list();
@@ -326,7 +327,7 @@ namespace sched
 		{
 			Thread *currentThread      = Thread::current_get();
 			currentThread->multiWaiter = this;
-			currentThread->suspend(timeout, &sched::MultiWaiter::threads);
+			currentThread->suspend(timeout, &MultiWaiterInternal::threads);
 			currentThread->multiWaiter = nullptr;
 		}
 
@@ -338,7 +339,7 @@ namespace sched
 		 */
 		void remove_from_pending_wake_list()
 		{
-			MultiWaiter **prev = &wokenMultiwaiters;
+			MultiWaiterInternal **prev = &wokenMultiwaiters;
 			while ((prev != nullptr) && (*prev != nullptr) && ((*prev) != this))
 			{
 				prev = &((*prev)->next);
@@ -368,7 +369,9 @@ namespace sched
 		/**
 		 * Private constructor, called only from the factory method (`create`).
 		 */
-		MultiWaiter(size_t length) : Handle(TypeMarker), Length(length) {}
+		MultiWaiterInternal(size_t length) : Handle(TypeMarker), Length(length)
+		{
+		}
 
 		/**
 		 * Priority-sorted wait queue for threads that are blocked on a
@@ -379,8 +382,7 @@ namespace sched
 		/**
 		 * List of multiwaiters whose threads have been woken but not yet run.
 		 */
-		static inline MultiWaiter *wokenMultiwaiters = nullptr;
+		static inline MultiWaiterInternal *wokenMultiwaiters = nullptr;
 	};
 
-} // namespace sched
-
+} // namespace

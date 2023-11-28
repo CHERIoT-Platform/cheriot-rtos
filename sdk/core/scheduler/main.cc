@@ -62,7 +62,7 @@ namespace
 	/**
 	 * Priority-sorted list of threads waiting for a futex.
 	 */
-	sched::Thread *futexWaitingList;
+	Thread *futexWaitingList;
 
 	/**
 	 * The value used for priority-boosting futexes that are not actually
@@ -82,14 +82,13 @@ namespace
 	 */
 	uint8_t priority_boost_for_thread(uint16_t threadID, uint8_t priority = 0)
 	{
-		sched::Thread::walk_thread_list(
-		  futexWaitingList, [&](sched::Thread *thread) {
-			  if ((thread->futexPriorityInheriting) &&
-			      (thread->futexPriorityBoostedThread == threadID))
-			  {
-				  priority = std::max(priority, thread->priority_get());
-			  }
-		  });
+		Thread::walk_thread_list(futexWaitingList, [&](Thread *thread) {
+			if ((thread->futexPriorityInheriting) &&
+			    (thread->futexPriorityBoostedThread == threadID))
+			{
+				priority = std::max(priority, thread->priority_get());
+			}
+		});
 		return priority;
 	}
 
@@ -99,14 +98,13 @@ namespace
 	 */
 	void priority_boost_update(ptraddr_t key, uint16_t threadID)
 	{
-		sched::Thread::walk_thread_list(
-		  futexWaitingList, [&](sched::Thread *thread) {
-			  if ((thread->futexPriorityInheriting) &&
-			      (thread->futexWaitAddress = key))
-			  {
-				  thread->futexPriorityBoostedThread = threadID;
-			  }
-		  });
+		Thread::walk_thread_list(futexWaitingList, [&](Thread *thread) {
+			if ((thread->futexPriorityInheriting) &&
+			    (thread->futexWaitAddress = key))
+			{
+				thread->futexPriorityBoostedThread = threadID;
+			}
+		});
 	}
 
 	/**
@@ -121,17 +119,16 @@ namespace
 	 */
 	void priority_boost_reset(ptraddr_t key, uint16_t threadID)
 	{
-		sched::Thread::walk_thread_list(
-		  futexWaitingList, [&](sched::Thread *thread) {
-			  if ((thread->futexPriorityInheriting) &&
-			      (thread->futexWaitAddress = key))
-			  {
-				  if (thread->futexPriorityBoostedThread == threadID)
-				  {
-					  thread->futexPriorityBoostedThread = FutexBoostNotThread;
-				  }
-			  }
-		  });
+		Thread::walk_thread_list(futexWaitingList, [&](Thread *thread) {
+			if ((thread->futexPriorityInheriting) &&
+			    (thread->futexWaitAddress = key))
+			{
+				if (thread->futexPriorityBoostedThread == threadID)
+				{
+					thread->futexPriorityBoostedThread = FutexBoostNotThread;
+				}
+			}
+		});
 	}
 
 	/**
@@ -160,14 +157,14 @@ namespace
 		// The number of threads that we've woken, this is the return value on
 		// success.
 		int woke = 0;
-		sched::Thread::walk_thread_list(
+		Thread::walk_thread_list(
 		  futexWaitingList,
-		  [&](sched::Thread *thread) {
+		  [&](Thread *thread) {
 			  if (thread->futexWaitAddress == key)
 			  {
 				  shouldRecalculatePriorityBoost |=
 				    thread->futexPriorityInheriting;
-				  shouldYield = thread->ready(sched::Thread::WakeReason::Futex);
+				  shouldYield = thread->ready(Thread::WakeReason::Futex);
 				  count--;
 				  woke++;
 			  }
@@ -177,7 +174,7 @@ namespace
 		if (count > 0)
 		{
 			auto multiwaitersWoken =
-			  sched::MultiWaiter::wake_waiters(key, count);
+			  MultiWaiterInternal::wake_waiters(key, count);
 			count -= multiwaitersWoken;
 			woke += multiwaitersWoken;
 			shouldYield |= (multiwaitersWoken > 0);
@@ -261,7 +258,7 @@ namespace sched
 	{
 		// The cycle count value the last time the scheduler returned.
 		bool schedNeeded;
-		if constexpr (sched::Accounting)
+		if constexpr (Accounting)
 		{
 			uint64_t  currentCycles = rdcycle64();
 			auto     *thread        = Thread::current_get();
@@ -316,7 +313,7 @@ namespace sched
 		auto newContext =
 		  schedNeeded ? Thread::schedule(sealedTStack) : sealedTStack;
 
-		if constexpr (sched::Accounting)
+		if constexpr (Accounting)
 		{
 			cyclesAtLastSchedulingEvent = rdcycle64();
 		}
@@ -564,14 +561,14 @@ int futex_wake(uint32_t *address, uint32_t count)
 
 int multiwaiter_create(Timeout           *timeout,
                        struct SObjStruct *heapCapability,
-                       ::MultiWaiter    **ret,
+                       MultiWaiter      **ret,
                        size_t             maxItems)
 {
 	int error;
 	// Don't bother checking if timeout is valid, the allocator will check for
 	// us.
 	auto mw =
-	  sched::MultiWaiter::create(timeout, heapCapability, maxItems, error);
+	  MultiWaiterInternal::create(timeout, heapCapability, maxItems, error);
 	if (!mw)
 	{
 		return error;
@@ -580,17 +577,17 @@ int multiwaiter_create(Timeout           *timeout,
 	return write_result(reinterpret_cast<void **>(ret), mw);
 }
 
-int multiwaiter_delete(struct SObjStruct *heapCapability, ::MultiWaiter *mw)
+int multiwaiter_delete(struct SObjStruct *heapCapability, MultiWaiter *mw)
 {
-	return deallocate<sched::MultiWaiter>(heapCapability, mw);
+	return deallocate<MultiWaiterInternal>(heapCapability, mw);
 }
 
 int multiwaiter_wait(Timeout           *timeout,
-                     ::MultiWaiter     *waiter,
+                     MultiWaiter       *waiter,
                      EventWaiterSource *events,
                      size_t             newEventsCount)
 {
-	return typed_op<sched::MultiWaiter>(waiter, [&](sched::MultiWaiter &mw) {
+	return typed_op<MultiWaiterInternal>(waiter, [&](MultiWaiterInternal &mw) {
 		if (newEventsCount > mw.capacity())
 		{
 			Debug::log("Too many events");
@@ -612,10 +609,10 @@ int multiwaiter_wait(Timeout           *timeout,
 		}
 		switch (mw.set_events(events, newEventsCount))
 		{
-			case sched::MultiWaiter::EventOperationResult::Error:
+			case MultiWaiterInternal::EventOperationResult::Error:
 				Debug::log("Adding events returned error");
 				return -EINVAL;
-			case sched::MultiWaiter::EventOperationResult::Sleep:
+			case MultiWaiterInternal::EventOperationResult::Sleep:
 				Debug::log("Sleeping for {} ticks", timeout->remaining);
 				if (timeout->may_block())
 				{
@@ -630,7 +627,7 @@ int multiwaiter_wait(Timeout           *timeout,
 					}
 				}
 				[[fallthrough]];
-			case sched::MultiWaiter::EventOperationResult::Wake:
+			case MultiWaiterInternal::EventOperationResult::Wake:
 				// If we didn't find any events, then we timed out.  We may
 				// still have timed out but received some events in between
 				// being rescheduled and being run, but don't count that as a
@@ -646,7 +643,7 @@ int multiwaiter_wait(Timeout           *timeout,
 
 uint16_t *thread_id_get_pointer(void)
 {
-	return sched::Thread::current_thread_id_pointer();
+	return Thread::current_thread_id_pointer();
 }
 
 namespace

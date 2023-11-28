@@ -23,10 +23,6 @@ namespace
 	using Priority = uint32_t;
 	using SourceID = uint32_t;
 
-} // namespace
-
-namespace sched
-{
 	template<typename T, size_t MaxIntrID, typename SourceID, typename Priority>
 	concept IsPlic = requires(T v, SourceID id, Priority p)
 	{
@@ -224,4 +220,4 @@ namespace sched
 
 	alignas(InterruptController) inline char InterruptController::masterPlic
 	  [sizeof(InterruptController)];
-} // namespace sched
+} // namespace
