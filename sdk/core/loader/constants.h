@@ -9,7 +9,7 @@
 
 #ifdef __cplusplus
 #	include "types.h"
-#	include "../scheduler/common.h"
+#	include "../scheduler/loaderinfo.h"
 namespace
 {
 	/// The return type of the loader, to pass information to the scheduler.
@@ -20,7 +20,7 @@ namespace
 		/// scheduler CGP for thread initialisation
 		void *schedCGP;
 		/// thread descriptors for all threads
-		sched::ThreadLoaderInfo threads[];
+		ThreadLoaderInfo threads[];
 	};
 
 	using namespace loader;

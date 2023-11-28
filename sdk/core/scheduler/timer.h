@@ -21,14 +21,10 @@ namespace
 		{T::init()};
 		{T::setnext(cycles)};
 	};
-} // namespace
 
-static_assert(
-  IsTimer<TimerCore>,
-  "Platform's timer implementation does not meet the required interface");
-
-namespace sched
-{
+	static_assert(
+	  IsTimer<TimerCore>,
+	  "Platform's timer implementation does not meet the required interface");
 
 	class Timer final : private TimerCore
 	{
@@ -63,7 +59,7 @@ namespace sched
 				{
 					Thread *iterNext = iter->timerNext;
 
-					iter->ready(sched::Thread::WakeReason::Timer);
+					iter->ready(Thread::WakeReason::Timer);
 					iter = iterNext;
 					if (Thread::waitingList == nullptr ||
 					    iter == Thread::waitingList)
@@ -78,4 +74,4 @@ namespace sched
 			}
 		}
 	};
-} // namespace sched
+} // namespace

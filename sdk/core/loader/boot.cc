@@ -51,7 +51,7 @@ namespace
 	__END_DECLS
 
 	static_assert(
-	  CheckSize<sizeof(sched::ThreadLoaderInfo), BOOT_THREADINFO_SZ>::value);
+	  CheckSize<sizeof(ThreadLoaderInfo), BOOT_THREADINFO_SZ>::value);
 
 	/**
 	 * Reserved sealing types.
@@ -755,8 +755,7 @@ namespace
 	/**
 	 * Construct the boot threads.
 	 */
-	void boot_threads_create(const ImgHdr            &image,
-	                         sched::ThreadLoaderInfo *threadInfo)
+	void boot_threads_create(const ImgHdr &image, ThreadLoaderInfo *threadInfo)
 	{
 		// Two hazard pointers per thread.  More makes free slow, fewer is hard
 		// to use.
@@ -1334,8 +1333,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	// invoke the exception entry point.
 	auto exportEntry = build<ExportEntry>(
 	  imgHdr.scheduler().exportTable,
-	  LA_ABS(
-	    __export_sched__ZN5sched15scheduler_entryEPKNS_16ThreadLoaderInfoE));
+	  LA_ABS(__export_sched__ZN5sched15scheduler_entryEPK16ThreadLoaderInfo));
 	schedPCC.address() += exportEntry->functionStart;
 
 	Debug::log("Will return to scheduler entry point: {}", schedPCC);

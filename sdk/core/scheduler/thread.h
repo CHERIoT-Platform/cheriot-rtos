@@ -9,14 +9,14 @@
 #include <strings.h>
 #include <utils.hh>
 
-namespace sched
+namespace
 {
 	/// The total number of thread priorities.
 	constexpr uint16_t ThreadPrioNum = 32U;
 
 	// Forward declaration of MultiWaiter so that we can use a pointer to it in
 	// thread structures.
-	class MultiWaiter;
+	class MultiWaiterInternal;
 
 	template<size_t NPrios>
 	class ThreadImpl final : private utils::NoCopyNoMove
@@ -33,7 +33,6 @@ namespace sched
 		              std::numeric_limits<decltype(threadCount)>::max());
 
 		public:
-
 		enum class ThreadState : uint8_t
 		{
 			Ready,
@@ -570,7 +569,7 @@ namespace sched
 			 * If this thread is blocked on a multiwaiter, this holds the
 			 * address of the multiwaiter object.
 			 */
-			MultiWaiter *multiWaiter;
+			MultiWaiterInternal *multiWaiter;
 		};
 		TrustedStack *tStackPtr;
 
@@ -638,4 +637,4 @@ namespace sched
 
 	using Thread = ThreadImpl<ThreadPrioNum>;
 
-} // namespace sched
+} // namespace
