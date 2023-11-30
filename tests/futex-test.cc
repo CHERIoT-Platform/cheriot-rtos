@@ -114,7 +114,7 @@ void test_futex()
 	futex = 0;
 	static cheriot::atomic<int> state;
 	auto                        priorityBug = []() {
-        if (thread_id_get_fast() == 2)
+        if (thread_id_get() == 2)
         {
             debug_log("Medium-priority task starting");
             // We are the high priority thread, wait for the futex to be
@@ -132,7 +132,7 @@ void test_futex()
         else
         {
             debug_log("Low-priority task starting");
-            futex = thread_id_get_fast();
+            futex = thread_id_get();
             state = 1;
             debug_log("Low-priority thread acquired futex, yielding");
             // Now the high priority thread should run.

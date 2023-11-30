@@ -23,19 +23,19 @@ extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
 	debug_log("Thread {} error handler invoked with mcause {}.  PCC: {}",
-	          thread_id_get_fast(),
+	          thread_id_get(),
 	          mcause,
 	          frame->pcc);
 	if (mcause != 25)
 	{
 		return ErrorRecoveryBehaviour::ForceUnwind;
 	}
-	if (thread_id_get_fast() != interruptThreadNumber)
+	if (thread_id_get() != interruptThreadNumber)
 	{
 		debug_log(
 		  "Explicit thread interrupt delivered on the wrong thread (thread {}, "
 		  "expected {})",
-		  thread_id_get_fast(),
+		  thread_id_get(),
 		  interruptThreadNumber.load());
 		return ErrorRecoveryBehaviour::ForceUnwind;
 	}
@@ -52,9 +52,6 @@ void test_thread_pool()
 	TEST(thread_id_get() == 1,
 	     "Thread id of main thread should be 1, is {}",
 	     thread_id_get());
-	TEST(thread_id_get_fast() == 1,
-	     "Thread id of main thread should be 1, is {}",
-	     thread_id_get_fast());
 	// Run a simple stateless callback that increments a global in the thread
 	// pool.  This demonstrates that we can correctly capture a stateless
 	// function and pass it to the worker thread.
@@ -89,7 +86,7 @@ void test_thread_pool()
 	free(heapInt);
 
 	async([]() {
-		auto fast = thread_id_get_fast();
+		auto fast = thread_id_get();
 		auto slow = thread_id_get();
 		TEST(fast == slow,
 		     "Thread ID is different in fast ({}) and slow ({}) accessors",
@@ -113,7 +110,7 @@ void test_thread_pool()
 	static void *asyncThread;
 	static bool  interrupted;
 	async([=]() mutable {
-		interruptThreadNumber = thread_id_get_fast();
+		interruptThreadNumber = thread_id_get();
 		asyncThread           = switcher_current_thread();
 		while (!interruptStarted)
 		{

@@ -55,14 +55,12 @@ int __cheri_libcall eventgroup_create(struct Timeout    *timeout,
  * If `clearOnExit` is true and this returns successfully then the bits in
  * `bitsWanted` will be cleared in the event group before this returns.
  */
-int __cheri_libcall
-eventgroup_wait(Timeout           *timeout,
-                struct EventGroup *group,
-                uint32_t          *outBits,
-                uint32_t           bitsWanted,
-                _Bool              waitForAll,
-                _Bool              clearOnExit,
-                uint16_t threadID  __if_cxx(= thread_id_get_fast()));
+int __cheri_libcall eventgroup_wait(Timeout           *timeout,
+                                    struct EventGroup *group,
+                                    uint32_t          *outBits,
+                                    uint32_t           bitsWanted,
+                                    _Bool              waitForAll,
+                                    _Bool              clearOnExit);
 
 /**
  * Set one or more bits in an event group.  The `bitsToSet` argument contains

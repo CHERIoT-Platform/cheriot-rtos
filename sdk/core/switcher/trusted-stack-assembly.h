@@ -46,7 +46,8 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStack,
                        frames,
                        TSTACK_REGFRAME_SZ + TSTACK_HEADER_SZ)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, frameoffset, TSTACK_REGFRAME_SZ)
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, inForcedUnwind, TSTACK_REGFRAME_SZ + 2)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, threadID, TSTACK_REGFRAME_SZ + 2)
+EXPORT_ASSEMBLY_OFFSET(TrustedStack, inForcedUnwind, TSTACK_REGFRAME_SZ + 4)
 
 EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, csp, 0)
 EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, calleeExportTable, 8)

@@ -50,8 +50,7 @@ class FlagLockGeneric
 	{
 		if constexpr (IsPriorityInherited)
 		{
-			return flaglock_priority_inheriting_trylock(
-			         timeout, &state, thread_id_get_fast()) == 0;
+			return flaglock_priority_inheriting_trylock(timeout, &state) == 0;
 		}
 		else
 		{

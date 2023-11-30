@@ -15,7 +15,7 @@ namespace
 	void                  barrier()
 	{
 		int c = --counter;
-		debug_log("Thread {} waiting for barrier {}", thread_id_get_fast(), c);
+		debug_log("Thread {} waiting for barrier {}", thread_id_get(), c);
 		while (counter > 0)
 		{
 			counter.wait(c);

@@ -83,8 +83,7 @@ int __cheri_libcall flaglock_trylock(Timeout *timeout, FlagLockState *lock);
 /**
  * Try to lock a flag lock.  This is the priority-inheriting version.  Some
  * other platforms refer to this as a priority-inheriting mutex or simply a
- * mutex.  The `threadID` argument should be the current thread's ID.  In C++,
- * this should be omitted.
+ * mutex.
  *
  * A higher-priority thread that calls this function while a lock is held will
  * lend its priority to the thread that successfully called this function until
@@ -94,10 +93,8 @@ int __cheri_libcall flaglock_trylock(Timeout *timeout, FlagLockState *lock);
  * Returns 0 on success, -ETIMEDOUT if the timeout expired, or -EINVAL if the
  * arguments are invalid.
  */
-int __cheri_libcall flaglock_priority_inheriting_trylock(
-  Timeout          *timeout,
-  FlagLockState    *lock,
-  uint16_t threadID __if_cxx(= thread_id_get_fast()));
+int __cheri_libcall flaglock_priority_inheriting_trylock(Timeout       *timeout,
+                                                         FlagLockState *lock);
 
 /**
  * Convenience wrapper to acquire a lock with an unlimited timeout.  See
@@ -114,10 +111,10 @@ __always_inline static inline void flaglock_lock(FlagLockState *lock)
  * `flaglock_priority_inheriting_trylock` for more details.
  */
 __always_inline static inline void
-flaglock_priority_inheriting_lock(FlagLockState *lock, uint16_t threadID)
+flaglock_priority_inheriting_lock(FlagLockState *lock)
 {
 	Timeout t{UnlimitedTimeout};
-	flaglock_priority_inheriting_trylock(&t, lock, threadID);
+	flaglock_priority_inheriting_trylock(&t, lock);
 }
 
 /**
@@ -138,10 +135,8 @@ void __cheri_libcall flaglock_unlock(FlagLockState *lock);
  * arguments are invalid.  Can also return -EOVERFLOW if the lock depth would
  * overflow the depth counter.
  */
-int __cheri_libcall
-recursivemutex_trylock(Timeout             *timeout,
-                       RecursiveMutexState *lock,
-                       uint16_t threadID    __if_cxx(= thread_id_get_fast()));
+int __cheri_libcall recursivemutex_trylock(Timeout             *timeout,
+                                           RecursiveMutexState *lock);
 
 /**
  * Unlock a recursive mutex.  Note: This does not check that the current thread

@@ -185,10 +185,10 @@ int __cheri_libcall flaglock_trylock(Timeout *t, FlagLockState *lock)
 	return static_cast<InternalFlagLock *>(lock)->try_lock(t, 0, false);
 }
 int __cheri_libcall flaglock_priority_inheriting_trylock(Timeout       *t,
-                                                         FlagLockState *lock,
-                                                         uint16_t threadID)
+                                                         FlagLockState *lock)
 {
-	return static_cast<InternalFlagLock *>(lock)->try_lock(t, threadID, true);
+	return static_cast<InternalFlagLock *>(lock)->try_lock(
+	  t, thread_id_get(), true);
 }
 void __cheri_libcall flaglock_unlock(FlagLockState *lock)
 {
@@ -204,10 +204,9 @@ void __cheri_libcall ticketlock_unlock(TicketLockState *lock)
 	static_cast<InternalTicketLock *>(lock)->unlock();
 }
 
-int recursivemutex_trylock(Timeout             *timeout,
-                           RecursiveMutexState *mutex,
-                           uint16_t             threadID)
+int recursivemutex_trylock(Timeout *timeout, RecursiveMutexState *mutex)
 {
+	auto              threadID = thread_id_get();
 	InternalFlagLock *internalLock =
 	  static_cast<InternalFlagLock *>(&mutex->lock);
 	if (internalLock->try_lock(timeout, threadID, true) == 0)

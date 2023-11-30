@@ -109,10 +109,8 @@ namespace
 					  current->priority,
 					  current->OriginalPriority);
 				}
-				currentThreadId = current->threadId;
 				return current->tStackPtr;
 			}
-			currentThreadId = 0;
 			return schedTStack;
 		}
 
@@ -573,18 +571,6 @@ namespace
 		};
 		TrustedStack *tStackPtr;
 
-		/**
-		 * Returns a read-only pointer to a variable containing the current
-		 * thread ID.
-		 */
-		static uint16_t *current_thread_id_pointer()
-		{
-			CHERI::Capability ptr{&currentThreadId};
-			ptr.permissions() &= CHERI::PermissionSet{CHERI::Permission::Global,
-			                                          CHERI::Permission::Load};
-			return ptr;
-		}
-
 		private:
 		/**
 		 * Helper to remove a thread from the priority map and update the
@@ -614,8 +600,6 @@ namespace
 
 		/// the current runnning thread
 		static inline ThreadImpl *current;
-		/// The ID of the current thread.
-		static inline uint16_t currentThreadId;
 		/// NPrios number of lists, each linking the threads of this priority
 		static inline ThreadImpl *priorityList[NPrios];
 		/// A bit field indicating the presence of ready threads. A set bit at
