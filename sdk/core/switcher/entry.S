@@ -777,7 +777,7 @@ exception_entry_asm:
 	// Restore the stack pointer.  All other spilled values are spilled there.
 	clc                csp, TrustedStackFrame_offset_csp(ct1)
 	// Update the current frame offset.
-	csw                t2, TrustedStack_offset_frameoffset(ctp)
+	csh                t2, TrustedStack_offset_frameoffset(ctp)
 	// Do the loads *after* moving the trusted stack pointer.  In theory, the
 	// checks in `check_compartment_stack_integrity` make it impossible for
 	// this to fault, but if we do fault here then we'd end up in an infinite
@@ -943,6 +943,15 @@ __Z28switcher_thread_hazard_slotsv:
 	clc                ca0, TrustedStack_offset_hazardPointers(ca0)
 	cret
 
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z13thread_id_getv,@function
+__Z13thread_id_getv:
+	// Load the trusted stack pointer into a register that we will clobber in
+	// the next instruction when we load the thread ID.
+	cspecialr          ca0, mtdc
+	clh                a0, TrustedStack_offset_threadID(ca0)
+	cret
 
 
 
@@ -978,3 +987,4 @@ export __Z22switcher_recover_stackv
 export __Z25switcher_interrupt_threadPv
 export __Z23switcher_current_threadv
 export __Z28switcher_thread_hazard_slotsv
+export __Z13thread_id_getv

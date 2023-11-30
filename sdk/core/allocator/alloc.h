@@ -1022,7 +1022,7 @@ class MState
 		// This happens only with the allocator lock held, so we can avoid any
 		// CAS operations.
 		epoch++;
-		*lockWord = (epoch << 16) | thread_id_get_fast();
+		*lockWord = (epoch << 16) | thread_id_get();
 		epoch++;
 		struct Guard
 		{

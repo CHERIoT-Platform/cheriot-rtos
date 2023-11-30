@@ -437,11 +437,6 @@ int __cheri_compartment("sched") thread_sleep(Timeout *timeout)
 	return 0;
 }
 
-uint16_t __cheri_compartment("sched") thread_id_get(void)
-{
-	return Thread::current_get()->id_get();
-}
-
 int futex_timed_wait(Timeout        *timeout,
                      const uint32_t *address,
                      uint32_t        expected,
@@ -639,11 +634,6 @@ int multiwaiter_wait(Timeout           *timeout,
 		}
 		return 0;
 	});
-}
-
-uint16_t *thread_id_get_pointer(void)
-{
-	return Thread::current_thread_id_pointer();
 }
 
 namespace

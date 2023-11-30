@@ -40,16 +40,10 @@ typedef struct
  * Return the thread ID of the current running thread.
  * This is mostly useful where one compartment can run under different threads
  * and it matters which thread entered this compartment.
+ *
+ * This is implemented in the switcher.
  */
-[[cheri::interrupt_state(disabled)]] uint16_t __cheri_compartment("sched")
-  thread_id_get(void);
-
-/**
- * Returns a cacheable (read-only) pointer to a global owned by the scheduler
- * that contains the current thread ID.  Reading this pointer will return the
- * thread ID of the currently running thread.
- */
-__cheri_compartment("sched") uint16_t *thread_id_get_pointer(void);
+uint16_t __cheri_libcall thread_id_get(void);
 
 /**
  * Returns the number of cycles accounted to the idle thread.
@@ -79,19 +73,3 @@ __cheri_compartment("sched") uint64_t thread_elapsed_cycles_current(void);
 __cheri_compartment("sched") uint16_t thread_count();
 
 __END_DECLS
-#ifdef __cplusplus
-/**
- * Helper function that returns the current thread ID.  This will do a
- * cross-compartment call the first time it is called but not on any
- * subsequent calls.
- */
-inline uint16_t thread_id_get_fast()
-{
-	static uint16_t *ptr;
-	if (!ptr)
-	{
-		ptr = thread_id_get_pointer();
-	}
-	return *ptr;
-}
-#endif

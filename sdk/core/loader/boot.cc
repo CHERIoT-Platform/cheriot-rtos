@@ -860,6 +860,11 @@ namespace
 			threadTStack->mshwm  = stack.top();
 			threadTStack->mshwmb = stack.base();
 #endif
+			// Set the thread ID that the switcher will return for this thread.
+			// This is indexed from 1, so 0 can be used to indicate the idle
+			// thread.
+			threadTStack->threadID = i + 1;
+
 			threadTStack->frameoffset = offsetof(TrustedStack, frames[1]);
 			threadTStack->frames[0].calleeExportTable =
 			  build(compartment.exportTable);

@@ -19,7 +19,7 @@ extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
 	debug_log("Thread {} error handler invoked with mcause {}.  PCC: {}",
-	          thread_id_get_fast(),
+	          thread_id_get(),
 	          mcause,
 	          frame->pcc);
 	return ErrorRecoveryBehaviour::ForceUnwind;
