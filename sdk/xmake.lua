@@ -102,9 +102,9 @@ set_defaultplat("cheriot")
 set_languages("c2x", "cxx20")
 
 -- Common rules for any CHERI MCU component (library or compartment)
-rule("cherimcu.component")
+rule("cheriot.component")
 
-	-- Set some default config balues for all cherimcu components.
+	-- Set some default config values for all cheriot components.
 	on_load(function (target)
 		-- Treat this as a static library, though we will replace the default linking steps.
 		target:set("kind", "static")
@@ -124,10 +124,10 @@ rule("cherimcu.component")
 	-- that will be provided in the specialisation of this rule.
 	on_linkcmd(function (target, batchcmds, opt)
 		-- Get a specified linker script
-		local linkerscript_name = target:get("cherimcu.ldscript")
+		local linkerscript_name = target:get("cheriot.ldscript")
 		local linkerscript = path.join(scriptdir, linkerscript_name)
 		-- Link using the compartment's linker script.
-		batchcmds:show_progress(opt.progress, "linking " .. target:get("cherimcu.type") .. ' ' .. target:filename())
+		batchcmds:show_progress(opt.progress, "linking " .. target:get("cheriot.type") .. ' ' .. target:filename())
 		batchcmds:mkdir(target:targetdir())
 		batchcmds:vrunv(target:tool("ld"), table.join({"--script=" .. linkerscript, "--compartment", "--relax", "-o", target:targetfile()}, target:objectfiles()), opt)
 		-- This depends on all of the object files and the linker script.
@@ -138,55 +138,55 @@ rule("cherimcu.component")
 -- CHERI MCU libraries are currently built as compartments, without a
 -- `-cheri-compartment` flag.  They should gain that flag once the compiler
 -- supports more than one library.
-rule("cherimcu.library")
-	add_deps("cherimcu.component")
+rule("cheriot.library")
+	add_deps("cheriot.component")
 	on_load(function (target)
 		-- Mark this target as a CHERI MCU library.
-		target:set("cherimcu.type", "library")
+		target:set("cheriot.type", "library")
 		-- Libraries have a .library extension
 		target:set("extension", ".library")
 		-- Link with the library linker script, which drops .data* sections.
-		target:set("cherimcu.ldscript", "library.ldscript")
+		target:set("cheriot.ldscript", "library.ldscript")
 	end)
 
 -- CHERI MCU compartments have an explicit compartment name passed to the
 -- compiler.
-rule("cherimcu.compartment")
-	add_deps("cherimcu.component")
+rule("cheriot.compartment")
+	add_deps("cheriot.component")
 	on_load(function (target)
 		-- Mark this target as a CHERI MCU compartment.
-		target:set("cherimcu.type", "compartment")
-		target:set("cherimcu.ldscript", "compartment.ldscript")
+		target:set("cheriot.type", "compartment")
+		target:set("cheriot.ldscript", "compartment.ldscript")
 		target:set("extension", ".compartment")
 	end)
 	-- Add the compartment name flag.  This defaults to the target's name but
-	-- can be overridden by setting the cherimcu.compartment property.
+	-- can be overridden by setting the cheriot.compartment property.
 	after_load(function (target)
-		local compartment = target:get("cherimcu.compartment") or target:name()
+		local compartment = target:get("cheriot.compartment") or target:name()
 		target:add("cxflags", "-cheri-compartment=" .. compartment, {force=true})
 	end)
 
 -- Privileged compartments are built as compartments, but with a slightly
 -- different linker script.
-rule("cherimcu.privileged-compartment")
-	add_deps("cherimcu.compartment")
+rule("cheriot.privileged-compartment")
+	add_deps("cheriot.compartment")
 	on_load(function (target)
-		target:set("cherimcu.ldscript", "privileged-compartment.ldscript")
-		target:set("cherimcu.type", "privileged compartment")
+		target:set("cheriot.ldscript", "privileged-compartment.ldscript")
+		target:set("cheriot.type", "privileged compartment")
 		target:add("defines", "CHERIOT_AVOID_CAPRELOCS")
 	end)
 
-rule("cherimcu.privileged-library")
-	add_deps("cherimcu.library")
+rule("cheriot.privileged-library")
+	add_deps("cheriot.library")
 	on_load(function (target)
-		target:set("cherimcu.type", "privileged library")
-		target:set("cherimcu.ldscript", "privileged-compartment.ldscript")
+		target:set("cheriot.type", "privileged library")
+		target:set("cheriot.ldscript", "privileged-compartment.ldscript")
 	end)
 
 -- Build the switcher as an object file that we can import into the final
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
-target("cherimcu.switcher")
+target("cheriot.switcher")
 	set_kind("object")
 	add_files(path.join(coredir, "switcher/entry.S"))
 
@@ -196,29 +196,29 @@ target("cherimcu.switcher")
 -- TODO: We should provide a mechanism for firmware images to either opt out of
 -- having an allocator (or into providing a different allocator for a
 -- particular application)
-target("cherimcu.allocator")
-	add_rules("cherimcu.privileged-compartment", "cherimcu.component-debug")
+target("cheriot.allocator")
+	add_rules("cheriot.privileged-compartment", "cheriot.component-debug")
 	add_files(path.join(coredir, "allocator/main.cc"))
 	add_deps("locks")
 	on_load(function (target)
-		target:set("cherimcu.compartment", "alloc")
-		target:set('cherimcu.debug-name', "allocator")
+		target:set("cheriot.compartment", "alloc")
+		target:set('cheriot.debug-name', "allocator")
 	end)
 
 target("cheriot.token_library")
-	add_rules("cherimcu.privileged-library", "cherimcu.component-debug")
+	add_rules("cheriot.privileged-library", "cheriot.component-debug")
 	add_files(path.join(coredir, "token_library/token_unseal.S"))
 	on_load(function (target)
-		target:set('cherimcu.debug-name', "token_library")
+		target:set('cheriot.debug-name', "token_library")
 	end)
 
-target("cherimcu.software_revoker")
+target("cheriot.software_revoker")
 	set_default(false)
 	add_files(path.join(coredir, "software_revoker/revoker.cc"))
-	add_rules("cherimcu.privileged-compartment")
+	add_rules("cheriot.privileged-compartment")
 	on_load(function (target)
-		target:set("cherimcu.compartment", "software_revoker")
-		target:set("cherimcu.ldscript", "software_revoker.ldscript")
+		target:set("cheriot.compartment", "software_revoker")
+		target:set("cheriot.ldscript", "software_revoker.ldscript")
 	end)
 
 -- Helper to get the board file for a given target
@@ -313,7 +313,7 @@ rule("firmware")
 			if board.revoker == "software" then
 				temporal_defines[#temporal_defines+1] = "SOFTWARE_REVOKER"
 				software_revoker = true
-				target:add('deps', "cherimcu.software_revoker")
+				target:add('deps', "cheriot.software_revoker")
 			end
 			add_defines(temporal_defines)
 		end
@@ -616,21 +616,21 @@ rule("firmware")
 				"\t\t.software_revoker_start = .;\n" ..
 				"\t\t.software_revoker_import_end = .;\n" ..
 				"\t\tsoftware_revoker.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);\n" ..
-				"\t\t*/cherimcu.software_revoker.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);\n" ..
+				"\t\t*/cheriot.software_revoker.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);\n" ..
 				"\t}\n" ..
 				"\t.software_revoker_end = .;\n\n"
 			ldscript_substitutions.software_revoker_globals =
 				"\n\t.software_revoker_globals : CAPALIGN" ..
 				"\n\t{" ..
 				"\n\t\t.software_revoker_globals = .;" ..
-				"\n\t\t*/cherimcu.software_revoker.compartment(.data .data.* .sdata .sdata.*);" ..
+				"\n\t\t*/cheriot.software_revoker.compartment(.data .data.* .sdata .sdata.*);" ..
 				"\n\t\t.software_revoker_bss_start = .;" ..
-				"\n\t\t*/cherimcu.software_revoker.compartment(.sbss .sbss.* .bss .bss.*)" ..
+				"\n\t\t*/cheriot.software_revoker.compartment(.sbss .sbss.* .bss .bss.*)" ..
 				"\n\t}" ..
 				"\n\t.software_revoker_globals_end = .;\n"
 			ldscript_substitutions.compartment_exports =
 				"\n\t\t.software_revoker_export_table = ALIGN(8);" ..
-				"\n\t\t*/cherimcu.software_revoker.compartment(.compartment_export_table);" ..
+				"\n\t\t*/cheriot.software_revoker.compartment(.compartment_export_table);" ..
 				"\n\t\t.software_revoker_export_table_end = .;\n" ..
 				ldscript_substitutions.compartment_exports
 			ldscript_substitutions.software_revoker_header =
@@ -653,7 +653,7 @@ rule("firmware")
 		-- Process all of the library dependencies.
 		local library_count = 0
 		visit_all_dependencies(function (target)
-			if target:get("cherimcu.type") == "library" then
+			if target:get("cheriot.type") == "library" then
 				library_count = library_count + 1
 				add_dependency(target:name(), target, library_templates)
 			end
@@ -662,7 +662,7 @@ rule("firmware")
 		-- Process all of the compartment dependencies.
 		local compartment_count = 0
 		visit_all_dependencies(function (target)
-			if target:get("cherimcu.type") == "compartment" then
+			if target:get("cheriot.type") == "compartment" then
 				compartment_count = compartment_count + 1
 				add_dependency(target:name(), target, compartment_templates)
 			end
@@ -689,10 +689,10 @@ rule("firmware")
 		batchcmds:mkdir(target:targetdir())
 		local objects = target:objectfiles()
 		visit_all_dependencies_of(target, function (dep)
-			if (dep:get("cherimcu.type") == "library") or
-				(dep:get("cherimcu.type") == "compartment") or
-				(dep:get("cherimcu.type") == "privileged compartment") or
-				(dep:get("cherimcu.type") == "privileged library") then
+			if (dep:get("cheriot.type") == "library") or
+				(dep:get("cheriot.type") == "compartment") or
+				(dep:get("cheriot.type") == "privileged compartment") or
+				(dep:get("cheriot.type") == "privileged library") then
 				table.insert(objects, dep:targetfile())
 			end
 		end)
@@ -705,9 +705,9 @@ rule("firmware")
 	end)
 
 -- Rule for conditionally enabling debug for a component.
-rule("cherimcu.component-debug")
+rule("cheriot.component-debug")
 	after_load(function (target)
-		local name = target:get("cherimcu.debug-name") or target:name()
+		local name = target:get("cheriot.debug-name") or target:name()
 		target:add('options', "debug-" .. name)
 		target:add('defines', "DEBUG_" .. name:upper() .. "=" .. tostring(get_config("debug-"..name)))
 	end)
@@ -716,13 +716,13 @@ rule("cherimcu.component-debug")
 -- Build the loader.  The firmware rule will set the flags required for
 -- this to create threads.
 target("cheriot.loader")
-	add_rules("cherimcu.component-debug")
+	add_rules("cheriot.component-debug")
 	set_kind("object")
 	-- FIXME: We should be setting this based on a board config file.
 	add_files(path.join(coredir, "loader/boot.S"), path.join(coredir, "loader/boot.cc"),  {force = {cxflags = "-O1"}})
 	add_defines("CHERIOT_AVOID_CAPRELOCS")
 	on_load(function (target)
-		target:set('cherimcu.debug-name', "loader")
+		target:set('cheriot.debug-name', "loader")
 		local config = {
 			-- Size in bytes of the trusted stack.
 			loader_trusted_stack_size = 192,
@@ -741,11 +741,11 @@ function firmware(name)
 	-- Build the scheduler.  The firmware rule will set the flags required for
 	-- this to create threads.
 	target(name .. ".scheduler")
-		add_rules("cherimcu.privileged-compartment", "cherimcu.component-debug")
+		add_rules("cheriot.privileged-compartment", "cheriot.component-debug")
 		add_deps("locks", "crt", "atomic1")
 		on_load(function (target)
-			target:set("cherimcu.compartment", "sched")
-			target:set('cherimcu.debug-name', "scheduler")
+			target:set("cheriot.compartment", "sched")
+			target:set('cheriot.debug-name', "scheduler")
 			target:add('defines', "SCHEDULER_ACCOUNTING=" .. tostring(get_config("scheduler-accounting")))
 		end)
 		add_files(path.join(coredir, "scheduler/main.cc"))
@@ -756,7 +756,7 @@ function firmware(name)
 		set_kind("binary")
 		add_rules("firmware")
 		-- TODO: Make linking the allocator optional.
-		add_deps(name .. ".scheduler", "cheriot.loader", "cherimcu.switcher", "cherimcu.allocator")
+		add_deps(name .. ".scheduler", "cheriot.loader", "cheriot.switcher", "cheriot.allocator")
 		add_deps("cheriot.token_library")
 		-- The firmware linker script will be populated based on the set of
 		-- compartments.
@@ -766,13 +766,13 @@ end
 -- Helper to create a library.
 function library(name)
 	target(name)
-		add_rules("cherimcu.library")
+		add_rules("cheriot.library")
 end
 
 -- Helper to create a compartment.
 function compartment(name)
 	target(name)
-		add_rules("cherimcu.compartment")
+		add_rules("cheriot.compartment")
 end
 
 includes("lib/locks", "lib/crt", "lib/atomic")
