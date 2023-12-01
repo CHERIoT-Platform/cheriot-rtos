@@ -111,6 +111,14 @@ rule("cherimcu.component")
 		-- We don't want a lib prefix or equivalent.
 		target:set("prefixname", "")
 	end)
+	before_build(function (target)
+		if not target:get("cheriot.board_file") then
+			raise("target " .. target:name() .. " is being built but does not " ..
+			"appear to be connected to a firmware image.  Please either use " ..
+			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
+			"prevent it from being built when not linked")
+		end
+	end)
 
 	-- Custom link step, link this as a compartment, with the linker script
 	-- that will be provided in the specialisation of this rule.
@@ -291,19 +299,6 @@ rule("firmware")
 		local boarddir, boardfile = board_file(target);
 		local board = json.loadfile(boardfile)
 
-		-- Check that all dependences have a single board that they're targeting.
-		visit_all_dependencies(function (target)
-			local targetBoardFile = target:get("cheriot.board_file")
-			local targetBoardDir = target:get("cheriot.board_dir")
-			if not targetBoard then
-				target:set("cheriot.board_file", boardfile)
-				target:set("cheriot.board_dir", boarddir)
-			else
-				if targetBoardFile ~= boardfile or targetBoardDir ~= boarddir then
-					raise("target " .. target:name() .. " is used in two or more firmware targets with different boards")
-				end
-			end
-		end)
 
 		-- Add defines to all dependencies.
 		local add_defines = function (defines)
@@ -322,6 +317,20 @@ rule("firmware")
 			end
 			add_defines(temporal_defines)
 		end
+
+		-- Check that all dependences have a single board that they're targeting.
+		visit_all_dependencies(function (target)
+			local targetBoardFile = target:get("cheriot.board_file")
+			local targetBoardDir = target:get("cheriot.board_dir")
+			if not targetBoard then
+				target:set("cheriot.board_file", boardfile)
+				target:set("cheriot.board_dir", boarddir)
+			else
+				if targetBoardFile ~= boardfile or targetBoardDir ~= boarddir then
+					raise("target " .. target:name() .. " is used in two or more firmware targets with different boards")
+				end
+			end
+		end)
 
 		if board.driver_includes then
 			for _, include_path in ipairs(board.driver_includes) do
