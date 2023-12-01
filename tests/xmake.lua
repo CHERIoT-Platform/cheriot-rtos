@@ -81,7 +81,7 @@ firmware("test-suite")
     add_deps("test_runner", "thread_pool")
     -- Helper libraries
     add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers")
-    add_deps("message_queue", "message_queue_library", "locks", "event_group")
+    add_deps("message_queue", "locks", "event_group")
     -- Tests
     add_deps("mmio_test")
     add_deps("eventgroup_test")

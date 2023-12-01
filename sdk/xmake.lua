@@ -191,6 +191,7 @@ target("cherimcu.switcher")
 target("cherimcu.allocator")
 	add_rules("cherimcu.privileged-compartment", "cherimcu.component-debug")
 	add_files(path.join(coredir, "allocator/main.cc"))
+	add_deps("locks")
 	on_load(function (target)
 		target:set("cherimcu.compartment", "alloc")
 		target:set('cherimcu.debug-name', "allocator")
@@ -226,6 +227,23 @@ local board_file = function(target)
 	end
 	return boarddir, boardfile
 end
+
+-- Helper to visit all dependencies of a specified target exactly once and call
+-- a callback.
+local function visit_all_dependencies_of(target, callback)
+	local visited = {}
+	local function visit(target)
+		if not visited[target:name()] then
+			visited[target:name()] = true
+			callback(target)
+			for _, d in table.orderpairs(target:deps()) do
+				visit(d)
+			end
+		end
+	end
+	visit(target)
+end
+
 
 -- Rule for defining a firmware image.
 rule("firmware")
@@ -266,13 +284,32 @@ rule("firmware")
 	after_load(function (target)
 		import("core.base.json")
 
+		local function visit_all_dependencies(callback)
+			visit_all_dependencies_of(target, callback)
+		end
+
 		local boarddir, boardfile = board_file(target);
 		local board = json.loadfile(boardfile)
 
-		local add_defines = function (defines)
-			for _, d in table.orderpairs(target:deps()) do
-				d:add('defines', defines)
+		-- Check that all dependences have a single board that they're targeting.
+		visit_all_dependencies(function (target)
+			local targetBoardFile = target:get("cheriot.board_file")
+			local targetBoardDir = target:get("cheriot.board_dir")
+			if not targetBoard then
+				target:set("cheriot.board_file", boardfile)
+				target:set("cheriot.board_dir", boarddir)
+			else
+				if targetBoardFile ~= boardfile or targetBoardDir ~= boarddir then
+					raise("target " .. target:name() .. " is used in two or more firmware targets with different boards")
+				end
 			end
+		end)
+
+		-- Add defines to all dependencies.
+		local add_defines = function (defines)
+			visit_all_dependencies(function (target)
+				target:add('defines', defines)
+			end)
 		end
 
 		local software_revoker = false
@@ -294,9 +331,9 @@ rule("firmware")
 				if not path.is_absolute(include_path) then
 					include_path = path.join(boarddir, include_path);
 				end
-				for _, d in table.orderpairs(target:deps()) do
-					d:add('includedirs', include_path)
-				end
+				visit_all_dependencies(function (target)
+					target:add('includedirs', include_path)
+				end)
 			end
 		end
 
@@ -606,21 +643,21 @@ rule("firmware")
 
 		-- Process all of the library dependencies.
 		local library_count = 0
-		for name, dep in table.orderpairs(target:deps()) do
-			if dep:get("cherimcu.type") == "library" then
+		visit_all_dependencies(function (target)
+			if target:get("cherimcu.type") == "library" then
 				library_count = library_count + 1
-				add_dependency(name, dep, library_templates)
+				add_dependency(target:name(), target, library_templates)
 			end
-		end
+		end)
 
 		-- Process all of the compartment dependencies.
 		local compartment_count = 0
-		for name, dep in table.orderpairs(target:deps()) do
-			if dep:get("cherimcu.type") == "compartment" then
+		visit_all_dependencies(function (target)
+			if target:get("cherimcu.type") == "compartment" then
 				compartment_count = compartment_count + 1
-				add_dependency(name, dep, compartment_templates)
+				add_dependency(target:name(), target, compartment_templates)
 			end
-		end
+		end)
 
 		-- Add the counts of libraries and compartments to the substitution list.
 		ldscript_substitutions.compartment_count = compartment_count
@@ -642,14 +679,14 @@ rule("firmware")
 		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
 		batchcmds:mkdir(target:targetdir())
 		local objects = target:objectfiles()
-		for name, dep in table.orderpairs(target:deps()) do
+		visit_all_dependencies_of(target, function (dep)
 			if (dep:get("cherimcu.type") == "library") or
 				(dep:get("cherimcu.type") == "compartment") or
 				(dep:get("cherimcu.type") == "privileged compartment") or
 				(dep:get("cherimcu.type") == "privileged library") then
 				table.insert(objects, dep:targetfile())
 			end
-		end
+		end)
 		batchcmds:vrunv(target:tool("ld"), table.join({"--script=" .. linkerscript, "--relax", "-o", target:targetfile(), "--compartment-report=" .. target:targetfile() .. ".json" }, objects), opt)
 		batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
 		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
@@ -696,6 +733,7 @@ function firmware(name)
 	-- this to create threads.
 	target(name .. ".scheduler")
 		add_rules("cherimcu.privileged-compartment", "cherimcu.component-debug")
+		add_deps("locks", "crt", "atomic1")
 		on_load(function (target)
 			target:set("cherimcu.compartment", "sched")
 			target:set('cherimcu.debug-name', "scheduler")
@@ -727,3 +765,6 @@ function compartment(name)
 	target(name)
 		add_rules("cherimcu.compartment")
 end
+
+includes("lib/locks", "lib/crt", "lib/atomic")
+
