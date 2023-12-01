@@ -8,11 +8,7 @@ set_toolchains("cheriot-clang")
 
 -- Support libraries
 includes(path.join(sdkdir, "lib/freestanding"),
-         path.join(sdkdir, "lib/atomic"),
-         path.join(sdkdir, "lib/locks"),
-         path.join(sdkdir, "lib/queue"),
-         path.join(sdkdir, "lib/compartment_helpers"),
-         path.join(sdkdir, "lib/crt"))
+         path.join(sdkdir, "lib/queue"))
 
 option("board")
     set_default("sail")
@@ -25,7 +21,8 @@ compartment("consumer")
 
 -- Firmware image for the example.
 firmware("producer-consumer")
-    add_deps("crt", "freestanding", "atomic_fixed", "locks", "message_queue", "message_queue_library", "compartment_helpers")
+    -- Both compartments need memcpy and the message queue compartment.
+    add_deps("freestanding", "message_queue")
     add_deps("producer", "consumer")
     on_load(function(target)
         target:values_set("board", "$(board)")

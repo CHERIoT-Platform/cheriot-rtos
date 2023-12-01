@@ -7,20 +7,18 @@ includes(sdkdir)
 set_toolchains("cheriot-clang")
 
 -- Support libraries
-includes(path.join(sdkdir, "lib/freestanding"),
-         path.join(sdkdir, "lib/atomic"),
-         path.join(sdkdir, "lib/locks"),
-         path.join(sdkdir, "lib/crt"))
+includes(path.join(sdkdir, "lib/freestanding"))
 
 option("board")
     set_default("sail")
 
 compartment("allocate")
+    -- memcpy
+    add_deps("freestanding")
     add_files("allocate.cc")
 
 -- Firmware image for the example.
 firmware("temporal_safety")
-    add_deps("crt", "freestanding", "atomic_fixed", "locks")
     add_deps("allocate")
     on_load(function(target)
         target:values_set("board", "$(board)")
