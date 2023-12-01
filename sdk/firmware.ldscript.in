@@ -27,7 +27,7 @@ SECTIONS
 		.scheduler_export_table_end = .;
 
 		.allocator_export_table = ALIGN(8);
-		*/cherimcu.allocator.compartment(.compartment_export_table);
+		*/cheriot.allocator.compartment(.compartment_export_table);
 		.allocator_export_table_end = .;
 
 		@compartment_exports@
@@ -55,10 +55,10 @@ SECTIONS
 	allocator_code : CAPALIGN
 	{
 		.allocator_start = .;
-		*/cherimcu.allocator.compartment(.compartment_import_table);
+		*/cheriot.allocator.compartment(.compartment_import_table);
 		.allocator_import_end = .;
 		allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
-		*/cherimcu.allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/cheriot.allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
 	}
 	.allocator_end = .;
 
@@ -94,16 +94,16 @@ SECTIONS
 	.allocator_sealed_objects : CAPALIGN
 	{
 		.allocator_sealed_objects = .;
-		*/cherimcu.allocator.compartment(.sealed_objects)
+		*/cheriot.allocator.compartment(.sealed_objects)
 	}
 	.allocator_sealed_objects_end = .;
 
 	.allocator_globals : CAPALIGN
 	{
 		.allocator_globals = .;
-		*/cherimcu.allocator.compartment(.data .data.* .sdata .sdata.*);
+		*/cheriot.allocator.compartment(.data .data.* .sdata .sdata.*);
 		.allocator_bss_start = .;
-		*/cherimcu.allocator.compartment(.sbss .sbss.* .bss .bss.*);
+		*/cheriot.allocator.compartment(.sbss .sbss.* .bss .bss.*);
 	}
 	.allocator_globals_end = .;
 
