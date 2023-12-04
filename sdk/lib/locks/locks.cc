@@ -209,11 +209,6 @@ int recursivemutex_trylock(Timeout *timeout, RecursiveMutexState *mutex)
 	auto              threadID = thread_id_get();
 	InternalFlagLock *internalLock =
 	  static_cast<InternalFlagLock *>(&mutex->lock);
-	if (internalLock->try_lock(timeout, threadID, true) == 0)
-	{
-		mutex->depth = 1;
-		return 0;
-	}
 	// If the lock owner is the current thread, we already own the lock.
 	if (internalLock->owner() == threadID)
 	{
@@ -224,7 +219,13 @@ int recursivemutex_trylock(Timeout *timeout, RecursiveMutexState *mutex)
 		mutex->depth++;
 		return 0;
 	}
-	return 0;
+	// If the lock owner is not currently us, try to acquire it.
+	if (internalLock->try_lock(timeout, threadID, true) == 0)
+	{
+		mutex->depth = 1;
+		return 0;
+	}
+	return -ETIMEDOUT;
 }
 
 int __cheri_libcall recursivemutex_unlock(RecursiveMutexState *mutex)
