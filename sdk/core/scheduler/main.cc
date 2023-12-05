@@ -200,7 +200,7 @@ namespace sched
 	 */
 	Thread *get_thread(uint16_t threadId)
 	{
-		if (threadId > CONFIG_THREADS_NUM)
+		if (threadId > CONFIG_THREADS_NUM || threadId == 0)
 		{
 			return nullptr;
 		}
@@ -445,12 +445,14 @@ int futex_timed_wait(Timeout        *timeout,
 	if (!check_timeout_pointer(timeout) ||
 	    !check_pointer<PermissionSet{Permission::Load}>(address))
 	{
+		Debug::log("futex_timed_wait: invalid timeout or address");
 		return -EINVAL;
 	}
 	// If the address does not contain the expected value then this call
 	// raced with an update in another thread, return success immediately.
 	if (*address != expected)
 	{
+		Debug::log("futex_timed_wait: skip wait {} != {}", *address, expected);
 		return 0;
 	}
 	Thread *currentThread = Thread::current_get();
@@ -472,6 +474,8 @@ int futex_timed_wait(Timeout        *timeout,
 		// If we try to block ourself, that's a mistake.
 		if ((owningThread == currentThread) || (owningThread == nullptr))
 		{
+			Debug::log("futex_timed_wait: invalid owning thread {}",
+			           owningThread);
 			return -EINVAL;
 		}
 		Debug::log("Thread {} boosting priority of {} for futex {}",
@@ -505,6 +509,9 @@ int futex_timed_wait(Timeout        *timeout,
 	// return an error.
 	if (!Capability{address}.is_valid())
 	{
+		Debug::log(
+		  "futex_timed_wait: futex address {} is invalid (deallocated?)",
+		  address);
 		return -EINVAL;
 	}
 	Debug::log("Thread {} ({}) woke after waiting on futex {}",

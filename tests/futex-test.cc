@@ -112,6 +112,7 @@ void test_futex()
 
 	debug_log("Starting priority inheritance test");
 	futex = 0;
+
 	static cheriot::atomic<int> state;
 	auto                        priorityBug = []() {
         if (thread_id_get() == 2)
@@ -171,6 +172,17 @@ void test_futex()
 	ret         = futex_timed_wait(&t, &futex, futex, FutexPriorityInheritance);
 	TEST(ret == -EINVAL,
 	     "PI futex with an invalid thread ID returned {}, should be {}",
+	     ret,
+	     -EINVAL);
+
+	futex = 0;
+	debug_log(
+	  "Testing priority inheriting futex_timed_wait with zero thread ID");
+	// zero is not a valid thread ID for priority inheriting futex. Previously
+	// this caused a crash due to OOB access but better to return -EINVAL.
+	ret = futex_timed_wait(&t, &futex, 0, FutexPriorityInheritance);
+	TEST(ret == -EINVAL,
+	     "PI futex with a zero thread ID returned {}, should be {}",
 	     ret,
 	     -EINVAL);
 }
