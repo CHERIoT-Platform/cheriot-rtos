@@ -4,3 +4,6 @@
 [submodule "sdk/third_party/microvium"]
 	path = sdk/third_party/microvium
 	url = https://github.com/coder-mike/microvium
+[submodule "sdk/third_party/freertos-plus-tcp"]
+	path = sdk/third_party/freertos-plus-tcp
+	url = https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git

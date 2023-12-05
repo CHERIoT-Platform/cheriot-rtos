@@ -15,8 +15,8 @@
 #include "cdefs.h"
 #include "thread.h"
 #include <compartment-macros.h>
-#include <cstdlib>
 #include <stdint.h>
+#include <stdlib.h>
 #include <timeout.h>
 
 struct EventGroup;
@@ -30,9 +30,9 @@ struct SObjStruct;
  * If the timeout expires then this returns `-ETIMEDOUT`, if memory cannot be
  * allocated it returns `-ENOMEM`.
  */
-int __cheri_libcall eventgroup_create(struct Timeout    *timeout,
-                                      struct SObjStruct *heapCapability,
-                                      EventGroup       **outGroup);
+int __cheri_libcall eventgroup_create(struct Timeout     *timeout,
+                                      struct SObjStruct  *heapCapability,
+                                      struct EventGroup **outGroup);
 
 /**
  * Wait for events in an event group.  The `bitsWanted` argument must contain
@@ -88,10 +88,10 @@ int __cheri_libcall eventgroup_set(Timeout           *timeout,
  * Independent of success or failure, `outBits` will be used to return the set
  * of currently set bits in this event group.
  */
-int __cheri_libcall eventgroup_clear(Timeout    *timeout,
-                                     EventGroup *group,
-                                     uint32_t   *outBits,
-                                     uint32_t    bitsToClear);
+int __cheri_libcall eventgroup_clear(Timeout           *timeout,
+                                     struct EventGroup *group,
+                                     uint32_t          *outBits,
+                                     uint32_t           bitsToClear);
 
 /**
  * Returns the current value of the event bits via `outBits`.  Returns 0 on

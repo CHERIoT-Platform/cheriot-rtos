@@ -1,6 +1,5 @@
 #pragma once
 #include <cdefs.h>
-#include <limits>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <thread.h>
@@ -45,7 +44,7 @@ struct RecursiveMutexState
 	/**
 	 * The underlying lock.
 	 */
-	FlagLockState lock;
+	struct FlagLockState lock;
 	/**
 	 * The count of the times the lock has been acquired by the same thread.
 	 * This must be initialised to 0.
@@ -78,7 +77,8 @@ __BEGIN_DECLS
  * Returns 0 on success, -ETIMEDOUT if the timeout expired, or -EINVAL if the
  * arguments are invalid.
  */
-int __cheri_libcall flaglock_trylock(Timeout *timeout, FlagLockState *lock);
+int __cheri_libcall flaglock_trylock(Timeout              *timeout,
+                                     struct FlagLockState *lock);
 
 /**
  * Try to lock a flag lock.  This is the priority-inheriting version.  Some
@@ -93,16 +93,17 @@ int __cheri_libcall flaglock_trylock(Timeout *timeout, FlagLockState *lock);
  * Returns 0 on success, -ETIMEDOUT if the timeout expired, or -EINVAL if the
  * arguments are invalid.
  */
-int __cheri_libcall flaglock_priority_inheriting_trylock(Timeout       *timeout,
-                                                         FlagLockState *lock);
+int __cheri_libcall
+flaglock_priority_inheriting_trylock(Timeout              *timeout,
+                                     struct FlagLockState *lock);
 
 /**
  * Convenience wrapper to acquire a lock with an unlimited timeout.  See
  * `flaglock_trylock` for more details.
  */
-__always_inline static inline void flaglock_lock(FlagLockState *lock)
+__always_inline static inline void flaglock_lock(struct FlagLockState *lock)
 {
-	Timeout t{UnlimitedTimeout};
+	Timeout t = {0, UnlimitedTimeout};
 	flaglock_trylock(&t, lock);
 }
 
@@ -111,16 +112,16 @@ __always_inline static inline void flaglock_lock(FlagLockState *lock)
  * `flaglock_priority_inheriting_trylock` for more details.
  */
 __always_inline static inline void
-flaglock_priority_inheriting_lock(FlagLockState *lock)
+flaglock_priority_inheriting_lock(struct FlagLockState *lock)
 {
-	Timeout t{UnlimitedTimeout};
+	Timeout t = {0, UnlimitedTimeout};
 	flaglock_priority_inheriting_trylock(&t, lock);
 }
 
 /**
  * Unlock a flag lock.  This can be called with either form of flag lock.
  */
-void __cheri_libcall flaglock_unlock(FlagLockState *lock);
+void __cheri_libcall flaglock_unlock(struct FlagLockState *lock);
 
 /**
  * Try to acquire a recursive mutex.   This is a priority-inheriting mutex that
@@ -135,8 +136,8 @@ void __cheri_libcall flaglock_unlock(FlagLockState *lock);
  * arguments are invalid.  Can also return -EOVERFLOW if the lock depth would
  * overflow the depth counter.
  */
-int __cheri_libcall recursivemutex_trylock(Timeout             *timeout,
-                                           RecursiveMutexState *lock);
+int __cheri_libcall recursivemutex_trylock(Timeout                    *timeout,
+                                           struct RecursiveMutexState *lock);
 
 /**
  * Unlock a recursive mutex.  Note: This does not check that the current thread
@@ -146,30 +147,30 @@ int __cheri_libcall recursivemutex_trylock(Timeout             *timeout,
  * Returns 0 on success.  Succeeds unconditionally (future versions may return
  * non-zero on error).
  */
-int __cheri_libcall recursivemutex_unlock(RecursiveMutexState *mutex);
+int __cheri_libcall recursivemutex_unlock(struct RecursiveMutexState *mutex);
 
 /**
  * Acquire a ticket lock.  Ticket locks, by design, cannot support a try-lock
  * operation and so will block forever until the lock is acquired.
  */
-void __cheri_libcall ticketlock_lock(TicketLockState *lock);
+void __cheri_libcall ticketlock_lock(struct TicketLockState *lock);
 
 /**
  * Release a ticket lock.
  */
-void __cheri_libcall ticketlock_unlock(TicketLockState *lock);
+void __cheri_libcall ticketlock_unlock(struct TicketLockState *lock);
 
 /**
  * Semaphore get operation, decrements the semaphore count.  Returns 0 on
  * success, -ETIMEDOUT if the timeout expired.  Can also return -EINVAL if the
  * arguments are invalid.
  */
-int __cheri_libcall semaphore_get(Timeout                *timeout,
-                                  CountingSemaphoreState *semaphore);
+int __cheri_libcall semaphore_get(Timeout                       *timeout,
+                                  struct CountingSemaphoreState *semaphore);
 /**
  * Semaphore put operation.  Returns 0 on success, -EINVAL if this would push
  * the semaphore count above the maximum.
  */
-int __cheri_libcall semaphore_put(CountingSemaphoreState *semaphore);
+int __cheri_libcall semaphore_put(struct CountingSemaphoreState *semaphore);
 
 __END_DECLS

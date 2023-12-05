@@ -36,7 +36,7 @@ __clang_ignored_warning_push("-Watomic-alignment")
 __always_inline _Bool
 atomic_flag_test_and_set_explicit(volatile atomic_flag *obj, enum memory_order order)
 {
-	return __c11_atomic_exchange(obj, true, order);
+	return __c11_atomic_exchange(obj, 1, order);
 }
 
 __always_inline _Bool atomic_flag_test_and_set(volatile atomic_flag *obj)
@@ -48,7 +48,7 @@ __always_inline _Bool
 atomic_flag_test_and_clear_explicit(volatile atomic_flag *obj,
                                     enum memory_order          order)
 {
-	return __c11_atomic_exchange(obj, false, order);
+	return __c11_atomic_exchange(obj, 0, order);
 }
 
 __always_inline _Bool atomic_flag_test_and_clear(volatile atomic_flag *obj)
