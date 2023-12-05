@@ -55,48 +55,58 @@ namespace
 		int
 		try_lock(Timeout *timeout, uint32_t threadID, bool isPriorityInherited)
 		{
-			uint32_t old     = Flag::Unlocked;
-			uint32_t desired = Flag::Locked | threadID;
-			if (lockWord.compare_exchange_strong(old, desired))
+			while (true)
 			{
-				return 0;
-			}
-			// Next time, try to acquire, acquire with waiters so that we don't
-			// lose wakes if we win a race.
-			desired = Flag::LockedWithWaiters | threadID;
-			while (timeout->remaining > 0)
-			{
+				uint32_t old     = Flag::Unlocked;
+				uint32_t desired = Flag::Locked | threadID;
+				if (lockWord.compare_exchange_strong(old, desired))
+				{
+					return 0;
+				}
+				if (!timeout->may_block())
+				{
+					return -ETIMEDOUT;
+				}
+				Debug::log("Hitting slow path wait for {}", &lockWord);
 				// If there are not already waiters, set the waiters flag.
 				if ((old & Flag::LockedWithWaiters) == 0)
 				{
 					Debug::Assert((old & 0xffff0000) == Flag::Locked,
 					              "Unexpected flag value: {}",
 					              old);
-					uint32_t addedWaiters = Flag::LockedWithWaiters;
-					addedWaiters |= (old & 0xffff);
+					// preserve any ThreadID
+					uint32_t addedWaiters =
+					  Flag::LockedWithWaiters | (old & 0xffff);
+					Debug::log("Adding waiters {} => {}", old, addedWaiters);
 					if (!lockWord.compare_exchange_strong(old, addedWaiters))
 					{
+						// Something raced with us while trying to add waiters
+						// flag. Could be:
+						// 1. unlock by another thread
+						// 2. unlock then acquire by other thread(s)
+						// 3. another thread added waiters flags
+						// We could potentially handle each of these separately
+						// but the simplest thing is just to start again from
+						// the top.
+						Debug::log("Adding waiters failed {}", old);
 						continue;
 					}
+					// update expected value as we've just successfully written
+					// it
+					old = addedWaiters;
 				}
-				if (old != Flag::Unlocked)
+				FutexWaitFlags flags =
+				  isPriorityInherited ? FutexPriorityInheritance : FutexNone;
+				if (int ret = lockWord.wait(timeout, old, flags); ret != 0)
 				{
-					Debug::log("Hitting slow path wait for {}", &lockWord);
-					FutexWaitFlags flags = isPriorityInherited
-					                         ? FutexPriorityInheritance
-					                         : FutexNone;
-					if (int ret = lockWord.wait(timeout, old, flags); ret != 0)
-					{
-						return ret;
-					}
-				}
-				old = Flag::Unlocked;
-				if (lockWord.compare_exchange_strong(old, desired))
-				{
-					return 0;
+					// Most likely a timeout, or waiting on priority inherited
+					// futex where this thread is already the owner i.e.
+					// reentrancy without recursive mutex. Otherwise something
+					// bad like invalid permissions.
+					Debug::log("Wait failed {}", ret);
+					return ret;
 				}
 			}
-			return -ETIMEDOUT;
 		}
 
 		/**

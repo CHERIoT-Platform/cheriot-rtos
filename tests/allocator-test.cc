@@ -117,7 +117,7 @@ namespace
 			freeStart.wait(0);
 			// One extra sleep to make sure that we're really in the blocking
 			// sleep.
-			Timeout t{1};
+			Timeout t{2};
 			thread_sleep(&t);
 			debug_log(
 			  "Deallocation thread resuming, freeing pool of allocations");

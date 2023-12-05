@@ -102,7 +102,7 @@ namespace
 			done = true;
 		});
 		// Give other thread a chance to run
-		sleep(1);
+		sleep(2);
 		// Check that it hasn't acquired the lock yet as we still have it
 		TEST(
 		  done == false,
@@ -110,13 +110,13 @@ namespace
 		// Unlock once, should still not release the lock
 		debug_log("Releasing recurisve mutex once");
 		recursivemutex_unlock(&recursiveMutex);
-		sleep(1);
+		sleep(2);
 		TEST(
 		  done == false,
 		  "Recursive mutex trylock succeeded on mutex owned by another thread");
 		debug_log("Releasing recurisve mutex again");
 		recursivemutex_unlock(&recursiveMutex);
-		sleep(1);
+		sleep(2);
 		TEST(done == true,
 		     "Recursive mutex acquire failed from other thread after mutex was "
 		     "unlocked");
