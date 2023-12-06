@@ -220,6 +220,22 @@ namespace
 		}
 
 		/**
+		 * Append a 16-bit unsigned integer to the buffer as hex.
+		 */
+		__always_inline void append(uint16_t s)
+		{
+			append(static_cast<uint32_t>(s));
+		}
+
+		/**
+		 * Append an 8-bit unsigned integer to the buffer as hex.
+		 */
+		__always_inline void append(uint8_t s)
+		{
+			append(static_cast<uint32_t>(s));
+		}
+
+		/**
 		 * Append an enumerated type value.
 		 */
 		template<typename T>
