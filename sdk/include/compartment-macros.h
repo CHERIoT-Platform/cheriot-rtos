@@ -3,6 +3,7 @@
 
 #pragma once
 #include <cdefs.h>
+#include <stdbool.h>
 
 /**
  * Helper macro, should not be used directly.

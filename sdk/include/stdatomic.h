@@ -33,31 +33,33 @@ typedef _Atomic(_Bool) atomic_flag;
 // Clang thinks that all atomics are too big, so ignore it.
 __clang_ignored_warning_push("-Watomic-alignment")
 
-__always_inline _Bool
-atomic_flag_test_and_set_explicit(volatile atomic_flag *obj, enum memory_order order)
+  __always_inline static inline _Bool
+  atomic_flag_test_and_set_explicit(volatile atomic_flag *obj,
+                                    enum memory_order     order)
 {
 	return __c11_atomic_exchange(obj, 1, order);
 }
 
-__always_inline _Bool atomic_flag_test_and_set(volatile atomic_flag *obj)
+__always_inline static inline _Bool
+atomic_flag_test_and_set(volatile atomic_flag *obj)
 {
 	return atomic_flag_test_and_set_explicit(obj, memory_order_seq_cst);
 }
 
-__always_inline _Bool
+__always_inline static inline _Bool
 atomic_flag_test_and_clear_explicit(volatile atomic_flag *obj,
-                                    enum memory_order          order)
+                                    enum memory_order     order)
 {
 	return __c11_atomic_exchange(obj, 0, order);
 }
 
-__always_inline _Bool atomic_flag_test_and_clear(volatile atomic_flag *obj)
+__always_inline static inline _Bool
+atomic_flag_test_and_clear(volatile atomic_flag *obj)
 {
 	return atomic_flag_test_and_clear_explicit(obj, memory_order_seq_cst);
 }
 
 __clang_ignored_warning_pop()
-
 
 // The functions in the following block are mapped directly to builtins.
 #	define atomic_init(obj, value) __c11_atomic_init(obj, value)
@@ -150,4 +152,3 @@ typedef _Atomic(intptr_t)           atomic_intptr_t;
 typedef _Atomic(uintptr_t)          atomic_uintptr_t;
 typedef _Atomic(size_t)             atomic_size_t;
 typedef _Atomic(ptrdiff_t)          atomic_ptrdiff_t;
-
