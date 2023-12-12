@@ -70,7 +70,8 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		    stackCapability.top() == stackCapability.address())
 		{
 			// looks like thread exit -- just log it then ForceUnwind
-			DebugErrorHandler::log("Thread exit CSP={}", stackCapability);
+			DebugErrorHandler::log(
+			  "Thread exit CSP={}, PCC={}", stackCapability, frame->pcc);
 		}
 		else if (exceptionCode == CHERI::CauseCode::None)
 		{
@@ -80,7 +81,14 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		else
 		{
 			// An unexpected error -- log it and end the simulation with error.
-			DebugErrorHandler::log("{} error at {}", exceptionCode, frame->pcc);
+			DebugErrorHandler::log(
+			  "{} error at {} (return address: {}), with capability register "
+			  "{}: {}",
+			  exceptionCode,
+			  frame->pcc,
+			  frame->get_register_value<CHERI::RegisterNumber::CRA>(),
+			  registerNumber,
+			  *frame->get_register_value(registerNumber));
 			simulation_exit(1);
 		}
 	}
