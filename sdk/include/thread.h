@@ -5,8 +5,10 @@
 
 #include <cdefs.h>
 #include <compartment.h>
+#include <riscvreg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <tick_macros.h>
 #include <timeout.h>
 
 __BEGIN_DECLS
@@ -71,5 +73,83 @@ __cheri_compartment("sched") uint64_t thread_elapsed_cycles_current(void);
  * The result of this is safe to cache: it will never change over time.
  */
 __cheri_compartment("sched") uint16_t thread_count();
+
+/**
+ * Wait for the specified number of microseconds.  This is a busy-wait loop,
+ * not a yield.  If the thread is preempted then the wait will be longer than
+ * requested.
+ *
+ * Returns the number of microseconds that the thread actually waited, with an
+ * error margin of the number of instructions used to compute the wait time and
+ * execute the function epilogue.
+ */
+static inline uint64_t thread_microsecond_spin(uint32_t microseconds)
+{
+#ifdef SIMULATION
+	// In simulation builds, pretend that the right amount of time has elapsed.
+	return microseconds;
+#else
+	static const uint32_t CyclesPerMicrosecond = CPU_TIMER_HZ / 1'000'000;
+	__if_cxx(
+	  static_assert(CyclesPerMicrosecond > 0, "CPU_TIMER_HZ is too low");)
+	  uint64_t start = rdcycle64();
+	// Convert the microseconds to a number of cycles.  This does the multiply
+	// first so that we don't end up with zero as a result of the division.
+	uint32_t cycles = microseconds / CyclesPerMicrosecond;
+#	ifdef X
+	Debug::log("Cycles per us: {}", CyclesPerMicrosecond);
+	Debug::log("Spinning for {} cycles", cycles);
+#	endif
+	uint64_t end = start + cycles;
+	uint64_t current;
+	do
+	{
+		current = rdcycle64();
+	} while (current < end);
+	return ((current - start) * CPU_TIMER_HZ) / 1'000'000;
+#endif
+}
+
+/**
+ * Wait for the specified number of milliseconds.  This will yield for periods
+ * that are longer than a scheduler tick and then spin for the remainder of the
+ * time.
+ *
+ * Returns the number of milliseconds that the thread actually waited.
+ */
+static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
+{
+#ifdef SIMULATION
+	// In simulation builds, just yield once but don't bother trying to do
+	// anything sensible with time.
+	Timeout t = {0, 1};
+	thread_sleep(&t);
+	return milliseconds;
+#else
+	static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
+	__if_cxx(
+	  static_assert(
+	    CyclesPerMillisecond > 0,
+	    "CPU_TIMER_HZ is too low");) static const uint32_t CyclesPerTick =
+	  CPU_TIMER_HZ / TICK_RATE_HZ;
+	uint32_t cycles  = CPU_TIMER_HZ * milliseconds / 1'000;
+	uint64_t start   = rdcycle64();
+	uint64_t end     = start + cycles;
+	uint64_t current = start;
+	while ((end > current) && (end - current > MS_PER_TICK))
+	{
+		Timeout t = {0, ((uint32_t)(end - current)) / CyclesPerTick};
+		thread_sleep(&t);
+		current = rdcycle64();
+	}
+	// Spin for the remaining time.
+	while (current < end)
+	{
+		current = rdcycle64();
+	}
+	current = rdcycle64();
+	return ((current - start) * CPU_TIMER_HZ) / 1'000;
+#endif
+}
 
 __END_DECLS
