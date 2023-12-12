@@ -35,4 +35,4 @@ riscv32-unknown-unknown
 -DCONFIG_THREADS_NUM=3
 -DREVOKABLE_MEMORY_START=0x80000000
 -DCLANG_TIDY
--DCHERIOT_INTERRUPT_NAMES=FakeInterrupt=4,RevokerInterrupt=5
+-DCHERIOT_INTERRUPT_NAMES=FakeInterrupt=4,RevokerInterrupt=5,EthernetReceiveInterrupt=3
