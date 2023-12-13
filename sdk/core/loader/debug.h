@@ -20,5 +20,6 @@ namespace
 	 */
 	using Debug = ConditionalDebug<DebugLoader,
 	                               "Loader",
-	                               MessageBuilder<ExplicitUARTOutput>>;
+	                               MessageBuilder<ExplicitUARTOutput>,
+	                               false>;
 } // namespace

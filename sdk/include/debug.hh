@@ -493,6 +493,9 @@ namespace
 	 * `Enabled` is true.  Uses `Context` to print additional detail on debug
 	 * lines.  Writes output using `Writer`.
 	 *
+	 * If `DisableInterrupts` is true then this disables interrupts while
+	 * printing the message to avoid accidental interleaving.
+	 *
 	 * This class is expected to be used as a type alias, something like:
 	 *
 	 * ```c++
@@ -502,7 +505,8 @@ namespace
 	 */
 	template<bool         Enabled,
 	         DebugContext Context,
-	         typename Writer = MessageBuilder<ImplicitUARTOutput>>
+	         typename Writer        = MessageBuilder<ImplicitUARTOutput>,
+	         bool DisableInterrupts = true>
 	class ConditionalDebug
 	{
 		public:
@@ -521,10 +525,26 @@ namespace
 			{
 				// Ensure that the compiler does not reorder messages.
 				asm volatile("" ::: "memory");
-				writer.format("\x1b[35m{}\033[0m", Context);
-				writer.format(": ");
-				writer.format(fmt, args...);
-				writer.format("\n");
+				if constexpr (DisableInterrupts)
+				{
+					// Write the message with interrupts disabled to avoid
+					// interleaving.  This is internal rather than making this
+					// function interrupts so that the outer function can be
+					// inlined and deleted in non-debug builds.
+					CHERI::with_interrupts_disabled([&]() {
+						writer.format("\x1b[35m{}\033[0m", Context);
+						writer.format(": ");
+						writer.format(fmt, args...);
+						writer.format("\n");
+					});
+				}
+				else
+				{
+					writer.format("\x1b[35m{}\033[0m", Context);
+					writer.format(": ");
+					writer.format(fmt, args...);
+					writer.format("\n");
+				}
 				asm volatile("" ::: "memory");
 			}
 		}
