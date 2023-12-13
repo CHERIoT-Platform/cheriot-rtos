@@ -31,7 +31,11 @@ DIRECTORIES="sdk tests examples"
 # supports NOLINTBEGIN to disable specific checks over a whole file.
 # In particular, modernize-redundant-void-arg should be disabled in any header
 # file that's included from C.
-HEADERS=$(find ${DIRECTORIES} -name '*.h' -or -name '*.hh' | grep -v libc++ | grep -v third_party | grep -v 'std.*.h' | grep -v errno.h | grep -v strings.h | grep -v string.h | grep -v -assembly.h | grep -v cdefs.h | grep -v /riscv.h | grep -v inttypes.h | grep -v /cheri-builtins.h | grep -v c++-config | grep -v ctype.h | grep -v switcher.h | grep -v assert.h | grep -v /build/ | grep -v microvium)
+#
+# FreeRTOS-Compat headers follow FreeRTOS naming conventions and should be
+# excluded for now.  Eventually they should be included for everything except
+# the identifier naming checks.
+HEADERS=$(find ${DIRECTORIES} -name '*.h' -or -name '*.hh' | grep -v libc++ | grep -v third_party | grep -v 'std.*.h' | grep -v errno.h | grep -v strings.h | grep -v string.h | grep -v -assembly.h | grep -v cdefs.h | grep -v /riscv.h | grep -v inttypes.h | grep -v /cheri-builtins.h | grep -v c++-config | grep -v ctype.h | grep -v switcher.h | grep -v assert.h | grep -v /build/ | grep -v microvium | grep -v FreeRTOS-Compat)
 SOURCES=$(find ${DIRECTORIES} -name '*.cc' | grep -v /build/ | grep -v third_party)
 
 echo Headers: ${HEADERS}
