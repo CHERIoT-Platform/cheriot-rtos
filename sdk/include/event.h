@@ -101,3 +101,10 @@ int __cheri_libcall eventgroup_clear(Timeout           *timeout,
  * cleared in between this call reading from the event group and returning.
  */
 int __cheri_libcall eventgroup_get(struct EventGroup *group, uint32_t *outBits);
+
+/**
+ * Destroy an event group.  This forces all waiters to wake and frees the
+ * underlying memory.
+ */
+int __cheri_libcall eventgroup_destroy(struct SObjStruct *heapCapability,
+                                       struct EventGroup *group);

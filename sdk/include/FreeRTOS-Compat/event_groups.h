@@ -2,6 +2,7 @@
 #include "FreeRTOS.h"
 #include <event.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 /**
  * Type for bits in an event group.
@@ -61,8 +62,8 @@ static inline EventBits_t xEventGroupWaitBits(EventGroupHandle_t xEventGroup,
 	                                         xEventGroup,
 	                                         &ret,
 	                                         uxBitsToWaitFor,
-	                                         xClearOnExit,
-	                                         xWaitForAllBits);
+	                                         xWaitForAllBits,
+	                                         xClearOnExit);
 	return ret;
 }
 
@@ -71,5 +72,5 @@ static inline EventBits_t xEventGroupWaitBits(EventGroupHandle_t xEventGroup,
  */
 static inline void vEventGroupDelete(EventGroupHandle_t xEventGroup)
 {
-	free(xEventGroup);
+	eventgroup_destroy(MALLOC_CAPABILITY, xEventGroup);
 }
