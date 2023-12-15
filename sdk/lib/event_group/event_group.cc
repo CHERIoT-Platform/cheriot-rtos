@@ -176,3 +176,20 @@ int eventgroup_get(EventGroup *group, uint32_t *outBits)
 	*outBits = group->bits;
 	return 0;
 }
+
+int eventgroup_destroy(SObjStruct *heapCapability, EventGroup *group)
+{
+	group->lock.lock();
+	// Force all waiters to wake.
+	for (size_t i = 0; i < group->waiterCount; ++i)
+	{
+		auto &waiter = group->waiters[i];
+		if (waiter.bitsWanted == 0)
+		{
+			continue;
+		}
+		waiter.bitsSeen.notify_one();
+	}
+	heap_free(heapCapability, group);
+	return 0;
+}

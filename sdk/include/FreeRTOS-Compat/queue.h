@@ -2,8 +2,8 @@
 #include "FreeRTOS.h"
 #include <queue.h>
 
-#define errQUEUE_EMPTY ((BaseType_t)0)
-#define errQUEUE_FULL ((BaseType_t)0)
+#define errQUEUE_EMPTY pdFALSE
+#define errQUEUE_FULL pdFALSE
 
 /**
  * Queue handle.  This is used to reference queues in the API functions.
