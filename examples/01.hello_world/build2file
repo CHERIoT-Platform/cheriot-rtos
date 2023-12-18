@@ -1,0 +1,10 @@
+./: firmware{hello_world}: compartment{hello}
+
+# @@ TODO: in xmake lib{freestanding} is listed as prerequisite of
+#    compartment but is linked to firmware.
+#
+compartment{hello}: obje{hello}
+
+obje{hello}: cxx{hello}
+
+obje{hello}: cxx.coptions += -cheri-compartment=hello

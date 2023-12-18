@@ -1,0 +1,14 @@
+#info 'loading cheriot-rtos root'
+
+define ldscript: file
+ldscript{*}: extension = ldscript
+
+# @@ Not ideal to load entire modules (which means there will be a report,
+#    etc).
+#
+using cxx
+using c
+using c.as-cpp
+
+hxx{*}: extension = h
+cxx{*}: extension = cc

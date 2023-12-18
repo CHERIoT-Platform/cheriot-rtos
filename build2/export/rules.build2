@@ -1,0 +1,278 @@
+import [dir_path] sdk = cheriot-rtos%dir{sdk}
+
+# @@ Maybe we should set config.cxx, config.c ourselves (and with proper
+#    mode options so we print accurate report)? But what configuration
+#    variable will we use for the toolchain? They will also end up being
+#    saved to config.build which feels off. Maybe instead we should add
+#    ability to merge mode options (i.e., we could set cxx/c.mode before
+#    loading cxx/c)? Let's see how things shake out with the rest of the
+#    tools (ld, etc).
+
+cxx.std = 20
+c.std = 2x
+
+using cxx
+using c
+using c.as-cpp
+
+hxx{*}: extension = h
+cxx{*}: extension = cc
+
+# Toolchain.
+#
+ld = $directory($effect($cxx.path))/ld.lld
+
+# Default and board options.
+#
+cc.coptions += \
+  -Qunused-arguments \
+  -target riscv32-unknown-unknown \
+  -mcpu=cheriot -mabi=cheriot -mxcheri-rvc -mrelax \
+  -fshort-wchar -fomit-frame-pointer -fno-builtin  -fno-exceptions \
+  -fno-asynchronous-unwind-tables -fno-c++-static-destructors -fno-rtti \
+  -nostdinc \
+  -Oz -g \
+  -Werror
+
+cxx.poptions += "-I$sdk/include/c++-config" "-I$sdk/include/libc++"
+cc.poptions += "-I$sdk/include"
+
+# @@ TODO: these come from the board JSON file.
+#
+for d: ../include/platform/generic-riscv ../include/platform/ibex
+  cc.poptions += "-I$sdk/include/$d"
+
+cc.poptions += -DTEMPORAL_SAFETY
+
+# @@ TODO: these come from the board JSON file.
+#
+for m: IBEX IBEX_SAFE
+  cc.poptions += "-D$m"
+
+# @@ TODO: these are computed based on values from the board JSON file.
+#
+cc.poptions += \
+-DCPU_TIMER_HZ=100000 \
+-DTICK_RATE_HZ=10 \
+-DSIMULATION \
+-DCONFIG_MSHWM \
+-DDEVICE_EXISTS_clint \
+-DDEVICE_EXISTS_plic \
+-DDEVICE_EXISTS_revoker \
+-DDEVICE_EXISTS_shadow \
+-DDEVICE_EXISTS_uart \
+-DREVOKABLE_MEMORY_START=0x20040000 \
+"-DCHERIOT_INTERRUPT_NAMES=RevokerInterrupt=1, "
+
+# @@ build2: why do we have to specify extension explicitly? Perhaps we are
+#    not resolving ldscript{} in the right scope/project?
+#
+define ldscript: file
+ldscript{*}: extension = ldscript
+
+define library: file
+library{*}: extension = library
+
+[rule_name=link_library] library{~'/(.*)/'}: obje{~'/(.*)/'} \
+  $sdk/ldscript{library.ldscript} $ld
+{{
+  s = $path($filter($<, obje))
+  #l = $path($filter($<, file)) # @@ build2: looks like we loose file{} extension.
+  l = $path($filter($<, ldscript))
+  o = $path($>)
+
+  diag ld $>
+
+  $ld "--script=$l" --compartment --relax -o $o $s
+}}
+
+define compartment: file
+compartment{*}: extension = compartment
+
+[rule_name=link_compartment] compartment{~'/(.*)/'}: obje{~'/(.*)/'} \
+  $sdk/ldscript{compartment.ldscript} $ld
+{{
+  s = $path($filter($<, obje))
+  l = $path($filter($<, ldscript))
+  o = $path($>)
+
+  diag ld $>
+
+  $ld "--script=$l" --compartment --relax -o $o $s
+}}
+
+define privileged_compartment: file
+privileged_compartment{*}: extension = compartment
+
+[rule_name=link_privileged_compartment] privileged_compartment{~'/(.*)/'}: \
+  obje{~'/(.*)/'} $sdk/ldscript{privileged-compartment.ldscript} $ld
+{{
+  s = $path($filter($<, obje))
+  l = $path($filter($<, ldscript))
+  o = $path($>)
+
+  diag ld $>
+
+  $ld "--script=$l" --compartment --relax -o $o $s
+}}
+
+# @@ Add core/ scope with common stuff (-DCHERIOT_AVOID_CAPRELOCS)?
+#
+
+privileged_compartment{scheduler}: scheduler/obje{main}
+
+scheduler/
+{
+  # @@ TODO: some come from board JSON and user's firmware configuration.
+  #
+  cc.poptions += \
+    -DCHERIOT_AVOID_CAPRELOCS \
+    -DSCHEDULER_ACCOUNTING=false \
+    -DDEBUG_SCHEDULER=false \
+    '-DCHERIOT_INTERRUPT_CONFIGURATION={1,2,false}' \
+    -DCONFIG_THREADS_NUM=1
+
+  cc.coptions += -cheri-compartment=sched
+
+  obje{main}: $sdk/core/scheduler/cxx{main} fsdir{./}
+}
+
+privileged_compartment{allocator}: allocator/obje{main}
+
+allocator/
+{
+  cc.poptions += -DCHERIOT_AVOID_CAPRELOCS -DDEBUG_ALLOCATOR=false -DNDEBUG
+  cc.coptions += -cheri-compartment=alloc -fvisibility=hidden
+  cxx.coptions += -fvisibility-inlines-hidden
+
+  obje{main}: $sdk/core/allocator/cxx{main} fsdir{./}
+}
+
+# @@ In original build this is called a "privileged library" but it's linked
+#    exactly like a privileged compartment. Can add privileged_library{} and
+#    the corresponding rule later.
+#
+privileged_compartment{token_library}: token_library/obje{token_unseal}
+
+token_library/
+{
+  cc.poptions += -DNDEBUG -DDEBUG_TOKEN_LIBRARY=false
+  cc.coptions += -fvisibility=hidden
+
+  obje{token_unseal}: $sdk/core/token_library/S{token_unseal} fsdir{./}
+}
+
+loader/
+{
+  # @@ TODO: comes from somewhere.
+  #
+  cc.poptions += \
+    -DCHERIOT_AVOID_CAPRELOCS \
+    -DDEBUG_LOADER=false \
+    -DNDEBUG \
+    -DCHERIOT_LOADER_STACK_SIZE=1024 \
+    -DCHERIOT_LOADER_TRUSTED_STACK_SIZE=192
+
+  cc.coptions += -fvisibility=hidden
+  cxx.coptions += -fvisibility-inlines-hidden
+
+  obje{boot-s}: $sdk/core/loader/S{boot} fsdir{./}
+
+  obje{boot-c}: $sdk/core/loader/cxx{boot} fsdir{./}
+  {
+    cc.coptions += -O1
+  }
+}
+
+switcher/
+{
+  cc.poptions += -DNDEBUG
+  cc.coptions += -fvisibility=hidden
+
+  obje{entry}: $sdk/core/switcher/S{entry} fsdir{./}
+}
+
+library{atomic1}: lib/atomic1/obje{atomic1}
+library{atomic4}: lib/atomic4/obje{atomic4}
+library{locks}: lib/locks/obje{locks semaphore}
+library{crt}: lib/crt/obje{cz}
+library{freestanding}: lib/freestanding/obje{memcmp memcpy memset}
+
+lib/
+{
+  cc.poptions += -DNDEBUG
+  cc.coptions += -fvisibility=hidden
+  cxx.coptions += -fvisibility-inlines-hidden
+
+  atomic1/
+  {
+    fsdir{./}: fsdir{../}
+
+    obje{atomic1}: $sdk/lib/atomic/cxx{atomic1} fsdir{./}
+  }
+
+  atomic4/
+  {
+    fsdir{./}: fsdir{../}
+
+    obje{atomic4}: $sdk/lib/atomic/cxx{atomic4} fsdir{./}
+  }
+
+  locks/
+  {
+    fsdir{./}: fsdir{../}
+
+    obje{locks}: $sdk/lib/locks/cxx{locks} fsdir{./}
+    obje{semaphore}: $sdk/lib/locks/cxx{semaphore} fsdir{./}
+  }
+
+  crt/
+  {
+    fsdir{./}: fsdir{../}
+
+    obje{cz}: $sdk/lib/crt/c{cz} fsdir{./}
+  }
+
+  freestanding/
+  {
+    fsdir{./}: fsdir{../}
+
+    # @@ These are built without NDEBUG/-fvisibility=hidden. Wonder if an
+    #    omission or intentional?
+    #
+    cc.poptions = $regex.filter_out_match($cc.poptions, '^-DNDEBUG$')
+    cc.coptions = $regex.filter_out_match($cc.coptions, '^--fvisibility=hidden$')
+
+    obje{memcmp}: $sdk/lib/freestanding/c{memcmp} fsdir{./}
+    obje{memcpy}: $sdk/lib/freestanding/c{memcpy} fsdir{./}
+    obje{memset}: $sdk/lib/freestanding/c{memset} fsdir{./}
+  }
+}
+
+define firmware: file
+firmware{*}: extension =
+
+# @@ TODO: generate firmware.ldscript. Maybe generate it as part of the
+#    firmware recipe (seeing that it will need a lot of info from firmware)?
+#    But then won't be able to use the in module.
+#
+# @@ TODO: unclear if the order in which we specify all the different
+#    prerequisites is significant. Appears to be not.
+#
+[rule_name=link_firmware] <firmware{~'/(.*)/'} file{^'/\1.json/'}>: \
+   compartment{~'/(.*)/'} \
+   loader/obje{boot-s boot-c} \
+   switcher/obje{entry} \
+   library{atomic1 atomic4 locks crt freestanding} \
+   privileged_compartment{allocator token_library scheduler} \
+   ldscript{firmware.ldscript} $ld
+{{
+  s = $path($filter($<, obje compartment privileged_compartment library))
+  l = $path($filter($<, ldscript))
+  o = $path($>[0])
+  r = $path($>[1])
+
+  diag ld $>
+
+  $ld "--script=$l" --relax -o $o "--compartment-report=$r" $s
+}}

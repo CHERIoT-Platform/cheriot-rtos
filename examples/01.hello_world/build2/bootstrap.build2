@@ -1,0 +1,5 @@
+project = hello_world
+
+using config
+using test
+using install

@@ -1,0 +1,6 @@
+if ($import.target == dir{sdk})
+{
+  export $out_root/sdk/
+}
+else
+  fail $import.target is not exported
