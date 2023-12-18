@@ -1,0 +1,558 @@
+# Copyright Microsoft and CHERIoT Contributors.
+# SPDX-License-Identifier: MIT
+
+__mmio_region_start = 0x10000000;
+__export_mem_clint = 0x14001000;
+__export_mem_clint_end = 0x14002000;
+__export_mem_plic = 0x10000000;
+__export_mem_plic_end = 0x10400000;
+__export_mem_revoker = 0x14000000;
+__export_mem_revoker_end = 0x14001000;
+__export_mem_shadow = 0x200fe000;
+__export_mem_shadow_end = 0x20100000;
+__export_mem_uart = 0x8f00b000;
+__export_mem_uart_end = 0x8f00b100;
+__mmio_region_end = 0x8f00b100;
+__export_mem_heap_end = 0x20080000;
+
+
+SECTIONS
+{
+	. = 0x20040000;
+	_start = .;
+
+	.loader_start :
+	{
+		*(.loader_start);
+	}
+
+	
+	. = ALIGN(8);
+	.loader_trusted_stack : CAPALIGN
+	{
+		bootTStack = .;
+		. += 192;
+	}
+
+	. = ALIGN(8);
+	.thread_trusted_stack_1 : CAPALIGN
+	{
+		.thread_1_trusted_stack_start = .;
+		. += 216;
+		.thread_1_trusted_stack_end = .;
+	}
+
+
+	__stack_space_start = .;
+	
+	. = ALIGN(16);
+	.loader_stack : CAPALIGN
+	{
+		bootStack = .;
+		. += 1024;
+	}
+
+	. = ALIGN(16);
+	.thread_stack_1 : CAPALIGN
+	{
+		.thread_1_stack_start = .;
+		. += 512;
+		.thread_1_stack_end = .;
+	}
+
+	__stack_space_end = .;
+
+	.compartment_export_tables : ALIGN(8)
+	{
+		# The scheduler and allocator's export tables are at the start.
+		.scheduler_export_table = .;
+		*.scheduler.compartment(.compartment_export_table);
+		.scheduler_export_table_end = .;
+
+		.allocator_export_table = ALIGN(8);
+		*/cheriot.allocator.compartment(.compartment_export_table);
+		.allocator_export_table_end = .;
+
+		
+		.hello_export_table = ALIGN(8);
+		build/cheriot/cheriot/release/hello.compartment(.compartment_export_table);
+		.hello_export_table_end = .;
+
+	}
+
+
+	__compart_pccs = .;
+
+	compartment_switcher_code : CAPALIGN
+	{
+		.compartment_switcher_start = .;
+		*/switcher/entry.S.o(.text);
+	}
+	.compartment_switcher_end = .;
+
+	scheduler_code : CAPALIGN
+	{
+		.scheduler_start = .;
+		*.scheduler.compartment(.compartment_import_table);
+		.scheduler_import_end = .;
+		*.scheduler.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+	}
+	.scheduler_end = .;
+
+	allocator_code : CAPALIGN
+	{
+		.allocator_start = .;
+		*/cheriot.allocator.compartment(.compartment_import_table);
+		.allocator_import_end = .;
+		allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/cheriot.allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+	}
+	.allocator_end = .;
+
+
+	token_library_code : CAPALIGN
+	{
+		.token_library_start = .;
+		*/cheriot.token_library.library(.compartment_import_table);
+		.token_library_import_end = .;
+		token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/cheriot.token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
+	}
+	.token_library_end = .;
+
+
+	
+
+	
+	.atomic1_code : CAPALIGN
+	{
+		.atomic1_code_start = .;
+		build/cheriot/cheriot/release/atomic1.library(.compartment_import_table);
+		.atomic1_imports_end = .;
+		build/cheriot/cheriot/release/atomic1.library(.text);
+		build/cheriot/cheriot/release/atomic1.library(.init_array);
+		build/cheriot/cheriot/release/atomic1.library(.rodata);
+		. = ALIGN(8);
+	}
+
+	.atomic4_code : CAPALIGN
+	{
+		.atomic4_code_start = .;
+		build/cheriot/cheriot/release/atomic4.library(.compartment_import_table);
+		.atomic4_imports_end = .;
+		build/cheriot/cheriot/release/atomic4.library(.text);
+		build/cheriot/cheriot/release/atomic4.library(.init_array);
+		build/cheriot/cheriot/release/atomic4.library(.rodata);
+		. = ALIGN(8);
+	}
+
+	.locks_code : CAPALIGN
+	{
+		.locks_code_start = .;
+		build/cheriot/cheriot/release/locks.library(.compartment_import_table);
+		.locks_imports_end = .;
+		build/cheriot/cheriot/release/locks.library(.text);
+		build/cheriot/cheriot/release/locks.library(.init_array);
+		build/cheriot/cheriot/release/locks.library(.rodata);
+		. = ALIGN(8);
+	}
+
+	.crt_code : CAPALIGN
+	{
+		.crt_code_start = .;
+		build/cheriot/cheriot/release/crt.library(.compartment_import_table);
+		.crt_imports_end = .;
+		build/cheriot/cheriot/release/crt.library(.text);
+		build/cheriot/cheriot/release/crt.library(.init_array);
+		build/cheriot/cheriot/release/crt.library(.rodata);
+		. = ALIGN(8);
+	}
+
+	.freestanding_code : CAPALIGN
+	{
+		.freestanding_code_start = .;
+		build/cheriot/cheriot/release/freestanding.library(.compartment_import_table);
+		.freestanding_imports_end = .;
+		build/cheriot/cheriot/release/freestanding.library(.text);
+		build/cheriot/cheriot/release/freestanding.library(.init_array);
+		build/cheriot/cheriot/release/freestanding.library(.rodata);
+		. = ALIGN(8);
+	}
+
+	.hello_code : CAPALIGN
+	{
+		.hello_code_start = .;
+		build/cheriot/cheriot/release/hello.compartment(.compartment_import_table);
+		.hello_imports_end = .;
+		build/cheriot/cheriot/release/hello.compartment(.text);
+		build/cheriot/cheriot/release/hello.compartment(.init_array);
+		build/cheriot/cheriot/release/hello.compartment(.rodata);
+		. = ALIGN(8);
+	}
+
+
+	__compart_pccs_end = .;
+
+	__compart_cgps = ALIGN(64);
+
+	.scheduler_globals : CAPALIGN
+	{
+		.scheduler_globals = .;
+		*.scheduler.compartment(.data .data.* .sdata .sdata.*);
+		.scheduler_bss_start = .;
+		*.scheduler.compartment(.sbss .sbss.* .bss .bss.*)
+	}
+	.scheduler_globals_end = .;
+
+	.allocator_sealed_objects : CAPALIGN
+	{
+		.allocator_sealed_objects = .;
+		*/cheriot.allocator.compartment(.sealed_objects)
+	}
+	.allocator_sealed_objects_end = .;
+
+	.allocator_globals : CAPALIGN
+	{
+		.allocator_globals = .;
+		*/cheriot.allocator.compartment(.data .data.* .sdata .sdata.*);
+		.allocator_bss_start = .;
+		*/cheriot.allocator.compartment(.sbss .sbss.* .bss .bss.*);
+	}
+	.allocator_globals_end = .;
+
+	. = ALIGN(8);
+	__export_mem_hazard_pointers = .;
+	# Two hazard pointers per thread
+	. += 1 * 8 * 2;
+	__export_mem_hazard_pointers_end = .;
+	# 32-bit counter for allocator epochs.
+	__export_mem_allocator_epoch = .;
+	. += 4;
+	__export_mem_allocator_epoch_end = .;
+	
+
+	
+
+	
+	.hello_globals : CAPALIGN
+	{
+		.hello_globals = .;
+		build/cheriot/cheriot/release/hello.compartment(.data);
+		.hello_bss_start = .;
+		build/cheriot/cheriot/release/hello.compartment(.bss)
+	}
+
+
+	.sealed_objects :
+	{
+		
+		.atomic1_sealed_objects_start = .;
+		build/cheriot/cheriot/release/atomic1.library(.sealed_objects);
+		.atomic1_sealed_objects_end = .;
+		.atomic4_sealed_objects_start = .;
+		build/cheriot/cheriot/release/atomic4.library(.sealed_objects);
+		.atomic4_sealed_objects_end = .;
+		.locks_sealed_objects_start = .;
+		build/cheriot/cheriot/release/locks.library(.sealed_objects);
+		.locks_sealed_objects_end = .;
+		.crt_sealed_objects_start = .;
+		build/cheriot/cheriot/release/crt.library(.sealed_objects);
+		.crt_sealed_objects_end = .;
+		.freestanding_sealed_objects_start = .;
+		build/cheriot/cheriot/release/freestanding.library(.sealed_objects);
+		.freestanding_sealed_objects_end = .;
+		.hello_sealed_objects_start = .;
+		build/cheriot/cheriot/release/hello.compartment(.sealed_objects);
+		.hello_sealed_objects_end = .;
+	}
+
+	__compart_cgps_end = ALIGN(64);
+
+	# Everything after this point can be discarded after the loader has
+	# finished.
+	__export_mem_heap = .;
+
+	__cap_relocs :
+	{
+		__cap_relocs = .;
+		# FIXME: This currently doesn't do anything.  The linker creates this
+		# entire section.  The linker script needs to be modified to create
+		# separate caprelocs sections for each section.
+		
+		.atomic1_cap_relocs_start = .;
+		build/cheriot/cheriot/release/atomic1.library(__cap_relocs);
+		.atomic1_cap_relocs_end = .;
+		.atomic4_cap_relocs_start = .;
+		build/cheriot/cheriot/release/atomic4.library(__cap_relocs);
+		.atomic4_cap_relocs_end = .;
+		.locks_cap_relocs_start = .;
+		build/cheriot/cheriot/release/locks.library(__cap_relocs);
+		.locks_cap_relocs_end = .;
+		.crt_cap_relocs_start = .;
+		build/cheriot/cheriot/release/crt.library(__cap_relocs);
+		.crt_cap_relocs_end = .;
+		.freestanding_cap_relocs_start = .;
+		build/cheriot/cheriot/release/freestanding.library(__cap_relocs);
+		.freestanding_cap_relocs_end = .;
+		.hello_cap_relocs_start = .;
+		build/cheriot/cheriot/release/hello.compartment(__cap_relocs);
+		.hello_cap_relocs_end = .;
+	}
+	__cap_relocs_end = .;
+
+	# Collect all compartment headers
+	.compartment_headers : ALIGN(4)
+	{
+		__compart_headers = .;
+		# Loader code start
+		LONG(.loader_code_start);
+		# Loader code length
+		SHORT(.loader_code_end - .loader_code_start);
+		# Loader data start
+		LONG(.loader_data_start);
+		# Loader data length
+		SHORT(.loader_data_end - .loader_data_start);
+
+		# Compartment switcher start address
+		LONG(.compartment_switcher_start);
+		# Compartment switcher end
+		SHORT(.compartment_switcher_end - .compartment_switcher_start);
+		# Compartment switcher sealing key
+		SHORT(compartment_switcher_sealing_key - .compartment_switcher_start);
+		# Switcher's copy of the scheduler's PCC.
+		SHORT(switcher_scheduler_entry_pcc - .compartment_switcher_start);
+		# Switcher's copy of the scheduler's CGP
+		SHORT(switcher_scheduler_entry_cgp - .compartment_switcher_start);
+		# Switcher's copy of the scheduler's CSP
+		SHORT(switcher_scheduler_entry_csp - .compartment_switcher_start);
+		# Address of switcher export table
+		LONG(.switcher_export_table);
+		# Size of the switcher export table
+		SHORT(.switcher_export_table_end - .switcher_export_table);
+
+		# sdk/core/loader/types.h:/PrivilegedCompartment
+		# Scheduler code start address
+		LONG(.scheduler_start);
+		# Scheduler code end
+		SHORT(.scheduler_end - .scheduler_start);
+		# Scheduler globals start address
+		LONG(.scheduler_globals);
+		# Scheduler globals end size
+		SHORT(SIZEOF(.scheduler_globals));
+		# Size of the scheduler import table
+		SHORT(.scheduler_import_end - .scheduler_start);
+		# Address of scheduler export table
+		LONG(.scheduler_export_table);
+		# Size of the scheduler export table
+		SHORT(.scheduler_export_table_end - .scheduler_export_table);
+		# No sealed objects
+		LONG(0);
+		SHORT(0);
+
+		# sdk/core/loader/types.h:/PrivilegedCompartment
+		# Allocator code start address
+		LONG(.allocator_start);
+		# Allocator code end
+		SHORT(.allocator_end - .allocator_start);
+		# Allocator globals start address
+		LONG(.allocator_globals);
+		# Allocator globals end
+		SHORT(SIZEOF(.allocator_globals));
+		# Size of the allocator import table
+		SHORT(.allocator_import_end - .allocator_start);
+		# Address of allocator export table
+		LONG(.allocator_export_table);
+		# Size of the allocator export table
+		SHORT(.allocator_export_table_end - .allocator_export_table);
+		# The allocator may have sealed objects
+		LONG(.allocator_sealed_objects);
+		SHORT(SIZEOF(.allocator_sealed_objects));
+
+		# sdk/core/loader/types.h:/PrivilegedCompartment
+		# Token server compartment header
+		# Code
+		LONG(.token_library_start);
+		SHORT(.token_library_end - .token_library_start);
+		# No data segment
+		LONG(0);
+		SHORT(0);
+		# Size of the token server import table
+		SHORT(.token_library_import_end - .token_library_start);
+		# Address of the token server export table
+		LONG(.token_library_export_table);
+		# Size of the token server export table
+		SHORT(.token_library_export_table_end - .token_library_export_table);
+		# No sealed objects
+		LONG(0);
+		SHORT(0);
+
+		
+
+		# sdk/core/loader/types.h:/is_magic_valid
+		# Magic number, used to detect mismatches between linker script and
+		# loader versions.
+		# New versions of this can be generated with:
+		# head /dev/random | shasum | cut -c 0-8
+		LONG(0x6cef3879);
+		# Number of library headers.
+		SHORT(5);
+		# Number of compartment headers.
+		SHORT(1);
+		
+		LONG(.atomic1_code_start);
+		SHORT((SIZEOF(.atomic1_code) + 7) / 8);
+		SHORT(.atomic1_imports_end - .atomic1_code_start);
+		LONG(.atomic1_export_table);
+		SHORT(.atomic1_export_table_end - .atomic1_export_table);
+		LONG(0);
+		SHORT(0);
+		SHORT(0);
+		LONG(.atomic1_cap_relocs_start);
+		SHORT(.atomic1_cap_relocs_end - .atomic1_cap_relocs_start);
+		LONG(.atomic1_sealed_objects_start);
+		SHORT(.atomic1_sealed_objects_end - .atomic1_sealed_objects_start);
+
+		LONG(.atomic4_code_start);
+		SHORT((SIZEOF(.atomic4_code) + 7) / 8);
+		SHORT(.atomic4_imports_end - .atomic4_code_start);
+		LONG(.atomic4_export_table);
+		SHORT(.atomic4_export_table_end - .atomic4_export_table);
+		LONG(0);
+		SHORT(0);
+		SHORT(0);
+		LONG(.atomic4_cap_relocs_start);
+		SHORT(.atomic4_cap_relocs_end - .atomic4_cap_relocs_start);
+		LONG(.atomic4_sealed_objects_start);
+		SHORT(.atomic4_sealed_objects_end - .atomic4_sealed_objects_start);
+
+		LONG(.locks_code_start);
+		SHORT((SIZEOF(.locks_code) + 7) / 8);
+		SHORT(.locks_imports_end - .locks_code_start);
+		LONG(.locks_export_table);
+		SHORT(.locks_export_table_end - .locks_export_table);
+		LONG(0);
+		SHORT(0);
+		SHORT(0);
+		LONG(.locks_cap_relocs_start);
+		SHORT(.locks_cap_relocs_end - .locks_cap_relocs_start);
+		LONG(.locks_sealed_objects_start);
+		SHORT(.locks_sealed_objects_end - .locks_sealed_objects_start);
+
+		LONG(.crt_code_start);
+		SHORT((SIZEOF(.crt_code) + 7) / 8);
+		SHORT(.crt_imports_end - .crt_code_start);
+		LONG(.crt_export_table);
+		SHORT(.crt_export_table_end - .crt_export_table);
+		LONG(0);
+		SHORT(0);
+		SHORT(0);
+		LONG(.crt_cap_relocs_start);
+		SHORT(.crt_cap_relocs_end - .crt_cap_relocs_start);
+		LONG(.crt_sealed_objects_start);
+		SHORT(.crt_sealed_objects_end - .crt_sealed_objects_start);
+
+		LONG(.freestanding_code_start);
+		SHORT((SIZEOF(.freestanding_code) + 7) / 8);
+		SHORT(.freestanding_imports_end - .freestanding_code_start);
+		LONG(.freestanding_export_table);
+		SHORT(.freestanding_export_table_end - .freestanding_export_table);
+		LONG(0);
+		SHORT(0);
+		SHORT(0);
+		LONG(.freestanding_cap_relocs_start);
+		SHORT(.freestanding_cap_relocs_end - .freestanding_cap_relocs_start);
+		LONG(.freestanding_sealed_objects_start);
+		SHORT(.freestanding_sealed_objects_end - .freestanding_sealed_objects_start);
+
+		LONG(.hello_code_start);
+		SHORT((SIZEOF(.hello_code) + 7) / 8);
+		SHORT(.hello_imports_end - .hello_code_start);
+		LONG(.hello_export_table);
+		SHORT(.hello_export_table_end - .hello_export_table);
+		LONG(.hello_globals);
+		SHORT(SIZEOF(.hello_globals));
+		SHORT(.hello_bss_start - .hello_globals);
+		LONG(.hello_cap_relocs_start);
+		SHORT(.hello_cap_relocs_end - .hello_cap_relocs_start);
+		LONG(.hello_sealed_objects_start);
+		SHORT(.hello_sealed_objects_end - .hello_sealed_objects_start);
+
+	}
+
+	# Thread configuration.  This follows the compartment headers but is in a
+	# separate section to make auditing easier.
+	# This section holds a `class ThreadInfo` (loader/types.h)
+	.thread_config :
+	{
+		.thread_config_start = .;
+		# Number of threads
+		__thread_count = .;
+		SHORT(1);
+		# The thread structures
+		
+		SHORT(1);
+		LONG(__export_hello__Z9say_hellov);
+		LONG(.thread_1_stack_start);
+		SHORT(.thread_1_stack_end - .thread_1_stack_start);
+		LONG(.thread_1_trusted_stack_start);
+		SHORT(.thread_1_trusted_stack_end - .thread_1_trusted_stack_start);
+
+
+		__compart_headers_end = .;
+	}
+
+
+	.loader_code : CAPALIGN
+	{
+		.loader_code_start = .;
+		*/loader/boot.cc.o(.text .text.* .rodata .rodata.* .data.rel.ro);
+	}
+	.loader_code_end = .;
+
+	.loader_data : CAPALIGN
+	{
+		.loader_data_start = .;
+		*/loader/boot.cc.o(.data .data.* .sdata .sdata.* .sbss .sbss.* .bss .bss.*);
+	}
+	.loader_data_end = .;
+
+	.library_export_tables : ALIGN(8)
+	{
+		.token_library_export_table = ALIGN(8);
+		*/cheriot.token_library.library(.compartment_export_table);
+		.token_library_export_table_end = .;
+
+		.switcher_export_table = ALIGN(8);
+		*/switcher/entry.S.o(.compartment_export_table);
+		.switcher_export_table_end = .;
+
+		
+		.atomic1_export_table = ALIGN(8);
+		build/cheriot/cheriot/release/atomic1.library(.compartment_export_table);
+		.atomic1_export_table_end = .;
+
+		.atomic4_export_table = ALIGN(8);
+		build/cheriot/cheriot/release/atomic4.library(.compartment_export_table);
+		.atomic4_export_table_end = .;
+
+		.locks_export_table = ALIGN(8);
+		build/cheriot/cheriot/release/locks.library(.compartment_export_table);
+		.locks_export_table_end = .;
+
+		.crt_export_table = ALIGN(8);
+		build/cheriot/cheriot/release/crt.library(.compartment_export_table);
+		.crt_export_table_end = .;
+
+		.freestanding_export_table = ALIGN(8);
+		build/cheriot/cheriot/release/freestanding.library(.compartment_export_table);
+		.freestanding_export_table_end = .;
+
+	}
+
+}
+# No symbols should be exported
+VERSION {
+	VERSION_1 {
+		local: *;
+	};
+};

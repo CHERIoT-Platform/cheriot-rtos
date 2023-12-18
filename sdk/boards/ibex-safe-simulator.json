@@ -1,32 +1,32 @@
 {
     "devices": {
         "clint": {
-            "start": 0x14001000,
-            "length": 0x1000
+            "start": 335548416,
+            "length": 4096
         },
         "plic": {
-            "start": 0x10000000,
-            "end": 0x10400000
+            "start": 268435456,
+            "end": 272629760
         },
         "revoker": {
-            "start": 0x14000000,
-            "length": 0x1000
+            "start": 335544320,
+            "length": 4096
         },
         "uart": {
-            "start": 0x8f00b000,
-            "end":   0x8f00b100
+            "start": 2399186944,
+            "end":   2399187200
         },
         "shadow" : {
-            "start": 0x200fe000,
-            "length": 0x2000
+            "start": 537911296,
+            "length": 8192
         }
     },
     "instruction_memory": {
-        "start": 0x20040000,
-        "end": 0x20080000
+        "start": 537133056,
+        "end": 537395200
     },
     "heap": {
-        "end": 0x20080000
+        "end": 537395200
     },
     "interrupts": [
         {
