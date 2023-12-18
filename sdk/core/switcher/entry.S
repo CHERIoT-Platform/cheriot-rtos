@@ -6,8 +6,8 @@
 
 .include "assembly-helpers.s"
 
-#  Symbolic names for the stack high water mark registers until
-#  the assembler knows about them.
+//  Symbolic names for the stack high water mark registers until
+//  the assembler knows about them.
 
 /**
  * Machine-mode stack high water mark CSR
@@ -28,28 +28,28 @@
 
 switcher_code_start:
 
-# Global for the sealing key.  Stored in the switcher's code section.
+// Global for the sealing key.  Stored in the switcher's code section.
 	.section .text, "ax", @progbits
 	.globl compartment_switcher_sealing_key
 	.p2align 3
 compartment_switcher_sealing_key:
 	.long 0
 	.long 0
-# Global for the scheduler's PCC.  Stored in the switcher's code section.
+// Global for the scheduler's PCC.  Stored in the switcher's code section.
 .section .text, "ax", @progbits
 	.globl switcher_scheduler_entry_pcc
 	.p2align 3
 switcher_scheduler_entry_pcc:
 	.long 0
 	.long 0
-# Global for the scheduler's CGP.  Stored in the switcher's code section.
+// Global for the scheduler's CGP.  Stored in the switcher's code section.
 .section .text, "ax", @progbits
 	.globl switcher_scheduler_entry_cgp
 	.p2align 3
 switcher_scheduler_entry_cgp:
 	.long 0
 	.long 0
-# Global for the scheduler's CSP.  Stored in the switcher's code section.
+// Global for the scheduler's CSP.  Stored in the switcher's code section.
 .section .text, "ax", @progbits
 	.globl switcher_scheduler_entry_csp
 	.p2align 2
