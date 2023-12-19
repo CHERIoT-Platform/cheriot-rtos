@@ -16,11 +16,29 @@ function test(name)
          add_files(name .. "-test.cc")
 end
 
--- Helper to add a C test
-function test_c(name)
-    compartment(name .. "_test")
-         add_files(name .. "-test.c")
+-- Helper for creating the different variants of the FreeRTOS compile tests.
+function freertos_compile_test(name, defines)
+target("freertos-compile-" .. name)
+	set_kind("object")
+	add_files("ccompile-freertos-test.c")
+	add_defines("CHERIOT_CUSTOM_DEFAULT_MALLOC_CAPABILITY")
+	add_defines(defines)
 end
+
+-- Try compiling the FreeRTOS compat layer with different combinations of
+-- semaphore options enabled.
+freertos_compile_test("semaphore-only", {"CHERIOT_EXPOSE_FREERTOS_SEMAPHORE"})
+freertos_compile_test("mutex-only", {"CHERIOT_EXPOSE_FREERTOS_MUTEX"})
+freertos_compile_test("recursive-mutex-only", {"CHERIOT_EXPOSE_FREERTOS_RECURSIVE_MUTEX"})
+freertos_compile_test("all-options", {"CHERIOT_EXPOSE_FREERTOS_SEMAPHORE", "CHERIOT_EXPOSE_FREERTOS_MUTEX", "CHERIOT_EXPOSE_FREERTOS_RECURSIVE_MUTEX"})
+
+-- Fake compartment that owns all C-compile-only tests
+compartment("ccompile_test")
+	add_files("ccompile-test.c")
+	add_deps("freertos-compile-semaphore-only",
+	"freertos-compile-mutex-only",
+	"freertos-compile-recursive-mutex-only",
+	"freertos-compile-all-options")
 
 -- Test MMIO access
 test("mmio")
@@ -46,8 +64,6 @@ compartment("crash_recovery_outer")
 test("crash_recovery")
 -- Test the multiwaiter
 test("multiwaiter")
--- Test that C code can compile
-test_c("ccompile")
 -- Test that the event groups APIs work
 test("eventgroup")
 -- Test stacks
