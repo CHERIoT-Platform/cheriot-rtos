@@ -341,7 +341,7 @@ class KunyanEthernet
 	[[nodiscard]] __always_inline Capability<volatile uint32_t>
 	                              mmio_region() const
 	{
-		return MMIO_CAPABILITY(uint32_t, dmb);
+		return MMIO_CAPABILITY(uint32_t, kunyan_ethernet);
 	}
 
 	/**
