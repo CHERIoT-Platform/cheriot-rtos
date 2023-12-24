@@ -24,13 +24,9 @@
             "start": 0x8f00f000,
             "length": 0x800
         },
-        "dmb_cfg": {
-            "start": 0x8f0f0000,
-            "length": 0x1000
-        },
-        "dmb": {
-            "start": 0x90000000,
-            "length": 0x100000
+        "kunyan_ethernet": {
+            "start": 0x14004000,
+            "length": 0x14008000
         }
     },
     "instruction_memory": {
@@ -73,7 +69,7 @@
         "${sdk}/include/platform/ibex",
         "${sdk}/include/platform/generic-riscv"
     ],
-    "timer_hz" : 20000000,
+    "timer_hz" : 33000000,
     "tickrate_hz" : 100,
     "revoker" : "hardware",
     "stack_high_water_mark" : true
