@@ -66,16 +66,16 @@ SECTIONS
 	{
 		# The scheduler and allocator's export tables are at the start.
 		.scheduler_export_table = .;
-		*.scheduler.compartment(.compartment_export_table);
+		*/scheduler.compartment(.compartment_export_table);
 		.scheduler_export_table_end = .;
 
 		.allocator_export_table = ALIGN(8);
-		*/cheriot.allocator.compartment(.compartment_export_table);
+		*/allocator.compartment(.compartment_export_table);
 		.allocator_export_table_end = .;
 
 		
 		.hello_export_table = ALIGN(8);
-		build/cheriot/cheriot/release/hello.compartment(.compartment_export_table);
+		*/hello.compartment(.compartment_export_table);
 		.hello_export_table_end = .;
 
 	}
@@ -86,26 +86,26 @@ SECTIONS
 	compartment_switcher_code : CAPALIGN
 	{
 		.compartment_switcher_start = .;
-		*/switcher/entry.S.o(.text);
+		*/switcher/entry.o(.text);
 	}
 	.compartment_switcher_end = .;
 
 	scheduler_code : CAPALIGN
 	{
 		.scheduler_start = .;
-		*.scheduler.compartment(.compartment_import_table);
+		*/scheduler.compartment(.compartment_import_table);
 		.scheduler_import_end = .;
-		*.scheduler.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/scheduler.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
 	}
 	.scheduler_end = .;
 
 	allocator_code : CAPALIGN
 	{
 		.allocator_start = .;
-		*/cheriot.allocator.compartment(.compartment_import_table);
+		*/allocator.compartment(.compartment_import_table);
 		.allocator_import_end = .;
-		allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
-		*/cheriot.allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
 	}
 	.allocator_end = .;
 
@@ -113,10 +113,10 @@ SECTIONS
 	token_library_code : CAPALIGN
 	{
 		.token_library_start = .;
-		*/cheriot.token_library.library(.compartment_import_table);
+		*/token_library.compartment(.compartment_import_table);
 		.token_library_import_end = .;
-		token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
-		*/cheriot.token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/token_library.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/token_library.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
 	}
 	.token_library_end = .;
 
@@ -127,66 +127,66 @@ SECTIONS
 	.atomic1_code : CAPALIGN
 	{
 		.atomic1_code_start = .;
-		build/cheriot/cheriot/release/atomic1.library(.compartment_import_table);
+		*/atomic1.library(.compartment_import_table);
 		.atomic1_imports_end = .;
-		build/cheriot/cheriot/release/atomic1.library(.text);
-		build/cheriot/cheriot/release/atomic1.library(.init_array);
-		build/cheriot/cheriot/release/atomic1.library(.rodata);
+		*/atomic1.library(.text);
+		*/atomic1.library(.init_array);
+		*/atomic1.library(.rodata);
 		. = ALIGN(8);
 	}
 
 	.atomic4_code : CAPALIGN
 	{
 		.atomic4_code_start = .;
-		build/cheriot/cheriot/release/atomic4.library(.compartment_import_table);
+		*/atomic4.library(.compartment_import_table);
 		.atomic4_imports_end = .;
-		build/cheriot/cheriot/release/atomic4.library(.text);
-		build/cheriot/cheriot/release/atomic4.library(.init_array);
-		build/cheriot/cheriot/release/atomic4.library(.rodata);
+		*/atomic4.library(.text);
+		*/atomic4.library(.init_array);
+		*/atomic4.library(.rodata);
 		. = ALIGN(8);
 	}
 
 	.locks_code : CAPALIGN
 	{
 		.locks_code_start = .;
-		build/cheriot/cheriot/release/locks.library(.compartment_import_table);
+		*/locks.library(.compartment_import_table);
 		.locks_imports_end = .;
-		build/cheriot/cheriot/release/locks.library(.text);
-		build/cheriot/cheriot/release/locks.library(.init_array);
-		build/cheriot/cheriot/release/locks.library(.rodata);
+		*/locks.library(.text);
+		*/locks.library(.init_array);
+		*/locks.library(.rodata);
 		. = ALIGN(8);
 	}
 
 	.crt_code : CAPALIGN
 	{
 		.crt_code_start = .;
-		build/cheriot/cheriot/release/crt.library(.compartment_import_table);
+		*/crt.library(.compartment_import_table);
 		.crt_imports_end = .;
-		build/cheriot/cheriot/release/crt.library(.text);
-		build/cheriot/cheriot/release/crt.library(.init_array);
-		build/cheriot/cheriot/release/crt.library(.rodata);
+		*/crt.library(.text);
+		*/crt.library(.init_array);
+		*/crt.library(.rodata);
 		. = ALIGN(8);
 	}
 
 	.freestanding_code : CAPALIGN
 	{
 		.freestanding_code_start = .;
-		build/cheriot/cheriot/release/freestanding.library(.compartment_import_table);
+		*/freestanding.library(.compartment_import_table);
 		.freestanding_imports_end = .;
-		build/cheriot/cheriot/release/freestanding.library(.text);
-		build/cheriot/cheriot/release/freestanding.library(.init_array);
-		build/cheriot/cheriot/release/freestanding.library(.rodata);
+		*/freestanding.library(.text);
+		*/freestanding.library(.init_array);
+		*/freestanding.library(.rodata);
 		. = ALIGN(8);
 	}
 
 	.hello_code : CAPALIGN
 	{
 		.hello_code_start = .;
-		build/cheriot/cheriot/release/hello.compartment(.compartment_import_table);
+		*/hello.compartment(.compartment_import_table);
 		.hello_imports_end = .;
-		build/cheriot/cheriot/release/hello.compartment(.text);
-		build/cheriot/cheriot/release/hello.compartment(.init_array);
-		build/cheriot/cheriot/release/hello.compartment(.rodata);
+		*/hello.compartment(.text);
+		*/hello.compartment(.init_array);
+		*/hello.compartment(.rodata);
 		. = ALIGN(8);
 	}
 
@@ -198,25 +198,25 @@ SECTIONS
 	.scheduler_globals : CAPALIGN
 	{
 		.scheduler_globals = .;
-		*.scheduler.compartment(.data .data.* .sdata .sdata.*);
+		*/scheduler.compartment(.data .data.* .sdata .sdata.*);
 		.scheduler_bss_start = .;
-		*.scheduler.compartment(.sbss .sbss.* .bss .bss.*)
+		*/scheduler.compartment(.sbss .sbss.* .bss .bss.*)
 	}
 	.scheduler_globals_end = .;
 
 	.allocator_sealed_objects : CAPALIGN
 	{
 		.allocator_sealed_objects = .;
-		*/cheriot.allocator.compartment(.sealed_objects)
+		*/allocator.compartment(.sealed_objects)
 	}
 	.allocator_sealed_objects_end = .;
 
 	.allocator_globals : CAPALIGN
 	{
 		.allocator_globals = .;
-		*/cheriot.allocator.compartment(.data .data.* .sdata .sdata.*);
+		*/allocator.compartment(.data .data.* .sdata .sdata.*);
 		.allocator_bss_start = .;
-		*/cheriot.allocator.compartment(.sbss .sbss.* .bss .bss.*);
+		*/allocator.compartment(.sbss .sbss.* .bss .bss.*);
 	}
 	.allocator_globals_end = .;
 
@@ -237,9 +237,9 @@ SECTIONS
 	.hello_globals : CAPALIGN
 	{
 		.hello_globals = .;
-		build/cheriot/cheriot/release/hello.compartment(.data);
+		*/hello.compartment(.data);
 		.hello_bss_start = .;
-		build/cheriot/cheriot/release/hello.compartment(.bss)
+		*/hello.compartment(.bss)
 	}
 
 
@@ -247,22 +247,22 @@ SECTIONS
 	{
 		
 		.atomic1_sealed_objects_start = .;
-		build/cheriot/cheriot/release/atomic1.library(.sealed_objects);
+		*/atomic1.library(.sealed_objects);
 		.atomic1_sealed_objects_end = .;
 		.atomic4_sealed_objects_start = .;
-		build/cheriot/cheriot/release/atomic4.library(.sealed_objects);
+		*/atomic4.library(.sealed_objects);
 		.atomic4_sealed_objects_end = .;
 		.locks_sealed_objects_start = .;
-		build/cheriot/cheriot/release/locks.library(.sealed_objects);
+		*/locks.library(.sealed_objects);
 		.locks_sealed_objects_end = .;
 		.crt_sealed_objects_start = .;
-		build/cheriot/cheriot/release/crt.library(.sealed_objects);
+		*/crt.library(.sealed_objects);
 		.crt_sealed_objects_end = .;
 		.freestanding_sealed_objects_start = .;
-		build/cheriot/cheriot/release/freestanding.library(.sealed_objects);
+		*/freestanding.library(.sealed_objects);
 		.freestanding_sealed_objects_end = .;
 		.hello_sealed_objects_start = .;
-		build/cheriot/cheriot/release/hello.compartment(.sealed_objects);
+		*/hello.compartment(.sealed_objects);
 		.hello_sealed_objects_end = .;
 	}
 
@@ -280,22 +280,22 @@ SECTIONS
 		# separate caprelocs sections for each section.
 		
 		.atomic1_cap_relocs_start = .;
-		build/cheriot/cheriot/release/atomic1.library(__cap_relocs);
+		*/atomic1.library(__cap_relocs);
 		.atomic1_cap_relocs_end = .;
 		.atomic4_cap_relocs_start = .;
-		build/cheriot/cheriot/release/atomic4.library(__cap_relocs);
+		*/atomic4.library(__cap_relocs);
 		.atomic4_cap_relocs_end = .;
 		.locks_cap_relocs_start = .;
-		build/cheriot/cheriot/release/locks.library(__cap_relocs);
+		*/locks.library(__cap_relocs);
 		.locks_cap_relocs_end = .;
 		.crt_cap_relocs_start = .;
-		build/cheriot/cheriot/release/crt.library(__cap_relocs);
+		*/crt.library(__cap_relocs);
 		.crt_cap_relocs_end = .;
 		.freestanding_cap_relocs_start = .;
-		build/cheriot/cheriot/release/freestanding.library(__cap_relocs);
+		*/freestanding.library(__cap_relocs);
 		.freestanding_cap_relocs_end = .;
 		.hello_cap_relocs_start = .;
-		build/cheriot/cheriot/release/hello.compartment(__cap_relocs);
+		*/hello.compartment(__cap_relocs);
 		.hello_cap_relocs_end = .;
 	}
 	__cap_relocs_end = .;
@@ -505,51 +505,51 @@ SECTIONS
 	.loader_code : CAPALIGN
 	{
 		.loader_code_start = .;
-		*/loader/boot.cc.o(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/loader/boot-c.o(.text .text.* .rodata .rodata.* .data.rel.ro);
 	}
 	.loader_code_end = .;
 
 	.loader_data : CAPALIGN
 	{
 		.loader_data_start = .;
-		*/loader/boot.cc.o(.data .data.* .sdata .sdata.* .sbss .sbss.* .bss .bss.*);
+		*/loader/boot-c.o(.data .data.* .sdata .sdata.* .sbss .sbss.* .bss .bss.*);
 	}
 	.loader_data_end = .;
 
 	.library_export_tables : ALIGN(8)
 	{
 		.token_library_export_table = ALIGN(8);
-		*/cheriot.token_library.library(.compartment_export_table);
+		*/token_library.compartment(.compartment_export_table);
 		.token_library_export_table_end = .;
 
 		.switcher_export_table = ALIGN(8);
-		*/switcher/entry.S.o(.compartment_export_table);
+		*/entry.o(.compartment_export_table);
 		.switcher_export_table_end = .;
 
 		
 		.atomic1_export_table = ALIGN(8);
-		build/cheriot/cheriot/release/atomic1.library(.compartment_export_table);
+		*/atomic1.library(.compartment_export_table);
 		.atomic1_export_table_end = .;
 
 		.atomic4_export_table = ALIGN(8);
-		build/cheriot/cheriot/release/atomic4.library(.compartment_export_table);
+		*/atomic4.library(.compartment_export_table);
 		.atomic4_export_table_end = .;
 
 		.locks_export_table = ALIGN(8);
-		build/cheriot/cheriot/release/locks.library(.compartment_export_table);
+		*/locks.library(.compartment_export_table);
 		.locks_export_table_end = .;
 
 		.crt_export_table = ALIGN(8);
-		build/cheriot/cheriot/release/crt.library(.compartment_export_table);
+		*/crt.library(.compartment_export_table);
 		.crt_export_table_end = .;
 
 		.freestanding_export_table = ALIGN(8);
-		build/cheriot/cheriot/release/freestanding.library(.compartment_export_table);
+		*/freestanding.library(.compartment_export_table);
 		.freestanding_export_table_end = .;
 
 	}
-
 }
+
 # No symbols should be exported
 VERSION {
 	VERSION_1 {
