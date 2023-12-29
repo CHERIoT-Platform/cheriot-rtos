@@ -20,7 +20,9 @@ cxx{*}: extension = cc
 
 # Toolchain.
 #
-ld = $directory($effect($cxx.path))/ld.lld
+toolchain = $directory($effect($cxx.path))
+ld = $toolchain/ld.lld
+objdump = $toolchain/llvm-objdump
 
 # Default and board options.
 #
@@ -160,6 +162,7 @@ token_library/
   cc.coptions += -fvisibility=hidden
 
   obje{token_unseal}: $sdk/core/token_library/S{token_unseal} fsdir{./}
+  obje{token_unseal}: cc.reprocess = true # @@ TMP
 }
 
 loader/
@@ -177,6 +180,7 @@ loader/
   cxx.coptions += -fvisibility-inlines-hidden
 
   obje{boot-s}: $sdk/core/loader/S{boot} fsdir{./}
+  obje{boot-s}: cc.reprocess = true # @@ TMP
 
   obje{boot-c}: $sdk/core/loader/cxx{boot} fsdir{./}
   {
@@ -190,6 +194,7 @@ switcher/
   cc.coptions += -fvisibility=hidden
 
   obje{entry}: $sdk/core/switcher/S{entry} fsdir{./}
+  obje{entry}: cc.reprocess = true # @@ TMP
 }
 
 library{atomic1}: lib/atomic1/obje{atomic1}
@@ -252,6 +257,12 @@ lib/
 define firmware: file
 firmware{*}: extension =
 
+define dump: file
+dump{*}: extension = dump
+
+define json: file
+json{*}: extension = json
+
 # @@ TODO: generate firmware.ldscript. Maybe generate it as part of the
 #    firmware recipe (seeing that it will need a lot of info from firmware)?
 #    But then won't be able to use the in module.
@@ -259,20 +270,22 @@ firmware{*}: extension =
 # @@ TODO: unclear if the order in which we specify all the different
 #    prerequisites is significant. Appears to be not.
 #
-[rule_name=link_firmware] <firmware{~'/(.*)/'} file{^'/\1.json/'}>: \
+[rule_name=link_firmware] <firmware{~'/(.*)/'} dump{^'/\1/'} json{^'/\1/'}>: \
    compartment{~'/(.*)/'} \
    loader/obje{boot-s boot-c} \
    switcher/obje{entry} \
    library{atomic1 atomic4 locks crt freestanding} \
    privileged_compartment{allocator token_library scheduler} \
-   ldscript{firmware.ldscript} $ld
+   ldscript{firmware.ldscript} $ld $objdump
 {{
   s = $path($filter($<, obje compartment privileged_compartment library))
   l = $path($filter($<, ldscript))
   o = $path($>[0])
-  r = $path($>[1])
+  d = $path($>[1])
+  r = $path($>[2])
 
   diag ld $>
 
   $ld "--script=$l" --relax -o $o "--compartment-report=$r" $s
+  $objdump -glxsdrS --demangle $o >$d
 }}
