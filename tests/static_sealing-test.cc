@@ -13,7 +13,7 @@ DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(TestType,
                                        static_sealing_inner,
                                        SealingType,
                                        test,
-                                       {42});
+                                       42);
 
 void test_static_sealing()
 {

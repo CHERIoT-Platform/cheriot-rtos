@@ -187,8 +187,7 @@
 	  name = /* NOLINT(bugprone-macro-parentheses) */                          \
 	  {(uint32_t)&__sealing_key_##compartment##_##keyName,                     \
 	   0,                                                                      \
-	   initialiser,                                                            \
-	   ##__VA_ARGS__}
+	   {initialiser, ##__VA_ARGS__}}
 
 /**
  * Helper macro that declares and defines a sealed value.
@@ -205,7 +204,8 @@
 	  compartment,                                                             \
 	  keyName,                                                                 \
 	  name,                                                                    \
-	  initialiser); /* NOLINT(bugprone-macro-parentheses) */
+	  initialiser,                                                             \
+	  ##__VA_ARGS__); /* NOLINT(bugprone-macro-parentheses) */
 
 /**
  * Returns a sealed capability to the named object created with
