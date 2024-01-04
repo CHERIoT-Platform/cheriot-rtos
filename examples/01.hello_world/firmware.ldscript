@@ -26,7 +26,7 @@ SECTIONS
 		*(.loader_start);
 	}
 
-	
+
 	. = ALIGN(8);
 	.loader_trusted_stack : CAPALIGN
 	{
@@ -44,7 +44,7 @@ SECTIONS
 
 
 	__stack_space_start = .;
-	
+
 	. = ALIGN(16);
 	.loader_stack : CAPALIGN
 	{
@@ -73,7 +73,7 @@ SECTIONS
 		*/allocator.compartment(.compartment_export_table);
 		.allocator_export_table_end = .;
 
-		
+
 		.hello_export_table = ALIGN(8);
 		*/hello.compartment(.compartment_export_table);
 		.hello_export_table_end = .;
@@ -113,17 +113,17 @@ SECTIONS
 	token_library_code : CAPALIGN
 	{
 		.token_library_start = .;
-		*/token_library.compartment(.compartment_import_table);
+		*/token_library.library(.compartment_import_table);
 		.token_library_import_end = .;
-		*/token_library.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
-		*/token_library.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
+		*/token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
 	}
 	.token_library_end = .;
 
 
-	
 
-	
+
+
 	.atomic1_code : CAPALIGN
 	{
 		.atomic1_code_start = .;
@@ -229,11 +229,11 @@ SECTIONS
 	__export_mem_allocator_epoch = .;
 	. += 4;
 	__export_mem_allocator_epoch_end = .;
-	
 
-	
 
-	
+
+
+
 	.hello_globals : CAPALIGN
 	{
 		.hello_globals = .;
@@ -245,7 +245,7 @@ SECTIONS
 
 	.sealed_objects :
 	{
-		
+
 		.atomic1_sealed_objects_start = .;
 		*/atomic1.library(.sealed_objects);
 		.atomic1_sealed_objects_end = .;
@@ -278,7 +278,7 @@ SECTIONS
 		# FIXME: This currently doesn't do anything.  The linker creates this
 		# entire section.  The linker script needs to be modified to create
 		# separate caprelocs sections for each section.
-		
+
 		.atomic1_cap_relocs_start = .;
 		*/atomic1.library(__cap_relocs);
 		.atomic1_cap_relocs_end = .;
@@ -386,7 +386,7 @@ SECTIONS
 		LONG(0);
 		SHORT(0);
 
-		
+
 
 		# sdk/core/loader/types.h:/is_magic_valid
 		# Magic number, used to detect mismatches between linker script and
@@ -398,7 +398,7 @@ SECTIONS
 		SHORT(5);
 		# Number of compartment headers.
 		SHORT(1);
-		
+
 		LONG(.atomic1_code_start);
 		SHORT((SIZEOF(.atomic1_code) + 7) / 8);
 		SHORT(.atomic1_imports_end - .atomic1_code_start);
@@ -489,7 +489,7 @@ SECTIONS
 		__thread_count = .;
 		SHORT(1);
 		# The thread structures
-		
+
 		SHORT(1);
 		LONG(__export_hello__Z9say_hellov);
 		LONG(.thread_1_stack_start);
@@ -519,14 +519,14 @@ SECTIONS
 	.library_export_tables : ALIGN(8)
 	{
 		.token_library_export_table = ALIGN(8);
-		*/token_library.compartment(.compartment_export_table);
+		*/token_library.library(.compartment_export_table);
 		.token_library_export_table_end = .;
 
 		.switcher_export_table = ALIGN(8);
 		*/entry.o(.compartment_export_table);
 		.switcher_export_table_end = .;
 
-		
+
 		.atomic1_export_table = ALIGN(8);
 		*/atomic1.library(.compartment_export_table);
 		.atomic1_export_table_end = .;
