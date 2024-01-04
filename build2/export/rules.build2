@@ -75,7 +75,7 @@ ldscript{*}: extension = ldscript
 define library: file
 library{*}: extension = library
 
-[rule_name=link_library] library{~'/(.*)/'}: obje{~'/(.*)/'} \
+[rule_name=link_library] library{~'/(.+)/'}: obje{~'/(.+)/'} \
   $sdk/ldscript{library.ldscript} $ld
 {{
   s = $path($filter($<, obje))
@@ -93,8 +93,8 @@ privileged_library{*}: extension = library
 
 # Note: linked with the privileged compartment linker script.
 #
-[rule_name=link_privileged_library] privileged_library{~'/(.*)/'}: \
-  obje{~'/(.*)/'} $sdk/ldscript{privileged-compartment.ldscript} $ld
+[rule_name=link_privileged_library] privileged_library{~'/(.+)/'}: \
+  obje{~'/(.+)/'} $sdk/ldscript{privileged-compartment.ldscript} $ld
 {{
   s = $path($filter($<, obje))
   l = $path($filter($<, ldscript))
@@ -108,7 +108,7 @@ privileged_library{*}: extension = library
 define compartment: file
 compartment{*}: extension = compartment
 
-[rule_name=link_compartment] compartment{~'/(.*)/'}: obje{~'/(.*)/'} \
+[rule_name=link_compartment] compartment{~'/(.+)/'}: obje{~'/(.+)/'} \
   $sdk/ldscript{compartment.ldscript} $ld
 {{
   s = $path($filter($<, obje))
@@ -123,8 +123,8 @@ compartment{*}: extension = compartment
 define privileged_compartment: file
 privileged_compartment{*}: extension = compartment
 
-[rule_name=link_privileged_compartment] privileged_compartment{~'/(.*)/'}: \
-  obje{~'/(.*)/'} $sdk/ldscript{privileged-compartment.ldscript} $ld
+[rule_name=link_privileged_compartment] privileged_compartment{~'/(.+)/'}: \
+  obje{~'/(.+)/'} $sdk/ldscript{privileged-compartment.ldscript} $ld
 {{
   s = $path($filter($<, obje))
   l = $path($filter($<, ldscript))
@@ -283,8 +283,8 @@ json{*}: extension = json
 #
 # Note: the order in which we specify things to link is no significant.
 #
-[rule_name=link_firmware] <firmware{~'/(.*)/'} dump{^'/\1/'} json{^'/\1/'}>: \
-   compartment{~'/(.*)/'} \
+[rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
+   compartment{~'/(.+)/'} \
    loader/obje{boot-s boot-c} \
    switcher/obje{entry} \
    library{atomic1 atomic4 locks crt freestanding} \
