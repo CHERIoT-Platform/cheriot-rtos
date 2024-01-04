@@ -135,136 +135,165 @@ privileged_compartment{*}: extension = compartment
   $ld "--script=$l" --compartment --relax -o $o $s
 }}
 
-# @@ Add core/ scope with common stuff (-DCHERIOT_AVOID_CAPRELOCS)?
+# Place all the cheriot-rtos-supplied targets into the cheriot-rtos/ so that
+# they don't clash with user's. Inside mimic the source directory structure.
 #
-
-# The scheduler compartment is specific to the firmware (depends on the number
-# of threads) and we assume a project may want to produce multiple firmwares
-# in the same build. So we synthesize the appropriate dependecies in the
-# link_firmware rule to include the firmware name into this compartment's name
-# and its object file names.
+# @@ TODO: tighten linker script to only recognize special compartments
+#    (allocator, scheduler, etc) inside cheriot-rtos/?
 #
-scheduler/
+cheriot-rtos/
 {
-  # @@ TODO: some come from board JSON and user's firmware configuration.
-  #
-  cc.poptions += \
-    -DCHERIOT_AVOID_CAPRELOCS \
-    -DSCHEDULER_ACCOUNTING=false \
-    -DDEBUG_SCHEDULER=false \
-    '-DCHERIOT_INTERRUPT_CONFIGURATION={1,2,false}'
-
-  cc.coptions += -cheri-compartment=sched
-}
-
-privileged_compartment{allocator}: allocator/obje{main}
-
-allocator/
-{
-  cc.poptions += -DCHERIOT_AVOID_CAPRELOCS -DDEBUG_ALLOCATOR=false -DNDEBUG
-  cc.coptions += -cheri-compartment=alloc -fvisibility=hidden
-  cxx.coptions += -fvisibility-inlines-hidden
-
-  obje{main}: $sdk/core/allocator/cxx{main} fsdir{./}
-}
-
-privileged_library{token_library}: token_library/obje{token_unseal}
-
-token_library/
-{
-  cc.poptions += -DNDEBUG -DDEBUG_TOKEN_LIBRARY=false
-  cc.coptions += -fvisibility=hidden
-
-  obje{token_unseal}: $sdk/core/token_library/S{token_unseal} fsdir{./}
-  obje{token_unseal}: cc.reprocess = true # @@ TMP
-}
-
-loader/
-{
-  # @@ TODO: comes from somewhere.
-  #
-  cc.poptions += \
-    -DCHERIOT_AVOID_CAPRELOCS \
-    -DDEBUG_LOADER=false \
-    -DNDEBUG \
-    -DCHERIOT_LOADER_STACK_SIZE=1024 \
-    -DCHERIOT_LOADER_TRUSTED_STACK_SIZE=192
-
-  cc.coptions += -fvisibility=hidden
-  cxx.coptions += -fvisibility-inlines-hidden
-
-  obje{boot-s}: $sdk/core/loader/S{boot} fsdir{./}
-  obje{boot-s}: cc.reprocess = true # @@ TMP
-
-  obje{boot-c}: $sdk/core/loader/cxx{boot} fsdir{./}
+  core/
   {
-    cc.coptions += -O1
-  }
-}
-
-switcher/
-{
-  cc.poptions += -DNDEBUG
-  cc.coptions += -fvisibility=hidden
-
-  obje{entry}: $sdk/core/switcher/S{entry} fsdir{./}
-  obje{entry}: cc.reprocess = true # @@ TMP
-}
-
-library{atomic1}: lib/atomic1/obje{atomic1}
-library{atomic4}: lib/atomic4/obje{atomic4}
-library{locks}: lib/locks/obje{locks semaphore}
-library{crt}: lib/crt/obje{cz}
-library{freestanding}: lib/freestanding/obje{memcmp memcpy memset}
-
-lib/
-{
-  cc.poptions += -DNDEBUG
-  cc.coptions += -fvisibility=hidden
-  cxx.coptions += -fvisibility-inlines-hidden
-
-  atomic1/
-  {
-    fsdir{./}: fsdir{../}
-
-    obje{atomic1}: $sdk/lib/atomic/cxx{atomic1} fsdir{./}
-  }
-
-  atomic4/
-  {
-    fsdir{./}: fsdir{../}
-
-    obje{atomic4}: $sdk/lib/atomic/cxx{atomic4} fsdir{./}
-  }
-
-  locks/
-  {
-    fsdir{./}: fsdir{../}
-
-    obje{locks}: $sdk/lib/locks/cxx{locks} fsdir{./}
-    obje{semaphore}: $sdk/lib/locks/cxx{semaphore} fsdir{./}
-  }
-
-  crt/
-  {
-    fsdir{./}: fsdir{../}
-
-    obje{cz}: $sdk/lib/crt/c{cz} fsdir{./}
-  }
-
-  freestanding/
-  {
-    fsdir{./}: fsdir{../}
-
-    # @@ These are built without NDEBUG/-fvisibility=hidden. Wonder if an
-    #    omission or intentional?
+    # @@ TODO: comes from somewhere?
     #
-    cc.poptions = $regex.filter_out_match($cc.poptions, '^-DNDEBUG$')
-    cc.coptions = $regex.filter_out_match($cc.coptions, '^--fvisibility=hidden$')
+    cc.poptions += -DCHERIOT_AVOID_CAPRELOCS
 
-    obje{memcmp}: $sdk/lib/freestanding/c{memcmp} fsdir{./}
-    obje{memcpy}: $sdk/lib/freestanding/c{memcpy} fsdir{./}
-    obje{memset}: $sdk/lib/freestanding/c{memset} fsdir{./}
+    # The scheduler compartment is specific to the firmware (depends on the
+    # number of threads) and we assume a project may want to produce multiple
+    # firmwares in the same build. So we synthesize the appropriate
+    # dependecies in the link_firmware rule to include the firmware name into
+    # this compartment's name and its object file names.
+    #
+    scheduler/
+    {
+      # @@ TODO: some come from board JSON and user's firmware configuration.
+      #
+      cc.poptions += \
+        -DSCHEDULER_ACCOUNTING=false \
+        -DDEBUG_SCHEDULER=false \
+        '-DCHERIOT_INTERRUPT_CONFIGURATION={1,2,false}'
+
+      cc.coptions += -cheri-compartment=sched
+
+      fsdir{./}: fsdir{../}
+    }
+
+    privileged_compartment{allocator}: allocator/obje{main} fsdir{./}
+
+    allocator/
+    {
+      cc.poptions += -DDEBUG_ALLOCATOR=false -DNDEBUG
+      cc.coptions += -cheri-compartment=alloc -fvisibility=hidden
+      cxx.coptions += -fvisibility-inlines-hidden
+
+      obje{main}: $sdk/core/allocator/cxx{main} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    privileged_library{token_library}: token_library/obje{token_unseal} fsdir{./}
+
+    token_library/
+    {
+      cc.poptions += -DNDEBUG -DDEBUG_TOKEN_LIBRARY=false
+      cc.coptions += -fvisibility=hidden
+
+      obje{token_unseal}: $sdk/core/token_library/S{token_unseal} fsdir{./}
+      obje{token_unseal}: cc.reprocess = true # @@ TMP
+
+      fsdir{./}: fsdir{../}
+    }
+
+    loader/
+    {
+      # @@ TODO: comes from somewhere.
+      #
+      cc.poptions += \
+        -DDEBUG_LOADER=false \
+        -DNDEBUG \
+        -DCHERIOT_LOADER_STACK_SIZE=1024 \
+        -DCHERIOT_LOADER_TRUSTED_STACK_SIZE=192
+
+      cc.coptions += -fvisibility=hidden
+      cxx.coptions += -fvisibility-inlines-hidden
+
+      obje{boot-s}: $sdk/core/loader/S{boot} fsdir{./}
+      obje{boot-s}: cc.reprocess = true # @@ TMP
+
+      obje{boot-c}: $sdk/core/loader/cxx{boot} fsdir{./}
+      {
+        cc.coptions += -O1
+      }
+
+      fsdir{./}: fsdir{../}
+    }
+
+    switcher/
+    {
+      cc.poptions += -DNDEBUG
+      cc.coptions += -fvisibility=hidden
+
+      obje{entry}: $sdk/core/switcher/S{entry} fsdir{./}
+      obje{entry}: cc.reprocess = true # @@ TMP
+
+      fsdir{./}: fsdir{../}
+    }
+
+    fsdir{./}: fsdir{../}
+  }
+
+  lib/
+  {
+    cc.poptions += -DNDEBUG
+    cc.coptions += -fvisibility=hidden
+    cxx.coptions += -fvisibility-inlines-hidden
+
+    library{atomic1}: atomic1/obje{atomic1} fsdir{./}
+
+    atomic1/
+    {
+      obje{atomic1}: $sdk/lib/atomic/cxx{atomic1} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    library{atomic4}: atomic4/obje{atomic4} fsdir{./}
+
+    atomic4/
+    {
+      obje{atomic4}: $sdk/lib/atomic/cxx{atomic4} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    library{locks}: locks/obje{locks semaphore} fsdir{./}
+
+    locks/
+    {
+      obje{locks}: $sdk/lib/locks/cxx{locks} fsdir{./}
+      obje{semaphore}: $sdk/lib/locks/cxx{semaphore} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    library{crt}: crt/obje{cz} fsdir{./}
+
+    crt/
+    {
+      obje{cz}: $sdk/lib/crt/c{cz} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    library{freestanding}: freestanding/obje{memcmp memcpy memset} fsdir{./}
+
+    freestanding/
+    {
+      # @@ These are built without NDEBUG/-fvisibility=hidden. Wonder if an
+      #    omission or intentional?
+      #
+      cc.poptions = $regex.filter_out_match($cc.poptions, '^-DNDEBUG$')
+      cc.coptions = $regex.filter_out_match($cc.coptions, '^--fvisibility=hidden$')
+
+      obje{memcmp}: $sdk/lib/freestanding/c{memcmp} fsdir{./}
+      obje{memcpy}: $sdk/lib/freestanding/c{memcpy} fsdir{./}
+      obje{memset}: $sdk/lib/freestanding/c{memset} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    fsdir{./}: fsdir{../}
   }
 }
 
@@ -285,12 +314,12 @@ json{*}: extension = json
 #
 [rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
    compartment{~'/(.+)/'} \
-   loader/obje{boot-s boot-c} \
-   switcher/obje{entry} \
-   library{atomic1 atomic4 locks crt freestanding} \
-   privileged_library{token_library} \
-   privileged_compartment{allocator} \
-   privileged_compartment{^'/\1-scheduler/'} \
+   cheriot-rtos/core/loader/obje{boot-s boot-c} \
+   cheriot-rtos/core/switcher/obje{entry} \
+   cheriot-rtos/lib/library{atomic1 atomic4 locks crt freestanding} \
+   cheriot-rtos/core/privileged_library{token_library} \
+   cheriot-rtos/core/privileged_compartment{allocator} \
+   cheriot-rtos/core/privileged_compartment{^'/\1-scheduler/'} \
    ldscript{firmware.ldscript} $ld $objdump
 {{
   s = $path($filter($<, obje library privileged_library \
@@ -310,9 +339,12 @@ json{*}: extension = json
 #
 # @@ TMP: use `.` instead of `-` as separator (also in linker script).
 #
-privileged_compartment{hello_world-scheduler}: scheduler/obje{hello_world-main}
-
-scheduler/obje{hello_world-main}: $sdk/core/scheduler/cxx{main} fsdir{scheduler/}
+cheriot-rtos/core/
 {
-  cc.poptions += -DCONFIG_THREADS_NUM=1
+  privileged_compartment{hello_world-scheduler}: scheduler/obje{hello_world-main} fsdir{.}
+
+  scheduler/obje{hello_world-main}: $sdk/core/scheduler/cxx{main} fsdir{scheduler/}
+  {
+    cc.poptions += -DCONFIG_THREADS_NUM=1
+  }
 }
