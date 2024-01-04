@@ -138,8 +138,12 @@ privileged_compartment{*}: extension = compartment
 # @@ Add core/ scope with common stuff (-DCHERIOT_AVOID_CAPRELOCS)?
 #
 
-privileged_compartment{scheduler}: scheduler/obje{main}
-
+# The scheduler compartment is specific to the firmware (depends on the number
+# of threads) and we assume a project may want to produce multiple firmwares
+# in the same build. So we synthesize the appropriate dependecies in the
+# link_firmware rule to include the firmware name into this compartment's name
+# and its object file names.
+#
 scheduler/
 {
   # @@ TODO: some come from board JSON and user's firmware configuration.
@@ -148,12 +152,9 @@ scheduler/
     -DCHERIOT_AVOID_CAPRELOCS \
     -DSCHEDULER_ACCOUNTING=false \
     -DDEBUG_SCHEDULER=false \
-    '-DCHERIOT_INTERRUPT_CONFIGURATION={1,2,false}' \
-    -DCONFIG_THREADS_NUM=1
+    '-DCHERIOT_INTERRUPT_CONFIGURATION={1,2,false}'
 
   cc.coptions += -cheri-compartment=sched
-
-  obje{main}: $sdk/core/scheduler/cxx{main} fsdir{./}
 }
 
 privileged_compartment{allocator}: allocator/obje{main}
@@ -288,7 +289,8 @@ json{*}: extension = json
    switcher/obje{entry} \
    library{atomic1 atomic4 locks crt freestanding} \
    privileged_library{token_library} \
-   privileged_compartment{allocator scheduler} \
+   privileged_compartment{allocator} \
+   privileged_compartment{^'/\1-scheduler/'} \
    ldscript{firmware.ldscript} $ld $objdump
 {{
   s = $path($filter($<, obje library privileged_library \
@@ -303,3 +305,14 @@ json{*}: extension = json
   $ld "--script=$l" --relax -o $o "--compartment-report=$r" $s
   $objdump -glxsdrS --demangle $o >$d
 }}
+
+# @@ TMP: these should be synthesized by the link_firmware rule.
+#
+# @@ TMP: use `.` instead of `-` as separator (also in linker script).
+#
+privileged_compartment{hello_world-scheduler}: scheduler/obje{hello_world-main}
+
+scheduler/obje{hello_world-main}: $sdk/core/scheduler/cxx{main} fsdir{scheduler/}
+{
+  cc.poptions += -DCONFIG_THREADS_NUM=1
+}
