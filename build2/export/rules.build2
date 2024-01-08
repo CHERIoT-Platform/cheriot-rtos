@@ -1,15 +1,14 @@
 import [dir_path] sdk = cheriot-rtos%dir{sdk}
 
-# @@ Maybe we should set config.cxx, config.c ourselves (and with proper
-#    mode options so we print accurate report)? But what configuration
-#    variable will we use for the toolchain? They will also end up being
-#    saved to config.build which feels off. Maybe instead we should add
-#    ability to merge mode options (i.e., we could set cxx/c.mode before
-#    loading cxx/c)? Let's see how things shake out with the rest of the
-#    tools (ld, etc).
-
 cxx.std = 20
-c.std = 2x
+c.std   = 2x
+
+# Specify these options as compiler mode (as opposed to in cc.coptions below)
+# so that they are taken into account when detecting target, searach paths,
+# etc.
+#
+cxx.mode = -target riscv32-unknown-unknown -nostdinc
+c.mode   = -target riscv32-unknown-unknown -nostdinc
 
 using cxx
 using c
@@ -28,11 +27,9 @@ objdump = $toolchain/llvm-objdump
 #
 cc.coptions += \
   -Qunused-arguments \
-  -target riscv32-unknown-unknown \
   -mcpu=cheriot -mabi=cheriot -mxcheri-rvc -mrelax \
-  -fshort-wchar -fomit-frame-pointer -fno-builtin  -fno-exceptions \
+  -fshort-wchar -fomit-frame-pointer -fno-builtin -fno-exceptions \
   -fno-asynchronous-unwind-tables -fno-c++-static-destructors -fno-rtti \
-  -nostdinc \
   -Oz -g \
   -Werror
 
