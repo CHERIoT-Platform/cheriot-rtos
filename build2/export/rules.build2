@@ -205,7 +205,6 @@ cheriot-rtos/
       cc.coptions += -fvisibility=hidden
 
       obje{token_unseal}: $sdk/core/token_library/S{token_unseal} fsdir{./}
-      obje{token_unseal}: cc.reprocess = true # @@ TMP
 
       fsdir{./}: fsdir{../}
     }
@@ -224,7 +223,6 @@ cheriot-rtos/
       cxx.coptions += -fvisibility-inlines-hidden
 
       obje{boot-s}: $sdk/core/loader/S{boot} fsdir{./}
-      obje{boot-s}: cc.reprocess = true # @@ TMP
 
       obje{boot-c}: $sdk/core/loader/cxx{boot} fsdir{./}
       {
@@ -240,7 +238,6 @@ cheriot-rtos/
       cc.coptions += -fvisibility=hidden
 
       obje{entry}: $sdk/core/switcher/S{entry} fsdir{./}
-      obje{entry}: cc.reprocess = true # @@ TMP
 
       fsdir{./}: fsdir{../}
     }
