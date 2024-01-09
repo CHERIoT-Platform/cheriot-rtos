@@ -1,4 +1,22 @@
-import [dir_path] sdk = cheriot-rtos%dir{sdk}
+config [string] config.cheriot_rtos.board
+
+if! $defined(config.cheriot_rtos.board)
+  fail 'config.cheriot_rtos.board must be specified'
+
+import! [dir_path] sdk = cheriot-rtos%dir{sdk}
+
+board = $sdk/boards/$(config.cheriot_rtos.board).json
+
+if $empty($path_search($board))
+  fail "unknown board '$config.cheriot_rtos.board': file $board does not exist"
+
+# @@ TODO: load board file.
+
+revoker = 'hardware'
+
+# Report key information about the board.
+#
+config [config.report.module=cheriot-rtos] revoker
 
 cxx.std = 20
 c.std   = 2x
