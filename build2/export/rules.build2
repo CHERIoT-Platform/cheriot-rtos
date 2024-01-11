@@ -331,7 +331,7 @@ json{*}: extension = json
    cheriot-rtos/lib/library{atomic1 atomic4 locks crt freestanding} \
    cheriot-rtos/core/privileged_library{token_library} \
    cheriot-rtos/core/privileged_compartment{allocator} \
-   cheriot-rtos/core/privileged_compartment{^'/\1-scheduler/'} \
+   cheriot-rtos/core/privileged_compartment{^'/\1..scheduler/'} \
    ldscript{firmware.ldscript} $ld $objdump
 {{
   s = $path($filter($<, obje library privileged_library \
@@ -349,13 +349,16 @@ json{*}: extension = json
 
 # @@ TMP: these should be synthesized by the link_firmware rule.
 #
-# @@ TMP: use `.` instead of `-` as separator (also in linker script).
+# Use `.` (escaped as `..`) instead of, say, `-` or `_` as a separator between
+# the firmware name and `scheduler` to minimize the chance of clashes between
+# several firmware (though seeing that this is inside cheriot-rtos/core/, it's
+# unclear what we could clash with).
 #
 cheriot-rtos/core/
 {
-  privileged_compartment{hello_world-scheduler}: scheduler/obje{hello_world-main} fsdir{.}
+  privileged_compartment{hello_world..scheduler}: scheduler/obje{hello_world..main} fsdir{.}
 
-  scheduler/obje{hello_world-main}: $sdk/core/scheduler/cxx{main} fsdir{scheduler/}
+  scheduler/obje{hello_world..main}: $sdk/core/scheduler/cxx{main} fsdir{scheduler/}
   {
     cc.poptions += -DCONFIG_THREADS_NUM=1
   }
