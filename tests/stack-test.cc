@@ -73,6 +73,11 @@ namespace
 	}
 } // namespace
 
+// Defeat the compiler optimisation that may turn our first call to this into a
+// call. If the compiler does this then we will fail on an even number of
+// cross-compartment calls not an odd number.
+__cheri_callback void (*volatile crossCompartmentCall)();
+
 /*
  * The stack tests should cover the edge-cases scenarios for both
  * the trusted and compartment stacks. We make sure the
@@ -86,9 +91,10 @@ void test_stack()
 {
 	__cheri_callback void (*callback)() = cross_compartment_call;
 
+	crossCompartmentCall = test_trusted_stack_exhaustion;
 	debug_log("exhaust trusted stack, do self recursion with a cheri_callback");
 	expect_handler(true);
-	test_trusted_stack_exhaustion();
+	(*crossCompartmentCall)();
 
 	debug_log("exhausting the compartment stack");
 	expect_handler(false);
