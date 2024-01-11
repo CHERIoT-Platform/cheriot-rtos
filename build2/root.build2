@@ -1,5 +1,3 @@
-#info 'loading cheriot-rtos root'
-
 define ldscript: file
 ldscript{*}: extension = ldscript
 
