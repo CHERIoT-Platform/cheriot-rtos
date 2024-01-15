@@ -1,4 +1,4 @@
-./: firmware{hello_world}: compartment{hello}
+firmware{hello_world}: compartment{hello}
 
 # @@ TODO: in xmake lib{freestanding} is listed as prerequisite of
 #    compartment but is linked to firmware.
