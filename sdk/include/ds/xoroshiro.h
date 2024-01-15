@@ -7,11 +7,15 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <debug.hh>
+#include <initializer_list>
 
 namespace ds::xoroshiro
 {
+
 	namespace detail
 	{
+		using Debug = ConditionalDebug<false, "xoroshiro">;
 
 		/**
 		 * The xoroshiro+ (not ++) generator(s) of Blackman and Vigna's
@@ -22,7 +26,15 @@ namespace ds::xoroshiro
 		 * variables used internally (State), the type of each sample (Result),
 		 * and the seed state values (A, B, C).
 		 */
-		template<typename State, typename Result, State A, State B, State C>
+		template<typename State,
+		         typename Result,
+		         State A,
+		         State B,
+		         State C,
+		         State Jump0     = 0,
+		         State Jump1     = 0,
+		         State LongJump0 = 0,
+		         State LongJump1 = 0>
 		class XorOshiro
 		{
 			private:
@@ -45,12 +57,33 @@ namespace ds::xoroshiro
 				return (x << k) | (x >> (StateBits - k));
 			}
 
+			void jump(State jump0, State jump1)
+			{
+				const State Jump[] = {jump0, jump1};
+				uint64_t    s0     = 0;
+				uint64_t    s1     = 0;
+				for (int i : {0, 1})
+				{
+					for (int b = 0; b < 64; b++)
+					{
+						if (Jump[i] & uint64_t(1) << b)
+						{
+							s0 ^= x;
+							s1 ^= y;
+						}
+						next();
+					}
+				}
+				x = s0;
+				y = s1;
+			}
+
 			public:
 			XorOshiro(State x = 5489, State y = 0) : x(x), y(y)
 			{
 				// If both zero, then this does not work
-				if (x == 0 && y == 0)
-					abort();
+				Debug::Invariant((x != 0) || (y != 0),
+				                 "Invalid state, both x and y are zero");
 
 				next();
 			}
@@ -58,8 +91,8 @@ namespace ds::xoroshiro
 			void set_state(State nx, State ny = 0)
 			{
 				// If both zero, then this does not work
-				if (nx == 0 && ny == 0)
-					abort();
+				Debug::Invariant((nx != 0) || (ny != 0),
+				                 "Invalid state, both nx and ny are zero");
 
 				x = nx;
 				y = ny;
@@ -68,14 +101,41 @@ namespace ds::xoroshiro
 
 			Result next()
 			{
-				State r = x + y;
+				State oldX = x;
+				State oldY = y;
+				State r    = x + y;
 				y ^= x;
 				x = rotl(x, A) ^ y ^ (y << B);
 				y = rotl(y, C);
 				// If both zero, then this does not work
-				if (x == 0 && y == 0)
-					abort();
+				Debug::Invariant((x != 0) || (y != 0),
+				                 "Invalid state, both x and y are zero after "
+				                 "next() with x: {}, y: {}",
+				                 oldX,
+				                 oldY);
 				return r >> (StateBits - ResultBits);
+			}
+
+			Result operator()()
+			{
+				return next();
+			}
+
+			/**
+			 * Jump.  If supported, this is equivalent to 2^64 calls to next().
+			 */
+			void jump() requires(Jump0 != 0) && (Jump1 != 0)
+			{
+				jump(Jump0, Jump1);
+			}
+
+			/**
+			 * Jump a *really* long way.  If supported, this is equivalent to
+			 * 2^96 calls to next().
+			 */
+			void long_jump() requires(LongJump0 != 0) && (LongJump1 != 0)
+			{
+				jump(LongJump0, LongJump1);
 			}
 		};
 	} // namespace detail
@@ -83,9 +143,18 @@ namespace ds::xoroshiro
 	/**
 	 * xoroshiro128+ with 64-bit output using the 2018 parameters.
 	 *
-	 * Parameters from https://prng.di.unimi.it/xoroshiro128plus.c .
+	 * Parameters (including jump parameters) from:
+	 * https://prng.di.unimi.it/xoroshiro128plus.c
 	 */
-	using P128R64 = detail::XorOshiro<uint64_t, uint64_t, 24, 16, 37>;
+	using P128R64 = detail::XorOshiro<uint64_t,
+	                                  uint64_t,
+	                                  24,
+	                                  16,
+	                                  37,
+	                                  0xdf900294d8f554a5,
+	                                  0x170865df4b3201fc,
+	                                  0xd2a98b26625eee7b,
+	                                  0xdddf9b1090aa7ac1>;
 
 	/**
 	 * xoroshiro128+ with 32-bit output using the 2018 parameters.
