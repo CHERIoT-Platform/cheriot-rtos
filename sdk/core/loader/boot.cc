@@ -11,7 +11,7 @@
 
 #include "../switcher/tstack.h"
 #include "constants.h"
-#include "debug.h"
+#include "debug.hh"
 #include "defines.h"
 #include "types.h"
 #include <cheri.hh>
@@ -1039,7 +1039,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	{
 		// Set the UART.  `Debug::log` and `Debug::Invariant` work after this
 		// point.
-		ExplicitUARTOutput::set_uart(uart);
+		LoaderWriter::set_uart(uart);
 	}
 
 	Debug::log("UART initialised!");
