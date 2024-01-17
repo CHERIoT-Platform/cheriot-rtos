@@ -18,6 +18,7 @@ int __cheri_libcall printf(const char *fmt, ...);
 	printf(__XSTRING(__CHERI_COMPARTMENT__) ": " fmt, ##__VA_ARGS__)
 
 int __cheri_libcall snprintf(char *str, size_t size, const char *format, ...);
+int __cheri_libcall vsnprintf(char *str, size_t size, const char *format, va_list ap); 
 __END_DECLS
 
 #endif /* !__STDIO_H__ */

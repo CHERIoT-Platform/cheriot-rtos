@@ -75,6 +75,8 @@ static inline TaskHandle_t xTaskGetCurrentTaskHandle(void)
 	return thread_id_get();
 }
 
+__BEGIN_DECLS
+
 /**
  * Lock used to simulate disabling interrupts in `taskENTER_CRITICAL` and
  * `taskEXIT_CRITICAL`.  Code using these APIs must provide a definition to
@@ -88,6 +90,8 @@ extern struct RecursiveMutexState __CriticalSectionFlagLock;
  * accompany this declaration.
  */
 extern struct RecursiveMutexState __SuspendFlagLock;
+
+__END_DECLS
 
 /**
  * Critical section.  This acquires a recursive mutex.  In FreeRTOS, this
