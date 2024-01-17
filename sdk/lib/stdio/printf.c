@@ -498,7 +498,7 @@ static int kvprintf(char const *fmt,
 /*
  * Scaled down version of vsnprintf(3).
  */
-static int vsnprintf(char *str, size_t size, const char *format, va_list ap)
+int __cheri_libcall vsnprintf(char *str, size_t size, const char *format, va_list ap)
 {
 	struct snprintf_arg info;
 	int                 retval;

@@ -88,3 +88,9 @@ void *__cheri_libcall memset(void *dst0, int c0, size_t length)
 		} while (--t != 0);
 	return (dst0);
 }
+
+void __cheri_libcall explicit_bzero(void *s, size_t n)
+{
+	memset(s, 0, n);
+}
+

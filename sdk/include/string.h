@@ -18,8 +18,16 @@ char *__cheri_libcall  strstr(const char *haystack, const char *needle);
 char *__cheri_libcall  strchr(const char *s, int c);
 size_t __cheri_libcall strlcpy(char *dest, const char *src, size_t n);
 
+/**
+ * Explicit bzero is a memset variant that the compiler is not permitted to
+ * remove.  Our implementation simply wraps memset and is safe from removal
+ * because it is provided by a different shared library.
+ */
+void __cheri_libcall explicit_bzero(void *s, size_t n);
 
 __always_inline static inline char *strcpy(char *dst, const char *src)
 {
 	return dst + strlcpy(dst, src, SIZE_MAX);
 }
+
+
