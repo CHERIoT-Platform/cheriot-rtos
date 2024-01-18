@@ -5,6 +5,7 @@
 #include <debug.hh>
 #include <futex.h>
 #include <locks.hh>
+#include <platform-uart.hh>
 
 /// Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "UART compartment">;
@@ -30,7 +31,9 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		faultingRegister = frame->registers[int(registerNumber) - 1];
 	}
 	// Make sure that we have a new line before the debug output.
-	ImplicitUARTOutput::write('\n');
+	// This uses the UART driver directly to write a single byte.
+	MMIO_CAPABILITY(Uart, uart)->blocking_write('\n');
+
 	Debug::log("Detected {} trying to write to UART.  Register {} contained "
 	           "invalid value: {}",
 	           exceptionCode,

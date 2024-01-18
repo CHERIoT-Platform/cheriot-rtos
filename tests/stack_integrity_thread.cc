@@ -45,9 +45,10 @@ namespace
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
-	debug_log("Error handler called in callee");
 	bool leakedSwitcherCapabilities = holds_switcher_capability(frame);
 	*threadStackTestFailed = !expectedHandler && !leakedSwitcherCapabilities;
+	// This needs to store pointers on the stack, so may fault.
+	debug_log("Error handler called in callee");
 
 	TEST(!leakedSwitcherCapabilities,
 	     "Switcher leaked privileged capabilities");

@@ -59,16 +59,17 @@ namespace
 	 */
 	bool stack_is_mostly_valid(const PermissionSet StackPermissions)
 	{
+		// Note: This does not include store-local, but the register frame will
+		// be corrupted if store local is missing because all pointers to the
+		// stack, including the spilled csp, will have their tags cleared.
 		static constexpr PermissionSet StackRequiredPermissions{
-		  Permission::Load,
-		  Permission::Store,
-		  Permission::LoadStoreCapability,
-		  Permission::StoreLocal};
+		  Permission::Load, Permission::Store, Permission::LoadStoreCapability};
 		return StackRequiredPermissions.can_derive_from(StackPermissions);
 	}
 
 	void expect_handler(bool handlerExpected)
 	{
+		debug_log("Expected to invoke the handler? {}", handlerExpected);
 		set_expected_behaviour(&threadStackTestFailed, handlerExpected);
 	}
 } // namespace

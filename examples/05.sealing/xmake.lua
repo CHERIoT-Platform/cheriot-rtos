@@ -7,8 +7,7 @@ includes(sdkdir)
 set_toolchains("cheriot-clang")
 
 -- Support libraries
-includes(path.join(sdkdir, "lib/freestanding"),
-         path.join(sdkdir, "lib/cxxrt"))
+includes(path.join(sdkdir, "lib"))
 
 option("board")
     set_default("sail")
@@ -25,7 +24,7 @@ compartment("caller")
 -- Firmware image for the example.
 firmware("sealing")
     -- Both compartments require memcpy
-    add_deps("freestanding")
+    add_deps("freestanding", "debug")
     add_deps("caller", "identifier")
     on_load(function(target)
         target:values_set("board", "$(board)")

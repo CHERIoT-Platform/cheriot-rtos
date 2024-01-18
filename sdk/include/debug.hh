@@ -2,394 +2,460 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "cdefs.h"
 #include <cheri.hh>
 #include <compartment.h>
+#include <concepts>
+#include <cstddef>
 #include <platform-uart.hh>
+#include <string.h>
 
 #include <array>
+#include <string_view>
+#include <type_traits>
+
+namespace DebugConcepts
+{
+	/// Helper concept for matching booleans
+	template<typename T>
+	concept IsBool = std::is_same_v<T, bool>;
+
+	/// Helper concept for matching enumerations.
+	template<typename T>
+	concept IsEnum = std::is_enum_v<T>;
+
+	/// Concept for something that can be lazily called to produce a bool.
+	template<typename T>
+	concept LazyAssertion = requires(T v)
+	{
+		{
+			v()
+			} -> IsBool;
+	};
+
+	template<typename T>
+	concept IsPointerButNotCString =
+	  std::is_pointer_v<T> && !std::is_same_v<T, const char *>;
+
+	template<typename T>
+	concept IsConvertibleToAddress =
+	  std::convertible_to<T, ptraddr_t> && !IsEnum<T>;
+
+} // namespace DebugConcepts
+
+/**
+ * Abstract class for writing debug output.  This is used for custom output.
+ *
+ * This may be changed in the future to provide better support for custom
+ * formatting.
+ */
+struct DebugWriter
+{
+	/**
+	 * Write a single character.
+	 */
+	virtual void write(char) = 0;
+	/**
+	 * Write a C string.
+	 */
+	virtual void write(const char *) = 0;
+	/**
+	 * Write a string view.
+	 */
+	virtual void write(std::string_view) = 0;
+	/**
+	 * Write a 32-bit unsigned integer.
+	 */
+	virtual void write(uint32_t) = 0;
+	/**
+	 * Write a 32-bit signed integer.
+	 */
+	virtual void write(int32_t) = 0;
+	/**
+	 * Write a 64-bit unsigned integer.
+	 */
+	virtual void write(uint64_t) = 0;
+	/**
+	 * Write a 64-bit signed integer.
+	 */
+	virtual void write(int64_t) = 0;
+};
+
+/**
+ * Helper function for writing enumerations.  Enumerations are written using
+ * magic_enum to provide a string and then a numeric value.
+ */
+template<typename T>
+void debug_enum_helper(uintptr_t    value,
+                       DebugWriter &writer) requires DebugConcepts::IsEnum<T>
+{
+	writer.write(magic_enum::enum_name<T>(static_cast<T>(value)));
+	writer.write('(');
+	writer.write(uint32_t(value));
+	writer.write(')');
+}
+
+/**
+ * Callback for custom types in debug output.  This should use the second
+ * argument to write the first argument to the debug output.
+ */
+using DebugCallback = void (*)(uintptr_t, DebugWriter &);
+
+struct DebugFormatArgument
+{
+	/**
+	 * The kind of value, for values that have special-cased handling.
+	 */
+	enum Kind : ptraddr_t
+	{
+		/// Boolean, printed as "true" or "false".
+		Bool,
+		/// Single character.
+		Character,
+		/// Signed 32-bit integer, printed as decimal.
+		SignedNumber32,
+		/// Unsigned 32-bit integer, printed as hexadecimal
+		UnsignedNumber32,
+		/// Signed 64-bit integer, printed as decimal.
+		SignedNumber64,
+		/// Unsigned 64-bit integer, printed as hexadecimal.
+		UnsignedNumber64,
+		/// Pointer, printed as a full capability.
+		Pointer,
+		/// Special case for permission sets, printed as in the capability
+		/// format.
+		PermissionSet,
+		/// C string, printed as-is.
+		CString,
+		/// String view, printed as-is.
+		StringView,
+	};
+
+	/**
+	 * The value that is being written.
+	 */
+	uintptr_t value;
+	/**
+	 * The kind of value that is being written.  This is either a pointer
+	 * to a `DebugCallback` or one of the `Kind` enumeration, depending on
+	 * whether the tag is set or not.
+	 */
+	uintptr_t kind;
+};
+
+/**
+ * Adaptor that turns an argument of type `T` into a `DebugFormatArgument`.
+ *
+ * Users may specialise these to provide custom formatters.  See the
+ * specialisation for enumerations for an example.
+ */
+template<typename T>
+struct DebugFormatArgumentAdaptor;
+
+/**
+ * Boolean specialisation, prints "true" or "false".
+ */
+template<>
+struct DebugFormatArgumentAdaptor<bool>
+{
+	__always_inline static DebugFormatArgument construct(bool value)
+	{
+		return {static_cast<uintptr_t>(value), DebugFormatArgument::Bool};
+	}
+};
+
+/**
+ * Character specialisation, prints the character.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<char>
+{
+	__always_inline static DebugFormatArgument construct(char value)
+	{
+		return {static_cast<uintptr_t>(value), DebugFormatArgument::Character};
+	}
+};
+
+/**
+ * Unsigned character specialisation, prints the character as a hex number.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<uint8_t>
+{
+	__always_inline static DebugFormatArgument construct(uint8_t value)
+	{
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgument::UnsignedNumber32};
+	}
+};
+
+/**
+ * Unsigned 16-bit integer specialisation, prints the integer as a hex number.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<uint16_t>
+{
+	__always_inline static DebugFormatArgument construct(uint16_t value)
+	{
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgument::UnsignedNumber32};
+	}
+};
+
+/**
+ * Unsigned 32-bit integer specialisation, prints the integer as a hex number.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<uint32_t>
+{
+	__always_inline static DebugFormatArgument construct(uint32_t value)
+	{
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgument::UnsignedNumber32};
+	}
+};
+
+/**
+ * Unsigned 64-bit integer specialisation, prints the integer as a hex number.
+ *
+ * All smaller sizes are handled by zero extending to 32 bits.  We treat 64-bit
+ * separately because it requires decomposing the two halves for printing and
+ * that's redundant overhead for the majority of cases.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<uint64_t>
+{
+	__always_inline static DebugFormatArgument construct(uint64_t value)
+	{
+		uintptr_t fudgedValue;
+		memcpy(&fudgedValue, &value, sizeof(fudgedValue));
+		return {fudgedValue, DebugFormatArgument::UnsignedNumber64};
+	}
+};
+
+/**
+ * Signed 8-bit integer specialisations, print the integer as a decimal number.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<int8_t>
+{
+	__always_inline static DebugFormatArgument construct(int8_t value)
+	{
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgument::SignedNumber32};
+	}
+};
+
+/**
+ * Signed 16-bit integer specialisations, print the integer as a decimal number.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<int16_t>
+{
+	__always_inline static DebugFormatArgument construct(int16_t value)
+	{
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgument::SignedNumber32};
+	}
+};
+
+/**
+ * Signed 32-bit integer specialisations, print the integer as a decimal number.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<int32_t>
+{
+	__always_inline static DebugFormatArgument construct(int32_t value)
+	{
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgument::SignedNumber32};
+	}
+};
+
+/**
+ * Signed 64-bit integer specialisations, print the integer as a decimal number.
+ *
+ * All smaller sizes are handled by sign extending to 32 bits.  We treat 64-bit
+ * separately because it requires 64-bit division to convert a 64-bit integer
+ * to a decimal and that, in turn, requires libcalls.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<int64_t>
+{
+	__always_inline static DebugFormatArgument construct(int64_t value)
+	{
+		static_assert(sizeof(uintptr_t) == sizeof(uint64_t));
+		uintptr_t fudgedValue;
+		memcpy(&fudgedValue, &value, sizeof(fudgedValue));
+		return {fudgedValue, DebugFormatArgument::SignedNumber64};
+	}
+};
+
+/**
+ * C string specialisation, prints the string as-is.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<const char *>
+{
+	__always_inline static DebugFormatArgument construct(const char *value)
+	{
+		return {reinterpret_cast<uintptr_t>(value),
+		        DebugFormatArgument::CString};
+	}
+};
+
+/**
+ * String view specialisation, prints the string as-is.
+ *
+ * Note that this relies on the string view persisting for the duration of the
+ * call.  It passes a pointer to the string-view argument.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<std::string_view>
+{
+	__always_inline static DebugFormatArgument
+	construct(std::string_view &value)
+	{
+		return {reinterpret_cast<uintptr_t>(&value),
+		        DebugFormatArgument::StringView};
+	}
+};
+
+/**
+ * Enum specialisation, prints the enum as a string and then the numeric value.
+ *
+ * This specialisation uses the generic printing facility in the library call
+ * and passes a callback that will map the enumeration to a string.
+ */
+template<DebugConcepts::IsEnum T>
+struct DebugFormatArgumentAdaptor<T>
+{
+	__always_inline static DebugFormatArgument construct(T value)
+	{
+#ifdef CHERIOT_AVOID_CAPRELOCS
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgument::UnsignedNumber32};
+#else
+		return {static_cast<uintptr_t>(value),
+		        reinterpret_cast<uintptr_t>(&debug_enum_helper<T>)};
+#endif
+	}
+};
+
+/**
+ * Permission set specialisation.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<CHERI::PermissionSet>
+{
+	__always_inline static DebugFormatArgument
+	construct(CHERI::PermissionSet value)
+	{
+		return {static_cast<uintptr_t>(value.as_raw()),
+		        DebugFormatArgument::PermissionSet};
+	}
+};
+
+/**
+ * Pointer specialisation, prints the pointer as a full capability.
+ */
+template<DebugConcepts::IsPointerButNotCString T>
+struct DebugFormatArgumentAdaptor<T>
+{
+	__always_inline static DebugFormatArgument construct(T value)
+	{
+		return {reinterpret_cast<uintptr_t>(
+		          static_cast<const volatile void *>(value)),
+		        DebugFormatArgument::Pointer};
+	}
+};
+
+/**
+ * Specialisation for the CHERI capability wrapper class, prints the capability
+ * in the same format as bare pointers.
+ */
+template<typename T>
+struct DebugFormatArgumentAdaptor<CHERI::Capability<T>>
+{
+	__always_inline static DebugFormatArgument
+	construct(CHERI::Capability<T> value)
+	{
+		return {reinterpret_cast<uintptr_t>(
+		          static_cast<const volatile void *>(value)),
+		        DebugFormatArgument::Pointer};
+	}
+};
+
+/**
+ * Specialisation for things that can be converted to addresses, prints as an
+ * unsigned number.
+ */
+template<DebugConcepts::IsConvertibleToAddress T>
+struct DebugFormatArgumentAdaptor<T>
+{
+	__always_inline static DebugFormatArgument construct(ptraddr_t value)
+	{
+		return {static_cast<uintptr_t>(value),
+
+		        DebugFormatArgument::UnsignedNumber32};
+	}
+};
+
+/**
+ * Recursive helper that maps from a tuple representing the arguments into a
+ * type-erased array.
+ */
+template<size_t I>
+__always_inline inline void map_debug_argument(DebugFormatArgument *arguments,
+                                               auto &&argumentTuple)
+{
+	arguments[I] =
+	  DebugFormatArgumentAdaptor<
+	    std::remove_cvref_t<decltype(std::get<I>(argumentTuple))>>{}
+	    .construct(std::get<I>(argumentTuple));
+	if constexpr (I > 0)
+	{
+		map_debug_argument<I - 1>(arguments, argumentTuple);
+	}
+}
+
+/**
+ * Convert `args` into a type-erased array of `DebugFormatArgument`s in
+ * `arguments`.
+ */
+template<typename... Args>
+__always_inline inline void
+make_debug_arguments_list(DebugFormatArgument *arguments, Args... args)
+{
+	if constexpr (sizeof...(Args) > 0)
+	{
+		map_debug_argument<sizeof...(Args) - 1>(arguments,
+		                                        std::forward_as_tuple(args...));
+	}
+}
+
+/**
+ * Library function that writes a debug message.  This runs with interrupts
+ * disabled (to avoid interleaving) and prints an array of debug messages. This
+ * is intended to allow a single call to print multiple format strings without
+ * requiring the format strings to be copied, so that the debugging APIs can
+ * wrap a user-provided format string.
+ */
+__cheri_libcall void debug_log_message_write(const char          *context,
+                                             const char          *format,
+                                             DebugFormatArgument *messages,
+                                             size_t               messageCount);
+
+__cheri_libcall void debug_report_failure(const char          *kind,
+                                          const char          *file,
+                                          const char          *function,
+                                          int                  line,
+                                          const char          *fmt,
+                                          DebugFormatArgument *arguments,
+                                          size_t               argumentCount);
 
 namespace
 {
-	namespace DebugConcepts
-	{
-		/// Helper concept for matching booleans
-		template<typename T>
-		concept IsBool = std::is_same_v<T, bool>;
-
-		/// Helper concept for matching enumerations.
-		template<typename T>
-		concept IsEnum = std::is_enum_v<T>;
-
-		/// Concept for something that can be lazily called to produce a bool.
-		template<typename T>
-		concept LazyAssertion = requires(T v)
-		{
-			{
-				v()
-				} -> IsBool;
-		};
-	} // namespace DebugConcepts
-
-	/**
-	 * Helper class for writing debug output to the UART.  This performs no
-	 * internal buffering and assumes interrupts are disabled for the duration
-	 * to avoid interference.
-	 *
-	 * This is based on snmalloc's class of the same name.
-	 */
-	template<typename Output>
-	class MessageBuilder : public Output
-	{
-		/**
-		 * Append a character, delegating to `Output`.
-		 */
-		void append_char(char c)
-		{
-			Output::write(c);
-		}
-
-		/**
-		 * Append a null-terminated C string.
-		 */
-		void append(const char *str)
-		{
-			for (; *str; ++str)
-			{
-				append_char(*str);
-			}
-		}
-
-		/**
-		 * Append a string view.
-		 */
-		void append(std::string_view str)
-		{
-			for (char c : str)
-			{
-				append_char(c);
-			}
-		}
-
-		void append(char c)
-		{
-			append_char(c);
-		}
-
-		/**
-		 * Outputs the permission set using the format G RWcgml Xa SU0 as
-		 * described in [/docs/Debugging.md].
-		 */
-		void append(CHERI::PermissionSet permissions)
-		{
-			using namespace CHERI;
-			auto perm = [&](Permission p, char c) -> char {
-				if (permissions.contains(p))
-				{
-					return c;
-				}
-				return '-';
-			};
-			format("{} {}{}{}{}{}{} {}{} {}{}{}",
-			       perm(Permission::Global, 'G'),
-			       perm(Permission::Load, 'R'),
-			       perm(Permission::Store, 'W'),
-			       perm(Permission::LoadStoreCapability, 'c'),
-			       perm(Permission::LoadGlobal, 'g'),
-			       perm(Permission::LoadMutable, 'm'),
-			       perm(Permission::StoreLocal, 'l'),
-			       perm(Permission::Execute, 'X'),
-			       perm(Permission::AccessSystemRegisters, 'a'),
-			       perm(Permission::Seal, 'S'),
-			       perm(Permission::Unseal, 'U'),
-			       perm(Permission::User0, '0'));
-		}
-
-		/**
-		 * Append a raw pointer as a hex string.
-		 */
-		__noinline void append(const void *ptr)
-		{
-			const CHERI::Capability C{ptr};
-
-			format("{} (v:{} {}-{} l:{} o:{} p: {})",
-			       C.address(),
-			       C.is_valid(),
-			       C.base(),
-			       C.top(),
-			       C.length(),
-			       C.type(),
-			       C.permissions());
-		}
-
-		/**
-		 * Append a capability.
-		 */
-		template<typename T>
-		__always_inline void append(CHERI::Capability<T> capability)
-		{
-			append(static_cast<const void *>(capability.get()));
-		}
-
-		/**
-		 * Append a signed integer, as a decimal string.
-		 */
-		__noinline void append(int32_t s)
-		{
-			if (s < 0)
-			{
-				append_char('-');
-				s = 0 - s;
-			}
-			std::array<char, 10> buf;
-			const char           Digits[] = "0123456789";
-			for (int i = int(buf.size() - 1); i >= 0; i--)
-			{
-				buf.at(static_cast<size_t>(i)) = Digits[s % 10];
-				s /= 10;
-			}
-			bool skipZero = true;
-			for (auto c : buf)
-			{
-				if (skipZero && (c == '0'))
-				{
-					continue;
-				}
-				skipZero = false;
-				append_char(c);
-			}
-			if (skipZero)
-			{
-				append_char('0');
-			}
-		}
-
-		/**
-		 * Append a 32-bit unsigned integer to the buffer as hex with no prefix.
-		 */
-		__attribute__((noinline)) void append_hex_word(uint32_t s)
-		{
-			std::array<char, 8> buf;
-			const char          Hexdigits[] = "0123456789abcdef";
-			// Length of string including null terminator
-			static_assert(sizeof(Hexdigits) == 0x11);
-			for (long i = long(buf.size() - 1); i >= 0; i--)
-			{
-				buf.at(static_cast<size_t>(i)) = Hexdigits[s & 0xf];
-				s >>= 4;
-			}
-			bool skipZero = true;
-			for (auto c : buf)
-			{
-				if (skipZero && (c == '0'))
-				{
-					continue;
-				}
-				skipZero = false;
-				append_char(c);
-			}
-			if (skipZero)
-			{
-				append_char('0');
-			}
-		}
-
-		/**
-		 * Append a 32-bit unsigned integer to the buffer as hex.
-		 */
-		__attribute__((noinline)) void append(uint32_t s)
-		{
-			append_char('0');
-			append_char('x');
-			append_hex_word(s);
-		}
-
-		/**
-		 * Append a 64-bit unsigned integer to the buffer as hex.
-		 */
-		__attribute__((noinline)) void append(uint64_t s)
-		{
-			append_char('0');
-			append_char('x');
-			uint32_t hi = static_cast<uint32_t>(s >> 32);
-			uint32_t lo = static_cast<uint32_t>(s);
-			if (hi != 0)
-			{
-				append_hex_word(hi);
-			}
-			append_hex_word(lo);
-		}
-
-		/**
-		 * Append a 16-bit unsigned integer to the buffer as hex.
-		 */
-		__always_inline void append(uint16_t s)
-		{
-			append(static_cast<uint32_t>(s));
-		}
-
-		/**
-		 * Append an 8-bit unsigned integer to the buffer as hex.
-		 */
-		__always_inline void append(uint8_t s)
-		{
-			append(static_cast<uint32_t>(s));
-		}
-
-		/**
-		 * Append an enumerated type value.
-		 */
-		template<typename T>
-		requires DebugConcepts::IsEnum<T>
-		void append(T e)
-		{
-			// `magic_enum::enum_name` requires cap relocs, so don't use it in
-			// components that want or need to avoid them.
-#ifdef CHERIOT_AVOID_CAPRELOCS
-			append(static_cast<int32_t>(e));
-#else
-			append(magic_enum::enum_name<T>(e));
-			append('(');
-			append(static_cast<int32_t>(e));
-			append(')');
-#endif
-		}
-
-		public:
-		/**
-		 * Base case for formatting: no format-string arguments.
-		 */
-		void format(const char *fmt)
-		{
-			append(fmt);
-		}
-
-		/**
-		 * Inductive case for formatting.  Writes up to the instruction to
-		 * output the first argument, writes that argument, and then recurses.
-		 */
-		template<typename T, typename... Args>
-		void format(const char *fmt, T firstArg, Args... args)
-		{
-			for (const char *s = fmt; *s != 0; ++s)
-			{
-				if (s[0] == '{' && s[1] == '}')
-				{
-					append(firstArg);
-					return format(s + 2, args...);
-				}
-
-				append_char(*s);
-			}
-		}
-	};
-
-	/**
-	 * Output class for writing directly to a UART.
-	 *
-	 * This writes to the uart that is exposed as the MMIO region called
-	 * `uart`.
-	 */
-	struct ImplicitUARTOutput
-	{
-		/**
-		 * Write a single character to the uart.
-		 */
-		static void write(char c)
-		{
-			MMIO_CAPABILITY(Uart, uart)->blocking_write(c);
-		}
-	};
-
-	/**
-	 * Output class for writing directly to a UART.  The UART is provided
-	 * explicitly.
-	 */
-	class ExplicitUARTOutput
-	{
-		/**
-		 * The capability to the UART device.
-		 */
-		static inline volatile Uart *uart16550;
-
-		public:
-		/**
-		 * Set the UART memory pointer.
-		 */
-		static void set_uart(volatile Uart *theUART)
-		{
-			uart16550 = theUART;
-		}
-
-		/**
-		 * Write a single character to the uart.
-		 */
-		static void write(char c)
-		{
-			uart16550->blocking_write(c);
-		}
-	};
-
-	/**
-	 * Output that writes to an in-object buffer.  Truncates any output that is
-	 * greater than the buffer size in length.  The template parameter is the
-	 * size of the buffer.
-	 */
-	template<size_t BufferSize = 160>
-	class BufferOutput
-	{
-		/**
-		 * Space in the buffer, excluding a trailing null terminator.
-		 */
-		static constexpr size_t SafeLength = BufferSize - 1;
-
-		/**
-		 * The buffer that is used to store the formatted output.
-		 */
-		std::array<char, BufferSize> buffer;
-
-		/**
-		 * The insert point in the buffer.
-		 */
-		size_t insert = 0;
-
-		public:
-		/**
-		 * Insert a character into the buffer.  Silently truncates if the buffer
-		 * is not sufficiently large.
-		 */
-		void write(char c)
-		{
-			if (insert < SafeLength)
-			{
-				buffer.at(insert++) = c;
-			}
-		}
-
-		/**
-		 * Constructor, ensures that the buffer is nul terminated.
-		 */
-		BufferOutput()
-		{
-			buffer[SafeLength] = '\0';
-		}
-
-		/**
-		 * Returns a null-terminated string containing the collected output.
-		 */
-		char *get_message()
-		{
-			// Ensure that the buffer is null terminated.
-			if (insert < SafeLength)
-			{
-				buffer.at(insert) = '\0';
-			}
-			CHERI::Capability b{buffer.data()};
-			// Bound the returned pointer to the valid size.
-			b.bounds() = std::min(insert, BufferSize);
-			return b;
-		}
-	};
-
 	/**
 	 * Helper class wrapping a string for use as a template argument.  This is
 	 * used to describe a context for conditional debugging that will be
@@ -409,7 +475,7 @@ namespace
 		/**
 		 * Implicit conversion to a C string.
 		 */
-		operator const char *() const
+		constexpr operator const char *() const
 		{
 			return value;
 		}
@@ -491,10 +557,8 @@ namespace
 	 * Conditional debug class.  Used to control conditional output and
 	 * assertion checking.  Enables debug log messages and assertions if
 	 * `Enabled` is true.  Uses `Context` to print additional detail on debug
-	 * lines.  Writes output using `Writer`.
-	 *
-	 * If `DisableInterrupts` is true then this disables interrupts while
-	 * printing the message to avoid accidental interleaving.
+	 * lines.  Each line is prefixed with the context string in magenta to make
+	 * it easy to see debug output from different subsystems in the same trace.
 	 *
 	 * This class is expected to be used as a type alias, something like:
 	 *
@@ -503,18 +567,12 @@ namespace
 	 * using Debug = ConditionalDebug<DebugFoo, "Foo">;
 	 * ```
 	 */
-	template<bool         Enabled,
-	         DebugContext Context,
-	         typename Writer        = MessageBuilder<ImplicitUARTOutput>,
-	         bool DisableInterrupts = true>
+	template<bool Enabled, DebugContext Context>
 	class ConditionalDebug
 	{
 		public:
-		/// The (singleton) writer used for output.
-		static inline Writer writer;
-
 		/**
-		 * Log a message to the specified writer.
+		 * Log a message.
 		 *
 		 * This function does nothing if the `Enabled` condition is false.
 		 */
@@ -523,28 +581,12 @@ namespace
 		{
 			if constexpr (Enabled)
 			{
-				// Ensure that the compiler does not reorder messages.
 				asm volatile("" ::: "memory");
-				if constexpr (DisableInterrupts)
-				{
-					// Write the message with interrupts disabled to avoid
-					// interleaving.  This is internal rather than making this
-					// function interrupts so that the outer function can be
-					// inlined and deleted in non-debug builds.
-					CHERI::with_interrupts_disabled([&]() {
-						writer.format("\x1b[35m{}\033[0m", Context);
-						writer.format(": ");
-						writer.format(fmt, args...);
-						writer.format("\n");
-					});
-				}
-				else
-				{
-					writer.format("\x1b[35m{}\033[0m", Context);
-					writer.format(": ");
-					writer.format(fmt, args...);
-					writer.format("\n");
-				}
+				DebugFormatArgument arguments[sizeof...(Args)];
+				make_debug_arguments_list(arguments, args...);
+				const char *context = Context;
+				debug_log_message_write(
+				  context, fmt, arguments, sizeof...(Args));
 				asm volatile("" ::: "memory");
 			}
 		}
@@ -558,24 +600,19 @@ namespace
 		 * of stack space consumed for every assert or invariant.
 		 */
 		template<typename... Args>
-		__noinline static void report_failure(const char *kind,
-		                                      const char *file,
-		                                      const char *function,
-		                                      int         line,
-		                                      const char *fmt,
-		                                      Args... args)
+		static inline void report_failure(const char *kind,
+		                                  const char *file,
+		                                  const char *function,
+		                                  int         line,
+		                                  const char *fmt,
+		                                  Args... args)
 		{
 			// Ensure that the compiler does not reorder messages.
-			asm volatile("" ::: "memory");
-			writer.format(
-			  "\x1b[35m{}:{} \x1b[31m{} failure\x1b[35m in {}\x1b[36m\n",
-			  file,
-			  line,
-			  kind,
-			  function);
-			writer.format(fmt, args...);
-			writer.format("\033[0m\n");
-			asm volatile("" ::: "memory");
+			DebugFormatArgument arguments[sizeof...(Args)];
+			make_debug_arguments_list(arguments, args...);
+			const char *context = Context;
+			debug_report_failure(
+			  kind, file, function, line, fmt, arguments, sizeof...(Args));
 		}
 
 		/**
@@ -599,7 +636,7 @@ namespace
 			          Args... args,
 			          SourceLocation loc = SourceLocation::current())
 			{
-				if (!condition)
+				if (__predict_false(!condition))
 				{
 					if constexpr (Enabled)
 					{
@@ -637,7 +674,7 @@ namespace
 			{
 				if constexpr (Enabled)
 				{
-					if (!condition)
+					if (__predict_false(!condition))
 					{
 						report_failure("Assertion",
 						               loc.file_name(),
@@ -668,7 +705,7 @@ namespace
 			{
 				if constexpr (Enabled)
 				{
-					if (!condition())
+					if (__predict_false(!condition()))
 					{
 						report_failure("Assertion",
 						               loc.file_name(),

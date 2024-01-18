@@ -400,8 +400,17 @@ namespace
 		// our quota.
 		heap_free(SECOND_HEAP, ptr);
 		// Sleep again to make sure that the lambda from our async is gone.
-		t.remaining = 1;
-		thread_sleep(&t);
+		// The logs may make it take more than one quantum in debug builds.
+		// The next test requires all memory allocated from the malloc
+		// capability to be freed before it starts.
+		int sleeps = 0;
+		while (heap_quota_remaining(MALLOC_CAPABILITY) < MALLOC_QUOTA)
+		{
+			Timeout t{1};
+			thread_sleep(&t);
+			TEST(sleeps++ < 100,
+			     "Sleeping for too long waiting for async lambda to be freed");
+		}
 		auto quotaLeft = heap_quota_remaining(SECOND_HEAP);
 		TEST(quotaLeft == SECOND_HEAP_QUOTA,
 		     "After alloc and free from {}-byte quota, {} bytes left",

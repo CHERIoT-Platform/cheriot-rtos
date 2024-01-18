@@ -7,7 +7,7 @@ includes(sdkdir)
 set_toolchains("cheriot-clang")
 
 -- Support libraries
-includes(path.join(sdkdir, "lib/freestanding"))
+includes(path.join(sdkdir, "lib"))
 
 option("board")
     set_default("sail")
@@ -21,7 +21,7 @@ compartment("hello")
 -- Firmware image for the example.
 firmware("hello_compartment")
     -- Both compartments need memcpy
-    add_deps("freestanding")
+    add_deps("freestanding", "debug")
     add_deps("hello", "uart")
     on_load(function(target)
         target:values_set("board", "$(board)")

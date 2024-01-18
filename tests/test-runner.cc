@@ -90,6 +90,18 @@ void __cheri_compartment("test_runner") run_tests()
 		TEST(permission == permissionArray[index++],
 		     "Iterator of PermissionSet failed");
 	}
+	// These need to be checked visually
+	debug_log("Trying to print 8-bit integer: {}", uint8_t(0x12));
+	debug_log("Trying to print unsigned 8-bit integer: {}", int8_t(34));
+	debug_log("Trying to print char: {}", 'c');
+	debug_log("Trying to print 32-bit integer: {}", 12345);
+	debug_log("Trying to print 64-bit integer: {}", 123456789012345LL);
+	debug_log("Trying to print unsigned 32-bit integer: {}", 0x12345U);
+	debug_log("Trying to print unsigned 64-bit integer: {}",
+	          0x123456789012345ULL);
+	const char *testString = "Hello, world! with some trailing characters";
+	// Make sure that we don't print the trailing characters
+	debug_log("Trying to print string: {}", std::string_view{testString, 13});
 
 	run_timed("All tests", []() {
 		run_timed("MMIO", test_mmio);
