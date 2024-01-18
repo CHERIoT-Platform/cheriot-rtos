@@ -7,8 +7,7 @@ includes(sdkdir)
 set_toolchains("cheriot-clang")
 
 -- Support libraries
-includes(path.join(sdkdir, "lib/freestanding"),
-         path.join(sdkdir, "lib/queue"))
+includes(path.join(sdkdir, "lib"))
 
 option("board")
     set_default("sail")
@@ -22,7 +21,7 @@ compartment("consumer")
 -- Firmware image for the example.
 firmware("producer-consumer")
     -- Both compartments need memcpy and the message queue compartment.
-    add_deps("freestanding", "message_queue")
+    add_deps("freestanding", "message_queue", "debug")
     add_deps("producer", "consumer")
     on_load(function(target)
         target:values_set("board", "$(board)")

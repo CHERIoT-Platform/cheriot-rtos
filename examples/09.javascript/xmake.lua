@@ -7,7 +7,7 @@ includes(sdkdir)
 set_toolchains("cheriot-clang")
 
 -- Support libraries
-includes(path.join(sdkdir, "lib/microvium"))
+includes(path.join(sdkdir, "lib"))
 
 option("board")
     set_default("sail")
@@ -17,7 +17,7 @@ compartment("hello")
 
 -- Firmware image for the example.
 firmware("javascript")
-    add_deps("microvium")
+    add_deps("microvium", "debug")
     add_deps("hello")
     on_load(function(target)
         target:values_set("board", "$(board)")

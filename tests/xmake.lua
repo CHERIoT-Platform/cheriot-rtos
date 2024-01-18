@@ -76,16 +76,7 @@ compartment("compartment_calls_inner_with_handler")
     add_files("compartment_calls_inner_with_handler.cc")
 test("compartment_calls")
 
-includes(path.join(sdkdir, "lib/atomic"),
-         path.join(sdkdir, "lib/cxxrt"),
-         path.join(sdkdir, "lib/freestanding"),
-         path.join(sdkdir, "lib/string"),
-         path.join(sdkdir, "lib/crt"),
-         path.join(sdkdir, "lib/compartment_helpers"),
-         path.join(sdkdir, "lib/queue"),
-         path.join(sdkdir, "lib/locks"),
-         path.join(sdkdir, "lib/event_group"),
-         path.join(sdkdir, "lib/thread_pool"))
+includes(path.join(sdkdir, "lib"))
 
 -- Compartment for the test entry point.
 compartment("test_runner")
@@ -96,7 +87,7 @@ firmware("test-suite")
     -- Main entry points
     add_deps("test_runner", "thread_pool")
     -- Helper libraries
-    add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers")
+    add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers", "debug")
     add_deps("message_queue", "locks", "event_group")
     -- Tests
     add_deps("mmio_test")

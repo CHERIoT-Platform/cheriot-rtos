@@ -4,6 +4,7 @@
 includes("../freestanding", "../string")
 
 library("microvium")
+  set_default(false)
   add_deps("freestanding", "string")
   add_files("../../third_party/microvium/dist-c/microvium.c")
   add_includedirs("../../include/microvium", ".")

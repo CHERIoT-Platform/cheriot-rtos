@@ -1,0 +1,14 @@
+includes(
+	"atomic",
+	"compartment_helpers",
+	"crt",
+	"cxxrt",
+	"debug",
+	"event_group",
+	"freestanding",
+	"locks",
+	"microvium",
+	"queue",
+	"stdio",
+	"string",
+	"thread_pool")

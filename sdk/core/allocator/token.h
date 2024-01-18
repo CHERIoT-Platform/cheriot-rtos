@@ -12,6 +12,7 @@
 #	include <stddef.h>
 #	include <stdint.h>
 #	include <token.h>
+#	include <debug.hh>
 
 /// Opaque type.  Sealing keys don't really point to anything.
 struct SKeyStruct;
@@ -50,6 +51,17 @@ struct SealingKey : public CHERI::Capability<SKeyStruct>
 };
 /// Helper for referring to a sealed allocation.
 using SealedAllocation = CHERI::Capability<SObjStruct>;
+
+template<>
+struct DebugFormatArgumentAdaptor<SealingKey>
+{
+	__always_inline static DebugFormatArgument construct(SealingKey value)
+	{
+		return {reinterpret_cast<uintptr_t>(
+		          static_cast<const volatile void *>(value)),
+		        DebugFormatArgument::Pointer};
+	}
+};
 
 #endif
 

@@ -925,6 +925,8 @@ namespace
 		           capRelocsSection.size());
 		for (auto &reloc : build_range<CapReloc, false>(capRelocsSection))
 		{
+			Debug::log(
+			  "Capreloc address: {}, base: {}", reloc.addr, reloc.base);
 			// Find the compartment that this relocation applies to.
 			const auto &compartment = findCompartment(reloc.addr);
 

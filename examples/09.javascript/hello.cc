@@ -5,6 +5,7 @@
 #include <debug.hh>
 #include <fail-simulator-on-error.h>
 #include <microvium/microvium.h>
+#include <platform-uart.hh>
 
 /// Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "JavaScript hello compartment">;
@@ -37,6 +38,7 @@ namespace
 	                  mvm_Value         *args,
 	                  uint8_t            argCount)
 	{
+		auto uart = MMIO_CAPABILITY(Uart, uart);
 		// Iterate over the arguments.
 		for (unsigned i = 0; i < argCount; i++)
 		{
@@ -45,14 +47,14 @@ namespace
 			// Write each character to the UART
 			for (; *str != '\0'; str++)
 			{
-				ImplicitUARTOutput::write(*str);
+				uart->blocking_write(*str);
 			}
 			// Try uncommenting the following line to see how it impacts total
 			// heap usage.
 			// mvm_runGC(vm, false);
 		}
 		// Write a trailing newline
-		ImplicitUARTOutput::write('\n');
+		uart->blocking_write('\n');
 		// Unconditionally return success
 		return MVM_E_SUCCESS;
 	}
