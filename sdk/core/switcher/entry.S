@@ -769,7 +769,7 @@ exception_entry_asm:
 	clear_hazard_slots ctp, ct2
 	// make sure there is a frame left in the trusted stack
 	clhu               t2, TrustedStack_offset_frameoffset(ctp)
-	li                 tp, TrustedStackFrame_size
+	li                 tp, TrustedStack_offset_frames
 	bgeu               tp, t2, .Lset_mcause_and_exit_thread
 	cspecialr          ctp, mtdc
 	addi               t2, t2, -TrustedStackFrame_size
