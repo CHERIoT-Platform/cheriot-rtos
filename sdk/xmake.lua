@@ -75,6 +75,8 @@ toolchain("cheriot-clang")
 			"-nostdinc",
 			"-Oz",
 			"-g",
+			"-ffunction-sections",
+			"-fdata-sections",
 			"-fomit-frame-pointer",
 			"-fno-builtin",
 			"-fno-exceptions",
@@ -129,7 +131,7 @@ rule("cheriot.component")
 		-- Link using the compartment's linker script.
 		batchcmds:show_progress(opt.progress, "linking " .. target:get("cheriot.type") .. ' ' .. target:filename())
 		batchcmds:mkdir(target:targetdir())
-		batchcmds:vrunv(target:tool("ld"), table.join({"--script=" .. linkerscript, "--compartment", "--relax", "-o", target:targetfile()}, target:objectfiles()), opt)
+		batchcmds:vrunv(target:tool("ld"), table.join({"--script=" .. linkerscript, "--compartment", "--gc-sections", "--relax", "-o", target:targetfile()}, target:objectfiles()), opt)
 		-- This depends on all of the object files and the linker script.
 		batchcmds:add_depfiles(linkerscript)
 		batchcmds:add_depfiles(target:objectfiles())

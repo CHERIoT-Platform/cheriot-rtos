@@ -71,10 +71,3 @@ SECTIONS
 		*(.comment);
 	}
 }
-# Export the exported function table.
-VERSION {
-	VERSION_1 {
-		global: __export_*;
-		local: *;
-	};
-};
