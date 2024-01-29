@@ -7,7 +7,7 @@
 .macro CHERIOT_EXPORT_FUNCTION_INTERNAL prefix, function_name, \
   minimum_stack, flags
 
-	.section .compartment_exports,"aw",@progbits
+	.section .compartment_exports,"awR",@progbits
 	.type    \prefix\()_\function_name\(),@object
 	.global  \prefix\()_\function_name\()
     .p2align 2

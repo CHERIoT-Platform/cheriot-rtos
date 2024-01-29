@@ -33,7 +33,7 @@ SECTIONS
 	.rodata :
 	{
 		*(.rodata .rodata.*);
-		*(.data.rel.ro);
+		*(.data.rel.ro .data.rel.ro.*);
 	}
 	# BSS remains in a separate section so that we can find it later.
 	.bss :
@@ -55,10 +55,3 @@ SECTIONS
 		*(.sdata .sdata.*);
 	}
 }
-# Export the exported function table.
-VERSION {
-	VERSION_1 {
-		global: __export_*;
-		local: *;
-	};
-};
