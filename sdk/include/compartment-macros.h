@@ -31,8 +31,8 @@
 		      ".endif\n"                                                       \
 		      "1:"                                                             \
 		      "  auipcc  %0,"                                                  \
-		      "      %%cheri_compartment_pccrel_hi(" mangledName ")\n"         \
-		      "  clc     %0, %%cheri_compartment_pccrel_lo(1b)(%0)\n"          \
+		      "      %%cheriot_compartment_hi(" mangledName ")\n"              \
+		      "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"             \
 		      : "=C"(ret)                                                      \
 		      : "i"(((permitLoad) ? (1 << 31) : 0) +                           \
 		            ((permitStore) ? (1 << 30) : 0) +                          \
@@ -88,8 +88,8 @@
 	({                                                                         \
 		void *ret;                                                             \
 		__asm("1:	"                                                            \
-		      "	auipcc		%0, %%cheri_compartment_pccrel_hi(__sealingkey)\n"     \
-		      "	clc			%0, %%cheri_compartment_pccrel_lo(1b)(%0)\n"             \
+		      "	auipcc		%0, %%cheriot_compartment_hi(__sealingkey)\n"          \
+		      "	clc			%0, %%cheriot_compartment_lo_i(1b)(%0)\n"                \
 		      : "=C"(ret));                                                    \
 		ret;                                                                   \
 	})
@@ -129,8 +129,8 @@
 		  " .previous\n"                                                       \
 		  ".endif\n"                                                           \
 		  "1:\n"                                                               \
-		  "  auipcc  %0, %%cheri_compartment_pccrel_hi(__import." name ")\n"   \
-		  "  clc     %0, %%cheri_compartment_pccrel_lo(1b)(%0)\n"              \
+		  "  auipcc  %0, %%cheriot_compartment_hi(__import." name ")\n"        \
+		  "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"                 \
 		  : "=C"(ret));                                                        \
 		ret;                                                                   \
 	})
@@ -214,25 +214,24 @@
 #define STATIC_SEALED_VALUE(name)                                              \
 	({                                                                         \
 		struct SObjStruct *ret; /* NOLINT(bugprone-macro-parentheses) */       \
-		__asm(                                                                 \
-		  ".ifndef __import.sealed_object." #name "\n"                         \
-		  "  .type     __import.sealed_object." #name ",@object\n"             \
-		  "  .section  .compartment_imports." #name                            \
-		  ",\"awG\",@progbits," #name ",comdat\n"                              \
-		  "  .globl    __import.sealed_object." #name "\n"                     \
-		  "  .p2align  3\n"                                                    \
-		  "__import.sealed_object." #name ":\n"                                \
-		  "  .word " #name "\n"                                                \
-		  "  .word %c1\n"                                                      \
-		  "  .size __import.sealed_object." #name ", 8\n"                      \
-		  " .previous\n"                                                       \
-		  ".endif\n"                                                           \
-		  "1:"                                                                 \
-		  "  auipcc  %0,"                                                      \
-		  "      %%cheri_compartment_pccrel_hi(__import.sealed_object." #name  \
-		  ")\n"                                                                \
-		  "  clc     %0, %%cheri_compartment_pccrel_lo(1b)(%0)\n"              \
-		  : "=C"(ret)                                                          \
-		  : "i"(sizeof(__typeof__(name))));                                    \
+		__asm(".ifndef __import.sealed_object." #name "\n"                     \
+		      "  .type     __import.sealed_object." #name ",@object\n"         \
+		      "  .section  .compartment_imports." #name                        \
+		      ",\"awG\",@progbits," #name ",comdat\n"                          \
+		      "  .globl    __import.sealed_object." #name "\n"                 \
+		      "  .p2align  3\n"                                                \
+		      "__import.sealed_object." #name ":\n"                            \
+		      "  .word " #name "\n"                                            \
+		      "  .word %c1\n"                                                  \
+		      "  .size __import.sealed_object." #name ", 8\n"                  \
+		      " .previous\n"                                                   \
+		      ".endif\n"                                                       \
+		      "1:"                                                             \
+		      "  auipcc  %0,"                                                  \
+		      "      %%cheriot_compartment_hi(__import.sealed_object." #name   \
+		      ")\n"                                                            \
+		      "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"             \
+		      : "=C"(ret)                                                      \
+		      : "i"(sizeof(__typeof__(name))));                                \
 		ret;                                                                   \
 	})

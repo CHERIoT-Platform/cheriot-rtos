@@ -987,8 +987,8 @@ namespace
 	{
 		SKeyStruct *ret;
 		__asm("1:   "
-		      " auipcc      %0, %%cheri_compartment_pccrel_hi(__sealingkey2)\n"
-		      " clc         %0, %%cheri_compartment_pccrel_lo(1b)(%0)\n"
+		      " auipcc      %0, %%cheriot_compartment_hi(__sealingkey2)\n"
+		      " clc         %0, %%cheriot_compartment_lo_i(1b)(%0)\n"
 		      : "=C"(ret));
 		return {ret};
 	}
@@ -1167,4 +1167,9 @@ int token_obj_destroy(SObj heapCapability, SKey key, SObj object)
 		// away after the check.
 	}
 	return heap_free(heapCapability, unsealed);
+}
+
+size_t heap_available()
+{
+	return gm->heapFreeSize;
 }

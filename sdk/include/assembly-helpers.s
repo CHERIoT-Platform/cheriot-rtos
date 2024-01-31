@@ -74,8 +74,8 @@
  */
 .macro LoadCapPCC register symbol
 1:
-	auipcc		\register, %cheri_compartment_pccrel_hi(\symbol)
-	clc			\register, %cheri_compartment_pccrel_lo(1b)(\register)
+	auipcc		\register, %cheriot_compartment_hi(\symbol)
+	clc			\register, %cheriot_compartment_lo_i(1b)(\register)
 .endm
 
 /**
@@ -83,6 +83,6 @@
  * register.
  */
 .macro LoadCapCGP register symbol
-	auicgp		\register, %cheri_compartment_cgprel_hi(\symbol)
-	clc			\register, %cheri_compartment_cgprel_lo_i(\symbol)(\register)
+	auicgp		\register, %cheriot_compartment_hi(\symbol)
+	clc			\register, %cheriot_compartment_lo_i(\symbol)(\register)
 .endm

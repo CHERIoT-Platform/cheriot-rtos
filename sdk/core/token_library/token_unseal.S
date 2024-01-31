@@ -57,8 +57,8 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
    * secrets if so.
    */
 .Lload_sealing_key:
-  auipcc ca0, %cheri_compartment_pccrel_hi(__sealingkey)
-  clc    ca0, %cheri_compartment_pccrel_lo(.Lload_sealing_key)(ca0)
+  auipcc ca0, %cheriot_compartment_hi(__sealingkey)
+  clc    ca0, %cheriot_compartment_lo_i(.Lload_sealing_key)(ca0)
 
   /* Unseal, clobbering authority */
   cunseal ca0, ca1, ca0

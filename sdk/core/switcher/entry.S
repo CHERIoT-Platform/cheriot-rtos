@@ -266,8 +266,8 @@ after_zero:
 	// of it at an offset defined by the number of registers that the export
 	// entry told us to pass.
 .Lload_zero_arguments_start:
-	auipcc             cs0, %cheri_compartment_pccrel_hi(.Lzero_arguments_start)
-	cincoffset         cs0, cs0, %cheri_compartment_pccrel_lo(.Lload_zero_arguments_start)
+	auipcc             cs0, %cheriot_compartment_hi(.Lzero_arguments_start)
+	cincoffset         cs0, cs0, %cheriot_compartment_lo_i(.Lload_zero_arguments_start)
 	// Change from the number of registers to pass into the number of 2-byte
 	// instructions to skip.
 	sll                t2, t2, 1

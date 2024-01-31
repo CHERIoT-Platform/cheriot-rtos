@@ -14,7 +14,7 @@ size_t __cheri_libcall strlen(const char *str);
 int __cheri_libcall    strncmp(const char *s1, const char *s2, size_t n);
 char *__cheri_libcall  strncpy(char *dest, const char *src, size_t n);
 int __cheri_libcall    strcmp(const char *s1, const char *s2);
-char *__cheri_libcall  strstr(const char *haystack, const char *needle);
+char *__cheri_libcall strnstr(const char *haystack, const char *needle, size_t haystackLength);
 char *__cheri_libcall  strchr(const char *s, int c);
 size_t __cheri_libcall strlcpy(char *dest, const char *src, size_t n);
 
@@ -31,3 +31,7 @@ __always_inline static inline char *strcpy(char *dst, const char *src)
 }
 
 
+__always_inline static inline char *strstr(const char *haystack, const char *needle)
+{
+	return strnstr(haystack, needle, SIZE_MAX);
+}
