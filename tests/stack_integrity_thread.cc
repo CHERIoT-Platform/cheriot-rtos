@@ -22,8 +22,8 @@ using namespace CHERI;
 		register auto rfn asm("ct1") = handle;                                 \
 		__asm__ volatile(                                                      \
 		  "1:\n"                                                               \
-		  "auipcc ct2, %%cheri_compartment_pccrel_hi(.compartment_switcher)\n" \
-		  "clc ct2, %%cheri_compartment_pccrel_lo(1b)(ct2)\n"                  \
+		  "auipcc ct2, %%cheriot_compartment_hi(.compartment_switcher)\n"      \
+		  "clc ct2, %%cheriot_compartment_lo_i(1b)(ct2)\n"                     \
 		  "" instructions "\n"                                                 \
 		  "cjalr ct2\n"                                                        \
 		  : /* no outputs; we're jumping and probably not coming back */       \
