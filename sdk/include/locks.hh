@@ -21,10 +21,9 @@ __clang_ignored_warning_push("-Watomic-alignment");
 
 /**
  * A simple flag log, wrapping an atomic word used with the `futex` calls.
- * Threads blocked on this will be woken in priority order but this does not
- * propagate priority and so can lead to priority inversion if a low-priority
- * thread is attempting to acquire a flag lock to perform an operation on
- * behalf of a high priority thread.
+ * Threads blocked on this will be woken in priority order. If
+ * `IsPriorityInherited` is set, priority is inherited by waiters to avoid
+ * priority inversion issues.
  *
  * The lock word that this wraps is directly accessibly by any malicious
  * compartment that has a reference to this thread.  If this is a security
