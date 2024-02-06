@@ -206,6 +206,42 @@ namespace
 		     "unlocked");
 	}
 
+	/**
+	 * Test that the ticket lock gives the ordering guarantees that it should.
+	 */
+	void test_ticket_lock_ordering()
+	{
+		debug_log("Starting ticket-lock ordering tests");
+		{
+			LockGuard g{ticketLock};
+			async([&]() {
+				LockGuard g{ticketLock};
+				TEST(counter == 0,
+				     "Ticket lock acquired out of order, counter is {}, "
+				     "expected 0",
+				     counter.load());
+				counter = 1;
+			});
+			async([&]() {
+				sleep(5);
+				LockGuard g{ticketLock};
+				TEST(counter == 1,
+				     "Ticket lock acquired out of order, counter is {}, "
+				     "expected 1",
+				     counter.load());
+				counter = 2;
+			});
+			// Make sure both other threads are blocked on the ticket lock.
+			sleep(10);
+		}
+		// We should not be allowed to run until both of the other threads have
+		// run.
+		LockGuard g{ticketLock};
+		TEST(counter == 2,
+		     "Ticket lock acquired out of order, counter is {}, expected 2",
+		     counter.load());
+	}
+
 } // namespace
 
 void test_locks()
@@ -218,34 +254,6 @@ void test_locks()
 	test_destruct_lock_wake_up(flagLock);
 	test_destruct_lock_wake_up(flagLockPriorityInherited);
 	test_destruct_flag_lock_acquire();
-
-	debug_log("Starting ticket-lock ordering tests");
-	// Test that the ticket lock gives the ordering guarantees that it should.
-	{
-		LockGuard g{ticketLock};
-		async([&]() {
-			LockGuard g{ticketLock};
-			TEST(counter == 0,
-			     "Ticket lock acquired out of order, counter is {}, expected 0",
-			     counter.load());
-			counter = 1;
-		});
-		async([&]() {
-			sleep(5);
-			LockGuard g{ticketLock};
-			TEST(counter == 1,
-			     "Ticket lock acquired out of order, counter is {}, expected 1",
-			     counter.load());
-			counter = 2;
-		});
-		// Make sure both other threads are blocked on the ticket lock.
-		sleep(10);
-	}
-	// We should not be allowed to run until both of the other threads have run.
-	LockGuard g{ticketLock};
-	TEST(counter == 2,
-	     "Ticket lock acquired out of order, counter is {}, expected 2",
-	     counter.load());
-
+	test_ticket_lock_ordering();
 	test_recursive_mutex();
 }
