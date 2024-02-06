@@ -16,21 +16,8 @@ namespace
 	  ;
 	using Debug = ConditionalDebug<DebugLocks, "Locking">;
 	/**
-	 * A simple flag log, wrapping an atomic word used with the `futex` calls.
-	 * Threads blocked on this will be woken in priority order but this does not
-	 * propagate priority and so can lead to priority inversion if a
-	 * low-priority thread is attempting to acquire a flag lock to perform an
-	 * operation on behalf of a high priority thread.
-	 *
-	 * The lock word that this wraps is directly accessibly by any malicious
-	 * compartment that has a reference to this thread.  If this is a security
-	 * concern then you may have other problems: a malicious compartment with
-	 * access to a mutex's interface (irrespective of the underlying
-	 * implementation) can cause deadlock by spuriously acquiring a lock or
-	 * cause data corruption via races by spuriously releasing it.  Anything
-	 * that requires mutual exclusion in the presence of mutual distrust should
-	 * consider an using a lock manager compartment with an API that returns a
-	 * single-use capability to unlock on any lock call.
+	 * Internal implementation of a simple flag lock. See comments in
+	 * locks.hh and locks.h for more details.
 	 */
 	struct InternalFlagLock : public FlagLockState
 	{
@@ -139,11 +126,8 @@ namespace
 	};
 
 	/**
-	 * A simple ticket lock.
-	 *
-	 * A ticket lock ensures that threads that arrive are serviced in order,
-	 * without regard for priorities.  It has no mechanism for tracking tickets
-	 * that are discarded and so does not implement a `try_lock` API.
+	 * Internal implementation of a simple ticket lock. See comments in
+	 * locks.hh and locks.h for more details.
 	 */
 	struct InternalTicketLock : public TicketLockState
 	{
