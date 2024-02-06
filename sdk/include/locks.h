@@ -74,8 +74,8 @@ __BEGIN_DECLS
  * Try to lock a flag lock.  This is the non-priority-inheriting version,
  * sometimes called a binary semaphore on other platforms.
  *
- * Returns 0 on success, -ETIMEDOUT if the timeout expired, or -EINVAL if the
- * arguments are invalid.
+ * Returns 0 on success, -ETIMEDOUT if the timeout expired, -EINVAL if the
+ * arguments are invalid, or -ENOENT if the lock is set in destruction mode.
  */
 int __cheri_libcall flaglock_trylock(Timeout              *timeout,
                                      struct FlagLockState *lock);
@@ -90,8 +90,13 @@ int __cheri_libcall flaglock_trylock(Timeout              *timeout,
  * that thread either releases the lock with `flaglock_unlock` or the timeout
  * expires.
  *
- * Returns 0 on success, -ETIMEDOUT if the timeout expired, or -EINVAL if the
- * arguments are invalid.
+ * Returns 0 on success, -ETIMEDOUT if the timeout expired, -EINVAL if the
+ * arguments are invalid, or -ENOENT if the lock is set in destruction mode.
+ *
+ * Note: if the object is deallocated while trying to acquire the lock, then
+ * this will fault.  In many cases, this is called at a compartment boundary
+ * and so this is fine.  If it is not acceptable, use `heap_claim_fast` to
+ * ensure that the object remains live until after the call.
  */
 int __cheri_libcall
 flaglock_priority_inheriting_trylock(Timeout              *timeout,
@@ -122,6 +127,17 @@ flaglock_priority_inheriting_lock(struct FlagLockState *lock)
  * Unlock a flag lock.  This can be called with either form of flag lock.
  */
 void __cheri_libcall flaglock_unlock(struct FlagLockState *lock);
+
+/**
+ * Set a flag lock in destruction mode.
+ *
+ * Locks in destruction mode cannot be acquired by other threads. Any threads
+ * currently attempting to acquire the lock will wake and fail to acquire the
+ * lock.  This should be called before deallocating an object that contains a
+ * lock.
+ */
+void __cheri_libcall
+flaglock_upgrade_for_destruction(struct FlagLockState *lock);
 
 /**
  * Try to acquire a recursive mutex.   This is a priority-inheriting mutex that

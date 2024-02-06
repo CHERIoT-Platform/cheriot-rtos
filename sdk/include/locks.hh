@@ -84,6 +84,15 @@ class FlagLockGeneric
 	{
 		flaglock_unlock(&state);
 	}
+
+	/**
+	 * Set the lock in destruction mode. See the documentation of
+	 * `flaglock_upgrade_for_destruction` for more information.
+	 */
+	__always_inline void upgrade_for_destruction()
+	{
+		flaglock_upgrade_for_destruction(&state);
+	}
 };
 
 /**
