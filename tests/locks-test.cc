@@ -65,6 +65,90 @@ namespace
 		}
 	}
 
+	/**
+	 * Test that destructing a lock automatically wakes up all waiters,
+	 * failing them to acquire the lock.
+	 */
+	template<typename Lock>
+	void test_destruct_lock_wake_up(Lock &lock)
+	{
+		modified = false;
+
+		Timeout t{1};
+		TEST(lock.try_lock(&t), "Failed to acquire uncontended lock");
+
+		// Try to acquire the lock in a background thread
+		async([&]() {
+			// Make sure that we don't prevent the thread pool
+			// making progress if this test fails.
+			// The generous timer makes sure that we reach the
+			// modified == true assert before the timeout.
+			Timeout t2{20};
+			TEST(lock.try_lock(&t2) == false,
+			     "Lock acquisition should not succeed!");
+
+			// When the lock is upgraded in destruction mode,
+			// `lock` will return failure.
+			modified = true;
+		});
+
+		// Give the thread a chance to run
+		sleep(1);
+
+		// Upgrade the lock to destruction mode
+		lock.upgrade_for_destruction();
+
+		// Give the waiter a chance to wake up
+		sleep(1);
+
+		// Check that the destruction mode woke up the waiters
+		TEST(modified == true, "Destruction mode did not wake up waiters!");
+
+		// Reset the lock in case other tests use it.
+		// Note: in practice, lock.upgrade_for_destruction() would be
+		// followed by a free() operation, not by unlock(). However
+		// unlock() comes handy here to remove the destruction flag to
+		// let other tests run properly with the same lock object
+		lock.unlock();
+	}
+
+	/**
+	 * Test that a lock with the destruction bit set cannot be acquired
+	 * anymore.
+	 *
+	 * Note: here, plug at the C API to be able to check C error codes.
+	 */
+	void test_destruct_flag_lock_acquire()
+	{
+		static FlagLockState flagLockState;
+		static FlagLockState priorityFlagLockState;
+
+		Timeout t{5};
+		int     ret = flaglock_trylock(&t, &flagLockState);
+		TEST(ret == 0, "Flag lock trylock failed with error {}", ret);
+
+		// Upgrade the lock to destruction mode
+		flaglock_upgrade_for_destruction(&flagLockState);
+
+		// Check that we now fail to grab the lock with the right error
+		TEST(flaglock_trylock(&t, &flagLockState) == -ENOENT,
+		     "Acquiring the lock did not fail with -ENOENT although it is in "
+		     "destruction mode");
+
+		// Now, do the same tests with the priority inheriting flag lock
+		ret = flaglock_priority_inheriting_trylock(&t, &priorityFlagLockState);
+		TEST(ret == 0,
+		     "Priority inheriting flag lock trylock failed with error {}",
+		     ret);
+
+		flaglock_upgrade_for_destruction(&priorityFlagLockState);
+
+		TEST(flaglock_priority_inheriting_trylock(&t, &priorityFlagLockState) ==
+		       -ENOENT,
+		     "Acquiring the lock did not fail with -ENOENT although it is in "
+		     "destruction mode");
+	}
+
 	void test_recursive_mutex()
 	{
 		static RecursiveMutexState recursiveMutex;
@@ -131,6 +215,9 @@ void test_locks()
 	test_lock(ticketLock);
 	test_trylock(flagLock);
 	test_trylock(flagLockPriorityInherited);
+	test_destruct_lock_wake_up(flagLock);
+	test_destruct_lock_wake_up(flagLockPriorityInherited);
+	test_destruct_flag_lock_acquire();
 
 	debug_log("Starting ticket-lock ordering tests");
 	// Test that the ticket lock gives the ordering guarantees that it should.

@@ -31,7 +31,9 @@ namespace
 			/// The lock is held.
 			Locked = 1 << 16,
 			/// The lock is held and one or more threads are waiting on it.
-			LockedWithWaiters = 1 << 17
+			LockedWithWaiters = 1 << 17,
+			/// The lock is held and set in destruction mode.
+			LockedInDestructMode = 1 << 18
 		};
 
 		public:
@@ -50,6 +52,19 @@ namespace
 				{
 					return 0;
 				}
+
+				// We are not setting the LockedInDestructMode
+				// bit in our expected value (`old`), so the
+				// CAS will always fail if the bit is set.
+				// Being locked for destruction is unusual (it
+				// should happen at most once for any lock) and
+				// so we don't bother to check for it unless
+				// we've failed to acquire the lock.
+				if ((old & Flag::LockedInDestructMode) != 0)
+				{
+					return -ENOENT;
+				}
+
 				if (!timeout->may_block())
 				{
 					return -ETIMEDOUT;
@@ -123,6 +138,42 @@ namespace
 				lockWord.notify_all();
 			}
 		}
+
+		/**
+		 * Set the destruction bit in the flag lock word and wake
+		 * waiters. Assumes that the lock is held by the caller.
+		 *
+		 * Note: This does not check that the lock is owned by the
+		 * calling thread.
+		 */
+		void upgrade_for_destruction()
+		{
+			Debug::log("Setting {} for destruction", &lockWord);
+
+			// Set the destruction bit.
+			lockWord |= Flag::LockedInDestructMode;
+
+			// Wake up waiters.
+			// There should not be any 'missed wake' because any
+			// thread calling lock() concurrently will either:
+			// - successfully CAS, pass the the -ENOENT check, reach
+			//   the futex `wait` before we set the
+			//   `Flag::LockedInDestructMode` bit, and be woken up
+			//   by our `notify_all`;
+			// - fail the -ENOENT check;
+			// - miss the `Flag::LockedInDestructMode` bit, pass the
+			//   -ENOENT check but fail their CAS to add the waiters
+			//   bit, retry, and fail the -ENOENT check;
+			// - or miss the `Flag::LockedInDestructMode` bit, pass
+			//   the -ENOENT check but fail their CAS in the futex
+			//   `wait` call, retry (because the futex returns 0 in
+			//   this case), and fail the -ENOENT check;
+			if ((lockWord & Flag::LockedWithWaiters) != 0)
+			{
+				Debug::log("hitting slow path wake for {}", &lockWord);
+				lockWord.notify_all();
+			}
+		}
 	};
 
 	/**
@@ -187,6 +238,12 @@ int __cheri_libcall flaglock_priority_inheriting_trylock(Timeout       *t,
 void __cheri_libcall flaglock_unlock(FlagLockState *lock)
 {
 	static_cast<InternalFlagLock *>(lock)->unlock();
+}
+
+void __cheri_libcall
+flaglock_upgrade_for_destruction(struct FlagLockState *lock)
+{
+	static_cast<InternalFlagLock *>(lock)->upgrade_for_destruction();
 }
 
 void __cheri_libcall ticketlock_lock(TicketLockState *lock)
