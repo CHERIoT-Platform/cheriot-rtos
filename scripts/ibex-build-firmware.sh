@@ -22,6 +22,11 @@ fi
 
 echo Using ${OBJCOPY}...
 
+# Create the firmware directory if it does not already exist
+if [ ! -d "firmware" ]; then
+	mkdir firmware
+fi
+
 # Convert the ELF file to a hex file for the simulator
 ${OBJCOPY} -O binary $1 - | hexdump -v -e '"%08X" "\n"' > firmware/cpu0_iram.vhx
 # Add a newline at the end of the vhx file
