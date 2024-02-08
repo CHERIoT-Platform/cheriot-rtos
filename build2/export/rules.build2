@@ -5,18 +5,44 @@ if! $defined(config.cheriot_rtos.board)
 
 import! [dir_path] sdk = cheriot-rtos%dir{sdk}
 
-board = $sdk/boards/$(config.cheriot_rtos.board).json
+board_file = $sdk/boards/$(config.cheriot_rtos.board).json
 
-if $empty($path_search($board))
-  fail "unknown board '$config.cheriot_rtos.board': file $board does not exist"
+if $empty($path_search($board_file))
+  fail "unknown board '$config.cheriot_rtos.board': file $board_file does not exist"
 
-# @@ TODO: load board file.
+board = $json.load($board_file)
 
-revoker = 'hardware'
+# Useful for debugging.
+#
+#info $serialize($board)
+
+revoker = ($board[revoker])
+devices = $object_names($board[devices])
+simulation = ($board[simulation] != [null] ? $board[simulation] : false)
+stack_hwm = ($board[stack_high_water_mark] != [null] ? $board[stack_high_water_mark] : false)
+
+revokable_memory_start = ($board[revokable_memory_start])
+if ($revokable_memory_start == [null])
+  revokable_memory_start = ($board[instruction_memory][start])
+
+interrupt_names = [string, null]
+interrupt_config = [string, null]
+for i: ($board[interrupts])
+{
+  na = ($i[name])
+  nu = ($i[number])
+  pr = ($i[priority])
+  et = ($i[edge_triggered] != [null] ? $i[edge_triggered] : false)
+
+  interrupt_names += "($interrupt_names != [null] ? ', ' : )$na=$nu"
+  interrupt_config += "($interrupt_config != [null] ? ', ' : ){$nu,$pr,$et}"
+}
 
 # Report key information about the board.
 #
 config [config.report.module=cheriot-rtos] revoker
+config [config.report.module=cheriot-rtos] devices
+config [config.report.module=cheriot-rtos] simulation
 
 cxx.std = 20
 c.std   = 2x
@@ -54,32 +80,32 @@ cc.coptions += \
 cxx.poptions += "-I$sdk/include/c++-config" "-I$sdk/include/libc++"
 cc.poptions += "-I$sdk/include"
 
-# @@ TODO: these come from the board JSON file.
-#
-for d: ../include/platform/generic-riscv ../include/platform/ibex
-  cc.poptions += "-I$sdk/include/$d"
+for i: ($board[driver_includes])
+  cc.poptions += "-I$sdk/include/$i"
 
 cc.poptions += -DTEMPORAL_SAFETY
 
-# @@ TODO: these come from the board JSON file.
-#
-for m: IBEX IBEX_SAFE
-  cc.poptions += "-D$m"
+for d: ($board[defines])
+  cc.poptions += "-D$d"
 
-# @@ TODO: these are computed based on values from the board JSON file.
+# These come from the board JSON file.
 #
 cc.poptions += \
--DCPU_TIMER_HZ=100000 \
--DTICK_RATE_HZ=10 \
--DSIMULATION \
--DCONFIG_MSHWM \
--DDEVICE_EXISTS_clint \
--DDEVICE_EXISTS_plic \
--DDEVICE_EXISTS_revoker \
--DDEVICE_EXISTS_shadow \
--DDEVICE_EXISTS_uart \
--DREVOKABLE_MEMORY_START=0x20040000 \
-"-DCHERIOT_INTERRUPT_NAMES=RevokerInterrupt=1, "
+"-DCPU_TIMER_HZ=($board[timer_hz])" \
+"-DTICK_RATE_HZ=($board[tickrate_hz])" \
+"-DREVOKABLE_MEMORY_START=$string($revokable_memory_start, 16, 8)"
+
+if $stack_hwm
+  cc.poptions += -DCONFIG_MSHWM
+
+if ($interrupt_names != [null])
+  cc.poptions += "-DCHERIOT_INTERRUPT_NAMES=$interrupt_names"
+
+if $simulation
+  cc.poptions += -DSIMULATION
+
+for d: $devices
+  cc.poptions += "-DDEVICE_EXISTS_$d"
 
 # Note: alias the ldscript{} target type from cheriot-rtos instead of deriving
 # a new one since some of the scripts come from there.
@@ -175,8 +201,10 @@ cheriot-rtos/
       #
       cc.poptions += \
         -DSCHEDULER_ACCOUNTING=false \
-        -DDEBUG_SCHEDULER=false \
-        '-DCHERIOT_INTERRUPT_CONFIGURATION={1,2,false}'
+        -DDEBUG_SCHEDULER=false
+
+      if ($interrupt_config != [null])
+        cc.poptions += "-DCHERIOT_INTERRUPT_CONFIGURATION=$interrupt_config"
 
       cc.coptions += -cheri-compartment=sched
 
