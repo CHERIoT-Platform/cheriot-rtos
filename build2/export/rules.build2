@@ -339,6 +339,21 @@ cheriot-rtos/
 define firmware: file
 firmware{*}: extension =
 
+# The user is expected to set the `threads` variable on each firmware{}
+# target. It should be a JSON array with one or more JSON object elements
+# each containing the following members:
+#
+#  [string] compartment
+#  [uint64] priority
+#  [string] entry_point
+#  [uint64] stack_size
+#  [uint64] trusted_stack_frames
+#
+firmware{*}:
+{
+  [json_array, visibility=target] threads = [null]
+}
+
 define dump: file
 dump{*}: extension = dump
 

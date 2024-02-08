@@ -1,4 +1,25 @@
 firmware{hello_world}: compartment{hello}
+{
+  threads += (compartment@hello      \
+              priority@1             \
+              entry_point@say_hello  \
+              stack_size@0x200       \
+              trusted_stack_frames@1)
+
+  # Alternative way to specify the same.
+  #
+  #\
+  threads += '{"compartment":"hello",
+               "priority":1,
+               "entry_point":"say_hello",
+               "stack_size":512,
+               "trusted_stack_frames":1}'
+  #\
+}
+
+# Useful for debugging.
+#
+#info $serialize($(firmware{hello_world}: threads))
 
 # @@ TODO: in xmake lib{freestanding} is listed as prerequisite of
 #    compartment but is linked to firmware.
