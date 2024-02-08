@@ -224,3 +224,128 @@ For Ubuntu, you can do:
 # apt install xmake
 ```
 
+Running on the Arty A7
+----------------------
+
+We previously ran the test suite in the simulator.
+Let us now run it on the Arty A7 FPGA development board.
+
+We will first build the CHERIoT [small and fast FPGA emulator](https://github.com/microsoft/cheriot-safe) (SAFE) configuration and load it onto the FPGA.
+Then, we will build, install, and run the CHERIoT RTOS firmware on the board.
+
+### Building and Installing the SAFE FPGA Configuration
+
+We will add documentation for this part later.
+In the meantime, our [blog post](https://cheriot.org/fpga/try/2023/11/16/cheriot-on-the-arty-a7.html) provides pointers on how to do this.
+
+### Building, Copying, and Running the Firmware
+
+We have now configured the FPGA.
+The LD4 LED on the FPGA board should be blinking green.
+We are ready to build, copy, and run the firmware.
+
+#### Building the Firmware
+
+We first need to reconfigure the build, and rebuild.
+For this example, we'll show rebuilding the test suite, but the same set of steps should work for any CHERIoT RTOS project (try the examples!):
+
+```sh
+$ cd tests
+$ xmake config --sdk=/cheriot-tools/ --board=ibex-arty-a7-100
+$ xmake
+```
+
+Note that `/cheriot-tools` is the location in the dev container.
+This value may vary if you did not use the dev container and must be the directory containing a `bin` directory with your LLVM build in it.
+
+Then, we need to build the firmware.
+This repository comes with a script to do this:
+
+```sh
+$ ../scripts/ibex-build-firmware.sh build/cheriot/cheriot/release/test-suite
+```
+
+The `./firmware` directory should now contain a firmware file `cpu0_iram.vhx`.
+This is the firmware we want copy onto the FPGA development board.
+
+#### Installing and Running the Firmware
+
+To copy the firmware onto the FPGA board, we will use minicom, which you can obtain through your your distribution's packaging system.
+For example on Ubuntu Linux distributions you would need to run (as root):
+
+```sh
+# apt install minicom
+```
+
+Now, plug the FPGA development board to your computer.
+We need to identify which serial device we will be using.
+On Linux, we do this by looking at the dmesg output:
+
+```sh
+$ sudo dmesg | grep tty
+(...)
+[19966.674679] usb 1-4: FTDI USB Serial Device converter now attached to ttyUSB1
+```
+
+The most recent lines of this command appear when plugging and unplugging your FPGA board, and indicate which serial device corresponds to the board.
+Here, it is `ttyUSB1`.
+
+Now we can open minicom (replace `ttyUSB1` with the serial device you just determined):
+
+```sh
+$ sudo minicom -c on -D ttyUSB1
+Welcome to minicom 2.8
+
+OPTIONS: I18n
+Port /dev/ttyUSB1, 13:51:28
+
+Press CTRL-A Z for help on special keys
+
+Ready to load firmware, hold BTN0 to ignore UART input.
+```
+
+Hitting the RESET button on the FPGA should produce the "Ready to load firmware..." line, which is the output from the loader on the FPGA.
+
+The "Press CTRL-A Z for help on special keys" message tells you which meta key is configured on your system.
+Here, the meta key is `CTRL-A`.
+The meta key varies across systems (the default on macOS is `<ESC>`) and configurations and so we refer to it as `<META>`.
+
+We must now configure a few things:
+- Hit `<META>` + `U` to turn carriage return `ON`
+- Hit `<META>` + `W` to turn linewrap `ON`
+- Hit `<META>` + `O`, then select `Serial Port Setup`, to ensure that `Bps/Par/Bits` (E) is set to `115200 8N1`, F to L on `No`, and M and N on `0`.
+
+In particular, make sure that hardware and software flow control are *off*.
+On macOS, the kernel silently ignores these if they are not supported but on Linux the kernel will refuse to send data unless the flow control is in the correct state.
+Unfortunately, the hardware flow control lines in the Arty A7's UART are not physically connected to the USB controller.
+
+We can now send our firmware to the FPGA.
+Hit `<META>` + `Y`, and select the `cpu0_iram.vhx` file we produced earlier.
+Minicom should now start outputing:
+
+```
+Ready to load firmware, hold BTN0 to ignore UART input.
+Starting loading.  First word was: 40812A15
+..
+```
+
+Minicom may block after printing a small number of dots.
+If it does, then it will resume if you press any key that would be sent over the serial link.
+Each dot represents 1 KiB of transmitted data.
+
+Once the firmware is fully loaded, the test suite will start executing:
+
+```
+Ready to load firmware, hold BTN0 to ignore UART input.
+Starting loading.  First word was: 40812A15
+.............................................................................................
+............
+Finished loading.  Last word was: 0300012C
+Number of words loaded to IRAM: 00006892
+Loaded firmware, jumping to IRAM.
+
+Test runner: Checking that rel-ro caprelocs work.  This will crash if they don't.  CHERI Perm
+issions are:
+Test runner: Global(0x0)
+...
+```
