@@ -129,8 +129,19 @@ namespace
 		void unlock()
 		{
 			auto old = lockWord.exchange(Flag::Unlocked);
+
+			// Assert that the locked is not already locked, and
+			// that the caller holds the lock. This is only
+			// compiled-in with debugging enabled for locking.
 			Debug::Assert(
 			  old != Flag::Unlocked, "Double-unlocking {}", &lockWord);
+			Debug::Assert(
+			  (old & 0x0000ffff) == thread_id_get(),
+			  "Calling thread {} does not hold the lock on {} (owner: {})",
+			  thread_id_get(),
+			  &lockWord,
+			  old & 0x0000ffff);
+
 			// If there are waiters, wake them all up.
 			if ((old & Flag::LockedWithWaiters) != 0)
 			{
@@ -149,6 +160,15 @@ namespace
 		void upgrade_for_destruction()
 		{
 			Debug::log("Setting {} for destruction", &lockWord);
+
+			// Assert that the caller holds the lock. This is only
+			// compiled-in with debugging enabled for locking.
+			Debug::Assert(
+			  (lockWord & 0x0000ffff) == thread_id_get(),
+			  "Calling thread {} does not hold the lock on {} (owner: {})",
+			  thread_id_get(),
+			  &lockWord,
+			  lockWord & 0x0000ffff);
 
 			// Set the destruction bit.
 			lockWord |= Flag::LockedInDestructMode;
@@ -227,7 +247,16 @@ namespace
 
 int __cheri_libcall flaglock_trylock(Timeout *t, FlagLockState *lock)
 {
-	return static_cast<InternalFlagLock *>(lock)->try_lock(t, 0, false);
+	// The thread ID is only used for debugging, or priority inheriting
+	// (which is not relevant here). To avoid a useless call to
+	// thread_id_get(), pass 0 when debugging is disabled.
+	uint32_t threadID = 0;
+	if constexpr (DebugLocks)
+	{
+		threadID = thread_id_get();
+	}
+
+	return static_cast<InternalFlagLock *>(lock)->try_lock(t, threadID, false);
 }
 int __cheri_libcall flaglock_priority_inheriting_trylock(Timeout       *t,
                                                          FlagLockState *lock)
