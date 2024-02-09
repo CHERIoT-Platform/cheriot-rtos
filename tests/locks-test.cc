@@ -242,6 +242,68 @@ namespace
 		     counter.load());
 	}
 
+	/**
+	 * Test ticket lock behavior on overflow.
+	 *
+	 * Note: here, plug at the C API to be able to set the lock's starting
+	 * state.  Ideally we would be able to do that externally from the C++
+	 * API without setting a specific internal state, but this requires us
+	 * to loop `lock` and `unlock` for about 2^32 iterations, which takes
+	 * too long on both the simulator and the FPGA.
+	 */
+	void test_ticket_lock_overflow()
+	{
+		static TicketLockState ticketLockState;
+		counter = 0;
+
+		// Put the ticket lock in an unlocked state where it is about
+		// to overflow.
+		ticketLockState.current = std::numeric_limits<uint32_t>::max() - 2;
+		ticketLockState.next    = std::numeric_limits<uint32_t>::max() - 2;
+
+		// Take the lock on the main thread.
+		ticketlock_lock(&ticketLockState);
+		// Now we should have (current: max-2, next: max-1).
+
+		// Now create two more threads which will try to get hold of
+		// the lock, thereby overflowing the `next` counter.
+		async([&]() {
+			ticketlock_lock(&ticketLockState);
+			// Now we should have (current: max-2, next: max).
+			counter++;
+			ticketlock_unlock(&ticketLockState);
+			// Now we should have (current: max, next: 0).
+		});
+		async([&]() {
+			ticketlock_lock(&ticketLockState);
+			// We just overflowed.
+			// Now we should have (current: max-2, next: 0).
+			counter++;
+			ticketlock_unlock(&ticketLockState);
+			// Now we should have (current: 0, next: 0).
+		});
+
+		// Give the threads a chance to run and increment `next`.
+		sleep(20);
+
+		// Release the lock on the main thread.
+		ticketlock_unlock(&ticketLockState);
+		// Now we should have (current: max-1, next: 0).
+
+		// Give the threads a chance to wake up.
+		sleep(20);
+
+		// The final state should be (current: 0, next: 0).
+
+		// Check that unlocking woke up the waiters.  Subsequent tests
+		// will generally fail if this fails, because one or all of the
+		// two threads may still be live and deadlocked.
+		TEST(counter.load() == 2,
+		     "Ticket lock deadlocked because of overflow, expected 2 threads "
+		     "to wake up, got {}",
+		     counter.load());
+	}
+
 } // namespace
 
 void test_locks()
@@ -255,5 +317,6 @@ void test_locks()
 	test_destruct_lock_wake_up(flagLockPriorityInherited);
 	test_destruct_flag_lock_acquire();
 	test_ticket_lock_ordering();
+	test_ticket_lock_overflow();
 	test_recursive_mutex();
 }
