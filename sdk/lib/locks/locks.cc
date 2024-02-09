@@ -230,8 +230,12 @@ namespace
 		 */
 		void unlock()
 		{
-			uint32_t currentSnapshot = ++current;
-			if (next > currentSnapshot)
+			uint32_t currentSnapshot = current++;
+
+			// If `next != current` when we entered this function,
+			// then there are waiters (because we had `next ==
+			// current` when took the lock)
+			if (next != currentSnapshot)
 			{
 				current.notify_all();
 			}
