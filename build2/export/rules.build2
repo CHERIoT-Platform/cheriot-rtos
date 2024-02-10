@@ -366,6 +366,7 @@ json{*}: extension = json
 #
 # Note: the order in which we specify things to link is no significant.
 #
+#\
 [rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
    compartment{~'/(.+)/'} \
    cheriot-rtos/core/loader/obje{boot-s boot-c} \
@@ -375,7 +376,6 @@ json{*}: extension = json
    cheriot-rtos/core/privileged_compartment{allocator} \
    cheriot-rtos/core/privileged_compartment{^'/\1..scheduler/'} \
    ldscript{firmware.ldscript} $ld $objdump
-#\
 {{
   s = $path($filter($<, obje library privileged_library \
                              compartment privileged_compartment))
@@ -390,6 +390,16 @@ json{*}: extension = json
   $objdump -glxsdrS --demangle $o >$d
 }}
 #\
+
+[rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
+   compartment{~'/(.+)/'} \
+   cheriot-rtos/core/loader/obje{boot-s boot-c} \
+   cheriot-rtos/core/switcher/obje{entry} \
+   cheriot-rtos/lib/library{atomic1 atomic4 locks crt} \
+   cheriot-rtos/core/privileged_library{token_library} \
+   cheriot-rtos/core/privileged_compartment{allocator} \
+   cheriot-rtos/core/privileged_compartment{^'/\1..scheduler/'} \
+   ldscript{firmware.ldscript} $ld $objdump
 % update clean
 recipe c++ link-firmware.cxx
 

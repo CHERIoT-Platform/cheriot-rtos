@@ -21,10 +21,7 @@ firmware{hello_world}: compartment{hello}
 #
 #info $serialize($(firmware{hello_world}: threads))
 
-# @@ TODO: in xmake lib{freestanding} is listed as prerequisite of
-#    compartment but is linked to firmware.
-#
-compartment{hello}: obje{hello}
+compartment{hello}: obje{hello} cheriot-rtos/lib/library{freestanding}
 
 obje{hello}: cxx{hello}
 

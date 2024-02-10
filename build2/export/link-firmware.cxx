@@ -123,15 +123,40 @@ perform_update (action a, const target& xt)
 
   // Append all the input paths.
   //
-  for (const prerequisite_target& pt: pts)
   {
-    const target& p (*pt.target);
-    string t (p.type ().name);
+    // Append prerequisite libraries, recursively.
+    //
+    auto append_libs = [a, &args] (const target& t,
+                                   const auto& append_libs) -> void
+    {
+      for (const prerequisite_target& pt: t.prerequisite_targets[a])
+      {
+        const target& p (*pt.target);
+        string t (p.type ().name);
 
-    if (t == "obje" ||
-        t == "library"     || t == "privileged_library" ||
-        t == "compartment" || t == "privileged_compartment")
-      args.push_back (p.as<file> ().path ().string ().c_str ());
+        if (t == "library" || t == "privileged_library")
+        {
+          args.push_back (p.as<file> ().path ().string ().c_str ());
+          append_libs (p, append_libs);
+        }
+      }
+    };
+
+    for (const prerequisite_target& pt: pts)
+    {
+      const target& p (*pt.target);
+      string t (p.type ().name);
+
+      if (t == "obje" ||
+          t == "library"     || t == "privileged_library" ||
+          t == "compartment" || t == "privileged_compartment")
+      {
+        args.push_back (p.as<file> ().path ().string ().c_str ());
+
+        if (t != "obje")
+          append_libs (p, append_libs);
+      }
+    }
   }
 
   // Hash the command line and and compare with depdb.
