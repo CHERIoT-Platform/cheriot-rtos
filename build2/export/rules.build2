@@ -63,9 +63,9 @@ cxx{*}: extension = cc
 
 # Toolchain.
 #
-toolchain = $directory($effect($cxx.path))
-ld = $toolchain/ld.lld
-objdump = $toolchain/llvm-objdump
+[dir_path] toolchain = $directory($effect($cxx.path))
+[path] ld = $toolchain/ld.lld
+[path] objdump = $toolchain/llvm-objdump
 
 # Default and board options.
 #
@@ -375,6 +375,7 @@ json{*}: extension = json
    cheriot-rtos/core/privileged_compartment{allocator} \
    cheriot-rtos/core/privileged_compartment{^'/\1..scheduler/'} \
    ldscript{firmware.ldscript} $ld $objdump
+#\
 {{
   s = $path($filter($<, obje library privileged_library \
                              compartment privileged_compartment))
@@ -385,9 +386,12 @@ json{*}: extension = json
 
   diag ld $>
 
-  $ld "--script=$l" --relax -o $o "--compartment-report=$r" $s
+  $ld --relax --script $l --compartment-report $r -o $o $s
   $objdump -glxsdrS --demangle $o >$d
 }}
+#\
+% update clean
+recipe c++ link-firmware.cxx
 
 # @@ TMP: these should be synthesized by the link_firmware rule.
 #
