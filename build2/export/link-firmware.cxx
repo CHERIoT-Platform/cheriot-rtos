@@ -8,6 +8,12 @@ apply (action a, target& xt, match_extra& me) const override
   const scope& bs (xt.base_scope ());
   const scope& rs (*bs.root_scope ());
 
+  const dir_path& sdk (cast<dir_path> (rs["sdk"]));
+
+  const json_array* threads (cast_null<json_array> (xt["threads"]));
+  if (threads == nullptr || threads->array.empty ())
+    fail << "no 'threads' variable set on " << xt;
+
   // Inject pattern's group members.
   //
   pattern->apply_group_members (a, xt, bs, me);
@@ -26,8 +32,8 @@ apply (action a, target& xt, match_extra& me) const override
   //
   inject_fsdir (a, t);
 
-  // This is essentially match_prerequisite_members() with the
-  // pattern->apply_prerequisites() call worked in between.
+  // This is essentially match_prerequisite_members() with some dependency
+  // synthesis and the pattern->apply_prerequisites() call worked in between.
   //
 
   // Add target's prerequisites.
@@ -48,12 +54,107 @@ apply (action a, target& xt, match_extra& me) const override
     if (a.operation () == clean_id && !pt.in (rs))
       continue;
 
-    pts.push_back (prerequisite_target (&pt, pi));
+    pts.push_back (prerequisite_target (pt, pi));
   }
 
   // Inject pattern's prerequisites.
   //
   pattern->apply_prerequisites (a, t, bs, me);
+
+  // Synthesize the dependency on the firmware-specific scheduler compartment.
+  //
+  // Use `.` instead of, say, `-` or `_` as a separator between the firmware
+  // name and `scheduler` to minimize the chance of clashes between several
+  // firmware (though seeing that this is inside cheriot-rtos/core/, it's
+  // unclear what we could clash with).
+  //
+  // We need to synthesize the equivalent of this (`.` is escaped as `..`):
+  //
+  // cheriot-rtos/core/
+  // {
+  //   privileged_compartment{hello_world..scheduler}: scheduler/obje{hello_world..main} fsdir{.}
+  //
+  //   scheduler/obje{hello_world..main}: $sdk/core/scheduler/cxx{main} fsdir{scheduler/}
+  //   {
+  //     cc.poptions += -DCONFIG_THREADS_NUM=1
+  //   }
+  // }
+  //
+  {
+    const target_type& com_tt (*rs.find_target_type ("privileged_compartment"));
+    const target_type& obj_tt (*rs.find_target_type ("obje"));
+    const target_type& cxx_tt (*rs.find_target_type ("cxx"));
+
+    const variable& pops_var (*bs.var_pool ().find ("cc.poptions"));
+
+    dir_path d (rs.out_path ()            /
+                dir_path ("cheriot-rtos") /
+                dir_path ("core")         /
+                dir_path ("scheduler"));
+
+    // scheduler/obje{hello_world..main}: $sdk/core/scheduler/cxx{main}
+    //
+    pair<target&, ulock> obj_tl (
+      search_new_locked (ctx,
+                         obj_tt,
+                         d,
+                         dir_path (), // out (always in out)
+                         t.name + ".main"));
+
+    // Assume this is already done if the target exists (e.g., operation
+    // batch).
+    //
+    if (obj_tl.second.owns_lock ())
+    {
+      prerequisites obj_ps {prerequisite (fsdir::static_type,
+                                          d,
+                                          dir_path (),
+                                          string (),
+                                          string (),
+                                          rs)};
+      obj_ps.push_back (
+        prerequisite (cxx_tt,
+                      sdk / dir_path ("core") / dir_path ("scheduler"),
+                      dir_path (),
+                      "main",
+                      "cc",
+                      rs));
+
+      obj_tl.first.prerequisites (move (obj_ps));
+
+      cast<strings> (obj_tl.first.append_locked (pops_var)).push_back (
+        "-DCONFIG_THREADS_NUM=" + to_string (threads->array.size ()));
+
+      obj_tl.second.unlock ();
+    }
+
+    d.make_directory (); // Back to core/.
+
+    // privileged_compartment{hello_world..scheduler}: scheduler/obje{hello_world..main}
+    //
+    pair<target&, ulock> com_tl (
+      search_new_locked (ctx,
+                         com_tt,
+                         d,
+                         dir_path (),
+                         t.name + ".scheduler"));
+
+
+    if (com_tl.second.owns_lock ())
+    {
+      prerequisites com_ps {prerequisite (fsdir::static_type,
+                                          d,
+                                          dir_path (),
+                                          string (),
+                                          string (),
+                                          rs)};
+      com_ps.push_back (prerequisite (obj_tl.first, true /* locked */));
+      com_tl.first.prerequisites (move (com_ps));
+      com_tl.second.unlock ();
+    }
+
+    pts.push_back (com_tl.first);
+  }
 
   // Start asynchronous matching of prerequisites. Wait with unlocked phase to
   // allow phase switching.

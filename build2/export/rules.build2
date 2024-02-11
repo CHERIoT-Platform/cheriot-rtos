@@ -389,19 +389,6 @@ json{*}: extension = json
   $ld --relax --script $l --compartment-report $r -o $o $s
   $objdump -glxsdrS --demangle $o >$d
 }}
-#\
-
-[rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
-   compartment{~'/(.+)/'} \
-   cheriot-rtos/core/loader/obje{boot-s boot-c} \
-   cheriot-rtos/core/switcher/obje{entry} \
-   cheriot-rtos/lib/library{atomic1 atomic4 locks crt} \
-   cheriot-rtos/core/privileged_library{token_library} \
-   cheriot-rtos/core/privileged_compartment{allocator} \
-   cheriot-rtos/core/privileged_compartment{^'/\1..scheduler/'} \
-   ldscript{firmware.ldscript} $ld $objdump
-% update clean
-recipe c++ link-firmware.cxx
 
 # @@ TMP: these should be synthesized by the link_firmware rule.
 #
@@ -419,3 +406,15 @@ cheriot-rtos/core/
     cc.poptions += -DCONFIG_THREADS_NUM=1
   }
 }
+#\
+
+[rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
+   compartment{~'/(.+)/'} \
+   cheriot-rtos/core/loader/obje{boot-s boot-c} \
+   cheriot-rtos/core/switcher/obje{entry} \
+   cheriot-rtos/lib/library{atomic1 atomic4 locks crt} \
+   cheriot-rtos/core/privileged_library{token_library} \
+   cheriot-rtos/core/privileged_compartment{allocator} \
+   ldscript{firmware.ldscript} $ld $objdump
+% update clean
+recipe c++ link-firmware.cxx
