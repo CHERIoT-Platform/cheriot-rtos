@@ -1,4 +1,12 @@
-// c++ 1
+// c++ 1 ---
+
+// For vocabulary types (string, path, vector), see <libbuild2/types.hxx>.
+// For standard utilities (move(), to_string()) see <libbuild2/utility.hxx>.
+//
+// Include extra headers, define global functions, etc., before the `---`
+// separator.
+
+---
 
 recipe
 apply (action a, target& xt, match_extra& me) const override
@@ -9,6 +17,7 @@ apply (action a, target& xt, match_extra& me) const override
   const scope& rs (*bs.root_scope ());
 
   const dir_path& sdk (cast<dir_path> (rs["sdk"]));
+  const json_object& board (cast<json_object> (rs["board"]));
 
   const json_array* threads (cast_null<json_array> (xt["threads"]));
   if (threads == nullptr || threads->array.empty ())
@@ -85,8 +94,6 @@ apply (action a, target& xt, match_extra& me) const override
     const target_type& obj_tt (*rs.find_target_type ("obje"));
     const target_type& cxx_tt (*rs.find_target_type ("cxx"));
 
-    const variable& pops_var (*bs.var_pool ().find ("cc.poptions"));
-
     dir_path d (rs.out_path ()            /
                 dir_path ("cheriot-rtos") /
                 dir_path ("core")         /
@@ -122,7 +129,7 @@ apply (action a, target& xt, match_extra& me) const override
 
       obj_tl.first.prerequisites (move (obj_ps));
 
-      cast<strings> (obj_tl.first.append_locked (pops_var)).push_back (
+      cast<strings> (obj_tl.first.append_locked ("cc.poptions")).push_back (
         "-DCONFIG_THREADS_NUM=" + to_string (threads->array.size ()));
 
       obj_tl.second.unlock ();
@@ -154,6 +161,106 @@ apply (action a, target& xt, match_extra& me) const override
     }
 
     pts.push_back (com_tl.first);
+  }
+
+  // Synthesize the dependency on the firmware-specific linker script.
+  //
+  // We need to synthesize the equivalent of this (`.` is escaped as `..`):
+  //
+  // cheriot-rtos/core/
+  // {
+  //   ldscript{hello_world..firmware}: $sdk/in{firmware.ldscript.in}
+  //   {
+  //     mmio = ...
+  //     ...
+  //   }
+  //
+  {
+    // Pre-calculate the substitution variables outside the lock.
+    //
+    string mmio;
+    try
+    {
+      uint64_t mmio_start (0xffffffff), mmio_end (0);
+      uint64_t heap_end (board.at ("heap").at ("end").as_uint64 ());
+
+      for (const json_member& m: board.at ("devices").as_object ())
+      {
+        const json_value& v (m.value);
+
+        uint64_t s (v.at ("start").as_uint64 ());
+        uint64_t e;
+        if (const json_value* p = v.find ("end"))
+          e = p->as_uint64 ();
+        else
+          e = s + v.at ("length").as_uint64 ();
+
+        if (mmio_start > s) mmio_start = s;
+        if (mmio_end < e) mmio_end = e;
+
+        mmio += "__export_mem_" + m.name + " = " + to_string (s, 16) + ";\n";
+        mmio += "__export_mem_" + m.name + "_end = " + to_string (e, 16) + ";\n";
+      }
+
+      mmio.insert (0, "__mmio_region_start = " + to_string (mmio_start, 16) + ";\n");
+      mmio += "__mmio_region_end = " + to_string (mmio_end, 16) + ";\n";
+
+      mmio += "__export_mem_heap_end = " + to_string (heap_end, 16) + ";\n";
+    }
+    catch (const std::exception& e)
+    {
+      fail << "invalid board json: " << e.what ();
+    }
+
+    const target_type& ls_tt (*rs.find_target_type ("ldscript"));
+    const target_type& in_tt (*rs.find_target_type ("in"));
+
+    dir_path d (rs.out_path () / dir_path ("cheriot-rtos") / dir_path ("core"));
+
+    pair<target&, ulock> ls_tl (
+      search_new_locked (ctx,
+                         ls_tt,
+                         d,
+                         dir_path (),
+                         t.name + ".firmware"));
+
+    // Assume this is already done if the target exists (e.g., operation
+    // batch).
+    //
+    if (ls_tl.second.owns_lock ())
+    {
+      prerequisites ls_ps {prerequisite (fsdir::static_type,
+                                         d,
+                                         dir_path (),
+                                         string (),
+                                         string (),
+                                         rs)};
+
+      ls_ps.push_back (prerequisite (in_tt,
+                                     sdk,
+                                     dir_path (),
+                                     "firmware.ldscript",
+                                     "in",
+                                     rs));
+
+      target& ls (ls_tl.first);
+
+      ls.prerequisites (move (ls_ps));
+
+      // Configure the alternative substitution symbol.
+      //
+      ls.assign ("in.symbol") = "@";
+
+      // Set substitution variables (e.g., @mmio@, etc).
+      //
+      // NOTE: these variables must be pre-entered in rules.build2!
+      //
+      ls.assign ("mmio") = move (mmio);
+
+      ls_tl.second.unlock ();
+    }
+
+    pts.push_back (ls_tl.first);
   }
 
   // Start asynchronous matching of prerequisites. Wait with unlocked phase to

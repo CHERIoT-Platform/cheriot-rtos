@@ -10,7 +10,7 @@ board_file = $sdk/boards/$(config.cheriot_rtos.board).json
 if $empty($path_search($board_file))
   fail "unknown board '$config.cheriot_rtos.board': file $board_file does not exist"
 
-board = $json.load($board_file)
+[json_object] board = $json.load($board_file)
 
 # Useful for debugging.
 #
@@ -43,6 +43,10 @@ for i: ($board[interrupts])
 config [config.report.module=cheriot-rtos] revoker
 config [config.report.module=cheriot-rtos] devices
 config [config.report.module=cheriot-rtos] simulation
+
+# Load the `in` module for firmware.ldscript.in processing.
+#
+using in
 
 cxx.std = 20
 c.std   = 2x
@@ -112,6 +116,17 @@ for d: $devices
 #
 define ldscript = $sdk/ldscript
 ldscript{*}: extension = ldscript
+
+# Pre-enter variables used in firmware.ldscript.in.
+#
+# @@ It would be better to give them names that are private to cheriot-rtos,
+#    say cheriot_rtos.mmio. Then we could fix their types and make them
+#    target-specific.
+#
+ldscript{*}:
+{
+  mmio = [null]
+}
 
 define library: file
 library{*}: extension = library
@@ -415,6 +430,6 @@ cheriot-rtos/core/
    cheriot-rtos/lib/library{atomic1 atomic4 locks crt} \
    cheriot-rtos/core/privileged_library{token_library} \
    cheriot-rtos/core/privileged_compartment{allocator} \
-   ldscript{firmware.ldscript} $ld $objdump
+   $ld $objdump
 % update clean
 recipe c++ link-firmware.cxx
