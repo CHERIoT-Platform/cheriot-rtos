@@ -1,24 +1,9 @@
 #!/bin/sh
 
-# Find objcopy.
-OBJCOPY=llvm-objcopy
-if ! type ${OBJCOPY} >/dev/null 2>&1 ; then
-	if [ -x "/cheriot-tools/bin/llvm-objcopy" ] ; then
-		OBJCOPY=/cheriot-tools/bin/llvm-objcopy
-	else
-		if [ -n "${TOOLS_PATH}" ] ; then
-			if [ -x "${TOOLS_PATH}/llvm-objcopy" ] ; then
-				echo found ${TOOLS_PATH}/llvm-objcopy
-				OBJCOPY=${TOOLS_PATH}/llvm-objcopy
-			fi
-		fi
-	fi
-fi
+SCRIPT_DIRECTORY="$(dirname "$(realpath "$0")")"
+. ${SCRIPT_DIRECTORY}/includes/helper_find_llvm_install.sh
 
-if [ ! -x ${OBJCOPY} ] ; then
-	echo Unable to locate llvm-objcopy, please set TOOLS_PATH to the directory containing the LLVM toolchain.
-	exit 1
-fi
+OBJCOPY=$(find_llvm_tool_required llvm-objcopy)
 
 echo Using ${OBJCOPY}...
 
