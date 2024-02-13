@@ -8,7 +8,23 @@
 // Include extra headers, define global functions, etc., before the `---`
 // separator.
 
+namespace build2
+{
+  static inline const target_type&
+  find_tt (const scope& rs, const char* n)
+  {
+    const target_type* tt (rs.find_target_type (n));
+    assert (tt != nullptr); // Should be known.
+    return *tt;
+  }
+}
+
 ---
+
+// namespace build2
+// {
+//   class rule: public simple_rule
+//   {
 
 bool
 match (action a, target& t) const
@@ -16,13 +32,14 @@ match (action a, target& t) const
   tracer trace ("link_compartment::match");
 
   const scope& bs (t.base_scope ());
+  const scope& rs (*bs.root_scope ());
 
   // We only match if there is at least one prerequisite of the c{}, cxx{},
   // or obje{} target type.
   //
-  const target_type& c_tt   (*bs.find_target_type ("c"));
-  const target_type& cxx_tt (*bs.find_target_type ("cxx"));
-  const target_type& obj_tt (*bs.find_target_type ("obje"));
+  const target_type& c_tt   (find_tt (rs, "c"));
+  const target_type& cxx_tt (find_tt (rs, "cxx"));
+  const target_type& obj_tt (find_tt (rs, "obje"));
 
   for (prerequisite_member p: group_prerequisite_members (a, t))
   {
@@ -58,12 +75,12 @@ apply (action a, target& xt, match_extra& me) const override
   // This is essentially match_prerequisite_members() with some dependency
   // synthesis and the pattern->apply_prerequisites() call worked in between.
   //
-  const target_type& c_tt   (*bs.find_target_type ("c"));
-  const target_type& cxx_tt (*bs.find_target_type ("cxx"));
-  const target_type& obj_tt (*bs.find_target_type ("obje"));
+  const target_type& c_tt   (find_tt (rs, "c"));
+  const target_type& cxx_tt (find_tt (rs, "cxx"));
+  const target_type& obj_tt (find_tt (rs, "obje"));
 
-  bool compart (t.is_a (*bs.find_target_type ("compartment")) ||
-                t.is_a (*bs.find_target_type ("privileged_compartment")));
+  bool compart (t.is_a (find_tt (rs, "compartment")) ||
+                t.is_a (find_tt (rs, "privileged_compartment")));
 
   // Add target's prerequisites.
   //
@@ -203,7 +220,12 @@ perform_update (action a, const target& xt)
 
   auto& pts (t.prerequisite_targets[a]);
 
-  depdb dd (tp + ".d");
+  const file& ls ( // ldscript{} prerequisite
+    find_if (pts.begin (), pts.end (),
+             [&tt = find_tt (rs, "ldscript")] (const prerequisite_target& pt)
+             {
+               return pt.target != nullptr && pt.target->type ().is_a (tt);
+             })->target->as<file> ());
 
   // Start building the command line. While we don't yet know whether we will
   // really need it, the easiest is to hash it and find out.
@@ -212,12 +234,7 @@ perform_update (action a, const target& xt)
     ld.recall_string (),
     "--relax",
     "--compartment", // Yes, even for libraries.
-    "--script", find_if (pts.begin (), pts.end (),
-                         [t = string ("ldscript")] (const prerequisite_target& pt)
-                         {
-                           return pt.target != nullptr &&
-                             pt.target->type ().name == t;
-                         })->target->as<file> ().path ().string ().c_str (),
+    "--script", ls.path ().string ().c_str (),
     "-o", tp.string ().c_str ()
   };
 
@@ -234,6 +251,8 @@ perform_update (action a, const target& xt)
     if (t == "obje")
       args.push_back (p.as<file> ().path ().string ().c_str ());
   }
+
+  depdb dd (tp + ".d");
 
   // Hash the command line and compare with depdb.
   //
@@ -270,3 +289,6 @@ perform_update (action a, const target& xt)
   t.mtime (system_clock::now ());
   return target_state::changed;
 }
+
+//   }; // class rule
+// } // namespace build2

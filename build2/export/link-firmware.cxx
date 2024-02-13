@@ -6,9 +6,25 @@
 // Include extra headers, define global functions, etc., before the `---`
 // separator.
 
+namespace build2
+{
+  static inline const target_type&
+  find_tt (const scope& rs, const char* n)
+  {
+    const target_type* tt (rs.find_target_type (n));
+    assert (tt != nullptr); // Should be known.
+    return *tt;
+  }
+}
+
 ---
 
-recipe
+// namespace build2
+// {
+//   class rule: public simple_rule
+//   {
+
+virtual recipe
 apply (action a, target& xt, match_extra& me) const override
 {
   context& ctx (xt.ctx);
@@ -93,9 +109,9 @@ apply (action a, target& xt, match_extra& me) const override
   // }
   //
   {
-    const target_type& com_tt (*rs.find_target_type ("privileged_compartment"));
-    const target_type& obj_tt (*rs.find_target_type ("obje"));
-    const target_type& cxx_tt (*rs.find_target_type ("cxx"));
+    const target_type& com_tt (find_tt (rs, "privileged_compartment"));
+    const target_type& obj_tt (find_tt (rs, "obje"));
+    const target_type& cxx_tt (find_tt (rs, "cxx"));
 
     dir_path d (rs.out_path ()            /
                 dir_path ("cheriot-rtos") /
@@ -215,8 +231,8 @@ apply (action a, target& xt, match_extra& me) const override
       fail << "invalid board json: " << e.what ();
     }
 
-    const target_type& ls_tt (*rs.find_target_type ("ldscript"));
-    const target_type& in_tt (*rs.find_target_type ("in"));
+    const target_type& ls_tt (find_tt (rs, "ldscript"));
+    const target_type& in_tt (find_tt (rs, "in"));
 
     dir_path d (rs.out_path () / dir_path ("cheriot-rtos") / dir_path ("core"));
 
@@ -301,13 +317,11 @@ perform_update (action a, const target& xt)
   const scope& bs (xt.base_scope ());
   const scope& rs (*bs.root_scope ());
 
-  const file& t (xt.as<file> ());                // firmware()
-  const file& dt (t.adhoc_member->as<file> ());  // dump()
-  const file& rt (dt.adhoc_member->as<file> ()); // json()
+  const file& t (xt.as<file> ());                // firmware{}
+  const file& dt (t.adhoc_member->as<file> ());  // dump{}
+  const file& rt (dt.adhoc_member->as<file> ()); // json{}
 
   const path& tp (t.path ());
-  const path& dtp (dt.path ());
-  const path& rtp (rt.path ());
 
   process_path ld (run_search (cast<path> (rs["ld"])));
   process_path objdump (run_search (cast<path> (rs["objdump"])));
@@ -317,7 +331,12 @@ perform_update (action a, const target& xt)
 
   auto& pts (t.prerequisite_targets[a]);
 
-  depdb dd (tp + ".d");
+  const file& ls ( // ldscript{} prerequisite
+    find_if (pts.begin (), pts.end (),
+             [&tt = find_tt (rs, "ldscript")] (const prerequisite_target& pt)
+             {
+               return pt.target != nullptr && pt.target->type ().is_a (tt);
+             })->target->as<file> ());
 
   // Start building the command line. While we don't yet know whether we will
   // really need it, the easiest is to hash it and find out.
@@ -325,13 +344,8 @@ perform_update (action a, const target& xt)
   cstrings args {
     ld.recall_string (),
     "--relax",
-    "--script", find_if (pts.begin (), pts.end (),
-                         [t = string ("ldscript")] (const prerequisite_target& pt)
-                         {
-                           return pt.target != nullptr &&
-                             pt.target->type ().name == t;
-                         })->target->as<file> ().path ().string ().c_str (),
-    "--compartment-report", rtp.string ().c_str (),
+    "--script", ls.path ().string ().c_str (),
+    "--compartment-report", rt.path ().string ().c_str (),
     "-o", tp.string ().c_str (),
   };
 
@@ -378,6 +392,8 @@ perform_update (action a, const target& xt)
       }
     }
   }
+
+  depdb dd (tp + ".d");
 
   // Hash the command line and compare with depdb.
   //
@@ -428,7 +444,7 @@ perform_update (action a, const target& xt)
     // llvm-objdump doesn't have a way to save the output to a file so we have
     // to jump through a few hoops to redirect the stdout.
     //
-    auto_fd o (fdopen (dtp,
+    auto_fd o (fdopen (dt.path (),
                        fdopen_mode::out |
                        fdopen_mode::create |
                        fdopen_mode::truncate));
@@ -446,3 +462,6 @@ perform_update (action a, const target& xt)
   t.mtime (system_clock::now ());
   return target_state::changed;
 }
+
+//   }; // class rule
+// } // namespace build2
