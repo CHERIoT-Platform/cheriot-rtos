@@ -36,3 +36,4 @@
 #include <time.h>
 #include <timeout.h>
 #include <token.h>
+#include <cheri.h>
