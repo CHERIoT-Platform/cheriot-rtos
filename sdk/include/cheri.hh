@@ -5,6 +5,7 @@
 /**
  * C++ helpers for operating on capabilities.
  */
+#include <cheri.h>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -1015,54 +1016,19 @@ namespace CHERI
 		       representable_length(size) == size;
 	}
 
-	namespace detail
-	{
-		/**
-		 * Helper function used by `check_pointer`.  This should not be called
-		 * directly, it exists to reduce code size by providing a non-inline
-		 * function that does the checks.  The wrapper is then always inlined
-		 * as a short sequence that materialises the constants that this needs
-		 * for each call site and a direct call.  In a future version, this may
-		 * be moved to a separate library to further reduce code size.
-		 */
-		template<bool CheckStack>
-		__noinline inline bool check_pointer_internal(const void *ptr,
-		                                              size_t      space,
-		                                              uint32_t rawPermissions)
-		{
-			auto permissions = PermissionSet::from_raw(rawPermissions);
-			Capability<const void> cap{ptr};
-			bool                   isValid = cap.is_valid() && !cap.is_sealed();
-			// Skip the stack check if we're requiring a global capability.  By
-			// construction, such a thing cannot be derived from the stack
-			// pointer.
-			if constexpr (CheckStack)
-			{
-				void *csp;
-				__asm__ volatile("cmove %0, csp" : "=C"(csp));
-				Capability<void> stack{csp};
-				// The base of the capability is <= the top, so as long as
-				// either the top is below the current stack or the base is
-				// above, then it is in bounds.
-				isValid &=
-				  (cap.top() <= stack.base()) || (cap.base() >= stack.top());
-			}
-			isValid &= cap.bounds() >= space;
-			// Check that we have, at least, the required permissions
-			isValid &= permissions.can_derive_from(cap.permissions());
-			return isValid;
-		}
-	} // namespace detail
-
 	/**
-	 * Checks that `ptr` is valid, unsealed, does not overlap the caller's
-	 * stack, and has at least `Permissions` and has at least `Space` bytes
-	 * after the current offset.
+	 * Checks that `ptr` is valid, unsealed, has at least `Permissions`,
+	 * and has at least `Space` bytes after the current offset.
 	 *
-	 * If the permissions do not include Global, then this will also check that
-	 * the capability does not point to the current thread's stack.  This
-	 * behaviour can be disabled (for example, for use in a shared library) by
-	 * passing `false` for `CheckStack`.
+	 * If the permissions do not include Global, then this will also check
+	 * that the capability does not point to the current thread's stack.
+	 * This behaviour can be disabled (for example, for use in a shared
+	 * library) by passing `false` for `CheckStack`.
+	 *
+	 * This function is provided as a wrapper for the `::check_pointer` C
+	 * API. It is always inlined. For each call site, it materialises the
+	 * constants needed before performing an indirect call to
+	 * `::check_pointer`.
 	 */
 	template<PermissionSet Permissions = PermissionSet{Permission::Load},
 	         typename T                = void,
@@ -1073,8 +1039,8 @@ namespace CHERI
 		// stack does not have this permission.
 		constexpr bool StackCheckNeeded =
 		  CheckStack && !Permissions.contains(Permission::Global);
-		return detail::check_pointer_internal<StackCheckNeeded>(
-		  ptr, space, Permissions.as_raw());
+		return ::check_pointer(
+		  ptr, space, Permissions.as_raw(), StackCheckNeeded);
 	}
 
 	/**
