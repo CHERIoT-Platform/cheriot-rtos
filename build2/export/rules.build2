@@ -131,6 +131,7 @@ ldscript{*}:
 define library: file
 library{*}: extension = library
 
+#\
 [rule_name=link_library] library{~'/(.+)/'}: obje{~'/(.+)/'} \
   $sdk/ldscript{library} $ld
 {{
@@ -140,14 +141,20 @@ library{*}: extension = library
 
   diag ld $>
 
-  $ld "--script=$l" --compartment --relax -o $o $s
+  $ld --script $l --compartment --relax -o $o $s
 }}
+#\
+
+[rule_name=link_library] library{~'/(.+)/'}: $sdk/ldscript{library} $ld
+% update clean
+recipe c++ link-compartment.cxx
 
 define privileged_library: file
 privileged_library{*}: extension = library
 
 # Note: linked with the privileged compartment linker script.
 #
+#\
 [rule_name=link_privileged_library] privileged_library{~'/(.+)/'}: \
   obje{~'/(.+)/'} $sdk/ldscript{privileged-compartment} $ld
 {{
@@ -157,12 +164,19 @@ privileged_library{*}: extension = library
 
   diag ld $>
 
-  $ld "--script=$l" --compartment --relax -o $o $s
+  $ld --script $l --compartment --relax -o $o $s
 }}
+#\
+
+[rule_name=link_privileged_library] privileged_library{~'/(.+)/'}: \
+  $sdk/ldscript{privileged-compartment} $ld
+% update clean
+recipe c++ link-compartment.cxx
 
 define compartment: file
 compartment{*}: extension = compartment
 
+#\
 [rule_name=link_compartment] compartment{~'/(.+)/'}: obje{~'/(.+)/'} \
   $sdk/ldscript{compartment} $ld
 {{
@@ -172,12 +186,19 @@ compartment{*}: extension = compartment
 
   diag ld $>
 
-  $ld "--script=$l" --compartment --relax -o $o $s
+  $ld --script $l --compartment --relax -o $o $s
 }}
+#\
+
+[rule_name=link_compartment] compartment{~'/(.+)/'}: \
+  $sdk/ldscript{compartment} $ld
+% update clean
+recipe c++ link-compartment.cxx
 
 define privileged_compartment: file
 privileged_compartment{*}: extension = compartment
 
+#\
 [rule_name=link_privileged_compartment] privileged_compartment{~'/(.+)/'}: \
   obje{~'/(.+)/'} $sdk/ldscript{privileged-compartment} $ld
 {{
@@ -187,8 +208,14 @@ privileged_compartment{*}: extension = compartment
 
   diag ld $>
 
-  $ld "--script=$l" --compartment --relax -o $o $s
+  $ld --script $l --compartment --relax -o $o $s
 }}
+#\
+
+[rule_name=link_privileged_compartment] privileged_compartment{~'/(.+)/'}: \
+  $sdk/ldscript{privileged-compartment} $ld
+% update clean
+recipe c++ link-compartment.cxx
 
 # Place all the cheriot-rtos-supplied targets into the cheriot-rtos/ so that
 # they don't clash with user's. Inside mimic the source directory structure.
@@ -405,8 +432,6 @@ json{*}: extension = json
   $objdump -glxsdrS --demangle $o >$d
 }}
 
-# @@ TMP: these should be synthesized by the link_firmware rule.
-#
 # Use `.` (escaped as `..`) instead of, say, `-` or `_` as a separator between
 # the firmware name and `scheduler` to minimize the chance of clashes between
 # several firmware (though seeing that this is inside cheriot-rtos/core/, it's

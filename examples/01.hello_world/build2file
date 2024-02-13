@@ -9,6 +9,7 @@ firmware{hello_world}: compartment{hello}
   # Alternative way to specify the same.
   #
   #\
+
   threads += '{"compartment":"hello",
                "priority":1,
                "entry_point":"say_hello",
@@ -21,8 +22,10 @@ firmware{hello_world}: compartment{hello}
 #
 #info $serialize($(firmware{hello_world}: threads))
 
+compartment{hello}: cxx{hello} cheriot-rtos/lib/library{freestanding}
+
+#\
 compartment{hello}: obje{hello} cheriot-rtos/lib/library{freestanding}
-
 obje{hello}: cxx{hello}
-
 obje{hello}: cxx.coptions += -cheri-compartment=hello
+#\

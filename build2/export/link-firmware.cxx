@@ -39,7 +39,7 @@ apply (action a, target& xt, match_extra& me) const override
 
   // Match prerequisites.
   //
-  inject_fsdir (a, t);
+  const fsdir* dir (inject_fsdir (a, t));
 
   // This is essentially match_prerequisite_members() with some dependency
   // synthesis and the pattern->apply_prerequisites() call worked in between.
@@ -57,6 +57,9 @@ apply (action a, target& xt, match_extra& me) const override
       continue;
 
     const target& pt (p.search (t));
+
+    if (dir == &pt) // Skip if already added.
+      continue;
 
     // Re-create the clean semantics as in match_prerequisite_members().
     //
@@ -269,14 +272,16 @@ apply (action a, target& xt, match_extra& me) const override
   wait_guard wg (ctx, ctx.count_busy (), t[a].task_count, true);
 
   for (const prerequisite_target& pt: pts)
-    match_async (a, *pt.target, ctx.count_busy (), t[a].task_count);
+    if (pt.target != dir) // Skip if already matched.
+      match_async (a, *pt.target, ctx.count_busy (), t[a].task_count);
 
   wg.wait ();
 
   // Finish matching.
   //
   for (const prerequisite_target& pt: pts)
-    match_complete (a, *pt.target);
+    if (pt.target != dir) // Skip if already matched.
+      match_complete (a, *pt.target);
 
   switch (a)
   {
@@ -323,7 +328,8 @@ perform_update (action a, const target& xt)
     "--script", find_if (pts.begin (), pts.end (),
                          [t = string ("ldscript")] (const prerequisite_target& pt)
                          {
-                           return pt.target->type ().name == t;
+                           return pt.target != nullptr &&
+                             pt.target->type ().name == t;
                          })->target->as<file> ().path ().string ().c_str (),
     "--compartment-report", rtp.string ().c_str (),
     "-o", tp.string ().c_str (),
@@ -339,6 +345,9 @@ perform_update (action a, const target& xt)
     {
       for (const prerequisite_target& pt: t.prerequisite_targets[a])
       {
+        if (pt.target == nullptr) // Skip "holes".
+          continue;
+
         const target& p (*pt.target);
         string t (p.type ().name);
 
@@ -352,6 +361,9 @@ perform_update (action a, const target& xt)
 
     for (const prerequisite_target& pt: pts)
     {
+      if (pt.target == nullptr) // Skip "holes".
+        continue;
+
       const target& p (*pt.target);
       string t (p.type ().name);
 
@@ -367,7 +379,7 @@ perform_update (action a, const target& xt)
     }
   }
 
-  // Hash the command line and and compare with depdb.
+  // Hash the command line and compare with depdb.
   //
   {
     sha256 cs;
