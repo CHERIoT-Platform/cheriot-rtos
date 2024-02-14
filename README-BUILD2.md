@@ -36,19 +36,19 @@ out of source builds, for example, for different boards, different
 `cheriot-rtos` and/or `cheriot-tools` versions):
 
 ```
-$ b configure: ./@../user-project-ibex/ \
+$ b configure: ./@../user-project-build-ibex/ \
     config.cxx=/cheriot-tools/bin/clang++ \
     config.import.cheriot_rtos=../cheriot-rtos \
     config.cheriot_rtos.board=ibex-safe-simulator
 
-$ b ../user-project-ibex/
+$ b ../user-project-build-ibex/
 ```
 
 To configure the source directory to forward to one of the out of source
 builds (so can build it form the source directory):
 
 ```
-$ b configure: ./@../user-project-ibex/,forward
+$ b configure: ./@../user-project-build-ibex/,forward
 $ b
 ```
 
