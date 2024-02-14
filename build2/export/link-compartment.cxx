@@ -189,7 +189,7 @@ apply (action a, target& xt, match_extra& me) const override
   {
   case perform_update_id:  return perform_update;
   case perform_clean_id:   return perform_clean_depdb;
-  default: assert (false); return noop_recipe;
+  default:                 return noop_recipe; // Configure update.
   }
 }
 
