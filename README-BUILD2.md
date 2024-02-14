@@ -32,7 +32,8 @@ $ b config.cxx=/cheriot-tools/bin/clang++ \
 ```
 
 To configure an out of source build of the user project (can have multiple
-out of the source builds, for example, for different boards):
+out of source builds, for example, for different boards, different
+`cheriot-rtos` and/or `cheriot-tools` versions):
 
 ```
 $ b configure: ./@../user-project-ibex/ \
