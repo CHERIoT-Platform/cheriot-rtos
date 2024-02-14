@@ -18,8 +18,25 @@ firmware{hello_world}: compartment{hello}
   #\
 }
 
+compartment{hello}: cxx{hello} cheriot-rtos/lib/library{freestanding}
+
 # Useful for debugging.
 #
 #info $serialize($(firmware{hello_world}: threads))
 
-compartment{hello}: cxx{hello} cheriot-rtos/lib/library{freestanding}
+
+# Example of building multiple firmware versions from the same compartments.
+#
+#\
+
+./: firmware{hello_world hello_world_large}
+
+firmware{hello_world_large}: compartment{hello}
+{
+  threads += (compartment@hello      \
+              priority@2             \
+              entry_point@say_hello  \
+              stack_size@0x400       \
+              trusted_stack_frames@2)
+}
+#\
