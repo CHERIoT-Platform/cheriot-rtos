@@ -6,7 +6,7 @@ firmware{hello_world}: compartment{hello}
               stack_size@0x200       \
               trusted_stack_frames@1)
 
-  # Alternative way to specify the same.
+  # Alternative way to specify the same as JSON text.
   #
   #\
 
@@ -23,9 +23,3 @@ firmware{hello_world}: compartment{hello}
 #info $serialize($(firmware{hello_world}: threads))
 
 compartment{hello}: cxx{hello} cheriot-rtos/lib/library{freestanding}
-
-#\
-compartment{hello}: obje{hello} cheriot-rtos/lib/library{freestanding}
-obje{hello}: cxx{hello}
-obje{hello}: cxx.coptions += -cheri-compartment=hello
-#\

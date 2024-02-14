@@ -131,20 +131,6 @@ ldscript{*}:
 define library: file
 library{*}: extension = library
 
-#\
-[rule_name=link_library] library{~'/(.+)/'}: obje{~'/(.+)/'} \
-  $sdk/ldscript{library} $ld
-{{
-  s = $path($filter($<, obje))
-  l = $path($filter($<, ldscript))
-  o = $path($>)
-
-  diag ld $>
-
-  $ld --script $l --compartment --relax -o $o $s
-}}
-#\
-
 [rule_name=link_library] library{~'/(.+)/'}: $sdk/ldscript{library} $ld
 % update clean
 recipe c++ link-compartment.cxx
@@ -154,20 +140,6 @@ privileged_library{*}: extension = library
 
 # Note: linked with the privileged compartment linker script.
 #
-#\
-[rule_name=link_privileged_library] privileged_library{~'/(.+)/'}: \
-  obje{~'/(.+)/'} $sdk/ldscript{privileged-compartment} $ld
-{{
-  s = $path($filter($<, obje))
-  l = $path($filter($<, ldscript))
-  o = $path($>)
-
-  diag ld $>
-
-  $ld --script $l --compartment --relax -o $o $s
-}}
-#\
-
 [rule_name=link_privileged_library] privileged_library{~'/(.+)/'}: \
   $sdk/ldscript{privileged-compartment} $ld
 % update clean
@@ -176,20 +148,6 @@ recipe c++ link-compartment.cxx
 define compartment: file
 compartment{*}: extension = compartment
 
-#\
-[rule_name=link_compartment] compartment{~'/(.+)/'}: obje{~'/(.+)/'} \
-  $sdk/ldscript{compartment} $ld
-{{
-  s = $path($filter($<, obje))
-  l = $path($filter($<, ldscript))
-  o = $path($>)
-
-  diag ld $>
-
-  $ld --script $l --compartment --relax -o $o $s
-}}
-#\
-
 [rule_name=link_compartment] compartment{~'/(.+)/'}: \
   $sdk/ldscript{compartment} $ld
 % update clean
@@ -197,20 +155,6 @@ recipe c++ link-compartment.cxx
 
 define privileged_compartment: file
 privileged_compartment{*}: extension = compartment
-
-#\
-[rule_name=link_privileged_compartment] privileged_compartment{~'/(.+)/'}: \
-  obje{~'/(.+)/'} $sdk/ldscript{privileged-compartment} $ld
-{{
-  s = $path($filter($<, obje))
-  l = $path($filter($<, ldscript))
-  o = $path($>)
-
-  diag ld $>
-
-  $ld --script $l --compartment --relax -o $o $s
-}}
-#\
 
 [rule_name=link_privileged_compartment] privileged_compartment{~'/(.+)/'}: \
   $sdk/ldscript{privileged-compartment} $ld
@@ -402,52 +346,8 @@ dump{*}: extension = dump
 define json: file
 json{*}: extension = json
 
-# @@ TODO: generate firmware.ldscript. Maybe generate it as part of the
-#    firmware recipe (seeing that it will need a lot of info from firmware)?
-#    But then won't be able to use the `in` module.
-#
 # Note: the order in which we specify things to link is no significant.
 #
-#\
-[rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
-   compartment{~'/(.+)/'} \
-   cheriot-rtos/core/loader/obje{boot-s boot-c} \
-   cheriot-rtos/core/switcher/obje{entry} \
-   cheriot-rtos/lib/library{atomic1 atomic4 locks crt freestanding} \
-   cheriot-rtos/core/privileged_library{token_library} \
-   cheriot-rtos/core/privileged_compartment{allocator} \
-   cheriot-rtos/core/privileged_compartment{^'/\1..scheduler/'} \
-   ldscript{firmware.ldscript} $ld $objdump
-{{
-  s = $path($filter($<, obje library privileged_library \
-                             compartment privileged_compartment))
-  l = $path($filter($<, ldscript))
-  o = $path($>[0])
-  d = $path($>[1])
-  r = $path($>[2])
-
-  diag ld $>
-
-  $ld --relax --script $l --compartment-report $r -o $o $s
-  $objdump -glxsdrS --demangle $o >$d
-}}
-
-# Use `.` (escaped as `..`) instead of, say, `-` or `_` as a separator between
-# the firmware name and `scheduler` to minimize the chance of clashes between
-# several firmware (though seeing that this is inside cheriot-rtos/core/, it's
-# unclear what we could clash with).
-#
-cheriot-rtos/core/
-{
-  privileged_compartment{hello_world..scheduler}: scheduler/obje{hello_world..main} fsdir{.}
-
-  scheduler/obje{hello_world..main}: $sdk/core/scheduler/cxx{main} fsdir{scheduler/}
-  {
-    cc.poptions += -DCONFIG_THREADS_NUM=1
-  }
-}
-#\
-
 [rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
    compartment{~'/(.+)/'} \
    cheriot-rtos/core/loader/obje{boot-s boot-c} \
