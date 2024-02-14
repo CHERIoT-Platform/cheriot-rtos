@@ -53,37 +53,19 @@ apply (action a, target& xt, match_extra& me) const override
   dt.derive_path ();
   rt.derive_path ();
 
-  // Match prerequisites.
+  // Search and match prerequisites.
   //
-  const fsdir* dir (inject_fsdir (a, t));
+  inject_fsdir (a, t, false /* match */);
 
-  // This is essentially match_prerequisite_members() with some dependency
-  // synthesis and the pattern->apply_prerequisites() call worked in between.
-  //
-
-  // Add target's prerequisites.
+  // This is essentially the standard match_prerequisite_members() with some
+  // dependency synthesis and the pattern->apply_prerequisites() call worked
+  // in between.
   //
   auto& pts (t.prerequisite_targets[a]);
-  for (prerequisite_member p: group_prerequisite_members (a, t))
-  {
-    // Ignore excluded.
-    //
-    include_type pi (include (a, t, p));
-    if (!pi)
-      continue;
 
-    const target& pt (p.search (t));
-
-    if (dir == &pt) // Skip if already added.
-      continue;
-
-    // Re-create the clean semantics as in match_prerequisite_members().
-    //
-    if (a.operation () == clean_id && !pt.in (rs))
-      continue;
-
-    pts.push_back (prerequisite_target (pt, pi));
-  }
+  // Search and add target's prerequisites.
+  //
+  search_prerequisite_members (a, t);
 
   // Inject pattern's prerequisites.
   //
@@ -282,22 +264,9 @@ apply (action a, target& xt, match_extra& me) const override
     pts.push_back (ls_tl.first);
   }
 
-  // Start asynchronous matching of prerequisites. Wait with unlocked phase to
-  // allow phase switching.
+  // Finally match all the prerequisite members.
   //
-  wait_guard wg (ctx, ctx.count_busy (), t[a].task_count, true);
-
-  for (const prerequisite_target& pt: pts)
-    if (pt.target != dir) // Skip if already matched.
-      match_async (a, *pt.target, ctx.count_busy (), t[a].task_count);
-
-  wg.wait ();
-
-  // Finish matching.
-  //
-  for (const prerequisite_target& pt: pts)
-    if (pt.target != dir) // Skip if already matched.
-      match_complete (a, *pt.target);
+  match_members (a, t, pts);
 
   switch (a)
   {
@@ -393,6 +362,8 @@ perform_update (action a, const target& xt)
     }
   }
 
+  // @@ TODO: change-track the ld/objdump versions.
+  //
   depdb dd (tp + ".d");
 
   // Hash the command line and compare with depdb.

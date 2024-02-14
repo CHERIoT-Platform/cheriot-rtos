@@ -68,129 +68,122 @@ apply (action a, target& xt, match_extra& me) const override
   //
   t.derive_path ();
 
-  // Match prerequisites.
+  // Search and match prerequisites.
   //
-  const fsdir* dir (inject_fsdir (a, t));
+  inject_fsdir (a, t, false /* match */);
 
-  // This is essentially match_prerequisite_members() with some dependency
-  // synthesis and the pattern->apply_prerequisites() call worked in between.
+  // This is essentially the standard match_prerequisite_members() with some
+  // dependency synthesis and the pattern->apply_prerequisites() call worked
+  // in between.
   //
+  auto& pts (t.prerequisite_targets[a]);
+
   const target_type& c_tt   (find_tt (rs, "c"));
   const target_type& cxx_tt (find_tt (rs, "cxx"));
   const target_type& obj_tt (find_tt (rs, "obje"));
 
+  // Search and add target's prerequisites filtering out and saving c/cxx{}
+  // prerequisites for later dependency synthesis.
+  //
+  // @@ TODO: we could also handle S{} in addition to c/cxx{}.
+  //
+  vector<prerequisite_member> syn_ps;
+
+  auto filter = [&c_tt,
+                 &cxx_tt,
+                 &syn_ps] (action,
+                           const target& t,
+                           const prerequisite_member& p,
+                           include_type pi) mutable -> prerequisite_target
+  {
+    if (pi == include_type::normal && (p.is_a (c_tt) || p.is_a (cxx_tt)))
+    {
+      syn_ps.push_back (p);
+      return prerequisite_target (nullptr);
+    }
+
+    return prerequisite_target (p.search (t), pi);
+  };
+
+  search_prerequisite_members (a, t, filter);
+
+  // Synthesize the obje{}:c/cxx{} dependencies for c/cxx{} prerequisites that
+  // we have saved. For compartments also propagate the compartment name with
+  // the -cheri-compartment option.
+  //
   bool compart (t.is_a (find_tt (rs, "compartment")) ||
                 t.is_a (find_tt (rs, "privileged_compartment")));
 
-  // Add target's prerequisites.
-  //
-  auto& pts (t.prerequisite_targets[a]);
-  for (prerequisite_member p: group_prerequisite_members (a, t))
+  for (const prerequisite_member& p: syn_ps)
   {
-    // Ignore excluded.
+    // Note: this code is inspired by libbuild2/cc/link-rule.cxx.
     //
-    include_type pi (include (a, t, p));
-    if (!pi)
-      continue;
+    const prerequisite_key& cp (p.key ()); // C/C++ source key.
 
-    // If this is a c/cxx{} prerequisite, synthesize the obje{}:c/cxx{}
-    // dependency. For compartments also propagate the compartment name in
-    // -cheri-compartment=.
+    // Come up with the obje{} target directory. The source prerequisite
+    // directory can be relative (to the scope) or absolute. If it is
+    // relative, then use it as is. If absolute, then translate it to the
+    // corresponding directory under out_root. While the source directory is
+    // most likely under src_root, it is also possible it is under out_root
+    // (e.g., generated source).
     //
-    if (pi == include_type::normal && (p.is_a (c_tt) || p.is_a (cxx_tt)))
+    dir_path d;
     {
-      // Note: this code is inspired by libbuild2/cc/link-rule.cxx.
-      //
-      const prerequisite_key& cp (p.key ()); // Source key.
+      const dir_path& cpd (*cp.tk.dir);
 
-      // Come up with the obje{} target directory. The source prerequisite
-      // directory can be relative (to the scope) or absolute. If it is
-      // relative, then use it as is. If absolute, then translate it to the
-      // corresponding directory under out_root. While the source directory is
-      // most likely under src_root, it is also possible it is under out_root
-      // (e.g., generated source).
-      //
-      dir_path d;
+      if (cpd.relative () || cpd.sub (rs.out_path ()))
+        d = cpd;
+      else
       {
-        const dir_path& cpd (*cp.tk.dir);
+        if (!cpd.sub (rs.src_path ()))
+          fail << "out of project prerequisite " << cp <<
+            info << "specify corresponding obje{} target explicitly";
 
-        if (cpd.relative () || cpd.sub (rs.out_path ()))
-          d = cpd;
-        else
-        {
-          if (!cpd.sub (rs.src_path ()))
-            fail << "out of project prerequisite " << cp <<
-              info << "specify corresponding obje{} target explicitly";
-
-          d = rs.out_path () / cpd.leaf (rs.src_path ());
-        }
+        d = rs.out_path () / cpd.leaf (rs.src_path ());
       }
-
-      pair<target&, ulock> obj_tl (
-        search_new_locked (ctx,
-                           obj_tt,
-                           d,
-                           dir_path (), // out (always in out)
-                           *cp.tk.name,
-                           nullptr,
-                           cp.scope));
-
-      // Assume this is already done if the target exists (e.g., operation
-      // batch).
-      //
-      if (obj_tl.second.owns_lock ())
-      {
-        // Note that here we don't need fsdir{} since we are building in the
-        // same directory as the source file.
-        //
-        obj_tl.first.prerequisites (prerequisites {p.as_prerequisite ()});
-
-        // Use target name as compartment name.
-        //
-        if (compart)
-          cast<strings> (obj_tl.first.append_locked ("cc.coptions")).push_back (
-            "-cheri-compartment=" + t.name);
-
-        obj_tl.second.unlock ();
-      }
-
-      pts.push_back (prerequisite_target (obj_tl.first, pi));
-      continue;
     }
 
-    const target& pt (p.search (t));
-
-    if (dir == &pt) // Skip if already added.
-      continue;
-
-    // Re-create the clean semantics as in match_prerequisite_members().
+    // @@ TODO: this is where we could add the source file extension to the
+    //          target name (i.e., hello.cc.o instead of hello.o).
     //
-    if (a.operation () == clean_id && !pt.in (rs))
-      continue;
+    pair<target&, ulock> obj_tl (
+      search_new_locked (ctx,
+                         obj_tt,
+                         d,
+                         dir_path (), // out (always in out)
+                         *cp.tk.name,
+                         nullptr,
+                         cp.scope));
 
-    pts.push_back (prerequisite_target (pt, pi));
+    // Assume this is already done if the target exists (e.g., operation
+    // batch).
+    //
+    if (obj_tl.second.owns_lock ())
+    {
+      // Note that here we don't need fsdir{} since we are building in the
+      // same directory as the source file.
+      //
+      obj_tl.first.prerequisites (prerequisites {p.as_prerequisite ()});
+
+      // Use target name as compartment name.
+      //
+      if (compart)
+        cast<strings> (obj_tl.first.append_locked ("cc.coptions")).push_back (
+          "-cheri-compartment=" + t.name);
+
+      obj_tl.second.unlock ();
+    }
+
+    pts.push_back (prerequisite_target (obj_tl.first));
   }
 
   // Inject pattern's prerequisites.
   //
   pattern->apply_prerequisites (a, t, bs, me);
 
-  // Start asynchronous matching of prerequisites. Wait with unlocked phase to
-  // allow phase switching.
+  // Finally match all the prerequisite members.
   //
-  wait_guard wg (ctx, ctx.count_busy (), t[a].task_count, true);
-
-  for (const prerequisite_target& pt: pts)
-    if (pt.target != dir) // Skip if already matched.
-      match_async (a, *pt.target, ctx.count_busy (), t[a].task_count);
-
-  wg.wait ();
-
-  // Finish matching.
-  //
-  for (const prerequisite_target& pt: pts)
-    if (pt.target != dir) // Skip if already matched.
-      match_complete (a, *pt.target);
+  match_members (a, t, pts);
 
   switch (a)
   {
@@ -252,6 +245,8 @@ perform_update (action a, const target& xt)
       args.push_back (p.as<file> ().path ().string ().c_str ());
   }
 
+  // @@ TODO: change-track the ld version.
+  //
   depdb dd (tp + ".d");
 
   // Hash the command line and compare with depdb.
