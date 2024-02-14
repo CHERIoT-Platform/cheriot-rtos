@@ -12,9 +12,10 @@ if $empty($path_search($board_file))
 
 [json_object] board = $json.load($board_file)
 
-# Useful for debugging.
+# Dump the board JSON if running with -V or higher (useful for debugging).
 #
-#info $serialize($board)
+if ($build.verbosity >= 3)
+  info $serialize($board)
 
 revoker = ($board[revoker])
 devices = $object_names($board[devices])
@@ -52,7 +53,7 @@ cxx.std = 20
 c.std   = 2x
 
 # Specify these options as compiler mode (as opposed to in cc.coptions below)
-# so that they are taken into account when detecting target, searach paths,
+# so that they are taken into account when detecting target, search paths,
 # etc.
 #
 cxx.mode = -target riscv32-unknown-unknown -nostdinc
