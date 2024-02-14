@@ -1,3 +1,11 @@
+# Make sure we have build2 0.17.0-a.0.20240214074408.40f84c09974c or later.
+#
+if! ($build.version.major > 0  || \
+     $build.version.minor > 17 || \
+     ($build.version.minor == 17 && (!$build.version.snapshot || \
+                                     $build.version.snapshot_sn >= 20240214074408)))
+  fail "build2 version $build.version is too old"
+
 config [string] config.cheriot_rtos.board
 
 if! $defined(config.cheriot_rtos.board)
