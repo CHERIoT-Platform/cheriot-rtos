@@ -7,9 +7,7 @@ includes(sdkdir)
 set_toolchains("cheriot-clang")
 
 -- Support libraries
-includes(path.join(sdkdir, "lib/freestanding"),
-         path.join(sdkdir, "lib/atomic"),
-         path.join(sdkdir, "lib/crt"))
+includes(path.join(sdkdir, "lib"))
 
 option("board")
     set_default("sail")
@@ -23,7 +21,7 @@ compartment("caller")
 
 -- Firmware image for the example.
 firmware("compartment-call-benchmark")
-    add_deps("crt", "freestanding", "atomic")
+    add_deps("crt", "freestanding", "atomic", "stdio", "string")
     add_deps("caller", "callee")
     on_load(function(target)
         target:values_set("board", "$(board)")
