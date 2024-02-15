@@ -1017,30 +1017,109 @@ namespace CHERI
 	}
 
 	/**
+	 * Concept that matches pointers.
+	 */
+	template<typename T>
+	concept IsPointer = std::is_pointer_v<T>;
+
+	/**
+	 * Concept that matches smart pointers, i.e., classes which implements
+	 * a `get` method returning a pointer, and supports `operator=` with
+	 * the return value of `get`. This will match `Capability`, standard
+	 * library smart pointers, etc.
+	 */
+	template<typename T>
+	concept IsSmartPointerLike = requires(T b)
+	{
+		{
+			b.get()
+			} -> IsPointer;
+	}
+	&&requires(T b)
+	{
+		b = b.get();
+	};
+
+	/**
 	 * Checks that `ptr` is valid, unsealed, has at least `Permissions`,
 	 * and has at least `Space` bytes after the current offset.
+	 *
+	 * `ptr` can be a pointer, or a smart pointer, i.e., any class that
+	 * supports a `get` method returning a pointer, and `operator=`. This
+	 * includes `Capability` and standard library smart pointers.
 	 *
 	 * If the permissions do not include Global, then this will also check
 	 * that the capability does not point to the current thread's stack.
 	 * This behaviour can be disabled (for example, for use in a shared
 	 * library) by passing `false` for `CheckStack`.
 	 *
+	 * If `EnforceStrictPermissions` is set to `true`, this will also set
+	 * the permissions of passed capability reference to `Permissions`.
+	 * This is useful for detecting cases where compartments ask for less
+	 * permissions than they actually require.
+	 *
 	 * This function is provided as a wrapper for the `::check_pointer` C
 	 * API. It is always inlined. For each call site, it materialises the
 	 * constants needed before performing an indirect call to
 	 * `::check_pointer`.
 	 */
-	template<PermissionSet Permissions = PermissionSet{Permission::Load},
-	         typename T                = void,
-	         bool CheckStack           = true>
-	__always_inline inline bool check_pointer(T *ptr, size_t space = sizeof(T))
+	template<PermissionSet Permissions     = PermissionSet{Permission::Load},
+	         typename T                    = void,
+	         bool CheckStack               = true,
+	         bool EnforceStrictPermissions = false>
+	__always_inline inline bool check_pointer(
+	  auto  &ptr,
+	  size_t space = sizeof(
+	    std::remove_pointer<
+	      decltype(ptr)>)) requires(std::
+	                                  is_pointer_v<
+	                                    std::remove_cvref_t<decltype(ptr)>> ||
+	                                IsSmartPointerLike<
+	                                  std::remove_cvref_t<decltype(ptr)>>)
 	{
 		// We can skip a stack check if we've asked for Global because the
 		// stack does not have this permission.
 		constexpr bool StackCheckNeeded =
 		  CheckStack && !Permissions.contains(Permission::Global);
-		return ::check_pointer(
-		  ptr, space, Permissions.as_raw(), StackCheckNeeded);
+		constexpr bool IsRawPointer =
+		  std::is_pointer_v<std::remove_cvref_t<decltype(ptr)>>;
+
+		bool isValid;
+		if constexpr (IsRawPointer)
+		{
+			// If passed `ptr` as a raw capability (e.g., `void*`),
+			// pass it as-is to ::check_pointer.
+			isValid = ::check_pointer(
+			  ptr, space, Permissions.as_raw(), StackCheckNeeded);
+		}
+		else
+		{
+			// Otherwise, call `get` on `ptr` to retrieve a raw
+			// capability.
+			isValid = ::check_pointer(
+			  ptr.get(), space, Permissions.as_raw(), StackCheckNeeded);
+		}
+		// If passed `EnforceStrictPermissions`, set the permissions
+		// of `ptr` to `Permissions`
+		if constexpr (EnforceStrictPermissions)
+		{
+			if (isValid)
+			{
+				if constexpr (IsRawPointer)
+				{
+					Capability cap{ptr};
+					cap.permissions() &= Permissions;
+					ptr = cap.get();
+				}
+				else
+				{
+					Capability cap{ptr.get()};
+					cap.permissions() &= Permissions;
+					ptr = cap.get();
+				}
+			}
+		}
+		return isValid;
 	}
 
 	/**

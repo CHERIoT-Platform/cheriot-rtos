@@ -16,6 +16,7 @@ __cheri_compartment("crash_recovery_test") void test_crash_recovery();
 __cheri_compartment("multiwaiter_test") void test_multiwaiter();
 __cheri_compartment("stack_test") void test_stack();
 __cheri_compartment("compartment_calls_test") void test_compartment_call();
+__cheri_compartment("check_pointer_test") void test_check_pointer();
 __cheri_compartment("static_sealing_test") void test_static_sealing();
 
 // Simple tests don't need a separate compartment.
