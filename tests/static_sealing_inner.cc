@@ -45,7 +45,7 @@ void test_static_sealed_object(Sealed<TestType> obj)
 	                                  Permission::LoadStoreCapability,
 	                                  Permission::LoadMutable,
 	                                  Permission::LoadGlobal,
-	                                  Permission::Global}>(unsealed.get(), 1)),
+	                                  Permission::Global}>(unsealed, 1)),
 	     "Incorrect permissions on unsealed statically sealed object {}",
 	     unsealed);
 }
