@@ -1063,10 +1063,9 @@ namespace CHERI
 	 * constants needed before performing an indirect call to
 	 * `::check_pointer`.
 	 */
-	template<PermissionSet Permissions     = PermissionSet{Permission::Load},
-	         typename T                    = void,
-	         bool CheckStack               = true,
-	         bool EnforceStrictPermissions = false>
+	template<PermissionSet Permissions = PermissionSet{Permission::Load},
+	         bool          CheckStack  = true,
+	         bool          EnforceStrictPermissions = false>
 	__always_inline inline bool check_pointer(
 	  auto  &ptr,
 	  size_t space = sizeof(

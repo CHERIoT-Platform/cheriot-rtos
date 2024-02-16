@@ -79,7 +79,7 @@ void check_pointer_strict_mode(int *ptr)
 
 	// We can re-use `cap` here because it was not changed.
 	isValid =
-	  check_pointer<PermissionSet{Permission::Load}, void, true, true>(cap, 1);
+	  check_pointer<PermissionSet{Permission::Load}, true, true>(cap, 1);
 	TEST(isValid,
 	     "Cannot check valid capability when EnforceStrictPermissions = true "
 	     "(calling with Capability object).");
@@ -107,7 +107,7 @@ void check_pointer_strict_mode(int *ptr)
 	  "Permissions of freshly created capability do not include load/store.");
 
 	isValid =
-	  check_pointer<PermissionSet{Permission::Load}, void, true, true>(ptr, 1);
+	  check_pointer<PermissionSet{Permission::Load}, true, true>(ptr, 1);
 	TEST(isValid,
 	     "Cannot check valid capability when EnforceStrictPermissions = true "
 	     "(calling with raw capability).");
