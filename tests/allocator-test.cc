@@ -419,6 +419,61 @@ namespace
 		debug_log("Hazard pointer tests done");
 	}
 
+	/**
+	 * Test the sealing APIs.  Tests that we can allocate and free sealed
+	 * objects, that we can't collect them with the wrong capabilities, and that
+	 * they don't go away when heap_free_all is called.
+	 *
+	 * This is marked as noinline because otherwise the predict-false on the
+	 * test failures causes all of the log-message-and-fail blocks to be moved
+	 * to the end of the function and, if this is inlined, ends up with some
+	 * branches that are more than 2 KiB away from their targets.
+	 */
+	__noinline void test_token()
+	{
+		auto    sealingCapability = STATIC_SEALING_TYPE(sealingTest);
+		Timeout noWait{0};
+		void   *unsealedCapability;
+		TEST(heap_quota_remaining(SECOND_HEAP) == SECOND_HEAP_QUOTA,
+		     "Quota left before allocating is {}, expected {}",
+		     heap_quota_remaining(SECOND_HEAP),
+		     SECOND_HEAP_QUOTA);
+		Capability sealedPointer = token_sealed_unsealed_alloc(
+		  &noWait, SECOND_HEAP, sealingCapability, 4096, &unsealedCapability);
+		// Note: If this test fails because the allocator can handle larger
+		// allocations, then this test can be removed.  If it fails because the
+		// allocator is incorrectly using imprecise bounds, please fix it!
+		TEST(!sealedPointer.is_valid(),
+		     "Successfully allocated capability that is too large for precise "
+		     "bounds");
+		sealedPointer = token_sealed_unsealed_alloc(
+		  &noWait, SECOND_HEAP, sealingCapability, 128, &unsealedCapability);
+		TEST(sealedPointer.is_valid(), "Failed to allocate capability");
+		TEST(sealedPointer.is_sealed(), "Failed to allocate sealed capability");
+		TEST(!Capability{unsealedCapability}.is_sealed(),
+		     "Failed to allocate sealed capability");
+		TEST(token_obj_destroy(
+		       MALLOC_CAPABILITY, sealingCapability, sealedPointer) != 0,
+		     "Freeing a sealed capability with the wrong allocator succeeded");
+		debug_log("Before heap free all, quota left: {}",
+		          heap_quota_remaining(SECOND_HEAP));
+		int ret = heap_free_all(SECOND_HEAP);
+		debug_log("After heap free all, quota left: {}",
+		          heap_quota_remaining(SECOND_HEAP));
+		TEST(sealedPointer.is_valid(),
+		     "heap_free_all freed sealed capability: {}",
+		     sealedPointer);
+		TEST(ret == 0, "heap_free_all returned {}, expected 0", ret);
+		TEST(
+		  token_obj_destroy(SECOND_HEAP, sealingCapability, sealedPointer) == 0,
+		  "Freeing a sealed capability with the correct capabilities failed");
+		TEST(heap_quota_remaining(SECOND_HEAP) == SECOND_HEAP_QUOTA,
+		     "Quota left after allocating sealed objects and cleaning up is "
+		     "{}, expected {}",
+		     heap_quota_remaining(SECOND_HEAP),
+		     SECOND_HEAP_QUOTA);
+	}
+
 } // namespace
 
 /**
@@ -438,6 +493,7 @@ void test_allocator()
 	     BigAllocSize);
 	debug_log("Heap size is {} bytes", HeapSize);
 
+	test_token();
 	test_hazards();
 
 	// Make sure that free works only on memory owned by the caller.
