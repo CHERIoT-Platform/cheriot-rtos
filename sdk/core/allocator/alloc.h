@@ -289,7 +289,13 @@ namespace displacement_proxy
 struct __packed __aligned(MallocAlignment)
 MChunkHeader
 {
-	static constexpr size_t OwnerIDWidth = 14;
+	/**
+	 * Each chunk has a 16-bit metadata field that is used to store a small
+	 * bitfield and the owner ID in the remaining bits.  This is the space not
+	 * consumed by the metadata.  It must be reduced if additional bits are
+	 * stolen for other fields.
+	 */
+	static constexpr size_t OwnerIDWidth = 13;
 	/**
 	 * Compressed size of the predecessor chunk.  See cell_prev().
 	 */
@@ -301,8 +307,15 @@ MChunkHeader
 
 	/// The unique identifier of the allocator.
 	uint16_t ownerID : OwnerIDWidth;
-	bool     isPrevInUse : 1;
-	bool     isCurrInUse : 1;
+	/**
+	 * Is this a sealed object?  If so, it should be exempted from free in
+	 * `heap_free_all` because deallocation requires consensus between the
+	 * holder of the allocator capability and the holder of the sealing
+	 * capability.
+	 */
+	bool isSealedObject : 1;
+	bool isPrevInUse : 1;
+	bool isCurrInUse : 1;
 	/// Head of a linked list of claims on this allocation
 	uint16_t claims;
 
@@ -386,6 +399,7 @@ MChunkHeader
 	void mark_free()
 	{
 		isCurrInUse              = false;
+		isSealedObject           = false;
 		cell_next()->isPrevInUse = false;
 	}
 
@@ -479,6 +493,10 @@ MChunkHeader
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
+static_assert(
+  offsetof(MChunkHeader, claims) == 2 * sizeof(SmallSize) + sizeof(uint16_t),
+  "Metadata is no longer 16 bits.  Update the OwnerIDWidth constant to correct "
+  "the space used for the owner ID to match the remaining space.");
 
 // the maximum requested size that is still categorised as a small bin
 constexpr size_t MaxSmallRequest = MaxSmallSize - sizeof(MChunkHeader);
@@ -1104,10 +1122,16 @@ class MState
 	 * allocation.  The `identifier` will be stored as the owner in the header
 	 * of a successful allocation.
 	 *
+	 * If `isSealed` is true then the allocation will be marked as a sealed
+	 * object.  This allows it to be skipped when freeing all objects allocated
+	 * with a given quota.
+	 *
 	 * @return User pointer if request can be satisfied, nullptr otherwise.
 	 */
-	AllocationResult
-	mspace_dispatch(size_t bytes, size_t &quota, uint16_t identifier)
+	AllocationResult mspace_dispatch(size_t   bytes,
+	                                 size_t  &quota,
+	                                 uint16_t identifier,
+	                                 bool     isSealed = false)
 	{
 		if (!hazard_quarantine_is_empty())
 		{
@@ -1185,7 +1209,8 @@ class MState
 			++sanityCounter;
 		}
 
-		size_t bodySize = header->size_get() - sizeof(MChunkHeader);
+		size_t bodySize        = header->size_get() - sizeof(MChunkHeader);
+		header->isSealedObject = isSealed;
 		header->set_owner(identifier);
 		quota -= header->size_get();
 		if (CHERI::is_precise_range(ret.address(), bodySize))
@@ -1560,6 +1585,11 @@ class MState
 		size_t sz         = pHeader->size_get();
 		auto   nextHeader = pHeader->cell_next();
 		ok_any_chunk(pHeader);
+		if (!pHeader->is_in_use())
+		{
+			Debug::Assert(!pHeader->isSealedObject,
+			              "Sealed objects should not be free");
+		}
 		Debug::Assert(
 		  !pHeader->is_in_use(), "Free chunk {} is marked as in use", p);
 		Debug::Assert(

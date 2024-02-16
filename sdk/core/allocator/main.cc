@@ -232,18 +232,24 @@ namespace
 	 * The lock guard own the lock on entry. It will drop the lock if a
 	 * transient error occurs and attempt to reacquire it. If the lock cannot be
 	 * reacquired during the permitted timeout then this returns nullptr.
+	 *
+	 * If `isSealedAllocation` is true, then the allocation is marked as sealed
+	 * and excluded during `heap_free_all`.
 	 */
 	void *malloc_internal(size_t                           bytes,
 	                      LockGuard<decltype(lock)>      &&g,
 	                      PrivateAllocatorCapabilityState *capability,
-	                      Timeout                         *timeout)
+	                      Timeout                         *timeout,
+	                      bool isSealedAllocation = false)
 	{
 		check_gm();
 
 		do
 		{
-			auto ret = gm->mspace_dispatch(
-			  bytes, capability->quota, capability->identifier);
+			auto ret = gm->mspace_dispatch(bytes,
+			                               capability->quota,
+			                               capability->identifier,
+			                               isSealedAllocation);
 			if (std::holds_alternative<Capability<void>>(ret))
 			{
 				return std::get<Capability<void>>(ret);
@@ -913,7 +919,7 @@ ssize_t heap_free_all(SObj heapCapability)
 	ssize_t   freed   = 0;
 	do
 	{
-		if (chunk->is_in_use())
+		if (chunk->is_in_use() && !chunk->isSealedObject)
 		{
 			auto size = chunk->size_get();
 			if (heap_free_chunk(
@@ -1040,8 +1046,8 @@ namespace
 		{
 			return {nullptr, nullptr};
 		}
-		SealedAllocation obj{static_cast<SObj>(
-		  malloc_internal(sz + ObjHdrSize, std::move(g), capability, timeout))};
+		SealedAllocation obj{static_cast<SObj>(malloc_internal(
+		  sz + ObjHdrSize, std::move(g), capability, timeout, true))};
 		if (obj == nullptr)
 		{
 			Debug::log("Underlying allocation failed for sealed object");
