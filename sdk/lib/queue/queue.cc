@@ -458,9 +458,8 @@ int queue_send(Timeout *timeout, struct QueueHandle *handle, const void *src)
 				Debug::log("Claim failed: {}", claim);
 				return claim;
 			}
-			if (!check_pointer<PermissionSet{Permission::Load},
-			                   const void,
-			                   false>(src, handle->elementSize))
+			if (!check_pointer<PermissionSet{Permission::Load}, false>(
+			      src, handle->elementSize))
 			{
 				drop_claims();
 				Debug::log("Load / bounds check failed: {}");
@@ -524,7 +523,7 @@ int queue_receive(Timeout *timeout, struct QueueHandle *handle, void *dst)
 			{
 				return claim;
 			}
-			if (!check_pointer<PermissionSet{Permission::Store}, void, false>(
+			if (!check_pointer<PermissionSet{Permission::Store}, false>(
 			      dst, handle->elementSize))
 			{
 				drop_claims();
