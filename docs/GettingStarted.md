@@ -125,7 +125,7 @@ This can be inside the source checkout but you may prefer to build somewhere els
 Next, use `cmake` to configure the build:
 
 ```sh
-$ cmake ${LLVM_PATH}/llvm -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld" -DCMAKE_INSTALL_PREFIX=install -DLLVM_ENABLE_UNWIND_TABLES=NO -DLLVM_TARGETS_TO_BUILD=RISCV -DLLVM_DISTRIBUTION_COMPONENTS="clang;clangd;lld;llvm-objdump" -G Ninja
+$ cmake ${LLVM_PATH}/llvm -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld" -DCMAKE_INSTALL_PREFIX=install -DLLVM_ENABLE_UNWIND_TABLES=NO -DLLVM_TARGETS_TO_BUILD=RISCV -DLLVM_DISTRIBUTION_COMPONENTS="clang;clangd;lld;llvm-objdump;llvm-objcopy" -G Ninja
 ```
 
 It is very strongly recommended that you do a release build, debug builds can take several minutes to compile files that take seconds with release builds.
