@@ -1054,9 +1054,9 @@ namespace CHERI
 	 * library) by passing `false` for `CheckStack`.
 	 *
 	 * If `EnforceStrictPermissions` is set to `true`, this will also set
-	 * the permissions of passed capability reference to `Permissions`.
-	 * This is useful for detecting cases where compartments ask for less
-	 * permissions than they actually require.
+	 * the permissions of passed capability reference to `Permissions`, and
+	 * its bounds to `space`. This is useful for detecting cases where
+	 * compartments ask for less permissions than they actually require.
 	 *
 	 * This function is provided as a wrapper for the `::check_pointer` C
 	 * API. It is always inlined. For each call site, it materialises the
@@ -1100,7 +1100,7 @@ namespace CHERI
 			  ptr.get(), space, Permissions.as_raw(), StackCheckNeeded);
 		}
 		// If passed `EnforceStrictPermissions`, set the permissions
-		// of `ptr` to `Permissions`
+		// of `ptr` to `Permissions`, and its bounds to `space`
 		if constexpr (EnforceStrictPermissions)
 		{
 			if (isValid)
@@ -1109,13 +1109,15 @@ namespace CHERI
 				{
 					Capability cap{ptr};
 					cap.permissions() &= Permissions;
-					ptr = cap.get();
+					cap.bounds() = space;
+					ptr          = cap.get();
 				}
 				else
 				{
 					Capability cap{ptr.get()};
 					cap.permissions() &= Permissions;
-					ptr = cap.get();
+					cap.bounds() = space;
+					ptr          = cap.get();
 				}
 			}
 		}
