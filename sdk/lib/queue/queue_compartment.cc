@@ -38,9 +38,7 @@ int queue_create_sealed(Timeout            *timeout,
                         size_t              elementSize,
                         size_t              elementCount)
 {
-	if (heap_address_is_valid(timeout) ||
-	    !check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
-	      timeout))
+	if (!check_timeout_pointer(timeout))
 	{
 		return -EPERM;
 	}
@@ -111,6 +109,10 @@ int queue_destroy_sealed(Timeout           *timeout,
                          struct SObjStruct *heapCapability,
                          struct SObjStruct *queueHandle)
 {
+	if (!check_timeout_pointer(timeout))
+	{
+		return -EPERM;
+	}
 	Debug::log("Destroying queue {}", queueHandle);
 	auto  token = receive_key();
 	auto *end   = token_unseal(token, Sealed<QueueEndpoint>{queueHandle});
@@ -146,9 +148,9 @@ int queue_send_sealed(Timeout           *timeout,
                       const void        *src)
 {
 	auto *end = token_unseal(send_key(), Sealed<QueueEndpoint>{handle});
-	// If we failed to unseal, or if the timeout is on the heap, invalid
+	// If we failed to unseal, or if the timeout pointer is invalid, invalid
 	// argument error.
-	if (!end || heap_address_is_valid(timeout))
+	if (!end || !check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
 	}
@@ -160,7 +162,7 @@ int queue_receive_sealed(Timeout *timeout, struct SObjStruct *handle, void *dst)
 	auto *end = token_unseal(receive_key(), Sealed<QueueEndpoint>{handle});
 	// If we failed to unseal, or if the timeout is on the heap, invalid
 	// argument error.
-	if (!end || heap_address_is_valid(timeout))
+	if (!end || !check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
 	}

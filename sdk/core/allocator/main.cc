@@ -795,13 +795,6 @@ namespace
 		  *capability, *chunk, bodySize, isPrecise, reallyFree);
 	}
 
-	bool timeout_is_valid(Timeout *timeout)
-	{
-		return !heap_address_is_valid(timeout) &&
-		       check_pointer<PermissionSet{Permission::Load,
-		                                   Permission::Store}>(timeout);
-	}
-
 } // namespace
 
 size_t heap_quota_remaining(struct SObjStruct *heapCapability)
@@ -832,7 +825,7 @@ void heap_quarantine_empty()
 
 void *heap_allocate(Timeout *timeout, SObj heapCapability, size_t bytes)
 {
-	if (!timeout_is_valid(timeout))
+	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
 	}
@@ -948,7 +941,7 @@ void *heap_allocate_array(Timeout *timeout,
                           size_t   nElements,
                           size_t   elemSize)
 {
-	if (!timeout_is_valid(timeout))
+	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
 	}
@@ -1094,7 +1087,7 @@ SObj token_sealed_unsealed_alloc(Timeout *timeout,
                                  size_t   sz,
                                  void   **unsealed)
 {
-	if (!timeout_is_valid(timeout))
+	if (!check_timeout_pointer(timeout))
 	{
 		return INVALID_SOBJ;
 	}

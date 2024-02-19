@@ -358,15 +358,6 @@ namespace sched
 		}
 	}
 
-	/**
-	 * Check that a timeout pointer is usable.
-	 */
-	bool check_timeout_pointer(Timeout *timeout)
-	{
-		return check_pointer<PermissionSet{Permission::Load,
-		                                   Permission::Store}>(timeout);
-	}
-
 	/// Lock used to serialise deallocations.
 	FlagLock deallocLock;
 
