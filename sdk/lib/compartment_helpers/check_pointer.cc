@@ -1,4 +1,6 @@
-#include "cheri.hh"
+#include <cheri.hh>
+
+using namespace CHERI;
 
 /**
  * C API for `check_pointer`.
@@ -10,17 +12,15 @@ bool check_pointer(const void *ptr,
                    uint32_t    rawPermissions,
                    bool        checkStackNeeded)
 {
-	auto permissions = CHERI::PermissionSet::from_raw(rawPermissions);
-	CHERI::Capability<const void> cap{ptr};
-	bool                          isValid = cap.is_valid() && !cap.is_sealed();
+	auto permissions = PermissionSet::from_raw(rawPermissions);
+	Capability<const void> cap{ptr};
+	bool                   isValid = cap.is_valid() && !cap.is_sealed();
 	// Skip the stack check if we're requiring a global capability.  By
 	// construction, such a thing cannot be derived from the stack
 	// pointer.
 	if (checkStackNeeded)
 	{
-		void *csp;
-		__asm__ volatile("cmove %0, csp" : "=C"(csp));
-		CHERI::Capability<void> stack{csp};
+		Capability<void> stack{__builtin_cheri_stack_get()};
 		// Check that the capability does not overlap the
 		// stack. The base of the capability is <= its top, so
 		// the capability is in bounds as long as either:
@@ -32,4 +32,14 @@ bool check_pointer(const void *ptr,
 	// Check that we have, at least, the required permissions
 	isValid &= permissions.can_derive_from(cap.permissions());
 	return isValid;
+}
+
+bool __cheri_libcall check_timeout_pointer(const struct Timeout *timeout)
+{
+	return !heap_address_is_valid(timeout) &&
+	       check_pointer(
+	         timeout,
+	         sizeof(struct Timeout),
+	         PermissionSet{Permission::Load, Permission::Store}.as_raw(),
+	         false);
 }
