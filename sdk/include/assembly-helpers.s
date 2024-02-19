@@ -83,6 +83,7 @@
  * register.
  */
 .macro LoadCapCGP register symbol
+1:
 	auicgp		\register, %cheriot_compartment_hi(\symbol)
-	clc			\register, %cheriot_compartment_lo_i(\symbol)(\register)
+	clc			\register, %cheriot_compartment_lo_i(1b)(\register)
 .endm
