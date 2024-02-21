@@ -668,22 +668,48 @@ class KunyanEthernet
 
 	std::optional<BufferedFrame> receive_frame()
 	{
+		// To avoid processing the same packet twice, we must not use
+		// the current receive buffer if it is already in use. In that
+		// case, check the next receive buffer. If it is not in use,
+		// rotate the buffers.  Otherwise, abandon.
 		if (receiveBufferInUse[nextReceiveBuffer])
 		{
 			if (!receiveBufferInUse[next_buffer_id(nextReceiveBuffer)])
 			{
+				// The next receive buffer is not in use. Rotate.
 				nextReceiveBuffer = next_buffer_id(nextReceiveBuffer);
 			}
 			else
 			{
+				// The next receive buffer is in use too. Abandon.
 				return std::nullopt;
 			}
 		}
+
 		auto maybeLength = check_frame(nextReceiveBuffer);
+
 		if (!maybeLength)
 		{
-			return std::nullopt;
+			// The current receive buffer is empty. However, the next
+			// receive buffer, if not in use, may have a packet ready for
+			// us. Check that one as well.
+
+			if (!receiveBufferInUse[next_buffer_id(nextReceiveBuffer)])
+			{
+				// The next receive buffer is not in use. Check
+				// for packets there as well.
+				nextReceiveBuffer = next_buffer_id(nextReceiveBuffer);
+				maybeLength       = check_frame(nextReceiveBuffer);
+			}
+
+			if (!maybeLength)
+			{
+				// None of the buffers has packets that we can
+				// process. Abandon.
+				return std::nullopt;
+			}
 		}
+
 		auto length = *maybeLength;
 		// Strip the FCS from the length.
 		length -= 4;
