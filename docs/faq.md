@@ -85,7 +85,6 @@ Compartments are considered separate security contexts, shared libraries are tre
 
 While shared libraries can contain read-only data (in regions bounded by the PCC), these cannot be exported by the libraries.
 They have to be explicit functions accessing the read-only data.
-Note that the PCC disallows storing caps within its bounds because of the encoding scheme.
 
 In terms of implementation, this means that a shared library does not require a full compartment transition to enter.
 Calls to shared-library functions are simply indirect function calls, the overhead is 2-3 instructions above a normal in-compartment call.
