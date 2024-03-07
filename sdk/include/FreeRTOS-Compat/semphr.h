@@ -154,6 +154,7 @@ xSemaphoreCreateCountingStatic(UBaseType_t        uxMaxCount,
 	return pxSemaphoreBuffer;
 }
 
+#	ifndef CHERIOT_NO_AMBIENT_MALLOC
 /**
  * Allocate a counting semaphore on the heap.  The initial value and maximum are
  * specified with `uxInitialCount` and `uxMaxCount` respectively.
@@ -171,6 +172,7 @@ xSemaphoreCreateCounting(UBaseType_t uxMaxCount, UBaseType_t uxInitialCount)
 	}
 	return semaphore;
 }
+#	endif
 
 /**
  * Create a heap-allocated binary semaphore.
@@ -208,6 +210,7 @@ xSemaphoreCreateMutexStatic(StaticSemaphore_t *pxMutexBuffer)
 	return pxMutexBuffer;
 }
 
+#	ifndef CHERIOT_NO_AMBIENT_MALLOC
 /**
  * Create a heap-allocated mutex.
  */
@@ -221,6 +224,7 @@ __always_inline static inline SemaphoreHandle_t xSemaphoreCreateMutex()
 	}
 	return semaphore;
 }
+#	endif
 #endif
 
 #ifdef CHERIOT_EXPOSE_FREERTOS_RECURSIVE_MUTEX
@@ -238,6 +242,7 @@ xSemaphoreCreateRecursiveMutexStatic(StaticSemaphore_t *pxMutexBuffer)
 	return pxMutexBuffer;
 }
 
+#	ifndef CHERIOT_NO_AMBIENT_MALLOC
 /**
  * Create a heap-allocated recursive mutex.
  */
@@ -252,6 +257,7 @@ xSemaphoreCreateRecursiveMutex(void)
 	}
 	return semaphore;
 }
+#	endif
 #endif
 
 /**
