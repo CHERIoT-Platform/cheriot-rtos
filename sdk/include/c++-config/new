@@ -10,11 +10,14 @@
  * These are intended to be small and inlined for normal use but have blocking
  * behaviour that may be inappropriate for some uses.  Individual compartments
  * can opt out of these definitions by defining `CHERIOT_NO_NEW_DELETE`.
+ *
+ * The `CHERIOT_NO_AMBIENT_MALLOC` macro will also hide these, because they
+ * depend on having ambient authority to allocate memory.
  */
 #include_next <new>
 #include <stdlib.h>
 
-#ifndef CHERIOT_NO_NEW_DELETE
+#if !defined(CHERIOT_NO_NEW_DELETE) && !defined(CHERIOT_NO_AMBIENT_MALLOC)
 namespace std
 {
 	/**

@@ -78,6 +78,7 @@ xQueueSendToBackFromISR(QueueHandle_t queueHandle,
 	return xQueueSendToBack(queueHandle, buffer, 0);
 }
 
+#ifndef CHERIOT_NO_AMBIENT_MALLOC
 /**
  * Create a queue that can store `uxQueueLength` messages of size `uxItemSize`.
  * Returns NULL if queue creation failed, false otherwise.
@@ -105,6 +106,7 @@ static inline QueueHandle_t xQueueCreate(UBaseType_t uxQueueLength,
 	}
 	return ret;
 }
+#endif
 
 /**
  * Delete a queue.  This frees the memory associated with the queue.
