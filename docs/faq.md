@@ -83,6 +83,9 @@ This is easy to audit and, as long as the hardware implements the correct read b
 Compartments contain mutable state, shared libraries do not.
 Compartments are considered separate security contexts, shared libraries are treated as being part of the security context of the compartment that invokes them.
 
+While shared libraries can contain read-only data (in regions bounded by the PCC), these cannot be exported by the libraries.
+They have to be explicit functions accessing the read-only data.
+
 In terms of implementation, this means that a shared library does not require a full compartment transition to enter.
 Calls to shared-library functions are simply indirect function calls, the overhead is 2-3 instructions above a normal in-compartment call.
 Calls to functions in another compartment require register zeroing and stack zeroing, which can cost around 400 cycles.
