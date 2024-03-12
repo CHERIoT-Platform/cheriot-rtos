@@ -38,7 +38,9 @@ typedef struct Timeout
 	 */
 	Ticks elapsed __if_cxx(= 0);
 	/**
-	 * The remaining time.  This is clamped at 0 on subtraction.
+	 * The remaining time. This is clamped at 0 on subtraction. A special
+	 * value of `UnlimitedTimeout` can be set to represent an unlimited
+	 * timeout.
 	 */
 	Ticks remaining;
 #ifdef __cplusplus
@@ -68,7 +70,8 @@ typedef struct Timeout
 		{
 			elapsed = UnlimitedTimeout;
 		}
-		if (__builtin_sub_overflow(remaining, time, &remaining))
+		if (remaining != UnlimitedTimeout &&
+		    __builtin_sub_overflow(remaining, time, &remaining))
 		{
 			remaining = 0;
 		}

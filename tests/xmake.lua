@@ -76,6 +76,8 @@ compartment("compartment_calls_inner_with_handler")
     add_files("compartment_calls_inner_with_handler.cc")
 test("compartment_calls")
 test("check_pointer")
+-- Test various APIs that are too small to deserve their own test file
+test("misc")
 
 includes(path.join(sdkdir, "lib"))
 
@@ -105,6 +107,7 @@ firmware("test-suite")
     add_deps("stack_test", "stack_integrity_thread")
     add_deps("compartment_calls_test", "compartment_calls_inner", "compartment_calls_inner_with_handler")
     add_deps("check_pointer_test")
+    add_deps("misc_test")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
         target:values_set("board", "$(board)")
