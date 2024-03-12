@@ -3,7 +3,8 @@
 #include <stdint.h>
 
 /**
- * The Arty A7 configuration has two LEDs exposed over GPIO.
+ * The Arty A7 configuration has two LEDs (LD5 and LD6), four buttons, and four
+ * switches, exposed over GPIO.
  *
  * This provides a simple driver for them.
  */
