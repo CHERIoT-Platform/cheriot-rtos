@@ -43,6 +43,7 @@ $ /cheriot-tools/bin/cheriot-audit -b ../../sdk/boards/sail.json -j build/cherio
 ```
 
 This uses `-b` to find the board description file and `-j` the report that the linker generated during the build.
+The query passed with `-q` asks which compartments or libraries import the UART's MMIO capability.
 This tells us that the `debug` library and the `scheduler` compartment both have direct access to the UART.
 The latter is an artefact of how some simulators exit: simulation builds will have the UART exposed to the scheduler.
 
@@ -75,7 +76,7 @@ Rerunning the above query should now show the following output:
 ```
 
 Now that we have something that is correct, we'd like to make sure that it *remains* correct.
-We do this by writing a Rego module that encapsulates out policy.
+We do this by writing a Rego module that encapsulates our policy.
 
 First, let's start with a rule that checks access to the MMIO region.
 
