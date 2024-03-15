@@ -1168,6 +1168,25 @@ int token_obj_destroy(SObj heapCapability, SKey key, SObj object)
 	return heap_free(heapCapability, unsealed);
 }
 
+int token_obj_can_destroy(SObj heapCapability, SKey key, SObj object)
+{
+	void *unsealed;
+	{
+		LockGuard g{lock};
+		unsealed = unseal_internal(key, object);
+		if (unsealed == nullptr)
+		{
+			return -EINVAL;
+		}
+		// At this point, we drop and reacquire the lock. This is better for
+		// code reuse and heap_can_free will catch races because it will check
+		// the revocation state.
+		// The key can't be revoked and so there is no race with the key going
+		// away after the check.
+	}
+	return heap_can_free(heapCapability, unsealed);
+}
+
 size_t heap_available()
 {
 	return gm->heapFreeSize;

@@ -452,6 +452,24 @@ namespace
 		TEST(sealedPointer.is_sealed(), "Failed to allocate sealed capability");
 		TEST(!Capability{unsealedCapability}.is_sealed(),
 		     "Failed to allocate sealed capability");
+
+		int canFree =
+		  token_obj_can_destroy(SECOND_HEAP, sealingCapability, sealedPointer);
+		TEST(canFree == 0,
+		     "Should be able to free a sealed heap capability with the correct "
+		     "pair of capabilities but failed with {}",
+		     canFree);
+		canFree = token_obj_can_destroy(
+		  MALLOC_CAPABILITY, sealingCapability, sealedPointer);
+		TEST(canFree != 0,
+		     "Should not be able to free a sealed capability with the wrong "
+		     "malloc capability but succeeded");
+		canFree = token_obj_can_destroy(
+		  SECOND_HEAP, STATIC_SEALING_TYPE(wrongSealingKey), sealedPointer);
+		TEST(canFree != 0,
+		     "Should not be able to free a sealed capability with the wrong "
+		     "sealing key but succeeded");
+
 		TEST(token_obj_destroy(
 		       MALLOC_CAPABILITY, sealingCapability, sealedPointer) != 0,
 		     "Freeing a sealed capability with the wrong allocator succeeded");

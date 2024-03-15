@@ -90,6 +90,16 @@ SObj __cheri_compartment("alloc")
 int __cheri_compartment("alloc")
   token_obj_destroy(struct SObjStruct *heapCapability, SKey, SObj);
 
+/**
+ * Check whether the pair of a sealing key and a heap capability can unseal a
+ * sealed object.
+ *
+ * Returns 0 on success, `-EINVAL` if the key or object is not valid, or one of
+ * the errors from `heap_can_free` if the free would fail for other reasons.
+ */
+int __cheri_compartment("alloc")
+  token_obj_can_destroy(SObj heapCapability, SKey key, SObj object);
+
 __END_DECLS
 
 #ifdef __cplusplus
