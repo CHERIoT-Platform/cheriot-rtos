@@ -5,8 +5,8 @@
 
 #include "../switcher/tstack.h"
 #include "assembly-helpers.h"
+#include "debug.hh"
 #include "defines.h"
-#include <cdefs.h>
 #include <cheri.hh>
 #include <concepts>
 #include <magic_enum/magic_enum.hpp>
@@ -892,6 +892,33 @@ namespace loader
 		static constexpr size_t PermitLoadMutable = (1UL << 28);
 
 		/**
+		 * Mask for the used permissions.
+		 */
+		static constexpr size_t PermissionsMask = PermitLoad | PermitStore |
+		                                          PermitLoadStoreCapabilities |
+		                                          PermitLoadMutable;
+
+		/**
+		 * Mask for the space reserved for permissions.
+		 */
+		static constexpr size_t ReservedPermissionsMask = 0xff000000;
+
+		/**
+		 * Mask for the space not used yet for permissions.
+		 */
+		static constexpr size_t UnusedPermissionsMask =
+		  ReservedPermissionsMask & ~PermissionsMask;
+
+		static_assert(
+		  (PermissionsMask & ReservedPermissionsMask) == PermissionsMask,
+		  "Permissions must be in the space reserved for permissions");
+
+		/**
+		 * Mask for the size.
+		 */
+		static constexpr size_t SizeMask = ~ReservedPermissionsMask;
+
+		/**
 		 * State on boot.
 		 */
 		struct
@@ -926,7 +953,11 @@ namespace loader
 		 */
 		[[nodiscard]] size_t size() const
 		{
-			return sizeAndPermissions & 0xffffff;
+			Debug::Invariant((sizeAndPermissions & UnusedPermissionsMask) == 0,
+			                 "Unused bits in sizeAndPermissions are not zero, "
+			                 "field contains {}",
+			                 sizeAndPermissions);
+			return sizeAndPermissions & SizeMask;
 		}
 
 		/**
