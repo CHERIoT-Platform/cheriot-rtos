@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <cdefs.h>
+
 // memcpy is exposed as a libcall in the standard library headers but we want
 // to ensure that our version is called directly and not exposed to anything
 // else.
