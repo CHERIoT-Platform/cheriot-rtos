@@ -18,7 +18,10 @@ firmware{hello_world}: compartment{hello}
   #\
 }
 
-compartment{hello}: cxx{hello} cheriot-rtos/lib/library{freestanding}
+compartment{hello}: cxx{hello} \
+                    cheriot-rtos/lib/library{freestanding}\
+                    cheriot-rtos/lib/library{debug} \
+                    cheriot-rtos/lib/library{compartment_helpers}
 
 # Useful for debugging.
 #

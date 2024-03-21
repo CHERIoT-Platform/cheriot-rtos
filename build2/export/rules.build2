@@ -301,11 +301,31 @@ cheriot-rtos/
       fsdir{./}: fsdir{../}
     }
 
-    library{crt}: crt/obje{cz} fsdir{./}
+    library{debug}: debug/obje{debug} fsdir{./}
+
+    debug/
+    {
+      obje{debug}: $sdk/lib/debug/cxx{debug} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    library{compartment_helpers}: compartment_helpers/obje{check_pointer claim_fast} fsdir{./}
+
+    compartment_helpers/
+    {
+      obje{check_pointer}: $sdk/lib/compartment_helpers/cxx{check_pointer} fsdir{./}
+      obje{claim_fast}: $sdk/lib/compartment_helpers/cxx{claim_fast} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    library{crt}: crt/obje{arith64 cz} fsdir{./}
 
     crt/
     {
       obje{cz}: $sdk/lib/crt/c{cz} fsdir{./}
+      obje{arith64}: $sdk/lib/crt/c{arith64} fsdir{./}
 
       fsdir{./}: fsdir{../}
     }
