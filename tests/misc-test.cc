@@ -3,6 +3,7 @@
 
 #define TEST_NAME "Test misc APIs"
 #include "tests.hh"
+#include <string.h>
 #include <timeout.h>
 
 /**
@@ -47,7 +48,45 @@ void check_timeouts()
 	TEST(t.may_block(), "An unlimited timeout should block.");
 }
 
+/**
+ * Test memchr.
+ *
+ * This test checks the following:
+ *
+ * - memchr finds the first occurrence of the character when it is present
+ *   (test for different values, particularly the first and the last one).
+ * - memchr returns NULL when the string does not contain the character (test
+ *   for non-NULL terminated string).
+ * - memchr does not stop at \0 characters.
+ * - memchr returns NULL for 0-size pointers.
+ */
+void check_memchr()
+{
+	debug_log("Test memchr.");
+
+	char string[] = {'C', 'H', 'E', 'R', 'R', 'I', 'E', 'S'};
+
+	TEST(memchr(string, 'C', sizeof(string)) == &string[0],
+	     "memchr must return the first occurence of the character.");
+	TEST(memchr(string, 'R', sizeof(string)) == &string[3],
+	     "memchr must return the first occurence of the character.");
+	TEST(memchr(string, 'S', sizeof(string)) == &string[7],
+	     "memchr must return the first occurence of the character.");
+	TEST(memchr(string, 'X', sizeof(string)) == NULL,
+	     "memchr must return NULL when a character is not present.");
+
+	char stringWithNull[] = {'Y', 'E', 'S', '\0', 'N', 'O', '\0'};
+
+	TEST(memchr(stringWithNull, 'N', sizeof(stringWithNull)) ==
+	       &stringWithNull[4],
+	     "memchr must not stop at NULL characters.");
+
+	TEST(memchr(stringWithNull, 'N', 0) == NULL,
+	     "memchr must return NULL for zero-size pointers.");
+}
+
 void test_misc()
 {
 	check_timeouts();
+	check_memchr();
 }
