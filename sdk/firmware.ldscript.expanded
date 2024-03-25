@@ -17,25 +17,9 @@ SECTIONS
 		*(.loader_start);
 	}
 
-	
-	. = ALIGN(8);
-	.loader_trusted_stack : CAPALIGN
-	{
-		bootTStack = .;
-		. += 192;
-	}
-
-	. = ALIGN(8);
-	.thread_trusted_stack_1 : CAPALIGN
-	{
-		.thread_1_trusted_stack_start = .;
-		. += 216;
-		.thread_1_trusted_stack_end = .;
-	}
-
+	@thread_trusted_stacks@
 
 	__stack_space_start = .;
-	
 	. = ALIGN(16);
 	.loader_stack : CAPALIGN
 	{

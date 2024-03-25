@@ -24,6 +24,44 @@ namespace build2
 //   class rule: public simple_rule
 //   {
 
+/**
+ * Generate the trusted stacks section of the linker script.
+ */
+string trusted_stacks(const json_array &threads) const
+{
+    // FIXME: This should be computed based on the enabled features.
+    uint32_t loaderTrustedStackSize = 192;
+    string trustedStacks =
+        "\n\t. = ALIGN(8);"
+        "\n\t.loader_trusted_stack : CAPALIGN"
+        "\n\t{"
+        "\n\t\tbootTStack = .;"
+        "\n\t\t. += " + to_string(loaderTrustedStackSize) + ";"
+        "\n\t}\n";
+    int threadID = 1;
+    try
+    {
+        for (auto &thread : threads.array)
+        {
+            string threadIDStr = to_string(threadID);
+            trustedStacks +=
+                "\n\t. = ALIGN(8);"
+                "\n\t.thread_trusted_stack_" + threadIDStr + " : CAPALIGN"
+                "\n\t{"
+                "\n\t\t.thread_" + threadIDStr + "_trusted_stack_start = .;"
+                "\n\t\t. += " + to_string(loaderTrustedStackSize + (thread.at("trusted_stack_frames").as_uint64() * 24)) + ";"
+                "\n\t\t.thread_" + threadIDStr + "_trusted_stack_end = .;"
+                "\n\t}\n";
+            threadID++;
+        }
+    }
+    catch (const std::exception &e)
+    {
+        fail << "invalid threads json while extracting trusted stacks: " << e.what();
+    }
+    return trustedStacks;
+}
+
 virtual recipe
 apply (action a, target& xt, match_extra& me) const override
 {
@@ -270,6 +308,7 @@ apply (action a, target& xt, match_extra& me) const override
       //
       ls.assign ("mmio") = move (mmio);
       ls.assign ("code_start") = code_start;
+      ls.assign ("thread_trusted_stacks") = trusted_stacks(*threads);
 
       ls_tl.second.unlock ();
     }
