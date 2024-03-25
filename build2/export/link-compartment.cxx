@@ -226,6 +226,7 @@ perform_update (action a, const target& xt)
   cstrings args {
     ld.recall_string (),
     "--relax",
+    "--gc-sections",
     "--compartment", // Yes, even for libraries.
     "--script", ls.path ().string ().c_str (),
     "-o", tp.string ().c_str ()
