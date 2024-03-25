@@ -241,7 +241,9 @@ apply (action a, target& xt, match_extra& me) const override
                                      sdk,
                                      dir_path (),
                                      "firmware.ldscript",
-                                     "in",
+                                     // Until we've implemented this fully, use
+                                     // a partially expanded version.
+                                     "expanded",// "in"
                                      rs));
 
       target& ls (ls_tl.first);
