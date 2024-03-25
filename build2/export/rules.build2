@@ -138,6 +138,7 @@ ldscript{*}:
   mmio = [null]
   code_start = [null]
   thread_trusted_stacks = [null]
+  thread_stacks = [null]
 }
 
 define library: file

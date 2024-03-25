@@ -20,21 +20,7 @@ SECTIONS
 	@thread_trusted_stacks@
 
 	__stack_space_start = .;
-	. = ALIGN(16);
-	.loader_stack : CAPALIGN
-	{
-		bootStack = .;
-		. += 1024;
-	}
-
-	. = ALIGN(16);
-	.thread_stack_1 : CAPALIGN
-	{
-		.thread_1_stack_start = .;
-		. += 512;
-		.thread_1_stack_end = .;
-	}
-
+	@thread_stacks@
 	__stack_space_end = .;
 
 	.compartment_export_tables : ALIGN(8)
