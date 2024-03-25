@@ -210,7 +210,17 @@ apply (action a, target& xt, match_extra& me) const override
     }
     catch (const std::exception& e)
     {
-      fail << "invalid board json: " << e.what ();
+      fail << "invalid board json while extracting MMIO regions: " << e.what ();
+    }
+
+    string code_start;
+    try
+    {
+      code_start = to_string(board.at("instruction_memory").at("start").as_uint64(), 16);
+    }
+    catch (const std::exception& e)
+    {
+      fail << "invalid board json while extracting code start address: " << e.what ();
     }
 
     const target_type& ls_tt (find_tt (rs, "ldscript"));
@@ -259,6 +269,7 @@ apply (action a, target& xt, match_extra& me) const override
       // NOTE: these variables must be pre-entered in rules.build2!
       //
       ls.assign ("mmio") = move (mmio);
+      ls.assign ("code_start") = code_start;
 
       ls_tl.second.unlock ();
     }

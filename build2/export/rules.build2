@@ -136,6 +136,7 @@ ldscript{*}: extension = ldscript
 ldscript{*}:
 {
   mmio = [null]
+  code_start = [null]
 }
 
 define library: file

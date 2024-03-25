@@ -9,7 +9,7 @@
 
 SECTIONS
 {
-	. = 0x20040000;
+	. = @code_start@;
 	_start = .;
 
 	.loader_start :
