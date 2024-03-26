@@ -19,10 +19,42 @@ namespace build2
 
 //---
 
+
 // namespace build2
 // {
 //   class rule: public simple_rule
 //   {
+
+static bool is_privileged_library(const target &t)
+{
+    return t.type().name == string("privileged_library");
+}
+
+static bool is_normal_library(const target &t)
+{
+    return t.type().name == string("library") || t.type().name == string("privileged_library");
+}
+
+static bool is_privileged_compartment(const target &t)
+{
+    return t.type().name == string("privileged_compartment");
+}
+
+static bool is_normal_compartment(const target &t)
+{
+    return t.type().name == string("compartment");
+
+}
+
+static bool is_library(const target &t)
+{
+    return is_normal_library(t) || is_privileged_library(t);
+}
+
+static bool is_compartment(const target &t)
+{
+    return is_normal_compartment(t) || is_privileged_compartment(t);
+}
 
 /**
  * Generate the trusted stacks section of the linker script.
@@ -99,7 +131,20 @@ string thread_stacks(const json_array &threads) const
     return threadStacks;
 }
 
-virtual recipe
+string compartment_exports(std::vector<const target*> &compartments) const
+{
+    string exports;
+    for (auto compartment : compartments)
+    {
+      exports +=
+       "\n\t\t." + compartment->name + "_export_table = ALIGN(8);"
+       "\n\t\t" + compartment->as<file>().path().string() + "(.compartment_export_table);"
+       "\n\t\t." + compartment->name + "_export_table_end = .;\n";
+    }
+    return exports;
+}
+
+recipe
 apply (action a, target& xt, match_extra& me) const override
 {
   context& ctx (xt.ctx);
@@ -246,6 +291,68 @@ apply (action a, target& xt, match_extra& me) const override
   //
   match_members (a, t, pts);
 
+  // Collect all of the libraries and compartments that we depend on for
+  // insertion into the linker script.
+  std::vector<const target*> libraries;
+  std::vector<const target*> compartments;
+  std::vector<const target*> privilegedLibraries;
+  std::vector<const target*> privilegedCompartments;
+  {
+    // Helper to find the vector that a target should be inserted into.
+    auto vectorForTarget = [&](const target &t) -> std::optional<std::vector<const target*>*> {
+      if (is_normal_library(t))
+      {
+        return &libraries;
+      }
+      if (is_normal_compartment(t))
+      {
+        return &compartments;
+      }
+      if (is_privileged_library(t))
+      {
+        return &privilegedLibraries;
+      }
+      if (is_privileged_compartment(t))
+      {
+        return &privilegedCompartments;
+      }
+      return std::nullopt;
+    };
+    // Append prerequisite libraries, recursively.
+    //
+    auto append_libs = [&] (const target& t,
+                            const auto& append_libs) -> void
+    {
+      for (const prerequisite_target& pt: t.prerequisite_targets[a])
+      {
+        if (pt.target == nullptr) // Skip "holes".
+          continue;
+
+        const target& p (*pt.target);
+        string t (p.type ().name);
+        if (auto vec = vectorForTarget(p))
+        {
+          (*vec)->push_back(&p);
+          append_libs(p, append_libs);
+        }
+      }
+    };
+
+    for (const prerequisite_target& pt: pts)
+    {
+      if (pt.target == nullptr) // Skip "holes".
+        continue;
+
+      const target& p (*pt.target);
+      string t (p.type ().name);
+      if (auto vec = vectorForTarget(p))
+      {
+        (*vec)->push_back(&p);
+        append_libs(p, append_libs);
+      }
+    }
+  }
+
   // Finally synthesize the dependency on the firmware-specific linker script
   // and match it to a rule.
   //
@@ -355,6 +462,7 @@ apply (action a, target& xt, match_extra& me) const override
       ls.assign ("code_start") = code_start;
       ls.assign ("thread_trusted_stacks") = thread_trusted_stacks(*threads);
       ls.assign ("thread_stacks") = thread_stacks(*threads);
+      ls.assign ("compartment_exports") = compartment_exports(compartments);
 
       ls_tl.second.unlock ();
     }
@@ -429,7 +537,7 @@ perform_update (action a, const target& xt)
         const target& p (*pt.target);
         string t (p.type ().name);
 
-        if (t == "library" || t == "privileged_library")
+        if (is_library(p) || is_compartment(p))
         {
           args.push_back (p.as<file> ().path ().string ().c_str ());
           append_libs (p, append_libs);

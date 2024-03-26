@@ -34,11 +34,7 @@ SECTIONS
 		*/allocator.compartment(.compartment_export_table);
 		.allocator_export_table_end = .;
 
-		
-		.hello_export_table = ALIGN(8);
-		*/hello.compartment(.compartment_export_table);
-		.hello_export_table_end = .;
-
+		@compartment_exports@
 	}
 
 

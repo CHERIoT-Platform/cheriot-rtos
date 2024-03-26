@@ -139,6 +139,7 @@ ldscript{*}:
   code_start = [null]
   thread_trusted_stacks = [null]
   thread_stacks = [null]
+  compartment_exports = [null]
 }
 
 define library: file
