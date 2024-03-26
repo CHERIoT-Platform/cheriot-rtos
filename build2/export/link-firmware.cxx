@@ -583,6 +583,7 @@ apply (action a, target& xt, match_extra& me) const override
       }
       catch(...) {}
       ls.assign ("heap_start") = heap_start;
+      ls.assign ("thread_count") = to_string(threads->array.size());
 
       ls_tl.second.unlock ();
     }

@@ -149,6 +149,7 @@ ldscript{*}:
   compartment_count = [null]
   compartment_headers = [null]
   heap_start = [null]
+  thread_count = [null]
 }
 
 define library: file
