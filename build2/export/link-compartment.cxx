@@ -1,4 +1,4 @@
-// c++ 1 ---
+// c++ 1 //---
 
 // Note: this recipe is reused to link libraries besides compartments.
 
@@ -19,7 +19,7 @@ namespace build2
   }
 }
 
----
+//---
 
 // namespace build2
 // {

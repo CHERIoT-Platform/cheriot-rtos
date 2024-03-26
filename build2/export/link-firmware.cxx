@@ -1,4 +1,4 @@
-// c++ 1 ---
+// c++ 1 //---
 
 // For vocabulary types (string, path, vector), see <libbuild2/types.hxx>.
 // For standard utilities (move(), to_string()) see <libbuild2/utility.hxx>.
@@ -17,7 +17,7 @@ namespace build2
   }
 }
 
----
+//---
 
 // namespace build2
 // {
