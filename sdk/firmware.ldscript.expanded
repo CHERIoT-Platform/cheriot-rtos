@@ -254,15 +254,7 @@ SECTIONS
 		__thread_count = .;
 		SHORT(@thread_count@);
 		# The thread structures
-		
-		SHORT(1);
-		LONG(__export_hello__Z9say_hellov);
-		LONG(.thread_1_stack_start);
-		SHORT(.thread_1_stack_end - .thread_1_stack_start);
-		LONG(.thread_1_trusted_stack_start);
-		SHORT(.thread_1_trusted_stack_end - .thread_1_trusted_stack_start);
-
-
+		@thread_headers@
 		__compart_headers_end = .;
 	}
 
@@ -291,35 +283,7 @@ SECTIONS
 		*/switcher/entry.o(.compartment_export_table);
 		.switcher_export_table_end = .;
 
-		
-		.atomic1_export_table = ALIGN(8);
-		*/atomic1.library(.compartment_export_table);
-		.atomic1_export_table_end = .;
-
-		.atomic4_export_table = ALIGN(8);
-		*/atomic4.library(.compartment_export_table);
-		.atomic4_export_table_end = .;
-
-		.compartment_helpers_export_table = ALIGN(8);
-		*/compartment_helpers.library(.compartment_export_table);
-		.compartment_helpers_export_table_end = .;
-
-		.locks_export_table = ALIGN(8);
-		*/locks.library(.compartment_export_table);
-		.locks_export_table_end = .;
-
-		.crt_export_table = ALIGN(8);
-		*/crt.library(.compartment_export_table);
-		.crt_export_table_end = .;
-
-		.debug_export_table = ALIGN(8);
-		*/debug.library(.compartment_export_table);
-		.debug_export_table_end = .;
-
-		.freestanding_export_table = ALIGN(8);
-		*/freestanding.library(.compartment_export_table);
-		.freestanding_export_table_end = .;
-
+		@library_exports@
 	}
 
 }

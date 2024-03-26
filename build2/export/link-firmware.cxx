@@ -32,7 +32,7 @@ static bool is_privileged_library(const target &t)
 
 static bool is_normal_library(const target &t)
 {
-    return t.type().name == string("library") || t.type().name == string("privileged_library");
+    return t.type().name == string("library");
 }
 
 static bool is_privileged_compartment(const target &t)
@@ -130,6 +130,38 @@ string thread_stacks(const json_array &threads) const
     }
     return threadStacks;
 }
+
+
+string thread_headers(const json_array &threads) const
+{
+    string threadHeaders;
+    int threadID = 1;
+    try
+    {
+        for (auto &thread : threads.array)
+        {
+            string threadIDStr = to_string(threadID);
+            string priority = to_string(thread.at("priority").as_uint64());
+            string entryPointFunction = thread.at("entry_point").as_string();
+            string entryPoint = "__export_" + thread.at("compartment").as_string() + "__Z" + to_string(entryPointFunction.size()) + entryPointFunction + "v";
+            threadHeaders +=
+                "\n\t\tSHORT(" + priority + ");"
+                "\n\t\tLONG(" + entryPoint + ");"
+                "\n\t\tLONG(.thread_" + threadIDStr + "_stack_start);"
+                "\n\t\tSHORT(.thread_" + threadIDStr + "_stack_end - .thread_" + threadIDStr + "_stack_start);"
+                "\n\t\tLONG(.thread_" + threadIDStr + "_trusted_stack_start);"
+                "\n\t\tSHORT(.thread_" + threadIDStr + "_trusted_stack_end - .thread_" + threadIDStr + "_trusted_stack_start);"
+                "\n\n";
+            threadID++;
+        }
+    }
+    catch (const std::exception &e)
+    {
+        fail << "invalid threads json while extracting thread stacks: " << e.what();
+    }
+    return threadHeaders;
+}
+
 
 string compartment_exports(std::vector<const target*> &compartments) const
 {
@@ -568,6 +600,7 @@ apply (action a, target& xt, match_extra& me) const override
       ls.assign ("thread_trusted_stacks") = thread_trusted_stacks(*threads);
       ls.assign ("thread_stacks") = thread_stacks(*threads);
       ls.assign ("compartment_exports") = compartment_exports(compartments);
+      ls.assign ("library_exports") = compartment_exports(libraries);
       ls.assign ("pcc_ld") = compartment_pccs(libraries) + compartment_pccs(compartments);
       ls.assign ("gdc_ld") = compartment_cgps(compartments);
       ls.assign ("sealed_objects") = compartment_sealed_objects(libraries) + compartment_sealed_objects(compartments);
@@ -575,6 +608,7 @@ apply (action a, target& xt, match_extra& me) const override
       ls.assign ("library_count") = to_string(libraries.size());
       ls.assign ("compartment_count") = to_string(compartments.size());
       ls.assign ("compartment_headers") = compartment_headers(libraries, false) + compartment_headers(compartments, true);
+      ls.assign ("thread_headers") = thread_headers(*threads);
       // Get the heap start if it exists, otherwise default to "." (current location).
       string heap_start = ".";
       try
