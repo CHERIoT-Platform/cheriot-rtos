@@ -575,6 +575,14 @@ apply (action a, target& xt, match_extra& me) const override
       ls.assign ("library_count") = to_string(libraries.size());
       ls.assign ("compartment_count") = to_string(compartments.size());
       ls.assign ("compartment_headers") = compartment_headers(libraries, false) + compartment_headers(compartments, true);
+      // Get the heap start if it exists, otherwise default to "." (current location).
+      string heap_start = ".";
+      try
+      {
+        heap_start = to_string(board.at("heap").at("start").as_uint64(), 16);
+      }
+      catch(...) {}
+      ls.assign ("heap_start") = heap_start;
 
       ls_tl.second.unlock ();
     }

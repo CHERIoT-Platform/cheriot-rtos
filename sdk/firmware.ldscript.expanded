@@ -124,7 +124,6 @@ SECTIONS
 
 	.sealed_objects :
 	{
-		
 		@sealed_objects@
 	}
 
@@ -132,7 +131,7 @@ SECTIONS
 
 	# Everything after this point can be discarded after the loader has
 	# finished.
-	__export_mem_heap = .;
+	__export_mem_heap = @heap_start@;
 
 	__cap_relocs :
 	{
