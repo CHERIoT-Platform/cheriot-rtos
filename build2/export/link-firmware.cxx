@@ -144,6 +144,111 @@ string compartment_exports(std::vector<const target*> &compartments) const
     return exports;
 }
 
+string compartment_pccs(std::vector<const target*> &compartments) const
+{
+    string pccs;
+    for (auto compartment : compartments)
+    {
+      string name = compartment->name;
+      string object = compartment->as<file>().path().string();
+      pccs +=
+        "\n\t." + name + "_code : CAPALIGN"
+        "\n\t{"
+        "\n\t\t." + name + "_code_start = .;"
+        "\n\t\t" + object + "(.compartment_import_table);"
+        "\n\t\t." + name + "_imports_end = .;"
+        "\n\t\t" + object + "(.text);"
+        "\n\t\t" + object + "(.init_array);"
+        "\n\t\t" + object + "(.rodata);"
+        "\n\t\t. = ALIGN(8);"
+        "\n\t}\n";
+    }
+    return pccs;
+}
+
+string compartment_cgps(std::vector<const target*> &compartments) const
+{
+    string cgps;
+    for (auto compartment : compartments)
+    {
+      string name = compartment->name;
+      string object = compartment->as<file>().path().string();
+      cgps +=
+        "\n\t." + name + "_globals : CAPALIGN"
+        "\n\t{"
+        "\n\t\t." + name + "_globals = .;"
+        "\n\t\t" + object + "(.data);"
+        "\n\t\t." + name + "_bss_start = .;"
+        "\n\t\t" + object + "(.bss)"
+        "\n\t}\n";
+
+    }
+    return cgps;
+}
+
+string compartment_sealed_objects(std::vector<const target*> &compartments) const
+{
+    string sealedObjects;
+    for (auto compartment : compartments)
+    {
+      string name = compartment->name;
+      string object = compartment->as<file>().path().string();
+      sealedObjects +=
+        "\n\t\t." + name + "_sealed_objects_start = .;"
+        "\n\t\t" + object + "(.sealed_objects);\n\t\t." + name + "_sealed_objects_end = .;";
+    }
+    return sealedObjects;
+}
+
+string compartment_cap_relocs(std::vector<const target*> &compartments) const
+{
+    string capRelocs;
+    for (auto compartment : compartments)
+    {
+      string name = compartment->name;
+      string object = compartment->as<file>().path().string();
+      capRelocs +=
+        "\n\t\t." + name + "_cap_relocs_start = .;"
+        "\n\t\t" + object + "(__cap_relocs);\n\t\t." + name + "_cap_relocs_end = .;";
+    }
+    return capRelocs;
+}
+
+string compartment_headers(std::vector<const target*> &compartments, bool isCompartment) const
+{
+    string headers;
+    for (auto compartment : compartments)
+    {
+      string name = compartment->name;
+      headers +=
+        "\n\t\tLONG(." + name + "_code_start);"
+        "\n\t\tSHORT((SIZEOF(." + name + "_code) + 7) / 8);"
+        "\n\t\tSHORT(." + name + "_imports_end - ." + name + "_code_start);"
+        "\n\t\tLONG(." + name + "_export_table);"
+        "\n\t\tSHORT(." + name + "_export_table_end - ." + name + "_export_table);";
+      if (isCompartment)
+      {
+        headers +=
+          "\n\t\tLONG(." + name + "_globals);"
+          "\n\t\tSHORT(SIZEOF(." + name + "_globals));"
+          "\n\t\tSHORT(." + name + "_bss_start - ." + name + "_globals);";
+      }
+      else
+      {
+        headers +=
+          "\n\t\tLONG(0);"
+          "\n\t\tSHORT(0);"
+          "\n\t\tSHORT(0);";
+      }
+      headers +=
+        "\n\t\tLONG(." + name + "_cap_relocs_start);"
+        "\n\t\tSHORT(." + name + "_cap_relocs_end - ." + name + "_cap_relocs_start);"
+        "\n\t\tLONG(." + name + "_sealed_objects_start);"
+        "\n\t\tSHORT(." + name + "_sealed_objects_end - ." + name + "_sealed_objects_start);\n";
+    }
+    return headers;
+}
+
 recipe
 apply (action a, target& xt, match_extra& me) const override
 {
@@ -463,6 +568,13 @@ apply (action a, target& xt, match_extra& me) const override
       ls.assign ("thread_trusted_stacks") = thread_trusted_stacks(*threads);
       ls.assign ("thread_stacks") = thread_stacks(*threads);
       ls.assign ("compartment_exports") = compartment_exports(compartments);
+      ls.assign ("pcc_ld") = compartment_pccs(libraries) + compartment_pccs(compartments);
+      ls.assign ("gdc_ld") = compartment_cgps(compartments);
+      ls.assign ("sealed_objects") = compartment_sealed_objects(libraries) + compartment_sealed_objects(compartments);
+      ls.assign ("cap_relocs") = compartment_cap_relocs(libraries) + compartment_cap_relocs(compartments);
+      ls.assign ("library_count") = to_string(libraries.size());
+      ls.assign ("compartment_count") = to_string(compartments.size());
+      ls.assign ("compartment_headers") = compartment_headers(libraries, false) + compartment_headers(compartments, true);
 
       ls_tl.second.unlock ();
     }

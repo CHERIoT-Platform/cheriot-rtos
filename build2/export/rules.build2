@@ -140,6 +140,14 @@ ldscript{*}:
   thread_trusted_stacks = [null]
   thread_stacks = [null]
   compartment_exports = [null]
+  pcc_ld = [null]
+  gdc_ld = [null]
+  compartment_headers = [null]
+  sealed_objects = [null]
+  cap_relocs = [null]
+  library_count = [null]
+  compartment_count = [null]
+  compartment_headers = [null]
 }
 
 define library: file
