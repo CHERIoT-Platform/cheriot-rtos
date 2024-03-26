@@ -595,11 +595,55 @@ apply (action a, target& xt, match_extra& me) const override
       //
       // NOTE: these variables must be pre-entered in rules.build2!
       //
+      string softwareRevokerExports;
+      if (board.at("revoker").as_string() == "software")
+      {
+        ls.assign("software_revoker_code") =
+          "\tsoftware_revoker_code : CAPALIGN\n"
+          "\t{\n"
+          "\t\t.software_revoker_start = .;\n"
+          "\t\t.software_revoker_import_end = .;\n"
+          "\t\t*/software_revoker.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);\n"
+          "\t}\n"
+          "\t.software_revoker_end = .;\n\n";
+        ls.assign("software_revoker_globals") =
+          "\n\t.software_revoker_globals : CAPALIGN"
+          "\n\t{"
+          "\n\t\t.software_revoker_globals = .;"
+          "\n\t\t*/software_revoker.compartment(.data .data.* .sdata .sdata.*);"
+          "\n\t\t.software_revoker_bss_start = .;"
+          "\n\t\t*/software_revoker.compartment(.sbss .sbss.* .bss .bss.*)"
+          "\n\t}"
+          "\n\t.software_revoker_globals_end = .;\n";
+        softwareRevokerExports =
+          "\n\t\t.software_revoker_export_table = ALIGN(8);"
+          "\n\t\t*/software_revoker.compartment(.compartment_export_table);"
+          "\n\t\t.software_revoker_export_table_end = .;\n";
+        ls.assign("software_revoker_header") =
+          "\n\t\tLONG(.software_revoker_start);"
+          "\n\t\tSHORT(.software_revoker_end - .software_revoker_start);"
+          "\n\t\tLONG(.software_revoker_globals);"
+          "\n\t\tSHORT(SIZEOF(.software_revoker_globals));"
+          // The import table offset is computed from the start by code that
+          // assumes that the first two words are space for sealing keys, so we
+          // set it to 16 here to provide a computed size of 0.
+          "\n\t\tSHORT(16)"
+          "\n\t\tLONG(.software_revoker_export_table);"
+          "\n\t\tSHORT(.software_revoker_export_table_end - .software_revoker_export_table);\n"
+          "\n\t\tLONG(0);"
+          "\n\t\tSHORT(0);\n";
+      }
+      else
+      {
+        ls.assign("software_revoker_code") = "";
+        ls.assign("software_revoker_globals") = "";
+        ls.assign("software_revoker_header") = "";
+      }
       ls.assign ("mmio") = move (mmio);
       ls.assign ("code_start") = code_start;
       ls.assign ("thread_trusted_stacks") = thread_trusted_stacks(*threads);
       ls.assign ("thread_stacks") = thread_stacks(*threads);
-      ls.assign ("compartment_exports") = compartment_exports(compartments);
+      ls.assign ("compartment_exports") = softwareRevokerExports + compartment_exports(compartments);
       ls.assign ("library_exports") = compartment_exports(libraries);
       ls.assign ("pcc_ld") = compartment_pccs(libraries) + compartment_pccs(compartments);
       ls.assign ("gdc_ld") = compartment_cgps(compartments);

@@ -1,24 +1,24 @@
 {
     "devices": {
         "clint": {
-            "start": 0x2000000,
-            "length": 0x10000
+            "start": 33554432,
+            "length": 65536
         },
         "uart": {
-            "start": 0x10000000,
-            "end":   0x10000100
+            "start": 268435456,
+            "end":   268435712
         },
         "shadow" : {
-            "start" : 0x83000000,
-            "end"   : 0x83001000
+            "start" : 2197815296,
+            "end"   : 2197819392
         }
     },
     "instruction_memory": {
-        "start": 0x80000000,
-        "end": 0x80040000
+        "start": 2147483648,
+        "end": 2147745792
     },
     "heap": {
-        "end": 0x80040000
+        "end": 2147745792
     },
     "interrupts": [
         {

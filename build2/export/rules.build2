@@ -98,6 +98,10 @@ for i: ($board[driver_includes])
   cc.poptions += "-I$sdk/include/$i"
 
 cc.poptions += -DTEMPORAL_SAFETY
+if ($revoker == 'software')
+{
+  cc.poptions += -DSOFTWARE_REVOKER
+}
 
 for d: ($board[defines])
   cc.poptions += "-D$d"
@@ -152,6 +156,9 @@ ldscript{*}:
   thread_count = [null]
   thread_headers = [null]
   library_exports = [null]
+  software_revoker_code = [null]
+  software_revoker_globals = [null]
+  software_revoker_header = [null]
 }
 
 define library: file
@@ -232,6 +239,17 @@ cheriot-rtos/
       cxx.coptions += -fvisibility-inlines-hidden
 
       obje{main}: $sdk/core/allocator/cxx{main} fsdir{./}
+
+      fsdir{./}: fsdir{../}
+    }
+
+    privileged_compartment{software_revoker}: software_revoker/obje{revoker} fsdir{./}
+
+    software_revoker/
+    {
+      cc.coptions += -cheri-compartment=software_revoker
+
+      obje{revoker}: $sdk/core/software_revoker/cxx{revoker} fsdir{./}
 
       fsdir{./}: fsdir{../}
     }
@@ -392,15 +410,22 @@ dump{*}: extension = dump
 define json: file
 json{*}: extension = json
 
-# Note: the order in which we specify things to link is no significant.
-#
-[rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
-   compartment{~'/(.+)/'} \
+core_components = \
    cheriot-rtos/core/loader/obje{boot-s boot-c} \
    cheriot-rtos/core/switcher/obje{entry} \
    cheriot-rtos/lib/library{atomic1 atomic4 locks crt} \
    cheriot-rtos/core/privileged_library{token_library} \
    cheriot-rtos/core/privileged_compartment{allocator} \
+
+if ($revoker == 'software')
+  core_components += cheriot-rtos/core/privileged_compartment{software_revoker}
+
+
+# Note: the order in which we specify things to link is no significant.
+#
+[rule_name=link_firmware] <firmware{~'/(.+)/'} dump{^'/\1/'} json{^'/\1/'}>: \
+   compartment{~'/(.+)/'} \
+   $core_components \
    $ld $objdump
 % update clean
 recipe c++ link-firmware.cxx

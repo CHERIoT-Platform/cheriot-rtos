@@ -78,6 +78,8 @@ SECTIONS
 	.token_library_end = .;
 
 
+	@software_revoker_code@
+
 	@pcc_ld@
 
 	__compart_pccs_end = .;
@@ -119,6 +121,8 @@ SECTIONS
 	. += 4;
 	__export_mem_allocator_epoch_end = .;
 	
+
+	@software_revoker_globals@
 
 	@gdc_ld@
 
@@ -229,7 +233,7 @@ SECTIONS
 		LONG(0);
 		SHORT(0);
 
-		
+		@software_revoker_header@
 
 		# sdk/core/loader/types.h:/is_magic_valid
 		# Magic number, used to detect mismatches between linker script and
