@@ -230,7 +230,9 @@ cheriot-rtos/
       fsdir{./}: fsdir{../}
     }
 
-    privileged_compartment{allocator}: allocator/obje{main} fsdir{./}
+    privileged_compartment{allocator}: allocator/obje{main} \
+                     ../lib/library{compartment_helpers} \
+                     fsdir{./}
 
     allocator/
     {
