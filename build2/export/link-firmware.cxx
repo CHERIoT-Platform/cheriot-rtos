@@ -239,7 +239,15 @@ apply (action a, target& xt, match_extra& me) const override
     pts.push_back (com_tl.first);
   }
 
-  // Synthesize the dependency on the firmware-specific linker script.
+  // Next match all the prerequisite members.
+  //
+  // Note: do this before synthesizing the dependency on the linker script to
+  // resolve all the prerequisite compartments and libraries recursively.
+  //
+  match_members (a, t, pts);
+
+  // Finally synthesize the dependency on the firmware-specific linker script
+  // and match it to a rule.
   //
   // We need to synthesize the equivalent of this (`.` is escaped as `..`):
   //
@@ -352,11 +360,8 @@ apply (action a, target& xt, match_extra& me) const override
     }
 
     pts.push_back (ls_tl.first);
+    match_sync (a, ls_tl.first);
   }
-
-  // Finally match all the prerequisite members.
-  //
-  match_members (a, t, pts);
 
   switch (a)
   {
