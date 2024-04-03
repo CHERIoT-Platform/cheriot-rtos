@@ -1,0 +1,32 @@
+{
+    "devices": {
+        "shadow" : {
+            "start" : 0x30000000,
+            "end"   : 0x30004000
+        },
+        "clint": {
+            "start" : 0x80040000,
+            "end"   : 0x80050000
+        },
+        "uart": {
+            "start" : 0x80100000,
+            "end"   : 0x80100034
+        }
+    },
+    "instruction_memory": {
+        "start": 0x00100080,
+        "end":   0x00120000
+    },
+    "heap": {
+        "end": 0x00120000
+    },
+    "defines" : "SUNBURST",
+    "driver_includes" : [
+        "../include/platform/sunburst",
+        "../include/platform/generic-riscv"
+    ],
+    "timer_hz" : 25000000,
+    "tickrate_hz" : 100,
+    "revoker" : "software",
+    "simulation": false
+}
