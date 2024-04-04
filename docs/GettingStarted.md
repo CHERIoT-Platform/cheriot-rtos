@@ -204,7 +204,6 @@ Make sure that all of the relevant opam environment variables are set and build 
 ```
 $ cd cheriot-sail
 $ eval $(opam env)
-$ make patch_sail_riscv
 $ make csim
 ```
 
