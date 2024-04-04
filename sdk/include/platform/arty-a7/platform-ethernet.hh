@@ -741,6 +741,17 @@ class KunyanEthernet
 		while (transmitControl & 1) {}
 		// Write the frame to the transmit buffer.
 		auto transmitBuffer = transmit_buffer_pointer();
+		// We must check the frame pointer and its length. Although it
+		// is supplied by the firewall which is trusted, the firewall
+		// does not check the pointer which is coming from external
+		// untrusted components.
+		Timeout t{10};
+		if ((heap_claim_fast(&t, buffer) < 0) ||
+		    (!CHERI::check_pointer<CHERI::PermissionSet{
+		       CHERI::Permission::Load}>(buffer, length)))
+		{
+			return false;
+		}
 		memcpy(transmitBuffer, buffer, length);
 		if (!check(transmitBuffer, length))
 		{
