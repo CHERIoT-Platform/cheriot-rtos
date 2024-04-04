@@ -215,9 +215,8 @@ __Z26compartment_switcher_entryz:
 	csetboundsexact    ct2, csp, s1
 	csetaddr           csp, ct2, s0
 #ifdef CONFIG_MSHWM
-	// Read and align the stack high water mark
+	// Read the stack high water mark (which is 16-byte aligned)
 	csrr               gp, CSR_MSHWM
-	and                gp, gp, ~0xf
 	// Skip zeroing if high water mark >= stack pointer
 	bge                t2, sp, after_zero
 	// Use stack high water mark as base address for zeroing.  If this faults
@@ -793,12 +792,11 @@ exception_entry_asm:
 	cincoffset         csp, csp, SPILL_SLOT_SIZE
 #ifndef CONFIG_NO_SWITCHER_SAFETY
 #ifdef CONFIG_MSHWM
-	// read and align the stack high water mark
+	// read the stack high water mark, which is 16-byte aligned
 	// we will use this as base address for stack clearing
 	// note that it cannot be greater than stack top as we 
 	// we set it to stack top when we pushed to trusted stack frame
 	csrr               tp, CSR_MSHWM
-	and                tp, tp, ~0xf
 #else
 	cgetbase           tp, csp
 #endif
