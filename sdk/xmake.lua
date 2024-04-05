@@ -779,5 +779,5 @@ function compartment(name)
 		add_rules("cheriot.compartment")
 end
 
-includes("lib/locks", "lib/crt", "lib/atomic")
+includes("lib/")
 

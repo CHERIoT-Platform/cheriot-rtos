@@ -1,34 +1,35 @@
 #include "../timing.h"
-#include <timeout.h>
 #include <compartment.h>
 #include <debug.hh>
-#include <thread.h>
 #include <event.h>
-#include <simulator.h>
 #include <locks.hh>
+#include <simulator.h>
+#include <thread.h>
+#include <timeout.h>
 #if DEBUG_INTERRUPT_BENCH
-#include <fail-simulator-on-error.h>
+#	include <fail-simulator-on-error.h>
 #endif
 
 using Debug = ConditionalDebug<DEBUG_INTERRUPT_BENCH, "Interrupt benchmark">;
 
-void *event_group;
-int start;
+namespace
+{
+	std::atomic<uint32_t> event;
+	int                   start;
+} // namespace
 
 /**
  * N threads of equal priority will enter here with different stack sizes. They
- * will all wait on a ticket lock so that only one of them runs at a time. The
- * first one creates an event group then they each wait on the event group in
- * turn and measure the latency from the time the low priority thread yields
- * until the higher priority thread returns from event_bits_wait.
+ * will all wait on a ticket lock so that only one of them runs at a time. They
+ * will then wait on a futex that will be set by the low-priority thread.
+ *
+ * All of these threads will be waiting for the futex.
  */
 void __cheri_compartment("interrupt_bench") entry_high_priority()
 {
-	MessageBuilder<ImplicitUARTOutput> out;
-
-	Timeout t = {0, UnlimitedTimeout};
-	static TicketLock lock;
-	static bool headerWritten;
+	Timeout                 t = {0, UnlimitedTimeout};
+	static TicketLock       lock;
+	static bool             headerWritten;
 	static _Atomic(uint8_t) threadCounter = 0;
 	threadCounter++;
 
@@ -41,22 +42,22 @@ void __cheri_compartment("interrupt_bench") entry_high_priority()
 		if (!headerWritten)
 		{
 			Debug::log("Thread {} creating event", threadID);
-			Debug::Invariant(event_create(&t, MALLOC_CAPABILITY, &event_group) == 0, "event create failed");
-			out.format("#board\tstack size\ttotal\n");
+			printf("#board\tstack size\ttotal\n");
 			headerWritten = true;
 		}
 
-		int end = CHERI::with_interrupts_disabled([&]() {
-			uint32_t bits = 0;
-			Debug::log("Thread {} waiting on event", threadID);
-			int ret = event_bits_wait(&t, event_group, &bits, 1, true, true);
-			int time = rdcycle();
-			Debug::Invariant(ret == 0, "event_bits_wait failed");
-			return time;
-		});
+		int    end       = CHERI::with_interrupts_disabled([&]() {
+            uint32_t bits = 0;
+            Debug::log("Thread {} releasing ticket lock", threadID);
+            g.unlock();
+            Debug::log("Thread {} waiting on event", threadID);
+            event.wait(0);
+            int time = rdcycle();
+            Debug::Invariant(event == 1, "Futex woke spuriously");
+            return time;
+		         });
 		size_t stackSize = get_stack_size();
-		out.format(__XSTRING(BOARD) "\t{}\t{}\n", stackSize, end - start);
-		Debug::log("Thread {} releasing ticket lock", threadID);
+		printf(__XSTRING(BOARD) "\t%d\t%d\n", stackSize, end - start);
 	}
 
 	// Last one out turns off the lights. This relies on all threads
@@ -90,13 +91,14 @@ void __cheri_compartment("interrupt_bench") entry_high_priority()
  */
 void __cheri_compartment("interrupt_bench") entry_low_priority()
 {
-	while(true)
+	while (true)
 	{
 		CHERI::with_interrupts_disabled([]() {
 			uint32_t bits = 0;
 			Debug::log("Low thread setting event");
+			event = 1;
 			start = rdcycle();
-			event_bits_set(event_group, &bits, 1);
+			event.notify_all();
 		});
 	}
 }

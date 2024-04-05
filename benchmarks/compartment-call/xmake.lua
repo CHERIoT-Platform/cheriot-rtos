@@ -21,7 +21,7 @@ compartment("caller")
 
 -- Firmware image for the example.
 firmware("compartment-call-benchmark")
-    add_deps("crt", "freestanding", "atomic", "stdio", "string")
+    add_deps("crt", "freestanding", "atomic", "stdio", "string", "debug")
     add_deps("caller", "callee")
     on_load(function(target)
         target:values_set("board", "$(board)")

@@ -15,8 +15,7 @@ void __cheri_compartment("allocbench") run()
 	// output the first time that allocation happens.
 	free(malloc(16));
 	heap_quarantine_empty();
-	MessageBuilder<ImplicitUARTOutput> out;
-	out.format("#board\tsize\ttime\n");
+	printf("#board\tsize\ttime\n");
 	const size_t MinimumSize = 32;
 	const size_t MaximumSize = 131072;
 	const size_t TotalSize   = 1024 * 1024;
@@ -31,7 +30,7 @@ void __cheri_compartment("allocbench") run()
 			free(ptr);
 		}
 		auto end = rdcycle();
-		out.format(__XSTRING(BOARD) "\t{}\t{}\n", static_cast<int>(size), end - start);
+		printf(__XSTRING(BOARD) "\t%ld\t%ld\n", static_cast<int>(size), end - start);
 		size_t quota = heap_quota_remaining(MALLOC_CAPABILITY);
 		Debug::Invariant(quota == MALLOC_QUOTA, "Quota remaining {}, should be {}", quota, MALLOC_QUOTA);
 		Debug::log("Flushing quarantine");
