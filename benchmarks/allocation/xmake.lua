@@ -6,25 +6,20 @@ sdkdir = "../../sdk"
 includes(sdkdir)
 set_toolchains("cheriot-clang")
 
--- Support libraries
-includes(path.join(sdkdir, "lib/freestanding"),
-         path.join(sdkdir, "lib/atomic"),
-         path.join(sdkdir, "lib/crt"))
-
 option("board")
     set_default("sail")
 
 debugOption("allocbench");
 compartment("allocbench")
+    add_deps("crt", "freestanding", "atomic", "stdio", "debug")
     -- Allow allocating an effectively unbounded amount of memory (more than exists)
-    add_rules("cherimcu.component-debug")
+    add_rules("cheriot.component-debug")
     add_defines("MALLOC_QUOTA=1000000")
     add_defines("BOARD=" .. tostring(get_config("board")))
     add_files("alloc.cc")
 
 -- Firmware image for the example.
 firmware("allocator-benchmark")
-    add_deps("crt", "freestanding", "atomic")
     add_deps("allocbench")
     on_load(function(target)
         target:values_set("board", "$(board)")

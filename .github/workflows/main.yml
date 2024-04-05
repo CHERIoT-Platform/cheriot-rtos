@@ -54,6 +54,15 @@ jobs:
           echo Running $example_dir
           xmake run
         done
+    - name: Build benchmarks
+      run: |
+        set -e
+        for example_dir in $PWD/benchmarks/*/; do
+          cd $example_dir
+          echo Building $example_dir
+          xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
+          xmake
+        done
 
   check-format:
     name: Check coding conventions

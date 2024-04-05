@@ -16,14 +16,14 @@ option("board")
 
 debugOption("interrupt_bench");
 compartment("interrupt_bench")
+    add_deps("crt", "freestanding", "stdio", "debug")
     -- Allow allocating an effectively unbounded amount of memory (more than exists)
-    add_rules("cherimcu.component-debug")
+    add_rules("cheriot.component-debug")
     add_defines("BOARD=" .. tostring(get_config("board")))
     add_files("interrupt_bench.cc")
 
 -- Firmware image for the example.
 firmware("interrupt-benchmark")
-    add_deps("crt", "freestanding", "atomic")
     add_deps("interrupt_bench")
     on_load(function(target)
         target:values_set("board", "$(board)")
