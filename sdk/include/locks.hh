@@ -96,6 +96,63 @@ class FlagLockGeneric
 };
 
 /**
+ * Priority-inheriting recursive mutex.  This can be acquired multiple times
+ * from the same thread.
+ */
+class RecursiveMutex
+{
+	/// State for the underling recursive mutex.
+	RecursiveMutexState state;
+
+	public:
+	/**
+	 * Attempt to acquire the lock, blocking until a timeout specified by the
+	 * `timeout` parameter has expired.
+	 */
+	__always_inline bool try_lock(Timeout *timeout)
+	{
+		return recursivemutex_trylock(timeout, &state) == 0;
+	}
+
+	/**
+	 * Try to acquire the lock, do not block.
+	 */
+	__always_inline bool try_lock()
+	{
+		Timeout t{0};
+		return try_lock(&t);
+	}
+
+	/**
+	 * Acquire the lock, potentially blocking forever.
+	 */
+	__always_inline void lock()
+	{
+		Timeout t{UnlimitedTimeout};
+		try_lock(&t);
+	}
+
+	/**
+	 * Release the lock.
+	 *
+	 * Note: This does not check that the lock is owned by the calling thread.
+	 */
+	__always_inline void unlock()
+	{
+		recursivemutex_unlock(&state);
+	}
+
+	/**
+	 * Set the lock in destruction mode. See the documentation of
+	 * `flaglock_upgrade_for_destruction` for more information.
+	 */
+	__always_inline void upgrade_for_destruction()
+	{
+		flaglock_upgrade_for_destruction(&state.lock);
+	}
+};
+
+/**
  * A simple ticket lock.
  *
  * A ticket lock ensures that threads that arrive are serviced in order,
