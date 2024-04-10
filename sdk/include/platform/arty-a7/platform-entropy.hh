@@ -20,7 +20,6 @@ DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(RevokerInterruptEntropy,
 class EntropySource
 {
 	ds::xoroshiro::P128R64 prng;
-	const uint32_t        *ethernetInterruptCount;
 
 	public:
 	using ValueType = uint64_t;
@@ -31,8 +30,6 @@ class EntropySource
 	/// Constructor, tries to generate an independent sequence of random numbers
 	EntropySource()
 	{
-		ethernetInterruptCount =
-		  interrupt_futex_get(STATIC_SEALED_VALUE(RevokerInterruptEntropy));
 		reseed();
 	}
 
@@ -42,7 +39,8 @@ class EntropySource
 		// Start from a not very random seed
 		uint64_t seed = rdcycle64();
 		prng.set_state(seed, seed >> 24);
-		uint32_t interrupts = *ethernetInterruptCount;
+		uint32_t interrupts =
+		  *interrupt_futex_get(STATIC_SEALED_VALUE(RevokerInterruptEntropy));
 		// Permute it with another not-very-random number
 		for (uint32_t i = 0; i < ((interrupts & 0xff00) >> 8); i++)
 		{
