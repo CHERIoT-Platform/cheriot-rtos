@@ -72,7 +72,10 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		}
 		else
 		{
-			// An unexpected error -- log it and end the simulation with error.
+			// An unexpected error -- log it and end the simulation
+			// with error.  Note: handle CZR differently as
+			// `get_register_value` will return a nullptr which we
+			// cannot dereference.
 			DebugErrorHandler::log(
 			  "{} error at {} (return address: {}), with capability register "
 			  "{}: {}",
@@ -80,7 +83,9 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 			  frame->pcc,
 			  frame->get_register_value<CHERI::RegisterNumber::CRA>(),
 			  registerNumber,
-			  *frame->get_register_value(registerNumber));
+			  registerNumber == CHERI::RegisterNumber::CZR
+			    ? nullptr
+			    : *frame->get_register_value(registerNumber));
 			simulation_exit(1);
 		}
 	}
