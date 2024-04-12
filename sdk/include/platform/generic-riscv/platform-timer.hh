@@ -38,6 +38,23 @@ class StandardClint : private utils::NoCopyNoMove
 		         2 * sizeof(uint32_t));
 	}
 
+	static uint64_t time()
+	{
+		// The timer is little endian, so the high 32 bits are after the low 32
+		// bits. We can't do atomic 64-bit loads and so we have to read these
+		// separately.
+		volatile uint32_t *timerHigh = pmtimer + 1;
+		uint32_t           timeLow, timeHigh;
+
+		// Read the current time. Loop until the high 32 bits are stable.
+		do
+		{
+			timeHigh = *timerHigh;
+			timeLow  = *pmtimer;
+		} while (timeHigh != *timerHigh);
+		return (uint64_t(timeHigh) << 32) | timeLow;
+	}
+
 	/**
 	 * Set the timer up for the next timer interrupt. We need to:
 	 * 1. read the current MTIME,
@@ -51,28 +68,22 @@ class StandardClint : private utils::NoCopyNoMove
 	 * interrupt. Writing to any half is enough to clear the interrupt,
 	 * which is also why 2. is important.
 	 */
-	static void setnext(uint32_t cycles)
+	static void setnext(uint64_t nextTime)
 	{
 		/// the high 32 bits of the 64-bit MTIME register
 		volatile uint32_t *pmtimercmphigh = pmtimercmp + 1;
-		/// the low 32 bits
-		volatile uint32_t *pmtimerhigh = pmtimer + 1;
 		uint32_t           curmtimehigh, curmtime, curmtimenew;
-
-		// Read the current time. Loop until the high 32 bits are stable.
-		do
-		{
-			curmtimehigh = *pmtimerhigh;
-			curmtime     = *pmtimer;
-		} while (curmtimehigh != *pmtimerhigh);
-
-		// Add tick cycles to current time. Handle carry bit.
-		curmtimehigh += __builtin_add_overflow(curmtime, cycles, &curmtimenew);
 
 		// Write the new MTIMECMP value, at which the next interrupt fires.
 		*pmtimercmphigh = -1; // Prevent spurious interrupts.
-		*pmtimercmp     = curmtimenew;
-		*pmtimercmphigh = curmtimehigh;
+		*pmtimercmp     = nextTime;
+		*pmtimercmphigh = nextTime >> 32;
+	}
+
+	static void clear()
+	{
+		volatile uint32_t *pmtimercmphigh = pmtimercmp + 1;
+		*pmtimercmphigh                   = -1; // Prevent spurious interrupts.
 	}
 
 	private:

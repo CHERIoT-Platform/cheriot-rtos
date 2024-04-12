@@ -270,15 +270,20 @@ namespace sched
 
 		ExceptionGuard g{[=]() { sched_panic(mcause, mepc, mtval); }};
 
+		bool tick = false;
 		switch (mcause)
 		{
 			// Explicit yield call
 			case MCAUSE_ECALL_MACHINE:
-				schedNeeded = true;
+			{
+				schedNeeded           = true;
+				Thread *currentThread = Thread::current_get();
+				tick = currentThread && currentThread->is_ready();
 				break;
+			}
 			case MCAUSE_INTR | MCAUSE_MTIME:
-				Timer::do_interrupt();
 				schedNeeded = true;
+				tick        = true;
 				break;
 			case MCAUSE_INTR | MCAUSE_MEXTERN:
 				schedNeeded = false;
@@ -293,6 +298,7 @@ namespace sched
 					  std::tie(schedNeeded, std::ignore, std::ignore) =
 					    futex_wake(Capability{&word}.address());
 				  });
+				tick = schedNeeded;
 				break;
 			case MCAUSE_THREAD_EXIT:
 				// Make the current thread non-runnable.
@@ -305,13 +311,23 @@ namespace sched
 				// We cannot continue exiting this thread, make sure we will
 				// pick a new one.
 				schedNeeded  = true;
+				tick         = true;
 				sealedTStack = nullptr;
 				break;
 			default:
 				sched_panic(mcause, mepc, mtval);
 		}
+		if (tick || !Thread::any_ready())
+		{
+			Timer::expiretimers();
+		}
 		auto newContext =
 		  schedNeeded ? Thread::schedule(sealedTStack) : sealedTStack;
+#if 0
+		Debug::log("Thread: {}",
+		           Thread::current_get() ? Thread::current_get()->id_get() : 0);
+#endif
+		Timer::update();
 
 		if constexpr (Accounting)
 		{
@@ -351,7 +367,7 @@ namespace sched
 
 			if (shouldYield)
 			{
-				Thread::yield_interrupt_enabled();
+				yield();
 			}
 
 			return ret;
@@ -419,14 +435,17 @@ SystickReturn __cheri_compartment("sched") thread_systemtick_get()
 }
 
 __cheriot_minimum_stack(0x80) int __cheri_compartment("sched")
-  thread_sleep(Timeout *timeout)
+  thread_sleep(Timeout *timeout, uint32_t flags)
 {
 	STACK_CHECK(0x80);
 	if (!check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
 	}
-	Thread::current_get()->suspend(timeout, nullptr, true);
+	// Debug::log("Thread {} sleeping for {} ticks",
+	//  Thread::current_get()->id_get(), timeout->remaining);
+	Thread *current = Thread::current_get();
+	current->suspend(timeout, nullptr, true, !(flags & ThreadSleepNoEarlyWake));
 	return 0;
 }
 
@@ -468,8 +487,10 @@ __cheriot_minimum_stack(0xa0) int futex_timed_wait(Timeout        *timeout,
 		// If we try to block ourself, that's a mistake.
 		if ((owningThread == currentThread) || (owningThread == nullptr))
 		{
-			Debug::log("futex_timed_wait: invalid owning thread {}",
-			           owningThread);
+			Debug::log("futex_timed_wait: thread {} acquiring PI futex with "
+			           "invalid owning thread {}",
+			           currentThread->id_get(),
+			           owningThreadID);
 			return -EINVAL;
 		}
 		Debug::log("Thread {} boosting priority of {} for futex {}",
@@ -550,7 +571,7 @@ __cheriot_minimum_stack(0x90) int futex_wake(uint32_t *address, uint32_t count)
 
 	if (shouldYield)
 	{
-		Thread::yield_interrupt_enabled();
+		yield();
 	}
 
 	return woke;

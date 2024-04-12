@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <debug.hh>
+#include <thread.h>
 
 using namespace CHERI;
 
@@ -335,7 +336,13 @@ debug_log_message_write(const char          *context,
 	DebugPrinter printer;
 	printer.write("\x1b[35m");
 	printer.write(context);
+#if 0
+	printer.write(" [Thread ");
+	printer.write(thread_id_get());
+	printer.write("]\033[0m: ");
+#else
 	printer.write("\033[0m: ");
+#endif
 	printer.format(format, messages, messageCount);
 	printer.write("\n");
 }

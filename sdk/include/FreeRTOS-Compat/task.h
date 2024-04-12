@@ -55,7 +55,7 @@ static inline BaseType_t xTaskCheckForTimeOut(TimeOut_t  *pxTimeOut,
 static inline void vTaskDelay(const TickType_t xTicksToDelay)
 {
 	struct Timeout timeout = {0, xTicksToDelay};
-	thread_sleep(&timeout);
+	thread_sleep(&timeout, ThreadSleepNoEarlyWake);
 }
 
 /**

@@ -970,7 +970,13 @@ __Z13thread_id_getv:
 	// Load the trusted stack pointer into a register that we will clobber in
 	// the next instruction when we load the thread ID.
 	cspecialr          ca0, mtdc
+	cgettag            a1, ca0
+	// If this is a null pointer, don't try to dereference it and report that
+	// we are thread 0.  This permits the debug code to work even from things
+	// that are not real threads.
+	beqz               a1, .Lend
 	clh                a0, TrustedStack_offset_threadID(ca0)
+.Lend:
 	cret
 
 

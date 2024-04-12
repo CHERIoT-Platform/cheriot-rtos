@@ -291,7 +291,7 @@ namespace
 						// Drop and reacquire the lock while yielding.
 						// Sleep for a single tick.
 						g.unlock();
-						Timeout smallSleep{0};
+						Timeout smallSleep{1};
 						thread_sleep(&smallSleep);
 						if (!reacquire_lock(timeout, g, smallSleep.elapsed))
 						{
