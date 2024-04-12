@@ -18,6 +18,8 @@ namespace
 	// thread structures.
 	class MultiWaiterInternal;
 
+	uint64_t expiry_time_for_timeout(uint32_t timeout);
+
 	template<size_t NPrios>
 	class ThreadImpl final : private utils::NoCopyNoMove
 	{
@@ -115,23 +117,18 @@ namespace
 		}
 
 		/**
-		 * When yielding inside the scheduler compartment, we almost always want
-		 * to re-enable interrupts before ecall. If we don't, then a thread with
-		 * interrupt enabled can just call a scheduler function with a long
-		 * timeout, essentially gaining the ability to indefinitely block
-		 * interrupts. Worse, if this is the only thread, then it blocks
-		 * interrupts forever for the whole system.
+		 * Returns true if any thread is ready to run.
 		 */
-		static void yield_interrupt_enabled()
+		static bool any_ready()
 		{
-			__asm volatile("ecall");
+			return priorityMap != 0;
 		}
 
 		static uint32_t yield_timed()
 		{
 			uint64_t ticksAtStart = ticksSinceBoot;
 
-			yield_interrupt_enabled();
+			yield();
 
 			uint64_t elapsed = ticksSinceBoot - ticksAtStart;
 			if (elapsed > std::numeric_limits<uint32_t>::max())
@@ -152,11 +149,12 @@ namespace
 		 */
 		bool suspend(Timeout     *t,
 		             ThreadImpl **newSleepQueue,
-		             bool         yieldUnconditionally = false)
+		             bool         yieldUnconditionally = false,
+		             bool         yieldNotSleep        = false)
 		{
 			if (t->remaining != 0)
 			{
-				suspend(t->remaining, newSleepQueue);
+				suspend(t->remaining, newSleepQueue, yieldNotSleep);
 			}
 			if ((t->remaining != 0) || yieldUnconditionally)
 			{
@@ -188,6 +186,7 @@ namespace
 		    OriginalPriority(priority),
 		    expiryTime(-1),
 		    state(ThreadState::Suspended),
+		    isYielding(false),
 		    sleepQueue(nullptr),
 		    tStackPtr(tstack)
 		{
@@ -212,7 +211,7 @@ namespace
 			// We must be suspended.
 			Debug::Assert(state == ThreadState::Suspended,
 			              "Waking thread that is in state {}, not suspended",
-			              state);
+			              static_cast<ThreadState>(state));
 			// First, remove self from the timer waiting list.
 			timer_list_remove(&waitingList);
 			if (sleepQueue != nullptr)
@@ -233,11 +232,18 @@ namespace
 					schedule        = true;
 				}
 			}
+			// If this is the same priority as the current thread, we may need
+			// to update the timer.
+			if (priority >= highestPriority)
+			{
+				schedule = true;
+			}
 			if (reason == WakeReason::Timer || reason == WakeReason::Delete)
 			{
 				multiWaiter = nullptr;
 			}
 			list_insert(&priorityList[priority]);
+			isYielding = false;
 
 			return schedule;
 		}
@@ -278,11 +284,14 @@ namespace
 		 * waiting on a resource, add it to the list of that resource. No
 		 * matter what, it has to be added to the timer list.
 		 */
-		void suspend(uint32_t waitTicks, ThreadImpl **newSleepQueue)
+		void suspend(uint32_t     waitTicks,
+		             ThreadImpl **newSleepQueue,
+		             bool         yieldNotSleep = false)
 		{
+			isYielding = yieldNotSleep;
 			Debug::Assert(state == ThreadState::Ready,
 			              "Suspending thread that is in state {}, not ready",
-			              state);
+			              static_cast<ThreadState>(state));
 			list_remove(&priorityList[priority]);
 			state = ThreadState::Suspended;
 			priority_map_remove();
@@ -291,8 +300,7 @@ namespace
 				list_insert(newSleepQueue);
 				sleepQueue = newSleepQueue;
 			}
-			expiryTime =
-			  (waitTicks == UINT32_MAX ? -1 : ticksSinceBoot + waitTicks);
+			expiryTime = expiry_time_for_timeout(waitTicks);
 
 			timer_list_insert(&waitingList);
 		}
@@ -407,7 +415,7 @@ namespace
 			Debug::Assert(state == ThreadState::Suspended,
 			              "Inserting thread into timer list that is in state "
 			              "{}, not suspended",
-			              state);
+			              static_cast<ThreadState>(state));
 			if (head == nullptr)
 			{
 				timerNext = timerPrev = *headPtr = this;
@@ -509,6 +517,29 @@ namespace
 		uint8_t priority_get()
 		{
 			return priority;
+		}
+
+		bool is_ready()
+		{
+			return state == ThreadState::Ready;
+		}
+
+		bool is_yielding()
+		{
+			return isYielding;
+		}
+
+		/**
+		 * Returns true if there are other runnable threads with the same
+		 * priority as this thread.
+		 */
+		bool has_priority_peers()
+		{
+			Debug::Assert(state == ThreadState::Ready,
+			              "Checking for peers on thread that is in state {}, "
+			              "not ready",
+			              static_cast<ThreadState>(state));
+			return next != this;
 		}
 
 		~ThreadImpl()
@@ -616,7 +647,13 @@ namespace
 		uint8_t priority;
 		/// The original priority level for this thread.  This never changes.
 		const uint8_t OriginalPriority;
-		ThreadState   state;
+		ThreadState   state : 2;
+		/**
+		 * If the thread is yielding, it may be scheduled before its timeout
+		 * expires, as long as no other threads are runnable or sleeping with
+		 * shorter timeouts.
+		 */
+		bool isYielding : 1;
 	};
 
 	using Thread = ThreadImpl<ThreadPrioNum>;

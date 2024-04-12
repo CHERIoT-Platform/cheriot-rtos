@@ -59,7 +59,9 @@ namespace
 		     "Trying to acquire lock spuriously succeeded");
 		if constexpr (!std::is_same_v<Lock, FlagLockPriorityInherited>)
 		{
+#ifndef SIMULATION
 			TEST(t.elapsed >= 1, "Sleep slept for {} ticks", t.elapsed);
+#endif
 		}
 	}
 

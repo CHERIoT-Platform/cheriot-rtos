@@ -23,6 +23,17 @@ typedef struct
 [[cheri::interrupt_state(disabled)]] SystickReturn __cheri_compartment("sched")
   thread_systemtick_get(void);
 
+enum ThreadSleepFlags : uint32_t
+{
+	/**
+	 * Sleep for up to the specified timeout, but wake early if there are no
+	 * other runnable threads.  This allows a high-priority thread to yield for
+	 * a fixed number of ticks for lower-priority threads to run, but does not
+	 * prevent it from resuming early.
+	 */
+	ThreadSleepNoEarlyWake = 1 << 0,
+};
+
 /**
  * Sleep for at most the specified timeout (see `timeout.h`).
  *
@@ -34,9 +45,23 @@ typedef struct
  * but reports the time spent sleeping.  This requires a cross-domain call and
  * return in addition to the overheads of `yield` and so `yield` should be
  * preferred in contexts where the elapsed time is not required.
+ *
+ * The `flags` parameter is a bitwise OR of `ThreadSleepFlags`.
+ *
+ * A sleeping thread may be woken early if no other threads are runnable or
+ * have earlier timeouts.  The thread with the earliest timeout will be woken
+ * first.  This can cause a yielding thread to sleep when no other thread is
+ * runnable, but avoids a potential problem where a high-priority thread yields
+ * to allow a low-priority thread to make progress, but then the low-priority
+ * thread does a short sleep.  In this case, the desired behaviour is not to
+ * wake the high-priority thread early, but to allow the low-priority thread to
+ * run for the full duration of the high-priority thread's yield.
+ *
+ * If you are using `thread_sleep` to elapse real time, pass
+ * `ThreadSleepNoEarlyWake` as the flags argument to prevent early wakeups.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  thread_sleep(struct Timeout *timeout);
+  thread_sleep(struct Timeout *timeout, uint32_t flags __if_cxx(= 0));
 
 /**
  * Return the thread ID of the current running thread.
@@ -119,7 +144,7 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 	// In simulation builds, just yield once but don't bother trying to do
 	// anything sensible with time.
 	Timeout t = {0, 1};
-	thread_sleep(&t);
+	thread_sleep(&t, 0);
 	return milliseconds;
 #else
 	static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
@@ -133,7 +158,7 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 	while ((end > current) && (end - current > MS_PER_TICK))
 	{
 		Timeout t = {0, ((uint32_t)(end - current)) / CyclesPerTick};
-		thread_sleep(&t);
+		thread_sleep(&t, ThreadSleepNoEarlyWake);
 		current = rdcycle64();
 	}
 	// Spin for the remaining time.
@@ -142,7 +167,7 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 		current = rdcycle64();
 	}
 	current = rdcycle64();
-	return (current - start) * CyclesPerMillisecond;
+	return (current - start) / CyclesPerMillisecond;
 #endif
 }
 
