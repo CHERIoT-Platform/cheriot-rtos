@@ -40,6 +40,14 @@ concept EthernetAdaptor = requires(T                      adaptor,
 		T::mac_address_default()
 		} -> std::same_as<std::array<uint8_t, 6>>;
 	/**
+	 * Is the default MAC address unique?  If the device (e.g. soft MAC)
+	 * doesn't have its own hardware MAC address then callers may prefer to
+	 * generate a locally administered MAC address randomly.
+	 */
+	{
+		T::has_unique_mac_address()
+		} -> std::convertible_to<bool>;
+	/**
 	 * Set the MAC address of this adaptor.
 	 */
 	{adaptor.mac_address_set(macAddress)};

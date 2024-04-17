@@ -480,9 +480,18 @@ class KunyanEthernet
 	KunyanEthernet(const KunyanEthernet &) = delete;
 	KunyanEthernet(KunyanEthernet &&)      = delete;
 
+	/**
+	 * This device does not have a unique MAC address and so users must provide
+	 * a locally administered MAC address if more than one device is present on
+	 * the same network.
+	 */
+	static constexpr bool has_unique_mac_address()
+	{
+		return false;
+	}
+
 	static constexpr MACAddress mac_address_default()
 	{
-		// FIXME: Generate a random locally administered MAC for each device.
 		return {0x60, 0x6A, 0x6A, 0x37, 0x47, 0x88};
 	}
 
