@@ -1,5 +1,6 @@
 #pragma once
 #include <cdefs.h>
+#include <stddef.h>
 
 /**
  * Returns true if the trusted stack contains at least `requiredFrames` frames
@@ -49,3 +50,9 @@ __cheri_libcall _Bool switcher_interrupt_thread(void *);
  * next cross-compartment call or until they are explicitly overwritten.
  */
 __cheri_libcall void **switcher_thread_hazard_slots(void);
+
+/**
+ * Returns the lowest address that has been stored to on the stack in this
+ * compartment invocation.
+ */
+__cheri_libcall ptraddr_t stack_lowest_used_address(void);

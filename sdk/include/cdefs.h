@@ -62,6 +62,7 @@ using _Bool = bool;
 #define __alloc_size(x) __attribute__((alloc_size(x)))
 #define __alloc_align(x) __attribute__((alloc_align(x)))
 #define __cheri_callback __attribute__((cheri_ccallback))
+#define __cheriot_minimum_stack(x) __attribute__((cheriot_minimum_stack(x)))
 // When running clang-tidy, we use the same compile flags for everything and so
 // will get errors about things being defined in the wrong compartment, so
 // define away the compartment name and pretend everything is local for now.

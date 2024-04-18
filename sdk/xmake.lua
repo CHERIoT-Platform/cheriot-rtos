@@ -39,6 +39,17 @@ debugOption("scheduler")
 debugOption("allocator")
 debugOption("token_library")
 
+function stackCheckOption(name)
+	option("stack-usage-check-" .. name)
+		set_default(false)
+		set_description("Enable dynamic stack usage checks in " .. name .. ". Do not enable this in debug builds!")
+		set_showmenu(true)
+		set_category("Debugging")
+	option_end()
+end
+
+stackCheckOption("allocator")
+
 -- Force -Oz irrespective of build config.  At -O0, we blow out our stack and
 -- require much stronger alignment.
 set_optimize("Oz")
@@ -199,7 +210,7 @@ target("cheriot.switcher")
 -- having an allocator (or into providing a different allocator for a
 -- particular application)
 target("cheriot.allocator")
-	add_rules("cheriot.privileged-compartment", "cheriot.component-debug")
+	add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks")
 	add_files(path.join(coredir, "allocator/main.cc"))
 	add_deps("locks")
 	add_deps("compartment_helpers")
@@ -715,6 +726,13 @@ rule("cheriot.component-debug")
 		target:add('defines', "DEBUG_" .. name:upper() .. "=" .. tostring(get_config("debug-"..name)))
 	end)
 
+-- Rule for conditionally enabling stack checks for a component.
+rule("cheriot.component-stack-checks")
+	after_load(function (target)
+		local name = target:get("cheriot.debug-name") or target:name()
+		target:add('options', "stack-usage-check-" .. name)
+		target:add('defines', "CHERIOT_STACK_CHECKS_" .. name:upper() .. "=" .. tostring(get_config("stack-usage-check-"..name)))
+	end)
 
 -- Build the loader.  The firmware rule will set the flags required for
 -- this to create threads.

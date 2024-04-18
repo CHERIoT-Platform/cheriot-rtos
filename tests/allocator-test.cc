@@ -542,7 +542,20 @@ void test_allocator()
 	TEST(heap_address_is_valid(&noWait) == false,
 	     "Global object incorrectly reported as heap address");
 
+	t = 5;
+	Capability array{heap_allocate_array(&t, MALLOC_CAPABILITY, 0x80000004, 2)};
+	TEST(
+	  !array.is_valid(), "Allocating too large an array succeeded: {}", array);
+	array = heap_allocate_array(&t, MALLOC_CAPABILITY, 16, 2);
+	TEST(array.is_valid(), "Allocating array failed: {}", array);
+	TEST(array.length() == 32,
+	     "Allocating array returned incorrect length: {}",
+	     array);
+	ret = heap_free(MALLOC_CAPABILITY, array);
+	TEST(ret == 0, "Freeing array failed: {}", ret);
+
 	test_blocking_allocator();
+	heap_quarantine_empty();
 	test_revoke();
 	test_fuzz();
 	allocations.clear();
