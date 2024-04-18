@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "cdefs.h"
 #include <cheri.hh>
 #include <compartment.h>
 #include <concepts>
 #include <cstddef>
 #include <platform-uart.hh>
 #include <string.h>
+#include <switcher.h>
 
 #include <array>
 #include <string_view>
@@ -739,6 +739,94 @@ namespace
 		 */
 		template<typename... Ts>
 		Assert(auto, const char *, Ts &&...) -> Assert<Ts...>;
+	};
+
+	enum class StackCheckMode
+	{
+		Disabled,
+		Logging,
+		Asserting,
+	};
+
+	/**
+	 * Check the (dynamic) stack usage of a function, including all of its
+	 * callees.  This is intended to be used in compartment entry points to
+	 * check the stack size that is required for that entry point.  Use this
+	 * with some test vectors that explore different code paths to identify the
+	 * maximum stack usage.  This can then be used with the
+	 * [[cheriot::minimum_stack]] attribute to ensure that the switcher will
+	 * never invoke the entry point with insufficient stack.
+	 *
+	 * Note that this records only the stack usage for the current compartment
+	 * invocation (including any invoked shared libraries).  If this
+	 * compartment calls others, then a larger stack may be required.  This
+	 * failure is recoverable: cross-compartment calls should always be assumed
+	 * to potentially fail.  This check is to ensure that an attacker cannot
+	 * cause stack overflow to crash the compartment, not to ensure that an
+	 * attacker cannot cause stack overflow to make the operation that they
+	 * requested fail.
+	 *
+	 * Stack checks run in one of three modes:
+	 *
+	 *  - Disabled: The checks do not run.
+	 *  - Logging: The checks run and print a message if the stack usage
+	 *    exceeds expectations.
+	 *  - Asserting: After printing the message, the function will trap.
+	 *
+	 * In logging mode, one message will be printed for each invocation of the
+	 * function that exceeds the previous maximum stack usage.
+	 *
+	 * An instance of this should be created as a local variable on entry to a
+	 * function.  The destructor (which prints the message) will then run after
+	 * any other destructors, ensuring the most accurate stack usage
+	 * measurement.
+	 *
+	 * Unfortunately, default arguments for templates are not evaluated in the
+	 * enclosing scope and so `__builtin_FUNCTION()` cannot be used here.
+	 * Instead, we must pass this explicitly, typically as something like:
+	 *
+	 * ```c++
+	 * StackUsageCheck<DebugFlag, 128, __PRETTY_FUNCTION__> stackCheck;
+	 * ```
+	 */
+	template<StackCheckMode Mode, size_t Expected, DebugContext Fn>
+	class StackUsageCheck
+	{
+		/**
+		 * The expected maximum.  This class is templated on the function name
+		 * and so there is one copy of this per function.
+		 */
+		static inline size_t stackUsage = Expected;
+
+		public:
+		/**
+		 * Default constructor, does nothing.
+		 */
+		StackUsageCheck() = default;
+
+		/**
+		 * Destructor, runs at the end of the function to print the message.
+		 */
+		__always_inline ~StackUsageCheck()
+		{
+			if constexpr (Mode != StackCheckMode::Disabled)
+			{
+				ptraddr_t lowest = stack_lowest_used_address();
+				ptraddr_t highest =
+				  CHERI::Capability{__builtin_cheri_stack_get()}.top();
+				size_t used = highest - lowest;
+				if (used > stackUsage)
+				{
+					stackUsage = used;
+					ConditionalDebug<true, Fn>::log("Stack used: {} bytes",
+					                                stackUsage);
+					if constexpr (Mode == StackCheckMode::Asserting)
+					{
+						__builtin_trap();
+					}
+				}
+			}
+		}
 	};
 
 } // namespace

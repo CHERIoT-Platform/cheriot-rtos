@@ -952,6 +952,13 @@ __Z13thread_id_getv:
 	cret
 
 
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z25stack_lowest_used_addressv,@function
+__Z25stack_lowest_used_addressv:
+	// Read the stack high-water mark into the return register.
+	csrr               a0, CSR_MSHWM
+	cret
 
 // The linker expects export tables to start with space for cgp and pcc, then
 // the compartment error handler.  We should eventually remove that requirement
@@ -986,3 +993,4 @@ export __Z25switcher_interrupt_threadPv
 export __Z23switcher_current_threadv
 export __Z28switcher_thread_hazard_slotsv
 export __Z13thread_id_getv
+export __Z25stack_lowest_used_addressv

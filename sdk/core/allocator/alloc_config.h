@@ -23,3 +23,16 @@ constexpr size_t MallocAlignShift = 3;
 
 constexpr size_t MallocAlignment = 1U << MallocAlignShift;
 constexpr size_t MallocAlignMask = MallocAlignment - 1;
+
+constexpr StackCheckMode StackMode =
+#if CHERIOT_STACK_CHECKS_ALLOCATOR
+  StackCheckMode::Asserting
+#else
+  StackCheckMode::Disabled
+// Uncomment if checks failed to find the correct values
+// StackCheckMode::Logging
+#endif
+  ;
+
+#define STACK_CHECK(expected)                                                  \
+	StackUsageCheck<StackMode, expected, __PRETTY_FUNCTION__> stackCheck
