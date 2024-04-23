@@ -128,7 +128,9 @@ namespace
 		 */
 		void unlock()
 		{
-			auto old = lockWord.exchange(Flag::Unlocked);
+			// Atomically empty all bits of the lockword except the
+			// destruct mode bit which we want to preserve.
+			auto old = lockWord.fetch_and(Flag::LockedInDestructMode);
 
 			// Assert that the locked is not already locked, and
 			// that the caller holds the lock. This is only
@@ -152,38 +154,28 @@ namespace
 
 		/**
 		 * Set the destruction bit in the flag lock word and wake
-		 * waiters. Assumes that the lock is held by the caller.
-		 *
-		 * Note: This does not check that the lock is owned by the
-		 * calling thread.
+		 * waiters. Callers do not need to hold the lock.
 		 */
 		void upgrade_for_destruction()
 		{
 			Debug::log("Setting {} for destruction", &lockWord);
 
-			// Assert that the caller holds the lock. This is only
-			// compiled-in with debugging enabled for locking.
-			Debug::Assert(
-			  (lockWord & 0x0000ffff) == thread_id_get(),
-			  "Calling thread {} does not hold the lock on {} (owner: {})",
-			  thread_id_get(),
-			  &lockWord,
-			  lockWord & 0x0000ffff);
-
-			// Set the destruction bit.
+			// Atomically set the destruction bit.
 			lockWord |= Flag::LockedInDestructMode;
 
 			// Wake up waiters.
 			// There should not be any 'missed wake' because any
 			// thread calling lock() concurrently will either:
-			// - successfully CAS, pass the the -ENOENT check, reach
+			// - successfully CAS and take the lock (i.e., not got
+			//   to sleep)
+			// - fail the CAS, and fail the -ENOENT check;
+			// - fail the CAS, pass the the -ENOENT check, reach
 			//   the futex `wait` before we set the
 			//   `Flag::LockedInDestructMode` bit, and be woken up
 			//   by our `notify_all`;
-			// - fail the -ENOENT check;
-			// - miss the `Flag::LockedInDestructMode` bit, pass the
-			//   -ENOENT check but fail their CAS to add the waiters
-			//   bit, retry, and fail the -ENOENT check;
+			// - miss the `Flag::LockedInDestructMode` bit, fail
+			//   the CAS, pass the -ENOENT check, fail the CAS to add
+			//   the waiters bit, retry, and fail the -ENOENT check;
 			// - or miss the `Flag::LockedInDestructMode` bit, pass
 			//   the -ENOENT check but fail their CAS in the futex
 			//   `wait` call, retry (because the futex returns 0 in
