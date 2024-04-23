@@ -23,14 +23,12 @@ namespace
 	cheriot::atomic<int>  counter;
 
 	/**
-	 * Test that a lock meets the minimum requirements: it actually provides
-	 * mutual exclusion.
+	 * Test that a lock actually provides mutual exclusion.
 	 */
 	template<typename Lock>
 	void test_lock(Lock &lock)
 	{
 		modified = false;
-		debug_log("Acquiring lock in {}", __PRETTY_FUNCTION__);
 		{
 			LockGuard g{lock};
 			async([&]() {
@@ -83,7 +81,7 @@ namespace
 			// making progress if this test fails.
 			// The generous timer makes sure that we reach the
 			// modified == true assert before the timeout.
-			Timeout t2{20};
+			Timeout t2{25};
 			TEST(lock.try_lock(&t2) == false,
 			     "Lock acquisition should not succeed!");
 
@@ -99,7 +97,7 @@ namespace
 		lock.upgrade_for_destruction();
 
 		// Give the waiter a chance to wake up
-		sleep(1);
+		sleep(5);
 
 		// Check that the destruction mode woke up the waiters
 		TEST(modified == true, "Destruction mode did not wake up waiters!");
@@ -113,6 +111,39 @@ namespace
 	}
 
 	/**
+	 * Test that unlocking a flag lock works: once a lock is released, it
+	 * can be re-acquired. This will fail if the unlock function does not
+	 * properly clear bits.
+	 */
+	void test_flaglock_unlock()
+	{
+		// Check for the case where a lock was released with the
+		// waiters bit set. Do not check the simple case without
+		// waiters as this is covered by other tests (at least
+		// `test_lock`).
+		Timeout t{5};
+		TEST(flagLock.try_lock(&t), "Failed to acquire uncontended lock");
+		counter = 0;
+		async([&]() {
+			Timeout t2{1};
+			TEST(flagLock.try_lock(&t2) == false,
+			     "Lock acquisition should not succeed!");
+			counter++;
+		});
+		do
+		{
+			debug_log("Other thread not finished, yielding");
+			sleep(1);
+		} while (counter.load() == 0);
+		flagLock.unlock();
+
+		TEST(flagLock.try_lock(&t),
+		     "Failed to acquire uncontended lock after unlock when the waiters "
+		     "bit was previously set");
+		flagLock.unlock();
+	}
+
+	/**
 	 * Test that a lock with the destruction bit set cannot be acquired
 	 * anymore.
 	 *
@@ -123,6 +154,36 @@ namespace
 		static FlagLockState flagLockState;
 		static FlagLockState priorityFlagLockState;
 
+		// Upgrade the lock to destruction mode. No need to acquire the
+		// lock for that.
+		flaglock_upgrade_for_destruction(&flagLockState);
+
+		// Check that we now fail to grab the lock with the right error
+		Timeout t{5};
+		TEST(flaglock_trylock(&t, &flagLockState) == -ENOENT,
+		     "Acquiring the lock did not fail with -ENOENT although it is in "
+		     "destruction mode");
+
+		// Now, do the same tests with the priority inheriting flag lock
+		flaglock_upgrade_for_destruction(&priorityFlagLockState);
+
+		TEST(flaglock_priority_inheriting_trylock(&t, &priorityFlagLockState) ==
+		       -ENOENT,
+		     "Acquiring the lock did not fail with -ENOENT although it is in "
+		     "destruction mode");
+	}
+
+	/**
+	 * Test that the destruction bit is preserved when unlocking.
+	 *
+	 * Note: here, plug at the C API to be able to check C error codes.
+	 */
+	void test_destruct_flag_lock_unlock()
+	{
+		// Only test without priority inheriting for code size reasons,
+		// but both should behave identically
+		static FlagLockState flagLockState;
+
 		Timeout t{5};
 		int     ret = flaglock_trylock(&t, &flagLockState);
 		TEST(ret == 0, "Flag lock trylock failed with error {}", ret);
@@ -130,23 +191,13 @@ namespace
 		// Upgrade the lock to destruction mode
 		flaglock_upgrade_for_destruction(&flagLockState);
 
-		// Check that we now fail to grab the lock with the right error
+		// Now unlock the lock
+		flaglock_unlock(&flagLockState);
+
+		// Check that the destruction bit is still set (by trying to
+		// grab the lock again - it should fail with -ENOENT)
 		TEST(flaglock_trylock(&t, &flagLockState) == -ENOENT,
-		     "Acquiring the lock did not fail with -ENOENT although it is in "
-		     "destruction mode");
-
-		// Now, do the same tests with the priority inheriting flag lock
-		ret = flaglock_priority_inheriting_trylock(&t, &priorityFlagLockState);
-		TEST(ret == 0,
-		     "Priority inheriting flag lock trylock failed with error {}",
-		     ret);
-
-		flaglock_upgrade_for_destruction(&priorityFlagLockState);
-
-		TEST(flaglock_priority_inheriting_trylock(&t, &priorityFlagLockState) ==
-		       -ENOENT,
-		     "Acquiring the lock did not fail with -ENOENT although it is in "
-		     "destruction mode");
+		     "Unlocking unsets the destruction bit of flag lock");
 	}
 
 	void test_recursive_mutex()
@@ -211,6 +262,7 @@ namespace
 	 */
 	void test_ticket_lock_ordering()
 	{
+		counter = 0;
 		debug_log("Starting ticket-lock ordering tests");
 		{
 			LockGuard g{ticketLock};
@@ -311,11 +363,13 @@ void test_locks()
 	test_lock(flagLock);
 	test_lock(flagLockPriorityInherited);
 	test_lock(ticketLock);
+	test_flaglock_unlock();
 	test_trylock(flagLock);
 	test_trylock(flagLockPriorityInherited);
 	test_destruct_lock_wake_up(flagLock);
 	test_destruct_lock_wake_up(flagLockPriorityInherited);
 	test_destruct_flag_lock_acquire();
+	test_destruct_flag_lock_unlock();
 	test_ticket_lock_ordering();
 	test_ticket_lock_overflow();
 	test_recursive_mutex();

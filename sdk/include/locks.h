@@ -135,6 +135,10 @@ void __cheri_libcall flaglock_unlock(struct FlagLockState *lock);
  * currently attempting to acquire the lock will wake and fail to acquire the
  * lock.  This should be called before deallocating an object that contains a
  * lock.
+ *
+ * Note that callers do not need to hold the lock; the ability to upgrade for
+ * destruction without holding the lock is useful for cleaning up from the
+ * error handler.
  */
 void __cheri_libcall
 flaglock_upgrade_for_destruction(struct FlagLockState *lock);
