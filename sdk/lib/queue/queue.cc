@@ -236,8 +236,9 @@ namespace
 		/**
 		 * The bit to use for the lock.
 		 */
-		static constexpr uint32_t LockBit    = 1U << 31;
-		static constexpr uint32_t WaitersBit = 1U << 30;
+		static constexpr uint32_t LockBit                 = 1U << 31;
+		static constexpr uint32_t WaitersBit              = 1U << 30;
+		static constexpr uint32_t LockedInDestructModeBit = 1U << 29;
 
 		// Function required to conform to the Lock concept.
 		void lock()
@@ -247,7 +248,7 @@ namespace
 
 		static constexpr uint32_t reserved_bits()
 		{
-			return LockBit | WaitersBit;
+			return LockBit | WaitersBit | LockedInDestructModeBit;
 		}
 
 		/**
@@ -259,6 +260,10 @@ namespace
 			do
 			{
 				value = lockWord.load();
+				if ((value & LockedInDestructModeBit) != 0)
+				{
+					return false;
+				}
 				if (value & LockBit)
 				{
 					// If the lock is held, set the flag that indicates that
@@ -292,6 +297,20 @@ namespace
 			value = lockWord.load();
 			// If we're releasing the lock with waiters, wake them up.
 			if (lockWord.exchange(value & ~LockBit) & WaitersBit)
+			{
+				lockWord.notify_all();
+			}
+		}
+
+		/**
+		 * Set the lock in destruction mode. This has the same
+		 * semantics as `flaglock_upgrade_for_destruction`.
+		 */
+		void upgrade_for_destruction()
+		{
+			// Atomically set the destruction bit.
+			lockWord |= LockedInDestructModeBit;
+			if (lockWord & WaitersBit)
 			{
 				lockWord.notify_all();
 			}
@@ -338,12 +357,35 @@ namespace
 		heap_claim_fast(&t, nullptr, nullptr);
 	}
 
+	void bound_queue_buffer(struct QueueHandle handle)
+	{
+		Capability buffer   = handle.buffer;
+		Capability producer = handle.producer;
+		// Restrict the bounds using the address of the producer, which
+		// comes immediately after the queue buffer. This should be
+		// strictly equivalent to calculating the size of the queue
+		// from the number of elements and the size of elements (we
+		// assert that below).
+		buffer.bounds() = producer.address() - buffer.address();
+		Debug::Assert(
+		  [&]() -> bool {
+			  size_t bufferSize;
+			  bool   overflow = __builtin_mul_overflow(
+			      handle.queueSize, handle.elementSize, &bufferSize);
+			  bufferSize = CHERI::representable_length(bufferSize);
+			  return (!overflow) && (buffer.bounds() == bufferSize);
+		  },
+		  "Mismatch between the size of the queue as reported by `queueSize` "
+		  "and `elementSize` and its real size.");
+	}
+
 } // namespace
 
 struct QueueHandle queue_make_receive_handle(struct QueueHandle handle)
 {
 	Capability buffer   = handle.buffer;
 	Capability producer = handle.producer;
+	bound_queue_buffer(handle);
 	buffer.permissions() &= ReadOnlyCapability;
 	producer.permissions() &= ReadOnly;
 	handle.buffer   = buffer;
@@ -355,11 +397,42 @@ struct QueueHandle queue_make_send_handle(struct QueueHandle handle)
 {
 	Capability buffer   = handle.buffer;
 	Capability consumer = handle.consumer;
+	bound_queue_buffer(handle);
 	buffer.permissions() &= WriteOnlyCapability;
 	consumer.permissions() &= ReadOnly;
 	handle.buffer   = buffer;
 	handle.consumer = consumer;
 	return handle;
+}
+
+int queue_destroy(struct SObjStruct *heapCapability, struct QueueHandle *handle)
+{
+	int ret = 0;
+	// Only upgrade the locks for destruction if we know that we will be
+	// able to free the queue at the end. This will fail if passed a
+	// restricted buffer, which will happen if `queue_destroy` is called on
+	// a restricted queue.
+	if (ret = heap_can_free(heapCapability, handle->buffer); ret != 0)
+	{
+		return ret;
+	}
+
+	auto           *producer = handle->producer;
+	HighBitFlagLock producerLock{*producer};
+	producerLock.upgrade_for_destruction();
+
+	auto           *consumer = handle->consumer;
+	HighBitFlagLock consumerLock{*consumer};
+	consumerLock.upgrade_for_destruction();
+
+	// This should not fail because of the `heap_can_free` check, unless we
+	// run out of stack.
+	if (ret = heap_free(heapCapability, handle->buffer); ret != 0)
+	{
+		return ret;
+	}
+
+	return ret;
 }
 
 int queue_create(Timeout            *timeout,
@@ -390,7 +463,7 @@ int queue_create(Timeout            *timeout,
 	// We need the counters to be able to run to double the queue size without
 	// hitting the high bits.  Error if this is the case.
 	//
-	// This should never be reached: a queue needs to be at least 512 MiB
+	// This should never be reached: a queue needs to be at least 256 MiB
 	// (assuming one-byte elements) to hit this limit.
 	if (((elementCount | (elementCount * 2)) &
 	     HighBitFlagLock::reserved_bits()) != 0)
@@ -416,8 +489,7 @@ int queue_create(Timeout            *timeout,
 	producer.bounds() = CounterSize;
 	consumer.bounds() = CounterSize;
 	// The pointer used to free the allocation
-	*outAllocation  = buffer;
-	buffer.bounds() = bufferSize;
+	*outAllocation = buffer;
 	Debug::log("Created queue with buffer: {}", buffer);
 	// The handle
 	*outQueue = {elementSize, elementCount, buffer, producer, consumer};

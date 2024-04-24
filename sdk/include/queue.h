@@ -77,6 +77,20 @@ int __cheri_libcall queue_create(Timeout            *timeout,
                                  size_t              elementCount);
 
 /**
+ * Destroys a queue. This wakes up all threads waiting to produce or consume,
+ * and makes them fail to acquire the lock, before deallocating the underlying
+ * allocation.
+ *
+ * This must be called on an unrestricted queue handle (*not* one returned by
+ * `queue_make_receive_handle` or `queue_make_send_handle`).
+ *
+ * Returns 0 on success. On failure, returns `-EPERM` if the queue handle is
+ * restricted (see comment above).
+ */
+int __cheri_libcall queue_destroy(struct SObjStruct  *heapCapability,
+                                  struct QueueHandle *handle);
+
+/**
  * Convert a queue handle returned from `queue_create` into one that can be
  * used *only* for receiving.
  *

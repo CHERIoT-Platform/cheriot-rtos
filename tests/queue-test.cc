@@ -96,7 +96,7 @@ void test_queue_unsealed()
 	checkSpace(1);
 	queue_receive(&timeout, &queue, bytes);
 	checkSpace(0);
-	rv = heap_free(MALLOC_CAPABILITY, queueMemory);
+	rv = queue_destroy(MALLOC_CAPABILITY, &queue);
 	TEST(rv == 0, "Queue deletion failed with {}", rv);
 	debug_log("All queue library tests successful");
 }
