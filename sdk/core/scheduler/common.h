@@ -30,6 +30,20 @@ namespace
 	  ;
 
 	using Debug = ConditionalDebug<DebugScheduler, "Scheduler">;
+
+	constexpr StackCheckMode StackMode =
+#if CHERIOT_STACK_CHECKS_SCHEDULER
+	  StackCheckMode::Asserting
+#else
+	  StackCheckMode::Disabled
+	// Uncomment if checks failed to find the correct values
+	// StackCheckMode::Logging
+#endif
+	  ;
+
+#define STACK_CHECK(expected)                                                  \
+	StackUsageCheck<StackMode, expected, __PRETTY_FUNCTION__> stackCheck
+
 	/**
 	 * Base class for types that are exported from the scheduler with a common
 	 * sealing type.  Includes an inline type marker.

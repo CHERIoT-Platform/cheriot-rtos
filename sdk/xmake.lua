@@ -49,6 +49,7 @@ function stackCheckOption(name)
 end
 
 stackCheckOption("allocator")
+stackCheckOption("scheduler")
 
 -- Force -Oz irrespective of build config.  At -O0, we blow out our stack and
 -- require much stronger alignment.
