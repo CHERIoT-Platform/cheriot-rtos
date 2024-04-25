@@ -17,7 +17,7 @@ jobs:
           - build-type: debug
             build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=y -m debug
           - build-type: release
-            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=n -m release --stack-usage-check-allocator=y
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=n -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y
       fail-fast: false
     runs-on: ubuntu-latest
     container:
