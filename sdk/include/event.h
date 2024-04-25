@@ -108,3 +108,12 @@ int __cheri_libcall eventgroup_get(struct EventGroup *group, uint32_t *outBits);
  */
 int __cheri_libcall eventgroup_destroy(struct SObjStruct *heapCapability,
                                        struct EventGroup *group);
+
+/**
+ * Destroy an event group without tacking the lock.
+ *
+ * This API is inherently racy. Its main purpose is to cleanup the event group
+ * in an error handler context, when taking lock may be impossible.
+ */
+int __cheri_libcall eventgroup_destroy_force(struct SObjStruct *heapCapability,
+                                             struct EventGroup *group);

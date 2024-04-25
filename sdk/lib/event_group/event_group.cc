@@ -177,9 +177,9 @@ int eventgroup_get(EventGroup *group, uint32_t *outBits)
 	return 0;
 }
 
-int eventgroup_destroy(SObjStruct *heapCapability, EventGroup *group)
+int eventgroup_destroy_force(SObjStruct *heapCapability, EventGroup *group)
 {
-	group->lock.lock();
+	group->lock.upgrade_for_destruction();
 	// Force all waiters to wake.
 	for (size_t i = 0; i < group->waiterCount; ++i)
 	{
@@ -192,4 +192,10 @@ int eventgroup_destroy(SObjStruct *heapCapability, EventGroup *group)
 	}
 	heap_free(heapCapability, group);
 	return 0;
+}
+
+int eventgroup_destroy(SObjStruct *heapCapability, EventGroup *group)
+{
+	group->lock.lock();
+	return eventgroup_destroy_force(heapCapability, group);
 }
