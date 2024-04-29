@@ -1205,7 +1205,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	for (auto &compartment : imgHdr.libraries_and_compartments())
 	{
 		auto expTablePtr = getExportTableHeader(compartment.exportTable);
-		Debug::log("Error handler for compartment is {})",
+		Debug::log("Error handler for compartment is {}",
 		           expTablePtr->errorHandler);
 		expTablePtr->pcc = build_pcc(compartment);
 		expTablePtr->cgp = build_cgp(compartment);
