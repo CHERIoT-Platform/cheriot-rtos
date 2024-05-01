@@ -299,6 +299,16 @@ class LockGuard
 	}
 
 	/**
+	 * Unwrap the lock without unlocking it. This is useful to call before
+	 * destroying a lock.
+	 */
+	void release()
+	{
+		wrappedLock = nullptr;
+		isOwned     = false;
+	}
+
+	/**
 	 * If the underlying lock type supports locking with a timeout, try to lock
 	 * it with the specified timeout. This must be called with the lock
 	 * unlocked.  Returns true if the lock has been acquired, false otherwise.
