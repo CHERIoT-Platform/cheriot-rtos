@@ -464,13 +464,29 @@ namespace
 					}
 				}
 			}
-			Debug::Invariant(entry.address >= LA_ABS(__mmio_region_start),
-			                 "{} is not in the MMIO range",
-			                 entry.address);
-			Debug::Invariant(entry.address + entry.size() <=
-			                   LA_ABS(__mmio_region_end),
-			                 "{} is not in the MMIO range",
-			                 entry.address + entry.size());
+			// MMIO regions should be within the range of the MMIO space.  As a
+			// special case (to be removed at some point when we have a generic
+			// way of setting up shared objects), allow the hazard-pointer
+			// region and hazard epoch to be excluded from this test.
+			Debug::Invariant(
+			  ((entry.address >= LA_ABS(__mmio_region_start)) &&
+			   (entry.address + entry.size() <= LA_ABS(__mmio_region_end))) ||
+			    ((entry.address == LA_ABS(__export_mem_allocator_epoch)) &&
+			     (entry.address + entry.size() ==
+			      LA_ABS(__export_mem_allocator_epoch_end))) ||
+			    ((entry.address == LA_ABS(__export_mem_hazard_pointers)) &&
+			     (entry.address + entry.size() ==
+			      LA_ABS(__export_mem_hazard_pointers_end))),
+			  "{}--{} is not in the MMIO range ({}--{}) or the hazard pointer "
+			  "range ({}--{}) or the allocator epoch range ({}--{})",
+			  entry.address,
+			  entry.address + entry.size(),
+			  LA_ABS(__mmio_region_start),
+			  LA_ABS(__mmio_region_end),
+			  LA_ABS(__export_mem_hazard_pointers),
+			  LA_ABS(__export_mem_hazard_pointers_end),
+			  LA_ABS(__export_mem_allocator_epoch),
+			  LA_ABS(__export_mem_allocator_epoch_end));
 			auto ret = build(entry.address, entry.size());
 			// Remove any permissions that shouldn't be held here.
 			ret.permissions() &= entry.permissions();
