@@ -11,21 +11,33 @@
         "uart": {
             "start" : 0x80100000,
             "end"   : 0x80100034
+        },
+        "plic": {
+            "start" : 0x88000000,
+            "end"   : 0x88400000
         }
     },
     "instruction_memory": {
         "start": 0x00100080,
-        "end":   0x00120000
+        "end":   0x00140000
     },
     "heap": {
-        "end": 0x00120000
+        "end": 0x00140000
     },
+    "interrupts": [
+        {
+            "name": "UartRxWatermark",
+            "number": 2,
+            "priority": 3,
+            "edge_triggered": true
+        }
+    ],
     "defines" : "SUNBURST",
     "driver_includes" : [
         "../include/platform/sunburst",
         "../include/platform/generic-riscv"
     ],
-    "timer_hz" : 25000000,
+    "timer_hz" : 30000000,
     "tickrate_hz" : 100,
     "revoker" : "software",
     "simulation": false
