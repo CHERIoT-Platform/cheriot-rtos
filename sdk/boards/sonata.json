@@ -36,7 +36,12 @@
             "edge_triggered": true
         }
     ],
-    "defines" : ["IBEX", "SUNBURST"],
+    "defines" : [
+        "IBEX",
+        "SUNBURST",
+        "SUNBURST_SHADOW_BASE=0x30000000",
+        "SUNBURST_SHADOW_SIZE=0x4000"
+    ],
     "driver_includes" : [
         "../include/platform/sunburst",
         "../include/platform/generic-riscv"
