@@ -49,9 +49,11 @@ test("thread_pool")
 -- Test the futex implementation
 test("futex")
 -- Test locks built on top of the futex
-test("queue")
--- Test queues
 test("locks")
+-- Test queues
+test("queue")
+-- Test minimal stdio implementation
+test("stdio")
 -- Test the static sealing types
 test("static_sealing")
 compartment("static_sealing_inner")
@@ -92,6 +94,7 @@ firmware("test-suite")
     -- Helper libraries
     add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers", "debug")
     add_deps("message_queue", "locks", "event_group")
+    add_deps("stdio")
     -- Tests
     add_deps("mmio_test")
     add_deps("eventgroup_test")
@@ -108,6 +111,7 @@ firmware("test-suite")
     add_deps("compartment_calls_test", "compartment_calls_inner", "compartment_calls_inner_with_handler")
     add_deps("check_pointer_test")
     add_deps("misc_test")
+    add_deps("stdio_test")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
         target:values_set("board", "$(board)")
