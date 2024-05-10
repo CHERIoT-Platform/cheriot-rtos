@@ -108,6 +108,7 @@ void __cheri_compartment("test_runner") run_tests()
 
 	run_timed("All tests", []() {
 		run_timed("MMIO", test_mmio);
+		run_timed("stdio", test_stdio);
 		run_timed("Static sealing", test_static_sealing);
 		run_timed("Crash recovery", test_crash_recovery);
 		run_timed("Compartment calls", test_compartment_call);
