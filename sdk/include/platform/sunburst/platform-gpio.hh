@@ -51,7 +51,7 @@ struct SonataGPIO
 
 	void led_off(uint32_t index) volatile
 	{
-		output = output | ~led_bit(index);
+		output = output & ~led_bit(index);
 	}
 
 	void led_toggle(uint32_t index) volatile
