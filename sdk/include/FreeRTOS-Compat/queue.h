@@ -88,7 +88,7 @@ static inline QueueHandle_t xQueueCreate(UBaseType_t uxQueueLength,
 {
 	QueueHandle_t  ret;
 	struct Timeout timeout = {0, UnlimitedTimeout};
-	ret                    = (QueueHandle_t)malloc(sizeof(struct QueueHandle));
+	ret                    = (QueueHandle_t)malloc(sizeof(*ret));
 	if (!ret)
 	{
 		return NULL;

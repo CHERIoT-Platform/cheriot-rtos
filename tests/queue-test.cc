@@ -6,6 +6,7 @@
 #include <cstdlib>
 #define TEST_NAME "Queue"
 #include "tests.hh"
+#include <FreeRTOS-Compat/queue.h>
 #include <debug.hh>
 #include <errno.h>
 #include <queue.h>
@@ -169,9 +170,25 @@ void test_queue_sealed()
 	debug_log("All queue compartment tests successful");
 }
 
+void test_queue_freertos()
+{
+	debug_log("Testing FreeRTOS queues");
+	auto quotaBegin    = heap_quota_remaining(MALLOC_CAPABILITY);
+	auto freertosQueue = xQueueCreate(10, sizeof(int));
+	vQueueDelete(freertosQueue);
+	auto quotaEnd = heap_quota_remaining(MALLOC_CAPABILITY);
+	TEST(
+	  quotaBegin == quotaEnd,
+	  "The FreeRTOS queue wrapper leaks memory: quota before is {}, after {}",
+	  quotaBegin,
+	  quotaEnd);
+	debug_log("All FreeRTOS queue tests successful");
+}
+
 void test_queue()
 {
 	test_queue_unsealed();
 	test_queue_sealed();
+	test_queue_freertos();
 	debug_log("All queue tests successful");
 }
