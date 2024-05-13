@@ -40,40 +40,86 @@ struct SonataGPIO
 	uint32_t arduinoShieldMask;
 
 	/**
-	 * The index of the first GPIO pin connected to a LED.
+	 * The bit index of the first GPIO pin connected to a user LED.
 	 */
 	static constexpr uint32_t FirstLED = 4;
 	/**
-	 * The index of the last GPIO pin connected to a LED.
+	 * The bit index of the last GPIO pin connected to a user LED.
 	 */
 	static constexpr uint32_t LastLED = 11;
 	/**
-	 * The number of GPIO pins used for LEDs.
+	 * The number of user LEDs.
 	 */
 	static constexpr uint32_t LEDCount = LastLED - FirstLED + 1;
 	/**
-	 * The mask covering the GPIO pins used for LEDs.
+	 * The mask covering the GPIO pins used for user LEDs.
 	 */
 	static constexpr uint32_t LEDMask = ((1 << LEDCount) - 1) << FirstLED;
 
+	/**
+	 * The output bit mask for a given user LED index
+	 */
 	constexpr static uint32_t led_bit(uint32_t index)
 	{
 		return (1 << (index + FirstLED)) & LEDMask;
 	}
 
+	/**
+	 * Switches off the LED at the given user LED index
+	 */
 	void led_on(uint32_t index) volatile
 	{
 		output = output | led_bit(index);
 	}
 
+	/**
+	 * Switches on the LED at the given user LED index
+	 */
 	void led_off(uint32_t index) volatile
 	{
 		output = output & ~led_bit(index);
 	}
 
+	/**
+	 * Toggles the LED at the given user LED index
+	 */
 	void led_toggle(uint32_t index) volatile
 	{
 		output = output ^ led_bit(index);
+	}
+
+	/**
+	 * The bit index of the first GPIO pin connected to a user switch.
+	 */
+	static constexpr uint32_t FirstSwitch = 5;
+	/**
+	 * The bit index of the last GPIO pin connected to a user switch.
+	 */
+	static constexpr uint32_t LastSwitch = 13;
+	/**
+	 * The number of user switches.
+	 */
+	static constexpr uint32_t SwitchCount = LastSwitch - FirstSwitch + 1;
+	/**
+	 * The mask covering the GPIO pins used for user switches.
+	 */
+	static constexpr uint32_t SwitchMask = ((1 << SwitchCount) - 1)
+	                                       << FirstSwitch;
+
+	/**
+	 * The input bit mask for a given user switch index
+	 */
+	constexpr static uint32_t switch_bit(uint32_t index)
+	{
+		return (1 << (index + FirstSwitch)) & SwitchMask;
+	}
+
+	/**
+	 * Returns the value of the switch at the given user switch index.
+	 */
+	bool read_switch(uint32_t index) volatile
+	{
+		return (input & switch_bit(index)) > 0;
 	}
 
 	/**
