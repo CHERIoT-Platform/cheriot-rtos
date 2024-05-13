@@ -91,16 +91,12 @@ static inline uint64_t thread_microsecond_spin(uint32_t microseconds)
 #else
 	static const uint32_t CyclesPerMicrosecond = CPU_TIMER_HZ / 1'000'000;
 	__if_cxx(
-	  static_assert(CyclesPerMicrosecond > 0, "CPU_TIMER_HZ is too low");)
-	  uint64_t start = rdcycle64();
+	  static_assert(CyclesPerMicrosecond > 0, "CPU_TIMER_HZ is too low"););
+	uint64_t start = rdcycle64();
 	// Convert the microseconds to a number of cycles.  This does the multiply
 	// first so that we don't end up with zero as a result of the division.
 	uint32_t cycles = microseconds * CyclesPerMicrosecond;
-#	ifdef X
-	Debug::log("Cycles per us: {}", CyclesPerMicrosecond);
-	Debug::log("Spinning for {} cycles", cycles);
-#	endif
-	uint64_t end = start + cycles;
+	uint64_t end    = start + cycles;
 	uint64_t current;
 	do
 	{
@@ -127,11 +123,9 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 	return milliseconds;
 #else
 	static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
+	static const uint32_t CyclesPerTick        = CPU_TIMER_HZ / TICK_RATE_HZ;
 	__if_cxx(
-	  static_assert(
-	    CyclesPerMillisecond > 0,
-	    "CPU_TIMER_HZ is too low");) static const uint32_t CyclesPerTick =
-	  CPU_TIMER_HZ / TICK_RATE_HZ;
+	  static_assert(CyclesPerMillisecond > 0, "CPU_TIMER_HZ is too low"););
 	uint32_t cycles  = milliseconds * CyclesPerMillisecond;
 	uint64_t start   = rdcycle64();
 	uint64_t end     = start + cycles;
