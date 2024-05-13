@@ -37,7 +37,7 @@ struct SonataGPIO
 	/**
 	 * The mask covering the GPIO pins used for LEDs.
 	 */
-	static constexpr uint32_t LEDMask = ((1 << LastLED) - 1) << FirstLED;
+	static constexpr uint32_t LEDMask = ((1 << LEDCount) - 1) << FirstLED;
 
 	constexpr static uint32_t led_bit(uint32_t index)
 	{
@@ -51,7 +51,7 @@ struct SonataGPIO
 
 	void led_off(uint32_t index) volatile
 	{
-		output = output & (~led_bit(index) | ~LEDMask);
+		output = output & ~led_bit(index);
 	}
 
 	void led_toggle(uint32_t index) volatile
