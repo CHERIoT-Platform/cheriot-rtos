@@ -95,7 +95,7 @@ static inline uint64_t thread_microsecond_spin(uint32_t microseconds)
 	  uint64_t start = rdcycle64();
 	// Convert the microseconds to a number of cycles.  This does the multiply
 	// first so that we don't end up with zero as a result of the division.
-	uint32_t cycles = microseconds / CyclesPerMicrosecond;
+	uint32_t cycles = microseconds * CyclesPerMicrosecond;
 #	ifdef X
 	Debug::log("Cycles per us: {}", CyclesPerMicrosecond);
 	Debug::log("Spinning for {} cycles", cycles);
@@ -106,7 +106,7 @@ static inline uint64_t thread_microsecond_spin(uint32_t microseconds)
 	{
 		current = rdcycle64();
 	} while (current < end);
-	return ((current - start) * CPU_TIMER_HZ) / 1'000'000;
+	return (current - start) * CyclesPerMicrosecond;
 #endif
 }
 
@@ -132,7 +132,7 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 	    CyclesPerMillisecond > 0,
 	    "CPU_TIMER_HZ is too low");) static const uint32_t CyclesPerTick =
 	  CPU_TIMER_HZ / TICK_RATE_HZ;
-	uint32_t cycles  = CPU_TIMER_HZ * milliseconds / 1'000;
+	uint32_t cycles  = milliseconds * CyclesPerMillisecond;
 	uint64_t start   = rdcycle64();
 	uint64_t end     = start + cycles;
 	uint64_t current = start;
@@ -148,7 +148,7 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 		current = rdcycle64();
 	}
 	current = rdcycle64();
-	return ((current - start) * CPU_TIMER_HZ) / 1'000;
+	return (current - start) * CyclesPerMillisecond;
 #endif
 }
 
