@@ -237,6 +237,10 @@ Then, we will build, install, and run the CHERIoT RTOS firmware on the board.
 We will add documentation for this part later.
 In the meantime, our [blog post](https://cheriot.org/fpga/try/2023/11/16/cheriot-on-the-arty-a7.html) provides pointers on how to do this.
 
+There are two default clock speeds that SAFE configuration can be synthesised at following the build instructions, 20MHz and 33MHz.
+The expected clock speed for the Arty A7 board in this project is 33MHz, but can be changed if the FPGA design is running at a different clock speed.
+If you want to use the 20MHz, or any other clock speed, implementation, please update the *timer_hz* field in the board file `sdk/boards/ibex-arty-a7-100.json`
+
 ### Building, Copying, and Running the Firmware
 
 We have now configured the FPGA.
