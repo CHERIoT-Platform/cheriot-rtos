@@ -52,7 +52,7 @@ All memory allocated by these functions is guaranteed to be zeroed.
 These functions will fail if the allocator capability does not have sufficient remaining quota to handle the allocation (or if the allocator itself is out of memory).
 All allocations have an eight-byte header and this counts towards the quota, so the total quota required is the sum of the size of all objects plus eight times the number of live objects.
 
-The amount of quota remaining in a allocator capability can be queried with `heap_quota_remaining`.
+The amount of quota remaining in an allocator capability can be queried with `heap_quota_remaining`.
 
 The `heap_free` function deallocates memory.
 This must be called with the same allocator capability that allocated the memory (you may not free memory unless authorised to do so).
@@ -96,3 +96,52 @@ This makes it easy to audit the property that some compartments should not alloc
 The C++ `new` / `delete` functions wrap `malloc` and friends.
 These can be hidden by defining the `CHERIOT_NO_NEW_DELETE` macro.
 
+Handling of failure
+-------------------
+
+All `heap_` allocator APIs can fail with `-ENOTENOUGHSTACK`, which indicates that the stack space available was insufficient for the allocator to safely execute.
+This is because executing the allocator on insufficient stack space may allow attackers to trigger arbitrary failures in the allocator through carefully setting the size of the stack.
+
+This implies an important difference of semantics between `heap_allocate` and the C stdlib `malloc`: upon failure `heap_allocate` may return a `(void*) -ENOTENOUGHSTACK` pointer as well as a `NULL` pointer.
+Success of `heap_allocate` must thus be checked by querying the tag bit of the returned capability, instead of comparing with a `NULL` pointer.
+
+A correct usage of `heap_allocate` with the C++ API looks like the following:
+```C++
+Timeout t{1};
+Capability ptr{heap_allocate(&t, MALLOC_CAPABILITY, sizeof(int))};
+// Correct check
+if (!ptr.is_valid())
+{
+    // ...
+}
+```
+
+Using the C-level API, a correct check is:
+```C
+Timeout t   = {0, UnlimitedTimeout};
+void *ptr = heap_allocate(&t, MALLOC_CAPABILITY, sizeof(int));
+// Correct check
+if (!__builtin_cheri_tag_get(ptr))
+{
+    // ...
+}
+```
+
+As opposed to an incorrect `NULL` check, which would fail if the return value is `-ENOTENOUGHSTACK`:
+```C++
+Timeout t{1};
+void *ptr = heap_allocate(&t, MALLOC_CAPABILITY, sizeof(int));
+// Incorrect, this will go wrong if we get (void*) ENOTENOUGHSTACK
+if (ptr == nullptr)
+{
+    // ...
+}
+```
+
+Similarly, the semantics of `heap_free` differ from those of the C stdlib `free`.
+Whereas the stdlib `free` does not report failure (e.g., if passed pointer is not a heap-allocated pointer, or if the function runs out of stack), `heap_free` returns an errno value.
+
+`heap_free` may fail if the stack is insufficient, if the heap capability cannot be used to free the capability, or if the pointer has already been freed, among others.
+Still - provided a valid heap-allocated pointer, `heap_free` should only fail if the stack space is insufficient.
+`heap_can_free` can be used to check if a call to `heap_free` would succeed without actually performing the free.
+This is useful to ensure that a failure to free will not happen at a point of no return (e.g., when resources have already been partially freed).
