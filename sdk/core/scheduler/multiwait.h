@@ -194,7 +194,7 @@ namespace
 			                        heapCapability,
 			                        sizeof(MultiWaiterInternal) +
 			                          (length * sizeof(EventWaiter)));
-			if (q == nullptr)
+			if (!__builtin_cheri_tag_get(q))
 			{
 				error = -ENOMEM;
 				return {};

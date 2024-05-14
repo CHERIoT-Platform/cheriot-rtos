@@ -5,6 +5,7 @@
 #define TEST_NAME "Allocator"
 
 #include "tests.hh"
+#include <cheri.hh>
 #include <cheriot-atomic.hh>
 #include <cstdlib>
 #include <debug.hh>
@@ -72,7 +73,7 @@ namespace
 				Timeout t{AllocTimeout};
 				allocation = heap_allocate(&t, MALLOC_CAPABILITY, AllocSize);
 				TEST(
-				  allocation != nullptr,
+				  __builtin_cheri_tag_get(allocation),
 				  "Cannot make allocations anymore. Either the revoker is not "
 				  "working or it's too slow");
 			}
@@ -84,7 +85,7 @@ namespace
 			for (auto allocation : allocations)
 			{
 				TEST(
-				  __builtin_cheri_tag_get(allocation) == 0,
+				  !__builtin_cheri_tag_get(allocation),
 				  "tag for freed memory {} from allocation {} should be clear",
 				  allocation);
 			}
@@ -140,6 +141,8 @@ namespace
 			Timeout t{0};
 			allocation =
 			  heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize);
+			// here test for nullptr (as opposed to the valid tag
+			// bit) because we specifically want to check for OOM
 			if (allocation == nullptr)
 			{
 				memoryExhausted = true;
@@ -148,11 +151,13 @@ namespace
 		}
 		TEST(memoryExhausted, "Failed to exhaust memory");
 		debug_log("Trying a non-blocking allocation");
+		// nullptr check because we explicitly want to check for OOM
 		TEST(heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize) == nullptr,
 		     "Non-blocking heap allocation did not return failure with memory "
 		     "exhausted");
 		debug_log("Trying a huge allocation");
 		Timeout forever{UnlimitedTimeout};
+		// nullptr check because we explicitly want to check for OOM
 		TEST(heap_allocate(&forever, MALLOC_CAPABILITY, 1024 * 1024 * 1024) ==
 		       nullptr,
 		     "Non-blocking heap allocation did not return failure on huge "
@@ -165,7 +170,7 @@ namespace
 		debug_log("Entering blocking malloc");
 		Timeout t{AllocTimeout};
 		void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, BigAllocSize);
-		TEST(ptr != nullptr,
+		TEST(__builtin_cheri_tag_get(ptr),
 		     "Failed to make progress on blocking allocation, allocation "
 		     "returned {}",
 		     ptr);
@@ -190,13 +195,12 @@ namespace
 		auto                  t    = Timeout(0); /* don't sleep */
 
 		auto doAlloc = [&](size_t sz) {
-			auto p = heap_allocate(&t, MALLOC_CAPABILITY, sz);
+			CHERI::Capability p{heap_allocate(&t, MALLOC_CAPABILITY, sz)};
 
-			if (p != nullptr)
+			if (p.is_valid())
 			{
-				CHERI::Capability pwrap{p};
 				// dlmalloc can give you one granule more.
-				TEST(pwrap.length() == sz || pwrap.length() == sz + 8,
+				TEST(p.length() == sz || p.length() == sz + 8,
 				     "Bad return length");
 				memset(p, 0xCA, sz);
 				allocations.push_back(p);
@@ -328,9 +332,10 @@ namespace
 		for (size_t i = 16; i < 256; i <<= 1)
 		{
 			allocated += i;
-			TEST(heap_allocate(&noWait, SECOND_HEAP, i) != nullptr,
-			     "Allocating {} bytes failed",
-			     i);
+			TEST(
+			  __builtin_cheri_tag_get(heap_allocate(&noWait, SECOND_HEAP, i)),
+			  "Allocating {} bytes failed",
+			  i);
 		}
 		debug_log("Quota left after allocating {} bytes: {}",
 		          allocated,
@@ -354,8 +359,10 @@ namespace
 		debug_log("Before allocating, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
 		Timeout longTimeout{1000};
-		void   *ptr  = heap_allocate(&longTimeout, SECOND_HEAP, 16);
-		void   *ptr2 = heap_allocate(&longTimeout, SECOND_HEAP, 16);
+		void   *ptr = heap_allocate(&longTimeout, SECOND_HEAP, 16);
+		TEST(__builtin_cheri_tag_get(ptr), "Failed to allocate 16 bytes");
+		void *ptr2 = heap_allocate(&longTimeout, SECOND_HEAP, 16);
+		TEST(__builtin_cheri_tag_get(ptr2), "Failed to allocate 16 bytes");
 		debug_log("After allocating, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
 		static cheriot::atomic<int> state = 0;
@@ -518,7 +525,7 @@ void test_allocator()
 	Timeout t{5};
 	test_free_all();
 	void *ptr = heap_allocate(&t, STATIC_SEALED_VALUE(secondHeap), 32);
-	TEST(ptr, "Failed to allocate 32 bytes");
+	TEST(__builtin_cheri_tag_get(ptr), "Failed to allocate 32 bytes");
 	TEST(heap_address_is_valid(ptr) == true,
 	     "Heap object incorrectly reported as not heap address");
 	int ret = heap_free(MALLOC_CAPABILITY, ptr);

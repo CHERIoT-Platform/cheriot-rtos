@@ -298,8 +298,13 @@ static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size)
  */
 #define MVM_CONTEXTUAL_MALLOC(size, context)                                   \
 	({                                                                         \
-		Timeout t = {0, 0};                                                    \
-		heap_allocate(&t, context, size);                                      \
+		Timeout t   = {0, 0};                                                  \
+		void   *ret = heap_allocate(&t, context, size);                        \
+		if (!__builtin_cheri_tag_get(ret))                                     \
+		{                                                                      \
+			ret = NULL;                                                        \
+		}                                                                      \
+		ret;                                                                   \
 	})
 #define MVM_CONTEXTUAL_FREE(ptr, context) heap_free(context, ptr)
 
