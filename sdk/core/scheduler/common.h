@@ -247,6 +247,10 @@ namespace
 		HeapObject(struct SObjStruct *heapCapability, T *allocatedObject)
 		  : pointer(allocatedObject, heapCapability)
 		{
+			if (!__builtin_cheri_tag_get(allocatedObject))
+			{
+				pointer = nullptr;
+			}
 		}
 
 		/**
@@ -264,9 +268,13 @@ namespace
 		              heap_allocate(timeout, heapCapability, sizeof(T))),
 		            {heapCapability})
 		{
-			if (pointer)
+			if (__builtin_cheri_tag_get(pointer.raw()))
 			{
 				new (pointer.get()) T(std::forward<Args>(args)...);
+			}
+			else
+			{
+				pointer = nullptr;
 			}
 		}
 

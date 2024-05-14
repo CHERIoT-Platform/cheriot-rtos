@@ -46,7 +46,7 @@ int eventgroup_create(Timeout     *timeout,
 	auto   group =
 	  static_cast<EventGroup *>(heap_allocate(timeout, heapCapability, size));
 	*outGroup = group;
-	if (!group)
+	if (!__builtin_cheri_tag_get(group))
 	{
 		return -ENOMEM;
 	}
