@@ -105,6 +105,11 @@ static inline void __dead2 panic()
  * or if the allocation cannot be satisfied under any circumstances (for example
  * if `size` is larger than the total heap size).
  *
+ * In both blocking and non-blocking cases, `-ENOTENOUGHSTACK` may be returned
+ * if the stack is insufficiently large to safely run the function. This means
+ * that the return value of `heap_allocate` should be checked for the validity
+ * of the tag bit *and not* nullptr.
+ *
  * Memory returned from this interface is guaranteed to be zeroed.
  */
 void *__cheri_compartment("alloc")
@@ -129,6 +134,9 @@ void *__cheri_compartment("alloc")
  * if `nmemb` * `size` is larger than the total heap size, or if `nmemb` *
  * `size` overflows).
  *
+ * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
+ * stack is insufficiently large to run the function. See `heap_allocate`.
+ *
  * Memory returned from this interface is guaranteed to be zeroed.
  */
 void *__cheri_compartment("alloc")
@@ -141,6 +149,10 @@ void *__cheri_compartment("alloc")
  * Add a claim to an allocation.  The object will be counted against the quota
  * provided by the first argument until a corresponding call to `heap_free`.
  * Note that this can be used with interior pointers.
+ *
+ * This will return the size of the allocation claimed on success, 0 on error
+ * (if `heapCapability` or `pointer` is not valid, etc.), or `-ENOTENOUGHSTACK`
+ * if the stack is insufficiently large to run the function.
  */
 size_t __cheri_compartment("alloc")
   heap_claim(struct SObjStruct *heapCapability, void *pointer);
@@ -152,10 +164,11 @@ size_t __cheri_compartment("alloc")
  * until either the next cross-compartment call or the next call to this
  * function.
  *
- * A null pointer can be used as a not-present value.  This function will
- * treat operations on null pointers as unconditionally successful.  It returns
- * `-ETIMEDOUT` if it failed to claim before the timeout expired or `EINVAL` if
- * one or more of the arguments is neither null nor a valid pointer at the end.
+ * A null pointer can be used as a not-present value.  This function will treat
+ * operations on null pointers as unconditionally successful.  It returns
+ * `-ETIMEDOUT` if it failed to claim before the timeout expired, or `EINVAL`
+ * if one or more of the arguments is neither null nor a valid pointer at the
+ * end.
  *
  * In the case of failure, neither pointer will have been claimed.
  *
@@ -169,8 +182,9 @@ int __cheri_libcall heap_claim_fast(Timeout         *timeout,
 /**
  * Free a heap allocation.
  *
- * Returns 0 on success, or `-EINVAL` if `ptr` is not a valid pointer to the
- * start of a live heap allocation.
+ * Returns 0 on success, `-EINVAL` if `ptr` is not a valid pointer to the start
+ * of a live heap allocation, or `-ENOTENOUGHSTACK` if the stack size is
+ * insufficiently large to safely run the function.
  */
 int __cheri_compartment("alloc")
   heap_free(struct SObjStruct *heapCapability, void *ptr);
@@ -178,8 +192,9 @@ int __cheri_compartment("alloc")
 /**
  * Free all allocations owned by this capability.
  *
- * Returns the number of bytes freed or `-EPERM` if this is not a valid heap
- * capability.
+ * Returns the number of bytes freed, `-EPERM` if this is not a valid heap
+ * capability, or `-ENOTENOUGHSTACK` if the stack size is insufficiently large
+ * to safely run the function.
  */
 ssize_t __cheri_compartment("alloc")
   heap_free_all(struct SObjStruct *heapCapability);
@@ -193,7 +208,8 @@ int __cheri_compartment("alloc")
 
 /**
  * Returns the space available in the given quota. This will return -1 if
- * `heapCapability` is not valid.
+ * `heapCapability` is not valid or if the stack is insufficient to run the
+ * function.
  */
 size_t __cheri_compartment("alloc")
   heap_quota_remaining(struct SObjStruct *heapCapability);
