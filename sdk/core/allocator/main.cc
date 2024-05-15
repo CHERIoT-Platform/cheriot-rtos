@@ -803,7 +803,7 @@ namespace
 
 } // namespace
 
-__cheriot_minimum_stack(0x80) size_t
+__cheriot_minimum_stack(0x80) ssize_t
   heap_quota_remaining(struct SObjStruct *heapCapability)
 {
 	STACK_CHECK(0x80);
@@ -856,7 +856,7 @@ __cheriot_minimum_stack(0x1f0) void *heap_allocate(Timeout *timeout,
 	return malloc_internal(bytes, std::move(g), cap, timeout);
 }
 
-__cheriot_minimum_stack(0x1b0) size_t
+__cheriot_minimum_stack(0x1b0) ssize_t
   heap_claim(SObj heapCapability, void *pointer)
 {
 	STACK_CHECK(0x1b0);

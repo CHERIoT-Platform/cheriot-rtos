@@ -31,7 +31,7 @@ void __cheri_compartment("allocbench") run()
 		}
 		auto end = rdcycle();
 		printf(__XSTRING(BOARD) "\t%ld\t%ld\n", static_cast<int>(size), end - start);
-		size_t quota = heap_quota_remaining(MALLOC_CAPABILITY);
+		auto quota = heap_quota_remaining(MALLOC_CAPABILITY);
 		Debug::Invariant(quota == MALLOC_QUOTA, "Quota remaining {}, should be {}", quota, MALLOC_QUOTA);
 		Debug::log("Flushing quarantine");
 		heap_quarantine_empty();

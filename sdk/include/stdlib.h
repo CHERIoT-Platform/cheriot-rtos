@@ -154,7 +154,7 @@ void *__cheri_compartment("alloc")
  * (if `heapCapability` or `pointer` is not valid, etc.), or `-ENOTENOUGHSTACK`
  * if the stack is insufficiently large to run the function.
  */
-size_t __cheri_compartment("alloc")
+ssize_t __cheri_compartment("alloc")
   heap_claim(struct SObjStruct *heapCapability, void *pointer);
 
 /**
@@ -211,7 +211,7 @@ int __cheri_compartment("alloc")
  * `heapCapability` is not valid or if the stack is insufficient to run the
  * function.
  */
-size_t __cheri_compartment("alloc")
+ssize_t __cheri_compartment("alloc")
   heap_quota_remaining(struct SObjStruct *heapCapability);
 
 /**
