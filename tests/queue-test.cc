@@ -104,7 +104,7 @@ void test_queue_unsealed()
 
 void test_queue_sealed()
 {
-	size_t  heapSpace = heap_quota_remaining(MALLOC_CAPABILITY);
+	auto    heapSpace = heap_quota_remaining(MALLOC_CAPABILITY);
 	Timeout t{1};
 	SObj    receiveHandle;
 	SObj    sendHandle;

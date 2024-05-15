@@ -78,6 +78,7 @@ int queue_create_sealed(Timeout            *timeout,
 	receive->allocation = freeBuffer;
 	// Add a second claim on the buffer so that we can free the queue by freeing
 	// it twice, once in each endpoint.
+	// TODO we should check the return value of `heap_claim`
 	heap_claim(heapCapability, freeBuffer);
 
 	if (int claimed = heap_claim_fast(timeout, outQueueSend, outQueueReceive);

@@ -261,20 +261,20 @@ namespace
 	void test_claims()
 	{
 		debug_log("Beginning tests on claims");
-		size_t quotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
+		auto quotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
 		TEST(quotaLeft == MALLOC_QUOTA,
 		     "After claim and free from {}-byte quota, {} bytes left before "
 		     "running claims tests",
 		     MALLOC_QUOTA,
 		     quotaLeft);
 		size_t allocSize       = 128;
-		size_t mallocQuotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
+		auto   mallocQuotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
 		CHERI::Capability alloc{
 		  heap_allocate(&noWait, MALLOC_CAPABILITY, allocSize)};
 		TEST(alloc.is_valid(), "Allocation failed");
 		int  claimCount = 0;
 		auto claim      = [&]() {
-            size_t claimSize = heap_claim(SECOND_HEAP, alloc);
+            ssize_t claimSize = heap_claim(SECOND_HEAP, alloc);
             claimCount++;
             TEST(claimSize == allocSize,
 			          "{}-byte allocation claimed as {} bytes (claim number {})",
@@ -293,7 +293,7 @@ namespace
 		claim();
 		quotaLeft = heap_quota_remaining(SECOND_HEAP);
 		claim();
-		size_t quotaLeftAfterSecondClaim = heap_quota_remaining(SECOND_HEAP);
+		auto quotaLeftAfterSecondClaim = heap_quota_remaining(SECOND_HEAP);
 		TEST(quotaLeft == quotaLeftAfterSecondClaim,
 		     "Claiming twice reduced quota from {} to {}",
 		     quotaLeft,
@@ -301,7 +301,7 @@ namespace
 		debug_log("Freeing object on malloc capability: {}", alloc);
 		ret = heap_free(MALLOC_CAPABILITY, alloc);
 		TEST(ret == 0, "Failed to free claimed object, return: {}", ret);
-		size_t mallocQuota2 = heap_quota_remaining(MALLOC_CAPABILITY);
+		auto mallocQuota2 = heap_quota_remaining(MALLOC_CAPABILITY);
 		TEST(mallocQuotaLeft == mallocQuota2,
 		     "Freeing claimed object did not restore quota to {}, quota is {}",
 		     mallocQuotaLeft,
@@ -411,7 +411,8 @@ namespace
 		// The next test requires all memory allocated from the malloc
 		// capability to be freed before it starts.
 		int sleeps = 0;
-		while (heap_quota_remaining(MALLOC_CAPABILITY) < MALLOC_QUOTA)
+		while (heap_quota_remaining(MALLOC_CAPABILITY) < MALLOC_QUOTA &&
+		       heap_quota_remaining(MALLOC_CAPABILITY) > 0)
 		{
 			Timeout t{1};
 			thread_sleep(&t);
@@ -538,7 +539,7 @@ void test_allocator()
 	TEST(ret == 0,
 	     "Heap free with the correct capability returned failed with {}.",
 	     ret);
-	size_t quotaLeft = heap_quota_remaining(STATIC_SEALED_VALUE(secondHeap));
+	auto quotaLeft = heap_quota_remaining(STATIC_SEALED_VALUE(secondHeap));
 	TEST(quotaLeft == 1024,
 	     "After alloc and free from 1024-byte quota, {} bytes left",
 	     quotaLeft);
