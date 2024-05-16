@@ -238,12 +238,12 @@ static inline void __dead2 abort()
 #ifndef CHERIOT_NO_AMBIENT_MALLOC
 static inline void *malloc(size_t size)
 {
-	Timeout t = {0, UnlimitedTimeout};
+	Timeout t = {0, 0};
 	return heap_allocate(&t, MALLOC_CAPABILITY, size);
 }
 static inline void *calloc(size_t nmemb, size_t size)
 {
-	Timeout t = {0, UnlimitedTimeout};
+	Timeout t = {0, 0};
 	return heap_allocate_array(&t, MALLOC_CAPABILITY, nmemb, size);
 }
 static inline int free(void *ptr)
