@@ -3,6 +3,7 @@
 
 #include "export-table-assembly.h"
 #include "trusted-stack-assembly.h"
+#include <errno.h>
 
 .include "assembly-helpers.s"
 
@@ -246,6 +247,17 @@ after_zero:
 	// table pointer.  Nothing between this point and transition to the callee
 	// should fault.
 	csc                ct1, TrustedStackFrame_offset_calleeExportTable(ctp)
+
+	// Load the minimum stack size required by the callee.
+	clbu               tp, ExportEntry_offset_minimumStackSize(ct1)
+	// The stack size is in 8-byte units, so multiply by 8.
+	slli               tp, tp, 3
+	// Check that the stack is large enough for the callee.
+	// At this point, we have already truncated the stack and so the length of
+	// the stack is the length that the callee can use.
+	cgetlen            t2, csp
+	bgtu               tp, t2, .Lstack_too_small
+
 	// Get the flags field into tp
 	clbu               tp, ExportEntry_offset_flags(ct1)
 	cgetbase           s1, ct1
@@ -289,6 +301,7 @@ after_zero:
 	zeroRegisters      tp, t1, t2, s0, s1
 	cjalr              cra
 
+.Lskip_compartment_call:
 	// If we are doing a forced unwind of the trusted stack then we do almost
 	// exactly the same as a normal unwind.  We will jump here from the
 	// exception path.
@@ -302,6 +315,15 @@ after_zero:
 	// ca1, used for second return value
 	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
 	cret
+
+	// If the stack is too small, we don't do the call, but to avoid leaking
+	// any other state we still go through the same return path as normal.  We
+	// set the return registers to -ENOTENOUGHSTACK and 0, so users can see
+	// that this is the failure reason.
+.Lstack_too_small:
+	li                 a0, -ENOTENOUGHSTACK
+	li                 a1, 0
+	j                  .Lskip_compartment_call
 .size compartment_switcher_entry, . - compartment_switcher_entry
 
 	// the entry point of all exceptions and interrupts

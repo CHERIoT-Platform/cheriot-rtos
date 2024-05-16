@@ -52,6 +52,9 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 #endif
 		return ErrorRecoveryBehaviour::ForceUnwind;
 	}
+	debug_log("mcause: {}, pcc: {}", mcause, frame->pcc);
+	auto [reg, cause] = CHERI::extract_cheri_mtval(mtval);
+	debug_log("Error {} in register {}", reg, cause);
 	debug_log("Current test crashed");
 	crashDetected = true;
 	return ErrorRecoveryBehaviour::InstallContext;

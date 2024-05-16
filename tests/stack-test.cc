@@ -72,7 +72,44 @@ namespace
 		debug_log("Expected to invoke the handler? {}", handlerExpected);
 		set_expected_behaviour(&threadStackTestFailed, handlerExpected);
 	}
+
+	__attribute__((used)) extern "C" int test_small_stack()
+	{
+		return test_stack_requirement();
+	}
 } // namespace
+
+__attribute__((used)) extern "C" int test_with_small_stack(size_t stackSize);
+
+asm(".section .text\n"
+    ".global test_with_small_stack\n"
+    "test_with_small_stack:\n"
+    // Preserve the old stack
+    "  cmove ct0, csp\n"
+    // Add space to the requested size for the spill slots and the size of the
+    // stack that `test_small_stack` will use, plus the four capabilities that
+    // the switcher will spill for us.  We use 16 bytes to store the stack
+    // pointer and return address, `test_small_stack` uses the same amount: it
+    // needs to store the return address, and the ABI requires that stacks are
+    // 16-byte aligned and so it uses a full 16 bytes.
+    "  add a0, a0, 64\n"
+    // Get the base of the stack
+    "  cgetbase a2, csp\n"
+    // Move the stack pointer to the current base
+    "  csetaddr csp, csp, a2\n"
+    // Truncate the stack
+    "  csetbounds csp, csp, a0\n"
+    // Move to the end of the stack, minus the spill-slot size
+    "  cincoffset csp, csp, a0\n"
+    "  cincoffset csp, csp, -16\n"
+    "  csc  ct0, 0(csp)\n"
+    "  csc  cra, 8(csp)\n"
+    // Call the test function
+    "  cjal test_small_stack\n"
+    // Restore
+    "  clc  cra, 8(csp)\n"
+    "  clc  csp, 0(csp)\n"
+    "  cjr cra\n");
 
 // Defeat the compiler optimisation that may turn our first call to this into a
 // call. If the compiler does this then we will fail on an even number of
@@ -90,6 +127,18 @@ __cheri_callback void (*volatile crossCompartmentCall)();
  */
 void test_stack()
 {
+	int ret = test_with_small_stack(128);
+	TEST(ret == 0,
+	     "test_with_small_stack failed, returned {} with 128-byte stack",
+	     ret);
+	ret = test_with_small_stack(144);
+	TEST(ret == 0,
+	     "test_with_small_stack failed, returned {} with 144-byte stack",
+	     ret);
+	ret = test_with_small_stack(112);
+	TEST(ret == -ENOTENOUGHSTACK,
+	     "test_with_small_stack failed, returned {} with 112-byte stack",
+	     ret);
 	__cheri_callback void (*callback)() = cross_compartment_call;
 
 	crossCompartmentCall = test_trusted_stack_exhaustion;
@@ -127,5 +176,6 @@ void test_stack()
 
 	debug_log("invalid stack on cross compartment call");
 	expect_handler(false);
+
 	test_stack_invalid_on_call(callback);
 }
