@@ -52,3 +52,6 @@ bool holds_switcher_capability(ErrorState *frame)
 
 	return false;
 }
+
+__cheri_compartment("stack_integrity_thread")
+  __cheriot_minimum_stack(128) int test_stack_requirement();

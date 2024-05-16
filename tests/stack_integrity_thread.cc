@@ -139,3 +139,8 @@ void exhaust_trusted_stack(__cheri_callback void (*fn)(),
 {
 	self_recursion(fn);
 }
+
+int test_stack_requirement()
+{
+	return 0;
+}
