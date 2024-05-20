@@ -257,48 +257,58 @@ namespace
 					else
 					{
 						switch (
-						  static_cast<DebugFormatArgument::Kind>(argument.kind))
+						  static_cast<DebugFormatArgumentKind>(argument.kind))
 						{
-							case DebugFormatArgument::Kind::Bool:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentBool:
 								write(static_cast<bool>(argument.value)
 								        ? "true"
 								        : "false");
 								break;
-							case DebugFormatArgument::Kind::Character:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentCharacter:
 								write(static_cast<char>(argument.value));
 								break;
-							case DebugFormatArgument::Kind::Pointer:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentPointer:
 								write(reinterpret_cast<void *>(argument.value));
 								break;
-							case DebugFormatArgument::Kind::SignedNumber32:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentSignedNumber32:
 								write(static_cast<int32_t>(argument.value));
 								break;
-							case DebugFormatArgument::Kind::UnsignedNumber32:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentUnsignedNumber32:
 								write(static_cast<uint32_t>(argument.value));
 								break;
-							case DebugFormatArgument::Kind::SignedNumber64:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentSignedNumber64:
 							{
 								int64_t value;
 								memcpy(&value, &argument.value, sizeof(value));
 								write(value);
 								break;
 							}
-							case DebugFormatArgument::Kind::UnsignedNumber64:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentUnsignedNumber64:
 							{
 								uint64_t value;
 								memcpy(&value, &argument.value, sizeof(value));
 								write(value);
 								break;
 							}
-							case DebugFormatArgument::Kind::CString:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentCString:
 								write(reinterpret_cast<const char *>(
 								  argument.value));
 								break;
-							case DebugFormatArgument::Kind::StringView:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentStringView:
 								write(*reinterpret_cast<std::string_view *>(
 								  argument.value));
 								break;
-							case DebugFormatArgument::Kind::PermissionSet:
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentPermissionSet:
 								write(CHERI::PermissionSet::from_raw(
 								  argument.value));
 								break;

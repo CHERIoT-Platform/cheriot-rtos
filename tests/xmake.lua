@@ -54,6 +54,9 @@ test("locks")
 test("queue")
 -- Test minimal stdio implementation
 test("stdio")
+-- Test the debug helpers.
+test("debug")
+	add_files("debug-test.c")
 -- Test the static sealing types
 test("static_sealing")
 compartment("static_sealing_inner")
@@ -112,6 +115,7 @@ firmware("test-suite")
     add_deps("check_pointer_test")
     add_deps("misc_test")
     add_deps("stdio_test")
+    add_deps("debug_test")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
         target:values_set("board", "$(board)")

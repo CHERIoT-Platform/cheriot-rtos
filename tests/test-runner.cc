@@ -107,6 +107,8 @@ void __cheri_compartment("test_runner") run_tests()
 	debug_log("Trying to print string: {}", std::string_view{testString, 13});
 
 	run_timed("All tests", []() {
+		run_timed("Debug helpers (C++)", test_debug_cxx);
+		run_timed("Debug helpers (C)", test_debug_c);
 		run_timed("MMIO", test_mmio);
 		run_timed("stdio", test_stdio);
 		run_timed("Static sealing", test_static_sealing);

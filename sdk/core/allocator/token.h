@@ -59,7 +59,7 @@ struct DebugFormatArgumentAdaptor<SealingKey>
 	{
 		return {reinterpret_cast<uintptr_t>(
 		          static_cast<const volatile void *>(value)),
-		        DebugFormatArgument::Pointer};
+		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };
 
