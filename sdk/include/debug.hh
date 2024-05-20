@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <__debug.h>
 #include <cheri.hh>
 #include <compartment.h>
 #include <concepts>
@@ -101,48 +102,6 @@ void debug_enum_helper(uintptr_t    value,
  */
 using DebugCallback = void (*)(uintptr_t, DebugWriter &);
 
-struct DebugFormatArgument
-{
-	/**
-	 * The kind of value, for values that have special-cased handling.
-	 */
-	enum Kind : ptraddr_t
-	{
-		/// Boolean, printed as "true" or "false".
-		Bool,
-		/// Single character.
-		Character,
-		/// Signed 32-bit integer, printed as decimal.
-		SignedNumber32,
-		/// Unsigned 32-bit integer, printed as hexadecimal
-		UnsignedNumber32,
-		/// Signed 64-bit integer, printed as decimal.
-		SignedNumber64,
-		/// Unsigned 64-bit integer, printed as hexadecimal.
-		UnsignedNumber64,
-		/// Pointer, printed as a full capability.
-		Pointer,
-		/// Special case for permission sets, printed as in the capability
-		/// format.
-		PermissionSet,
-		/// C string, printed as-is.
-		CString,
-		/// String view, printed as-is.
-		StringView,
-	};
-
-	/**
-	 * The value that is being written.
-	 */
-	uintptr_t value;
-	/**
-	 * The kind of value that is being written.  This is either a pointer
-	 * to a `DebugCallback` or one of the `Kind` enumeration, depending on
-	 * whether the tag is set or not.
-	 */
-	uintptr_t kind;
-};
-
 /**
  * Adaptor that turns an argument of type `T` into a `DebugFormatArgument`.
  *
@@ -160,7 +119,8 @@ struct DebugFormatArgumentAdaptor<bool>
 {
 	__always_inline static DebugFormatArgument construct(bool value)
 	{
-		return {static_cast<uintptr_t>(value), DebugFormatArgument::Bool};
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgumentKind::DebugFormatArgumentBool};
 	}
 };
 
@@ -172,7 +132,8 @@ struct DebugFormatArgumentAdaptor<char>
 {
 	__always_inline static DebugFormatArgument construct(char value)
 	{
-		return {static_cast<uintptr_t>(value), DebugFormatArgument::Character};
+		return {static_cast<uintptr_t>(value),
+		        DebugFormatArgumentKind::DebugFormatArgumentCharacter};
 	}
 };
 
@@ -185,7 +146,7 @@ struct DebugFormatArgumentAdaptor<uint8_t>
 	__always_inline static DebugFormatArgument construct(uint8_t value)
 	{
 		return {static_cast<uintptr_t>(value),
-		        DebugFormatArgument::UnsignedNumber32};
+		        DebugFormatArgumentKind::DebugFormatArgumentUnsignedNumber32};
 	}
 };
 
@@ -198,7 +159,7 @@ struct DebugFormatArgumentAdaptor<uint16_t>
 	__always_inline static DebugFormatArgument construct(uint16_t value)
 	{
 		return {static_cast<uintptr_t>(value),
-		        DebugFormatArgument::UnsignedNumber32};
+		        DebugFormatArgumentKind::DebugFormatArgumentUnsignedNumber32};
 	}
 };
 
@@ -211,7 +172,7 @@ struct DebugFormatArgumentAdaptor<uint32_t>
 	__always_inline static DebugFormatArgument construct(uint32_t value)
 	{
 		return {static_cast<uintptr_t>(value),
-		        DebugFormatArgument::UnsignedNumber32};
+		        DebugFormatArgumentKind::DebugFormatArgumentUnsignedNumber32};
 	}
 };
 
@@ -229,7 +190,8 @@ struct DebugFormatArgumentAdaptor<uint64_t>
 	{
 		uintptr_t fudgedValue;
 		memcpy(&fudgedValue, &value, sizeof(fudgedValue));
-		return {fudgedValue, DebugFormatArgument::UnsignedNumber64};
+		return {fudgedValue,
+		        DebugFormatArgumentKind::DebugFormatArgumentUnsignedNumber64};
 	}
 };
 
@@ -242,7 +204,7 @@ struct DebugFormatArgumentAdaptor<int8_t>
 	__always_inline static DebugFormatArgument construct(int8_t value)
 	{
 		return {static_cast<uintptr_t>(value),
-		        DebugFormatArgument::SignedNumber32};
+		        DebugFormatArgumentKind::DebugFormatArgumentSignedNumber32};
 	}
 };
 
@@ -255,7 +217,7 @@ struct DebugFormatArgumentAdaptor<int16_t>
 	__always_inline static DebugFormatArgument construct(int16_t value)
 	{
 		return {static_cast<uintptr_t>(value),
-		        DebugFormatArgument::SignedNumber32};
+		        DebugFormatArgumentKind::DebugFormatArgumentSignedNumber32};
 	}
 };
 
@@ -268,7 +230,7 @@ struct DebugFormatArgumentAdaptor<int32_t>
 	__always_inline static DebugFormatArgument construct(int32_t value)
 	{
 		return {static_cast<uintptr_t>(value),
-		        DebugFormatArgument::SignedNumber32};
+		        DebugFormatArgumentKind::DebugFormatArgumentSignedNumber32};
 	}
 };
 
@@ -287,7 +249,8 @@ struct DebugFormatArgumentAdaptor<int64_t>
 		static_assert(sizeof(uintptr_t) == sizeof(uint64_t));
 		uintptr_t fudgedValue;
 		memcpy(&fudgedValue, &value, sizeof(fudgedValue));
-		return {fudgedValue, DebugFormatArgument::SignedNumber64};
+		return {fudgedValue,
+		        DebugFormatArgumentKind::DebugFormatArgumentSignedNumber64};
 	}
 };
 
@@ -300,7 +263,7 @@ struct DebugFormatArgumentAdaptor<const char *>
 	__always_inline static DebugFormatArgument construct(const char *value)
 	{
 		return {reinterpret_cast<uintptr_t>(value),
-		        DebugFormatArgument::CString};
+		        DebugFormatArgumentKind::DebugFormatArgumentCString};
 	}
 };
 
@@ -317,7 +280,7 @@ struct DebugFormatArgumentAdaptor<std::string_view>
 	construct(std::string_view &value)
 	{
 		return {reinterpret_cast<uintptr_t>(&value),
-		        DebugFormatArgument::StringView};
+		        DebugFormatArgumentKind::DebugFormatArgumentStringView};
 	}
 };
 
@@ -334,7 +297,7 @@ struct DebugFormatArgumentAdaptor<T>
 	{
 #ifdef CHERIOT_AVOID_CAPRELOCS
 		return {static_cast<uintptr_t>(value),
-		        DebugFormatArgument::UnsignedNumber32};
+		        DebugFormatArgumentKind::DebugFormatArgumentUnsignedNumber32};
 #else
 		return {static_cast<uintptr_t>(value),
 		        reinterpret_cast<uintptr_t>(&debug_enum_helper<T>)};
@@ -352,7 +315,19 @@ struct DebugFormatArgumentAdaptor<CHERI::PermissionSet>
 	construct(CHERI::PermissionSet value)
 	{
 		return {static_cast<uintptr_t>(value.as_raw()),
-		        DebugFormatArgument::PermissionSet};
+		        DebugFormatArgumentKind::DebugFormatArgumentPermissionSet};
+	}
+};
+
+/**
+ * Null pointer specialisation.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<std::nullptr_t>
+{
+	__always_inline static DebugFormatArgument construct(std::nullptr_t)
+	{
+		return {0, DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };
 
@@ -366,7 +341,7 @@ struct DebugFormatArgumentAdaptor<T>
 	{
 		return {reinterpret_cast<uintptr_t>(
 		          static_cast<const volatile void *>(value)),
-		        DebugFormatArgument::Pointer};
+		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };
 
@@ -382,7 +357,7 @@ struct DebugFormatArgumentAdaptor<CHERI::Capability<T>>
 	{
 		return {reinterpret_cast<uintptr_t>(
 		          static_cast<const volatile void *>(value)),
-		        DebugFormatArgument::Pointer};
+		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };
 
@@ -397,7 +372,7 @@ struct DebugFormatArgumentAdaptor<T>
 	{
 		return {static_cast<uintptr_t>(value),
 
-		        DebugFormatArgument::UnsignedNumber32};
+		        DebugFormatArgumentKind::DebugFormatArgumentUnsignedNumber32};
 	}
 };
 
