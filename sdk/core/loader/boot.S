@@ -13,10 +13,10 @@
     .p2align 2
     .type start,@function
 start:
-	cjal			.Lregs_clear
-	// The common register clearing function will not zero these registers.
-	zeroRegisters	ra, sp, gp, a0
-	// At this point all registers are cleared.
+	// Most hardware will have zeroed all general-purposes registers at this
+	// point, but any code between here and the call into the scheduler has
+	// access to the root capabilities and so we are not concerned about
+	// information / capability leakage.
 #if __has_include(<platform-early_boot.inc>)
 #	include <platform-early_boot.inc>
 #endif
@@ -142,7 +142,6 @@ start:
 	addi			s1, s1, -16
 	csetbounds		ca0, csp, s1
 
-.Lregs_clear:
 	// a0 is used to pass arguments to the scheduler entry.
 	zeroAllRegistersExcept	ra, sp, gp, a0
 	cjalr			cra
