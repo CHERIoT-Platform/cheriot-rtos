@@ -28,6 +28,7 @@
     "heap": {
         "end": 0x00140000
     },
+    "revokable_memory_start": 0x00100000,
     "interrupts": [
         {
             "name": "UartRxWatermark",
