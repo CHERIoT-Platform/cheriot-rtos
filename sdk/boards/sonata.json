@@ -22,7 +22,7 @@
         }
     },
     "instruction_memory": {
-        "start": 0x00100080,
+        "start": 0x00101000,
         "end":   0x00140000
     },
     "heap": {
