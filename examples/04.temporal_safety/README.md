@@ -15,7 +15,7 @@ The debug facilities pretty print CHERI capabilities, so lets look at these two 
 The first value is the address, which is the same in both.
 Everything else, shown in brackets, is the *capability metadata*.
 
-The only field that changes after three call to `free` is the *tag* or *valid* bit.
+The only field that changes after the call to `free` is the *tag* or *valid* bit.
 This is the bit that indicates whether this is a valid capability.
 When this bit is cleared, the CPU will not permit this pointer to be used to authorise any operations.
 Its fields can still be read, which is why the other lines are the same.
