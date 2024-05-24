@@ -9,8 +9,8 @@ The bug-classes we demonstrate are covered by these three groups:
 ## Spatial safety
 
 By "spatial safety" we mean that every memory allocation has a well-defined size/bounds, and it's incorrect to access memory outside of these bounds. 
-Every C/C++ pointer in our system is a bounded, unforgeable CHERI capability.Every C/C++ pointer in our system is a bounded unforgeable CHERI capability.
-Any dereference Any dereference outside of an allocation's bounds, whether adjacent to the allocation or far outside, will trap. of an allocation's bounds, whether adjacent to the allocation or far outside, will trap.
+Every C/C++ pointer in our system is a bounded, unforgeable CHERI capability.
+Any dereference outside of an allocation's bounds, whether adjacent to the allocation or far outside, will trap. of an allocation's bounds, whether adjacent to the allocation or far outside, will trap.
 This is enforced by the hardware and so the same guarantees apply to accesses from assembly code.
 This property is enforced at the architectural level.
 You can see examples for that in the cases for `StackLinearOverflow`, `HeapLinearOverflow`, and `HeapNonlinearOverflow`, [implemented](memory_safety_inner.cc:49) in the inner compartment.
