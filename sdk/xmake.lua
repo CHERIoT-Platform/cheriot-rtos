@@ -887,6 +887,7 @@ rule("cheriot.firmware")
 
 		-- Templates for parts of the linker script that are instantiated per compartment
 		local compartment_templates = {
+			-- sdk/core/loader/types.h:/CompartmentHeader
 			compartment_headers =
 				"\n\t\tLONG(\".${compartment}_code_start\");" ..
 				"\n\t\tSHORT((SIZEOF(.${compartment}_code) + 7) / 8);" ..
@@ -894,7 +895,9 @@ rule("cheriot.firmware")
 				"\n\t\tLONG(\".${compartment}_export_table\");" ..
 				"\n\t\tSHORT(\".${compartment}_export_table_end\" - \".${compartment}_export_table\");" ..
 				"\n\t\tLONG(\".${compartment}_globals\");" ..
-				"\n\t\tSHORT(SIZEOF(.${compartment}_globals));" ..
+				"\n\t\tASSERT((SIZEOF(\".${compartment}_globals\") % 4) == 0, \"${compartment}'s globals oddly sized\");" ..
+				"\n\t\tASSERT(SIZEOF(\".${compartment}_globals\") < 0x40000, \"${compartment}'s globals are too large\");" ..
+				"\n\t\tSHORT(SIZEOF(\".${compartment}_globals\") / 4);" ..
 				"\n\t\tSHORT(\".${compartment}_bss_start\" - \".${compartment}_globals\");" ..
 				"\n\t\tLONG(\".${compartment}_cap_relocs_start\");" ..
 				"\n\t\tSHORT(\".${compartment}_cap_relocs_end\" - \".${compartment}_cap_relocs_start\");" ..
@@ -918,6 +921,7 @@ rule("cheriot.firmware")
 				"\n\t\t\"${obj}\"(.data);" ..
 				"\n\t\t\".${compartment}_bss_start\" = .;" ..
 				"\n\t\t\"${obj}\"(.bss)" ..
+				"\n\t\t. = ALIGN(4);" ..
 				"\n\t}\n",
 			compartment_exports =
 				"\n\t\t. = ALIGN(8); \".${compartment}_export_table\" = .;" ..
@@ -1010,6 +1014,7 @@ rule("cheriot.firmware")
 				"\n\t\t*/cheriot.software_revoker.compartment(.data .data.* .sdata .sdata.*);" ..
 				"\n\t\t.software_revoker_bss_start = .;" ..
 				"\n\t\t*/cheriot.software_revoker.compartment(.sbss .sbss.* .bss .bss.*)" ..
+				"\n\t\t. = ALIGN(8);" ..
 				"\n\t}" ..
 				"\n\t.software_revoker_globals_end = .;\n"
 			ldscript_substitutions.compartment_exports =
@@ -1017,12 +1022,13 @@ rule("cheriot.firmware")
 				"\n\t\t*/cheriot.software_revoker.compartment(.compartment_export_table);" ..
 				"\n\t\t.software_revoker_export_table_end = .;\n" ..
 				ldscript_substitutions.compartment_exports
+			-- sdk/core/loader/types.h:/PrivilegedCompartment
 			ldscript_substitutions.software_revoker_header =
 				"\n\t\tLONG(.software_revoker_start);" ..
 				"\n\t\tSHORT(.software_revoker_end - .software_revoker_start);" ..
 				"\n\t\tLONG(.software_revoker_globals);" ..
-				"\n\t\tSHORT(SIZEOF(.software_revoker_globals));" ..
-				-- The software revoker has no import table.
+				"\n\t\tASSERT((SIZEOF(.software_revoker_globals) % 4) == 0, \"Software revoker globals oddly sized\");" ..
+				"\n\t\tSHORT(SIZEOF(.software_revoker_globals) / 4);" ..
 				"\n\t\tLONG(0)" ..
 				"\n\t\tSHORT(0)" ..
 				"\n\t\tLONG(.software_revoker_export_table);" ..
