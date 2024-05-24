@@ -111,7 +111,8 @@ __cap_relocs_end = .;
     # Scheduler globals start address
     LONG(.scheduler_globals);
     # Scheduler globals end size
-    SHORT(SIZEOF(.scheduler_globals));
+    ASSERT((SIZEOF(.scheduler_globals) % 4) == 0, "Scheduler globals oddly sized");
+    SHORT(SIZEOF(.scheduler_globals) / 4);
     # Start of the scheduler's import table
     LONG(.scheduler_import_start);
     # Size of the scheduler import table
@@ -132,7 +133,8 @@ __cap_relocs_end = .;
     # Allocator globals start address
     LONG(.allocator_globals);
     # Allocator globals end
-    SHORT(SIZEOF(.allocator_globals));
+    ASSERT((SIZEOF(.allocator_globals) % 4) == 0, "Allocator globals oddly sized");
+    SHORT(SIZEOF(.allocator_globals) / 4);
     # Start of the allocator's import table
     LONG(.allocator_import_start);
     # Size of the allocator import table
@@ -172,7 +174,7 @@ __cap_relocs_end = .;
     # loader versions.
     # New versions of this can be generated with:
     # head /dev/random | shasum | cut -c 0-8
-    LONG(0xca2b63de);
+    LONG(0x46391da0);
     # Number of library headers.
     SHORT(@library_count@);
     # Number of compartment headers.
