@@ -183,11 +183,12 @@ int eventgroup_destroy_force(SObjStruct *heapCapability, EventGroup *group)
 	// Force all waiters to wake.
 	for (size_t i = 0; i < group->waiterCount; ++i)
 	{
-		auto &waiter = group->waiters[i];
-		if (waiter.bitsWanted == 0)
-		{
-			continue;
-		}
+		// Notifying is not enough, we need to ensure that waiters get
+		// appropriate bits to leave the loop.
+		auto    &waiter   = group->waiters[i];
+		uint32_t bits     = waiter.bitsWanted;
+		waiter.bitsWanted = 0;
+		waiter.bitsSeen   = bits;
 		waiter.bitsSeen.notify_one();
 	}
 	heap_free(heapCapability, group);
