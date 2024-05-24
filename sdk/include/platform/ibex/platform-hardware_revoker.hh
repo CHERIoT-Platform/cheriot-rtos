@@ -7,6 +7,7 @@
 #include <compartment-macros.h>
 #include <futex.h>
 #include <interrupt.h>
+#include <limits>
 #include <riscvreg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -126,11 +127,25 @@ namespace Ibex
 		uint32_t has_revocation_finished_for_epoch(uint32_t epoch)
 		{
 			auto current = system_epoch_get();
+			// We want to know if current is greater than epoch, but current
+			// may have wrapped.  Perform unsigned subtraction (guaranteed to
+			// wrap) and then coerce the result to a signed value.  This will
+			// be correct unless we have more than 2^31 revocations in between
+			// checks
+			std::make_signed_t<decltype(current)> distance = current - epoch;
 			if (AllowPartial)
 			{
-				return current > epoch;
+				return distance >= 0;
 			}
-			return current - epoch >= (2 + (epoch & 1));
+			// The allocator stores the epoch when things can be popped, which
+			// is always a complete (even) epoch.
+#ifndef CLANG_TIDY
+			Debug::Assert((epoch & 1) == 0, "Epoch must be even");
+#endif
+			// If the current epoch is odd then the epoch needs to be at least
+			// two more, to capture the fact that this is a complete epoch.
+			decltype(distance) minimumRequired = 1 + (epoch & 1);
+			return distance > minimumRequired;
 		}
 
 		/**

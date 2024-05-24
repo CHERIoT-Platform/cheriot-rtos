@@ -384,31 +384,32 @@ namespace Revocation
 		template<bool AllowPartial = false>
 		uint32_t has_revocation_finished_for_epoch(uint32_t previousEpoch)
 		{
+			auto current = *epoch;
 			// If the revoker is running, prod it to do a bit more work every
 			// time that it's queried.
-			if ((*epoch & 1) == 1)
+			if ((current & 1) == 1)
 			{
 				revoker_tick();
+				current = *epoch;
 			}
+			// We want to know if current is greater than epoch, but current
+			// may have wrapped.  Perform unsigned subtraction (guaranteed to
+			// wrap) and then coerce the result to a signed value.  This will
+			// be correct unless we have more than 2^31 revocations in between
+			// checks
+			std::make_signed_t<decltype(current)> distance =
+			  current - previousEpoch;
 			if (AllowPartial)
 			{
-				return *epoch > previousEpoch;
+				return distance >= 0;
 			}
-			// We want to check if a complete revocation pass has happened
-			// since the last query of the epoch.  If the last query happened
-			// in the middle of revocation then the low bit will be 1.  In this
-			// case, we need to ensure that the revocation epoch has
-			// incremented by 3 (finished the in-progress sweep, started and
-			// finished the next one).  In the other case, where revocation was
-			// not in progress, we need to ensure only that one complete
-			// revocation pass has happened and so the epoch counter was
-			// incremented twice.
-			//
-			// We perform a subtraction first because unsigned overflow is
-			// well-defined in C to wrap and so, as long as we don't manage to
-			// do 2^31 revocation sweeps without the consumer noticing then
-			// this will give the correct result even in overflow cases.
-			return *epoch - previousEpoch >= (2 + (previousEpoch & 1));
+			// The allocator stores the epoch when things can be popped, which
+			// is always a complete (even) epoch.
+			Debug::Assert((previousEpoch & 1) == 0, "Epoch must be even");
+			// If the current epoch is odd then the epoch needs to be at least
+			// two more, to capture the fact that this is a complete epoch.
+			decltype(distance) minimumRequired = 1 + (previousEpoch & 1);
+			return distance > minimumRequired;
 		}
 
 		/// Start revocation running.
