@@ -24,6 +24,7 @@ compartment("js")
 firmware("javascript")
     add_deps("crt", "freestanding", "string", "microvium", "atomic_fixed")
     add_deps("js")
+    add_deps("debug")
     on_load(function(target)
         target:values_set("board", "$(board)")
         target:values_set("threads", {
