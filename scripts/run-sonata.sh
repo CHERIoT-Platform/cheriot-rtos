@@ -36,4 +36,6 @@ try_copy /run/media/$USER/
 try_copy /run/media/
 try_copy /mnt/
 
-echo "Please copy $(pwd)/${FIRMWARE_ELF}.uf2 to the SONATA drive to load."
+cp ${FIRMWARE_ELF}.uf2 firmware.uf2
+
+echo "Please copy $(pwd)/firmware.uf2 to the SONATA drive to load."
