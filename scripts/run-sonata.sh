@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -ue
+set -e
 
 FIRMWARE_ELF=$1
 
