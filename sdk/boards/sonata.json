@@ -50,6 +50,7 @@
     "timer_hz" : 30000000,
     "tickrate_hz" : 100,
     "revoker" : "software",
+    "stack_high_water_mark" : true,
     "simulator" : "${sdk}/../scripts/run-sonata.sh",
     "simulation": false
 }
