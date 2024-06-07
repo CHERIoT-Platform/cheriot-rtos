@@ -90,10 +90,15 @@ namespace
 			}
 			else
 			{
+				static constexpr uint64_t DistantFuture =
+				  std::numeric_limits<uint64_t>::max();
+				uint64_t nextTick  = threadHasNoPeers
+				                       ? DistantFuture
+				                       : time() + TIMERCYCLES_PER_TICK;
 				uint64_t nextTimer = waitingListIsEmpty
-				                       ? time() + TIMERCYCLES_PER_TICK
+				                       ? DistantFuture
 				                       : Thread::waitingList->expiryTime;
-				setnext(nextTimer);
+				setnext(std::min(nextTick, nextTimer));
 			}
 		}
 
