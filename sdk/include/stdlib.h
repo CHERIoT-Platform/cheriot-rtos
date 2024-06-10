@@ -95,15 +95,53 @@ static inline void __dead2 panic()
 	}
 }
 
+enum [[clang::flag_enum]] AllocateWaitFlags{
+  /**
+   * Non-blocking mode. This is equivalent to passing a timeout with no time
+   * remaining.
+   */
+  AllocateWaitNone = 0,
+  /**
+   * If there is enough memory in the quarantine to fulfil the allocation, wait
+   * for the revoker to free objects from the quarantine.
+   */
+  AllocateWaitRevocationNeeded = (1 << 0),
+  /**
+   * If the quota of the passed heap capability is exceeded, wait for other
+   * threads to free allocations.
+   */
+  AllocateWaitQuotaExceeded = (1 << 1),
+  /**
+   * If the heap memory is exhausted, wait for any other thread of the system
+   * to free allocations.
+   */
+  AllocateWaitHeapFull = (1 << 2),
+  /**
+   * Block on any of the above reasons. This is the default behavior.
+   */
+  AllocateWaitAny = (AllocateWaitRevocationNeeded | AllocateWaitQuotaExceeded |
+                     AllocateWaitHeapFull),
+};
+
 /**
  * Non-standard allocation API.  Allocates `size` bytes.  Blocking behaviour is
- * controlled by the `timeout` parameter.
+ * controlled by the `flags` and the `timeout` parameters.
  *
- * The non-blocking mode will return a successful allocation if one can be
- * created immediately, or `nullptr` otherwise.
- * The blocking versions of this may return `nullptr` if the timeout has expired
- * or if the allocation cannot be satisfied under any circumstances (for example
- * if `size` is larger than the total heap size).
+ * Specifically, the `flags` parameter defines on which conditions to wait, and
+ * the `timeout` parameter how long to wait.
+ *
+ * The non-blocking mode (`AllocateWaitNone`, or `timeout` with no time
+ * remaining) will return a successful allocation if one can be created
+ * immediately, or `nullptr` otherwise.
+ *
+ * The blocking modes may return `nullptr` if the condition to wait is not
+ * fulfiled, if the timeout has expired, or if the allocation cannot be
+ * satisfied under any circumstances (for example if `size` is larger than the
+ * total heap size).
+ *
+ * This means that calling this with `AllocateWaitAny` and `UnlimitedTimeout`
+ * will only ever return `nullptr` if the allocation cannot be satisfied under
+ * any circumstances.
  *
  * In both blocking and non-blocking cases, `-ENOTENOUGHSTACK` may be returned
  * if the stack is insufficiently large to safely run the function. This means
@@ -115,24 +153,19 @@ static inline void __dead2 panic()
 void *__cheri_compartment("alloc")
   heap_allocate(Timeout           *timeout,
                 struct SObjStruct *heapCapability,
-                size_t             size);
+                size_t             size,
+                uint32_t flags     __if_cxx(= AllocateWaitAny));
 
 /**
  * Non-standard allocation API.  Allocates `size` * `nmemb` bytes of memory,
- * checking for arithmetic overflow.  Blocking behaviour is controlled by the
- * `timeout` parameter:
+ * checking for arithmetic overflow. Similarly to `heap_allocate`, blocking
+ * behaviour is controlled by the `flags` and the `timeout` parameters.
  *
- *  - 0 indicates that this call may not block.
- *  - The maximum value of the type indicates that this may block indefinitely.
- *  - Any other value indicates that this may block for, at most, that many
- *    ticks.
- *
- * The non-blocking mode will return a successful allocation if one can be
- * created immediately, or `nullptr` otherwise.
- * The blocking versions of this may return `nullptr` if the timeout has expired
- * or if the allocation cannot be satisfied under any circumstances (for example
- * if `nmemb` * `size` is larger than the total heap size, or if `nmemb` *
- * `size` overflows).
+ * See `heap_allocate` for more information on the blocking behavior.  One
+ * difference between this and `heap_allocate` is the definition of when the
+ * allocation cannot be satisfied under any circumstances, which is here if
+ * `nmemb` * `size` is larger than the total heap size, or if `nmemb` * `size`
+ * overflows.
  *
  * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
  * stack is insufficiently large to run the function. See `heap_allocate`.
@@ -143,7 +176,8 @@ void *__cheri_compartment("alloc")
   heap_allocate_array(Timeout           *timeout,
                       struct SObjStruct *heapCapability,
                       size_t             nmemb,
-                      size_t             size);
+                      size_t             size,
+                      uint32_t flags     __if_cxx(= AllocateWaitAny));
 
 /**
  * Add a claim to an allocation.  The object will be counted against the quota
@@ -255,7 +289,7 @@ static inline void __dead2 abort()
 static inline void *malloc(size_t size)
 {
 	Timeout t   = {0, 0};
-	void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, size);
+	void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, size, AllocateWaitNone);
 	if (!__builtin_cheri_tag_get(ptr))
 	{
 		ptr = NULL;
@@ -264,8 +298,9 @@ static inline void *malloc(size_t size)
 }
 static inline void *calloc(size_t nmemb, size_t size)
 {
-	Timeout t   = {0, 0};
-	void   *ptr = heap_allocate_array(&t, MALLOC_CAPABILITY, nmemb, size);
+	Timeout t = {0, 0};
+	void   *ptr =
+	  heap_allocate_array(&t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitNone);
 	if (!__builtin_cheri_tag_get(ptr))
 	{
 		ptr = NULL;

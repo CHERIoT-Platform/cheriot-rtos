@@ -24,6 +24,9 @@ DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(secondHeap, SECOND_HEAP_QUOTA);
 using namespace CHERI;
 #define SECOND_HEAP STATIC_SEALED_VALUE(secondHeap)
 
+DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(emptyHeap, 0);
+#define EMPTY_HEAP STATIC_SEALED_VALUE(emptyHeap)
+
 namespace
 {
 	/**
@@ -155,8 +158,50 @@ namespace
 		TEST(heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize) == nullptr,
 		     "Non-blocking heap allocation did not return failure with memory "
 		     "exhausted");
-		debug_log("Trying a huge allocation");
+		debug_log("Checking that the 'heap full' flag works");
 		Timeout forever{UnlimitedTimeout};
+		TEST(heap_allocate(&forever,
+		                   MALLOC_CAPABILITY,
+		                   BigAllocSize,
+		                   AllocateWaitRevocationNeeded |
+		                     AllocateWaitQuotaExceeded) == nullptr,
+		     "Blocking heap allocation with the heap full flag unset did not "
+		     "return failure with memory "
+		     "exhausted");
+		Timeout thirtyticks{30};
+		TEST(heap_allocate(&thirtyticks,
+		                   MALLOC_CAPABILITY,
+		                   BigAllocSize,
+		                   AllocateWaitHeapFull) == nullptr,
+		     "Time-limited blocking allocation did not return failure with "
+		     "memory exhausted");
+		TEST(thirtyticks.remaining == 0,
+		     "Allocation with heap full wait flag set did not wait on memory "
+		     "exhausted");
+		debug_log("Checking that the 'quota exhausted' flag works");
+		TEST(heap_allocate(&forever,
+		                   EMPTY_HEAP,
+		                   BigAllocSize,
+		                   AllocateWaitRevocationNeeded) == nullptr,
+		     "Blocking heap allocation with the quota exhausted flag unset did "
+		     "not "
+		     "return failure with memory "
+		     "exhausted");
+		thirtyticks = Timeout{30};
+		TEST(heap_allocate(&thirtyticks,
+		                   EMPTY_HEAP,
+		                   BigAllocSize,
+		                   AllocateWaitQuotaExceeded) == nullptr,
+		     "Time-limited blocking allocation did not return failure with "
+		     "memory exhausted");
+		TEST(
+		  thirtyticks.remaining == 0,
+		  "Allocation with quota exhausted wait flag set did not wait on quota "
+		  "exhausted");
+		// Note: we do not test the functioning of
+		// `AllocateWaitQuotaExceeded` as this would require to be able
+		// to manipulate the quarantine to be reliably done.
+		debug_log("Trying a huge allocation");
 		// nullptr check because we explicitly want to check for OOM
 		TEST(heap_allocate(&forever, MALLOC_CAPABILITY, 1024 * 1024 * 1024) ==
 		       nullptr,

@@ -240,7 +240,8 @@ namespace
 	                      LockGuard<decltype(lock)>      &&g,
 	                      PrivateAllocatorCapabilityState *capability,
 	                      Timeout                         *timeout,
-	                      bool isSealedAllocation = false)
+	                      bool     isSealedAllocation = false,
+	                      uint32_t flags              = AllocateWaitAny)
 	{
 		check_gm();
 
@@ -254,8 +255,9 @@ namespace
 			{
 				return std::get<Capability<void>>(ret);
 			}
-			// If the timeout is 0, fail now.
-			if (!may_block(timeout))
+			// If the call is non-blocking (`flags` is
+			// `AllocateWaitNone`, or `timeout` is 0), fail now.
+			if (flags == AllocateWaitNone || !may_block(timeout))
 			{
 				return nullptr;
 			}
@@ -265,6 +267,13 @@ namespace
 			  std::get_if<MState::AllocationFailureRevocationNeeded>(&ret);
 			if (needsRevocation)
 			{
+				if (!(flags & AllocateWaitRevocationNeeded))
+				{
+					// The flags specify that we should not
+					// wait when revocation is needed.
+					return nullptr;
+				}
+
 				// If we are able to dequeue some objects from quarantine then
 				// retry immediately, otherwise yield.
 				//
@@ -303,11 +312,24 @@ namespace
 			}
 			// If the heap is full, wait for someone to free an allocation and
 			// then retry.
-			if (std::holds_alternative<MState::AllocationFailureHeapFull>(
-			      ret) ||
-			    std::holds_alternative<MState::AllocationFailureQuotaExceeded>(
-			      ret))
+			bool isHeapFullFailure =
+			  std::holds_alternative<MState::MState::AllocationFailureHeapFull>(
+			    ret);
+			bool isQuotaExceededFailure =
+			  std::holds_alternative<MState::AllocationFailureQuotaExceeded>(
+			    ret);
+			if (isHeapFullFailure || isQuotaExceededFailure)
 			{
+				if ((isHeapFullFailure && !(flags & AllocateWaitHeapFull)) ||
+				    (isQuotaExceededFailure &&
+				     !(flags & AllocateWaitQuotaExceeded)))
+				{
+					// The flags specify that we should not
+					// wait when the heap is full and/or
+					// when the quota is exceeded.
+					return nullptr;
+				}
+
 				Debug::log("Not enough free space to handle {}-byte "
 				           "allocation, sleeping",
 				           bytes);
@@ -834,11 +856,12 @@ __cheriot_minimum_stack(0xb0) void heap_quarantine_empty()
 	}
 }
 
-__cheriot_minimum_stack(0x1f0) void *heap_allocate(Timeout *timeout,
+__cheriot_minimum_stack(0x200) void *heap_allocate(Timeout *timeout,
                                                    SObj     heapCapability,
-                                                   size_t   bytes)
+                                                   size_t   bytes,
+                                                   uint32_t flags)
 {
-	STACK_CHECK(0x1f0);
+	STACK_CHECK(0x200);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
@@ -855,7 +878,7 @@ __cheriot_minimum_stack(0x1f0) void *heap_allocate(Timeout *timeout,
 		return nullptr;
 	}
 	// Use the default memory space.
-	return malloc_internal(bytes, std::move(g), cap, timeout);
+	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags);
 }
 
 __cheriot_minimum_stack(0x1b0) ssize_t
@@ -957,12 +980,13 @@ __cheriot_minimum_stack(0x180) ssize_t heap_free_all(SObj heapCapability)
 	return freed;
 }
 
-__cheriot_minimum_stack(0x1f0) void *heap_allocate_array(Timeout *timeout,
+__cheriot_minimum_stack(0x200) void *heap_allocate_array(Timeout *timeout,
                                                          SObj   heapCapability,
                                                          size_t nElements,
-                                                         size_t elemSize)
+                                                         size_t elemSize,
+                                                         uint32_t flags)
 {
-	STACK_CHECK(0x1f0);
+	STACK_CHECK(0x200);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
@@ -984,7 +1008,7 @@ __cheriot_minimum_stack(0x1f0) void *heap_allocate_array(Timeout *timeout,
 	{
 		return nullptr;
 	}
-	return malloc_internal(req, std::move(g), cap, timeout);
+	return malloc_internal(req, std::move(g), cap, timeout, false, flags);
 }
 
 namespace
@@ -1103,14 +1127,14 @@ SKey token_key_new()
 	return nullptr;
 }
 
-__cheriot_minimum_stack(0x250) SObj
+__cheriot_minimum_stack(0x260) SObj
   token_sealed_unsealed_alloc(Timeout *timeout,
                               SObj     heapCapability,
                               SKey     key,
                               size_t   sz,
                               void   **unsealed)
 {
-	STACK_CHECK(0x250);
+	STACK_CHECK(0x260);
 	if (!check_timeout_pointer(timeout))
 	{
 		return INVALID_SOBJ;
