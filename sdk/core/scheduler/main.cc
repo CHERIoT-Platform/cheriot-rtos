@@ -452,7 +452,7 @@ __cheriot_minimum_stack(0x80) int __cheri_compartment("sched")
 __cheriot_minimum_stack(0xa0) int futex_timed_wait(Timeout        *timeout,
                                                    const uint32_t *address,
                                                    uint32_t        expected,
-                                                   FutexWaitFlags  flags)
+                                                   uint32_t        flags)
 {
 	STACK_CHECK(0xa0);
 	if (!check_timeout_pointer(timeout) ||

@@ -14,7 +14,7 @@ enum [[clang::flag_enum]] FutexWaitFlags{
    * are assumed to hold the thread ID of the thread that currently holds the
    * lock.
    */
-  FutexPriorityInheritance};
+  FutexPriorityInheritance = (1 << 0)};
 
 /**
  * Compare the value at `address` to `expected` and, if they match, sleep the
@@ -37,10 +37,10 @@ enum [[clang::flag_enum]] FutexWaitFlags{
  *  - `-ETIMEOUT` if the timeout expires.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
-  futex_timed_wait(Timeout                  *ticks,
-                   const uint32_t           *address,
-                   uint32_t                  expected,
-                   enum FutexWaitFlags flags __if_cxx(= FutexNone));
+  futex_timed_wait(Timeout        *ticks,
+                   const uint32_t *address,
+                   uint32_t        expected,
+                   uint32_t flags  __if_cxx(= FutexNone));
 
 /**
  * Compare the value at `address` to `expected` and, if they match, sleep the
