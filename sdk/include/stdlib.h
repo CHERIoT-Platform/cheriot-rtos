@@ -85,6 +85,17 @@ DEFINE_ALLOCATOR_CAPABILITY(__default_malloc_capability, MALLOC_QUOTA)
  */
 #define MALLOC_CAPABILITY STATIC_SEALED_VALUE(__default_malloc_capability)
 
+#ifndef MALLOC_WAIT_TICKS
+/**
+ * Define how long a call to `malloc` and `calloc` can block to fulfil an
+ * allocation. Regardless of this value, `malloc` and `calloc` will only ever
+ * block to wait for the quarantine to be processed. This means that, even with
+ * a non-zero value of `MALLOC_WAIT_TICKS`, `malloc` would immediately return
+ * if the heap or the quota is exhausted.
+ */
+#	define MALLOC_WAIT_TICKS 30
+#endif
+
 __BEGIN_DECLS
 static inline void __dead2 panic()
 {
@@ -288,8 +299,9 @@ static inline void __dead2 abort()
 #ifndef CHERIOT_NO_AMBIENT_MALLOC
 static inline void *malloc(size_t size)
 {
-	Timeout t   = {0, 0};
-	void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, size, AllocateWaitNone);
+	Timeout t = {0, MALLOC_WAIT_TICKS};
+	void   *ptr =
+	  heap_allocate(&t, MALLOC_CAPABILITY, size, AllocateWaitRevocationNeeded);
 	if (!__builtin_cheri_tag_get(ptr))
 	{
 		ptr = NULL;
@@ -298,9 +310,9 @@ static inline void *malloc(size_t size)
 }
 static inline void *calloc(size_t nmemb, size_t size)
 {
-	Timeout t = {0, 0};
-	void   *ptr =
-	  heap_allocate_array(&t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitNone);
+	Timeout t   = {0, MALLOC_WAIT_TICKS};
+	void   *ptr = heap_allocate_array(
+	    &t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitRevocationNeeded);
 	if (!__builtin_cheri_tag_get(ptr))
 	{
 		ptr = NULL;
