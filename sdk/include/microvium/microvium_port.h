@@ -295,11 +295,15 @@ static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size)
  *
  * The `context` passed to these macros is whatever value that the host passes
  * to `mvm_restore`. It can be any value that fits in a pointer.
+ *
+ * Similarly to `malloc` and `calloc`, this will only ever
+ * block to wait for the quarantine to be processed.
  */
 #define MVM_CONTEXTUAL_MALLOC(size, context)                                   \
 	({                                                                         \
-		Timeout t   = {0, 0};                                                  \
-		void   *ret = heap_allocate(&t, context, size);                        \
+		Timeout t = {0, MALLOC_WAIT_TICKS};                                    \
+		void   *ret =                                                          \
+		  heap_allocate(&t, context, size, AllocateWaitRevocationNeeded);      \
 		if (!__builtin_cheri_tag_get(ret))                                     \
 		{                                                                      \
 			ret = NULL;                                                        \
