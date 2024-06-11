@@ -303,8 +303,10 @@ namespace
 			}
 			// If the heap is full, wait for someone to free an allocation and
 			// then retry.
-			if (std::holds_alternative<
-			      MState::AllocationFailureDeallocationNeeded>(ret))
+			if (std::holds_alternative<MState::AllocationFailureHeapFull>(
+			      ret) ||
+			    std::holds_alternative<MState::AllocationFailureQuotaExceeded>(
+			      ret))
 			{
 				Debug::log("Not enough free space to handle {}-byte "
 				           "allocation, sleeping",
