@@ -1099,9 +1099,17 @@ class MState
 
 	/**
 	 * Tag type indicating that the requested allocation cannot succeed until
+	 * some objects have been freed in the passed quota.
+	 */
+	struct AllocationFailureQuotaExceeded
+	{
+	};
+
+	/**
+	 * Tag type indicating that the requested allocation cannot succeed until
 	 * some objects have been freed.
 	 */
-	struct AllocationFailureDeallocationNeeded
+	struct AllocationFailureHeapFull
 	{
 	};
 
@@ -1110,7 +1118,8 @@ class MState
 	 */
 	using AllocationResult = std::variant<AllocationFailurePermanent,
 	                                      AllocationFailureRevocationNeeded,
-	                                      AllocationFailureDeallocationNeeded,
+	                                      AllocationFailureQuotaExceeded,
+	                                      AllocationFailureHeapFull,
 	                                      CHERI::Capability<void>>;
 
 	/**
@@ -1126,7 +1135,8 @@ class MState
 	 * object.  This allows it to be skipped when freeing all objects allocated
 	 * with a given quota.
 	 *
-	 * @return User pointer if request can be satisfied, nullptr otherwise.
+	 * @return User pointer if request can be satisfied, or a tag type
+	 * representing the error otherwise.
 	 */
 	AllocationResult mspace_dispatch(size_t   bytes,
 	                                 size_t  &quota,
@@ -1161,7 +1171,7 @@ class MState
 			           "quota is {})",
 			           alignSize,
 			           quota);
-			return AllocationFailureDeallocationNeeded{};
+			return AllocationFailureQuotaExceeded{};
 		}
 		CHERI::Capability<void> ret{mspace_memalign(
 		  alignSize, -CHERI::representable_alignment_mask(bytes))};
@@ -1180,7 +1190,7 @@ class MState
 			{
 				return AllocationFailurePermanent{};
 			}
-			return AllocationFailureDeallocationNeeded{};
+			return AllocationFailureHeapFull{};
 		}
 		auto header = MChunkHeader::from_body(ret);
 
@@ -1194,7 +1204,7 @@ class MState
 			           header->size_get(),
 			           quota);
 			mspace_free_internal(header);
-			return AllocationFailureDeallocationNeeded{};
+			return AllocationFailureQuotaExceeded{};
 		}
 
 		if constexpr (DEBUG_ALLOCATOR)
