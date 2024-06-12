@@ -1,6 +1,7 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 // Use a large quota for this compartment.
+#include "token.h"
 #define MALLOC_QUOTA 0x100000
 #define TEST_NAME "Allocator"
 
@@ -472,6 +473,49 @@ namespace
 		debug_log("Hazard pointer tests done");
 	}
 
+	void test_large_token(size_t tokenSize)
+	{
+		void      *unsealedCapability;
+		auto       sealingCapability = STATIC_SEALING_TYPE(sealingTest);
+		Capability sealedPointer =
+		  token_sealed_unsealed_alloc(&noWait,
+		                              MALLOC_CAPABILITY,
+		                              sealingCapability,
+		                              tokenSize,
+		                              &unsealedCapability);
+		TEST(sealedPointer.is_valid(),
+		     "Failed to allocate large sealed capability that requires padding "
+		     "for the header");
+		TEST(sealedPointer.is_sealed(), "Failed to allocate sealed capability");
+		TEST(!Capability{unsealedCapability}.is_sealed(),
+		     "Failed to allocate sealed capability");
+		size_t unsealedLength = Capability{unsealedCapability}.length();
+		TEST(unsealedLength >= tokenSize,
+		     "Length of unsealed capability is not {}: {}",
+		     tokenSize,
+		     unsealedCapability);
+		TEST(sealedPointer.length() >= unsealedLength + 8,
+		     "Length of unsealed capability is not the unsealed size plus the "
+		     "header size: {}",
+		     unsealedCapability);
+		TEST(sealedPointer.address() + 4 <
+		       Capability{unsealedCapability}.address(),
+		     "Header for the sealed capability ({}) is not before the start of "
+		     "the unsealed capability ({})",
+		     sealedPointer,
+		     unsealedCapability);
+		Capability unsealedLarge =
+		  token_unseal(sealingCapability, Sealed<void>{sealedPointer.get()});
+		TEST(unsealedLarge == Capability{unsealedCapability},
+		     "Unsealing large capability gave a different capability to the "
+		     "expected one ({} != {})",
+		     unsealedLarge,
+		     unsealedCapability);
+		int destroyed = token_obj_destroy(
+		  MALLOC_CAPABILITY, sealingCapability, sealedPointer);
+		TEST(destroyed == 0, "Failed to destroy large sealed capability");
+	}
+
 	/**
 	 * Test the sealing APIs.  Tests that we can allocate and free sealed
 	 * objects, that we can't collect them with the wrong capabilities, and that
@@ -484,6 +528,35 @@ namespace
 	 */
 	__noinline void test_token()
 	{
+		debug_log("Testing token allocation");
+		size_t validSizes[] = {
+		  128, 0xfe9, 8193, 511, 511 << 1, 511 << 2, 511 << 3};
+		for (size_t tokenSize : validSizes)
+		{
+			debug_log("Testing (expected valid) token size {}", tokenSize);
+			test_large_token(tokenSize);
+		}
+		size_t invalidSizes[] = {0, 0xffffffff};
+		for (size_t tokenSize : invalidSizes)
+		{
+			debug_log("Testing (expected invalid) token size {}", tokenSize);
+			auto       sealingCapability = STATIC_SEALING_TYPE(sealingTest);
+			void      *unsealedCapability;
+			Capability sealedPointer =
+			  token_sealed_unsealed_alloc(&noWait,
+			                              MALLOC_CAPABILITY,
+			                              sealingCapability,
+			                              tokenSize,
+			                              &unsealedCapability);
+			TEST(!sealedPointer.is_valid(),
+			     "Allocated {} for invalid token size {}",
+			     sealedPointer,
+			     tokenSize);
+			TEST(!Capability{unsealedCapability}.is_valid(),
+			     "Allocated {} for invalid token size {}",
+			     unsealedCapability,
+			     tokenSize);
+		}
 		auto    sealingCapability = STATIC_SEALING_TYPE(sealingTest);
 		Timeout noWait{0};
 		void   *unsealedCapability;
@@ -492,14 +565,6 @@ namespace
 		     heap_quota_remaining(SECOND_HEAP),
 		     SECOND_HEAP_QUOTA);
 		Capability sealedPointer = token_sealed_unsealed_alloc(
-		  &noWait, SECOND_HEAP, sealingCapability, 4096, &unsealedCapability);
-		// Note: If this test fails because the allocator can handle larger
-		// allocations, then this test can be removed.  If it fails because the
-		// allocator is incorrectly using imprecise bounds, please fix it!
-		TEST(!sealedPointer.is_valid(),
-		     "Successfully allocated capability that is too large for precise "
-		     "bounds");
-		sealedPointer = token_sealed_unsealed_alloc(
 		  &noWait, SECOND_HEAP, sealingCapability, 128, &unsealedCapability);
 		TEST(sealedPointer.is_valid(), "Failed to allocate capability");
 		TEST(sealedPointer.is_sealed(), "Failed to allocate sealed capability");

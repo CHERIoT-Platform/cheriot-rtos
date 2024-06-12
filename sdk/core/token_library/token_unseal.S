@@ -80,9 +80,17 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
   bne t0, t1, .Lexit_failure
 
   /* Subset bounds to ->data */
+  // Get the top into t1
   cgetlen         t1, ca0
+  cgetbase        t0, ca0
+  add             t1, t1, t0
+  // Move the address to the start of the data
   cincoffset      ca0, ca0, TokenSObj_offset_data
-  addi            t1, t1, -TokenSObj_offset_data
+  // Subtract the address of the (to-be-returned-unsealed) data from the top to
+  // give the length.
+  sub             t1, t1, a0
+  // Set the new bounds, using an exact setting so that any errors in the
+  // allocator's alignment turn into an untagged capability here.
   csetboundsexact ca0, ca0, t1
 
   /* And that's an unwrap. */
