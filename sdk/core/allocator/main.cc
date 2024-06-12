@@ -375,6 +375,7 @@ namespace
 		auto  key = STATIC_SEALING_TYPE(MallocKey);
 		auto *capability =
 		  token_unseal<PrivateAllocatorCapabilityState>(key, in.get());
+		Debug::log("Unsealed: {}", capability);
 		if (!capability)
 		{
 			Debug::log("Invalid malloc capability {}", in);
@@ -1057,14 +1058,14 @@ namespace
 	  __noinline allocate_sealed_unsealed(Timeout      *timeout,
 	                                      SObj          heapCapability,
 	                                      SealingKey    key,
-	                                      size_t        sz,
+	                                      size_t        requestedSize,
 	                                      PermissionSet permissions)
 	{
-		if (!check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
-		      timeout))
+		if (!check_timeout_pointer(timeout))
 		{
 			return {nullptr, nullptr};
 		}
+
 		if (!permissions.can_derive_from(key.permissions()))
 		{
 			Debug::log(
@@ -1072,11 +1073,28 @@ namespace
 			return {nullptr, nullptr};
 		}
 
-		if (sz > 0xfe8 - ObjHdrSize)
+		// Round up the size to the next representable size.  This ensures
+		// that, once we've added the header space, we have an allocation where
+		// both the object (from the end) and the header (with padding at the
+		// start) are representable.
+		size_t unsealedSize = CHERI::representable_length(requestedSize);
+		// Very large sizes may be rounded 'up' to zero.  Don't allow this.
+		if (unsealedSize == 0)
 		{
-			Debug::log("Cannot allocate sealed object of {} bytes, too large",
-			           sz);
-			// TODO: Properly handle imprecision.
+			Debug::log("Requested size {} is not representable", requestedSize);
+			return {nullptr, nullptr};
+		}
+
+		// It shouldn't be possible to overflow the add due to the way the
+		// rounding works, but this is not guaranteed in future capability
+		// encodings, so we'll do a tiny bit of extra work here to avoid
+		// accidentally introducing a security vulnerability in a future
+		// encoding.
+		size_t sealedSize = unsealedSize + ObjHdrSize;
+		if (__builtin_add_overflow(ObjHdrSize, unsealedSize, &sealedSize))
+		{
+			Debug::log("Requested size {} is too large to include header",
+			           requestedSize);
 			return {nullptr, nullptr};
 		}
 
@@ -1087,19 +1105,32 @@ namespace
 			return {nullptr, nullptr};
 		}
 		SealedAllocation obj{static_cast<SObj>(malloc_internal(
-		  sz + ObjHdrSize, std::move(g), capability, timeout, true))};
+		  sealedSize, std::move(g), capability, timeout, true))};
 		if (obj == nullptr)
 		{
 			Debug::log("Underlying allocation failed for sealed object");
 			return {nullptr, nullptr};
 		}
+		obj.address() = obj.top() - sealedSize;
+		// Round down the base to the heap alignment size.
+		// This ensures that the header is aligned and gives the same alignment
+		// as a normal allocation.  We will already be this aligned for most
+		// requested sizes.  The allocator always aligns the top and bottom of
+		// any allocations on a `MallocAlignment` boundary, and also on a
+		// representable boundary (whichever is stricter).  This extra
+		// alignment step ensures that this is also true for both the start of
+		// the header and the start of the unsealed object.  If the
+		// representable-length rounding of the requested size increased the
+		// requested alignment beyond 8, this will be a no-op.
+		obj.align_down(MallocAlignment);
 
 		obj->type   = key.address();
 		auto sealed = obj;
 		sealed.seal(SEALING_CAP());
 		obj.address() += ObjHdrSize; // Exclude the header.
-		obj.bounds() = obj.length() - ObjHdrSize;
-		Debug::log("Allocated sealed {}, unsealed {}", sealed, obj);
+		obj.bounds() = obj.top() - obj.address();
+		Debug::Assert(
+		  obj.is_valid(), "Unsealed object {} is not representable", obj);
 		return {sealed, obj};
 	}
 } // namespace
@@ -1127,14 +1158,14 @@ SKey token_key_new()
 	return nullptr;
 }
 
-__cheriot_minimum_stack(0x260) SObj
+__cheriot_minimum_stack(0x270) SObj
   token_sealed_unsealed_alloc(Timeout *timeout,
                               SObj     heapCapability,
                               SKey     key,
                               size_t   sz,
                               void   **unsealed)
 {
-	STACK_CHECK(0x260);
+	STACK_CHECK(0x270);
 	if (!check_timeout_pointer(timeout))
 	{
 		return INVALID_SOBJ;
@@ -1173,23 +1204,18 @@ __cheriot_minimum_stack(0x250) SObj token_sealed_alloc(Timeout *timeout,
 __noinline static SealedAllocation unseal_internal(SKey rawKey, SObj obj)
 {
 	SealingKey key{rawKey};
+	Capability unsealedInner = token_unseal<void>(key, obj);
+	if (!unsealedInner.is_valid())
+	{
+		return nullptr;
+	}
 
 	if (!key.permissions().contains(Permission::Unseal))
 	{
 		return nullptr;
 	}
 
-	auto unsealed = unseal_if_valid(obj);
-	if (!unsealed)
-	{
-		return nullptr;
-	}
-	if (unsealed->type != key.address())
-	{
-		return nullptr;
-	}
-
-	return unsealed;
+	return unseal_if_valid(obj);
 }
 
 __cheriot_minimum_stack(0x250) int token_obj_destroy(SObj heapCapability,

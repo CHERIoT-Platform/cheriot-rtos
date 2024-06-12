@@ -990,6 +990,33 @@ namespace CHERI
 		{
 			return ptr[index];
 		}
+
+		/**
+		 * Returns true if the capability is `align`-byte aligned, false
+		 * otherwise.
+		 */
+		bool is_aligned(size_t align)
+		{
+			return __builtin_is_aligned(ptr, align);
+		}
+
+		/**
+		 * Aligns the capability down to the nearest `align`-byte boundary.
+		 */
+		Capability &align_down(size_t align)
+		{
+			ptr = __builtin_align_down(ptr, align);
+			return *this;
+		}
+
+		/**
+		 * Aligns the capability up to the nearest `align`-byte boundary.
+		 */
+		Capability &align_up(size_t align)
+		{
+			ptr = __builtin_align_up(ptr, align);
+			return *this;
+		}
 	};
 
 	/**
