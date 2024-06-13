@@ -7,8 +7,8 @@
  */
 enum class SonataRgbLed
 {
-	Led0,
-	Led1,
+	Led0 = 0,
+	Led1 = 1,
 };
 
 /**
@@ -20,15 +20,20 @@ struct SonataRgbLedController
 	 * Registers for setting the 8-bit red, green, and blue values
 	 * for the two RGB Leds.
 	 */
-	uint32_t rgbLed0;
-	uint32_t rgbLed1;
-	/// Control Register
+	uint32_t ledColors[2];
+	/**
+	 * Control Register. See `SonataRgbLedController::ControlFields` for the
+	 * fields.
+	 */
 	uint32_t control;
-	/// Status Register
+	/**
+	 * Status Register See `SonataRgbLedController::StatusFields` for the
+	 * fields.
+	 */
 	uint32_t status;
 
 	/// Control Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
+	enum [[clang::flag_enum]] ControlFields : uint32_t{
 	  /// Write 1 to set RGB LEDs to specified colours.
 	  ControlSet = 1 << 0,
 	  /**
@@ -39,7 +44,7 @@ struct SonataRgbLedController
 	};
 
 	/// Status Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
+	enum [[clang::flag_enum]] StatusFields : uint32_t{
 	  /**
 	   * When asserted controller is idle and new colours can be set,
 	   * otherwise writes to regLed0, regLed1, and control are ignored.
@@ -47,37 +52,44 @@ struct SonataRgbLedController
 	  StatusIdle = 1 << 0,
 	};
 
+	/**
+	 * Blocks until the controller is not busy.
+	 *
+	 * The controller can be busy when it is in the process of updating the
+	 * LEDs. While busy, register writes will be ignored.
+	 */
 	void wait_for_idle() volatile
 	{
 		while ((status & StatusIdle) == 0) {}
 	}
 
+	/**
+	 * Set the desired Red, Green, and Blue value of an LED. To apply these
+	 * changes, one needs to run `SonataRgbLedController::update()`.
+	 */
 	void
-	rgb(uint8_t red, uint8_t green, uint8_t blue, SonataRgbLed led) volatile
+	rgb(SonataRgbLed led, uint8_t red, uint8_t green, uint8_t blue) volatile
 	{
-		uint32_t rgb = (static_cast<uint32_t>(blue) << 16) |
-		               (static_cast<uint32_t>(green) << 8) |
-		               static_cast<uint32_t>(red);
 		wait_for_idle();
-
-		switch (led)
-		{
-			case SonataRgbLed::Led0:
-				rgbLed0 = rgb;
-			case SonataRgbLed::Led1:
-				rgbLed1 = rgb;
-		};
+		ledColors[static_cast<uint32_t>(led)] =
+		  (static_cast<uint32_t>(blue) << 16) |
+		  (static_cast<uint32_t>(green) << 8) | static_cast<uint32_t>(red);
 	}
 
+	/// Update the colours of the LEDs.
 	void update() volatile
 	{
 		wait_for_idle();
 		control = ControlSet;
 	}
 
-	void clear() volatile
+	/// Switch all of the RGB LEDs off.
+	void off() volatile
 	{
 		wait_for_idle();
 		control = ControlOff;
 	}
 };
+
+static_assert(sizeof(SonataRgbLedController) == 16,
+              "The SonataRgbLedController structure is the wrong size.");
