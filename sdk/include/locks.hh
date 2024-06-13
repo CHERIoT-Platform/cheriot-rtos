@@ -93,6 +93,19 @@ class FlagLockGeneric
 	{
 		flaglock_upgrade_for_destruction(&state);
 	}
+
+	/**
+	 * Return the thread ID of the owner of the lock.
+	 *
+	 * This is only available for priority inherited locks, as this is the
+	 * only case where we store the thread ID of the owner. See the
+	 * documentation of `flaglock_priority_inheriting_get_owner_thread_id`
+	 * for more information.
+	 */
+	__always_inline uint16_t get_owner_thread_id() requires(IsPriorityInherited)
+	{
+		return flaglock_priority_inheriting_get_owner_thread_id(&state);
+	}
 };
 
 /**
