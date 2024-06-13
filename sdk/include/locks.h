@@ -144,6 +144,33 @@ void __cheri_libcall
 flaglock_upgrade_for_destruction(struct FlagLockState *lock);
 
 /**
+ * Return the thread ID of the owner of the lock.
+ *
+ * This is only available for priority inherited locks, as this is the only
+ * case where we store the thread ID of the owner.
+ *
+ * The return value is 0 if the lock is not owned or if called on a
+ * non-priority inherited flag lock. The return value is undefined if called on
+ * an uninitialized lock.
+ *
+ * This *will* race with succesful `lock` and `unlock` operations on other
+ * threads, and should thus not be used to check if the lock is owned.
+ *
+ * The main use case for this function is in the error handler to check whether
+ * or not the lock is owned by the thread on which the error handler was
+ * invoked.  In this case we can call this function and compare the result with
+ * `thread_id_get` to know if the current thread owns the lock.
+ */
+__always_inline static inline uint16_t
+flaglock_priority_inheriting_get_owner_thread_id(struct FlagLockState *lock)
+{
+	// The lock must be held at this point for the value to be stable so do
+	// a non-atomic read (simply &ing the lock word would result in a
+	// libcall for the atomic operation).
+	return ((*(uint32_t *)&(lock->lockWord)) & 0x0000ffff);
+}
+
+/**
  * Try to acquire a recursive mutex.   This is a priority-inheriting mutex that
  * can be acquired multiple times by the same thread.
  *

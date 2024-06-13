@@ -202,6 +202,42 @@ namespace
 		     "Unlocking unsets the destruction bit of flag lock");
 	}
 
+	/**
+	 * Test that `get_owner_thread_id` returns the thread ID of the owner
+	 * of the lock.
+	 */
+	void test_get_owner_thread_id(FlagLockPriorityInherited &lock)
+	{
+		debug_log("Testing that `get_owner_thread_id` works.");
+
+		TEST(lock.get_owner_thread_id() == 0,
+		     "`get_owner_thread_id` does not return 0 when called on an unheld "
+		     "lock");
+
+		modified = false;
+		LockGuard g{lock};
+		uint16_t  ownerThreadId = thread_id_get();
+		TEST(lock.get_owner_thread_id() == ownerThreadId,
+		     "`get_owner_thread_id` does not return the thread ID of the lock "
+		     "owner");
+
+		async([ownerThreadId, &lock]() {
+			TEST(thread_id_get() != ownerThreadId,
+			     "Async has the same thread ID as the main thread");
+			TEST(lock.get_owner_thread_id() == ownerThreadId,
+			     "`get_owner_thread_id` does not return the thread ID of the "
+			     "lock owner when called from a non-owning thread");
+			modified = true;
+		});
+
+		sleep(1);
+		while (!modified)
+		{
+			debug_log("Other thread not finished, yielding");
+			sleep(1);
+		}
+	}
+
 	void test_recursive_mutex()
 	{
 		static RecursiveMutexState recursiveMutex;
@@ -365,6 +401,7 @@ void test_locks()
 	test_lock(flagLock);
 	test_lock(flagLockPriorityInherited);
 	test_lock(ticketLock);
+	test_get_owner_thread_id(flagLockPriorityInherited);
 	test_flaglock_unlock();
 	test_trylock(flagLock);
 	test_trylock(flagLockPriorityInherited);
