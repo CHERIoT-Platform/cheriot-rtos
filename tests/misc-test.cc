@@ -3,6 +3,7 @@
 
 #define TEST_NAME "Test misc APIs"
 #include "tests.hh"
+#include <ds/pointer.h>
 #include <string.h>
 #include <timeout.h>
 
@@ -85,8 +86,35 @@ void check_memchr()
 	     "memchr must return NULL for zero-size pointers.");
 }
 
+/**
+ * Test pointer utilities.
+ *
+ * Not comprehensive, would benefit from being expanded at some point.
+ */
+void check_pointer_utilities()
+{
+	debug_log("Test pointer utilities.");
+
+	int                              integer        = 42;
+	int                             *integerPointer = &integer;
+	ds::pointer::proxy::Pointer<int> pointer{integerPointer};
+
+	TEST((pointer == integerPointer) && (*pointer == 42),
+	     "The pointer proxy does not return the value of its proxy.");
+
+	int                              anotherInteger        = -100;
+	int                             *anotherIntegerPointer = &anotherInteger;
+	ds::pointer::proxy::Pointer<int> anotherPointer{anotherIntegerPointer};
+
+	pointer = anotherPointer;
+
+	TEST((pointer == anotherIntegerPointer) && (*pointer == -100),
+	     "The pointer proxy `=` operator does not correctly set the pointer.");
+}
+
 void test_misc()
 {
 	check_timeouts();
 	check_memchr();
+	check_pointer_utilities();
 }

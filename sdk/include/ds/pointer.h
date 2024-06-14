@@ -113,7 +113,7 @@ namespace ds::pointer
 
 			__always_inline Pointer<T> &operator=(Pointer const &p)
 			{
-				ref = *p.ref;
+				ref = p.ref;
 				return *this;
 			}
 
