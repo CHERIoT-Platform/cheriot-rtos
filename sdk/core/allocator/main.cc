@@ -375,7 +375,6 @@ namespace
 		auto  key = STATIC_SEALING_TYPE(MallocKey);
 		auto *capability =
 		  token_unseal<PrivateAllocatorCapabilityState>(key, in.get());
-		Debug::log("Unsealed: {}", capability);
 		if (!capability)
 		{
 			Debug::log("Invalid malloc capability {}", in);
