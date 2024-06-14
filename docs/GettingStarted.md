@@ -226,7 +226,7 @@ For Ubuntu, you can do:
 
 ### Installing u2futils
 
-If you are working with Sonata, you will need to convert the ELF files that the linker produces to [USB Flashing Format (UF2)](https://github.com/microsoft/uf2) format.
+If you are working with Sonata, you will need to convert the ELF files that the linker produces to [USB Flashing Format (UF2)](https://github.com/microsoft/uf2).
 The firmware on the RPi 2040 on the Sonata board can then load these files onto the CHERIoT Ibex and run them.
 
 The [uf2utils](https://github.com/makerdiary/uf2utils) project provides a tool to generate this format, which can be installed from pip.
