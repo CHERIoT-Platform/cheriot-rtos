@@ -79,6 +79,7 @@ If you do not wish to use the dev container, you will need to build:
  - The LLVM-based toolchain with CHERIoT support
  - The emulator generated from the Sail formal model of the CHERIoT ISA
  - The xmake build tool
+ - [Sonata only] u2futils to create images that Sonata's loader can boot
 
 Building LLVM is fairly simple, but requires a fast machine and several GiBs of disk space.
 Building the executable model requires a working ocaml installation.
@@ -223,6 +224,29 @@ For Ubuntu, you can do:
 # apt install xmake
 ```
 
+### Installing u2futils
+
+If you are working with Sonata, you will need to convert the ELF files that the linker produces to [USB Flashing Format (UF2)](https://github.com/microsoft/uf2) format.
+The firmware on the RPi 2040 on the Sonata board can then load these files onto the CHERIoT Ibex and run them.
+
+The [uf2utils](https://github.com/makerdiary/uf2utils) project provides a tool to generate this format, which can be installed from pip.
+You will need to have Python 3 and pip installed.
+You can then follow their instructions to install.
+On *NIX systems, this is typically simply:
+
+```
+python3 -m pip install --pre -U git+https://github.com/makerdiary/uf2utils.git@main
+```
+
+Or the following on Windows:
+
+```
+py -3 -m pip install --pre -U git+https://github.com/makerdiary/uf2utils.git@main
+```
+
+The `xmake run` command for firmware using the `sonata` board will automatically invoke this correctly and provide the correct file.
+
+
 Running on the Arty A7
 ----------------------
 
@@ -352,3 +376,99 @@ issions are:
 Test runner: Global(0x0)
 ...
 ```
+
+Running on Sonata
+-----------------
+
+The Sonata board from lowRISC is an FPGA prototyping platform designed specifically to work with the CHERIoT Ibex.
+If you have installed a [release of their system firmware](https://github.com/lowRISC/sonata-system/releases) that is at least v0.2, everything should be ready to work out of the box.
+
+### Building, Copying, and Running the Firmware
+
+The steps to build firmware are the same as for any other CHERIoT hardware, this time specifying `sonata` as the board.
+Let's build the test suite again:
+
+```
+$ cd tests
+$ xmake config --sdk=/cheriot-tools/ --board=sonata
+$ xmake
+```
+
+Note that /cheriot-tools is the location in the dev container.
+This value may vary if you did not use the dev container and must be the directory containing a bin directory with your LLVM build in it.
+
+### Running the firmware
+
+You can usually run firmware on Sonata simply with `xmake run`:
+
+```
+$ xmake run
+[100%]: build ok, spent 4.52s
+Converted to uf2, output size: 258048, start address: 0x101000
+Wrote 258048 bytes to test-suite.uf2
+Firmware copied to /Volumes//SONATA/
+```
+
+If the last line instead says something like the following, one extra step is needed:
+
+```
+Please copy {some path}/cheriot-rtos/tests/build/cheriot/cheriot/release/firmware.uf2 to the SONATA drive to load.
+```
+
+If your SONATA board is connected, you should have a filesystem mounted called `SONATA` as a USB mass storage device.
+You can copy the file mentioned in this line to the `SONATA` drive to run it.
+The script that `xmake run` invokes looks in common mount locations for macOS and some Linux distributions to try to find the SONATA device.
+
+If you are running in the dev container, you are in an isolated environment with no access to this filesystem.
+On most systems, you can add this as an explicit mount by adding the following to the [`devcontainer.json`](https://github.com/microsoft/cheriot-rtos/blob/main/.devcontainer/devcontainer.json) file:
+
+```json
+  "mounts": [
+    "source={/your/SONATA/mount/point},target=/mnt/SONATA,type=bind"
+  ]
+```
+
+Replacing `{/your/SONATA/mount/point}` with the mount point of your `SONATA` filesystem.
+Your editor should prompt to rebuild the container at this point.
+
+If you invoked the dev container directly, rather than via an editor such as VS Code, then you will need to instead add the following to your `docker run` command:
+
+```
+--mount source={/your/SONATA/mount/point},target=/mnt/SONATA,type=bind
+```
+
+Again, replacing `{/your/SONATA/mount/point}` with the real mount point.
+
+If you are on Windows, this will not work because Docker on Windows runs containers in a WSL2 VM and needs to have host filesystems mounted explicitly (Docker on macOS does this automatically).
+In theory, the following steps should work (run in the WSL2 terminal in the Docker WSL2 VM):
+
+```
+sudo mkdir /mnt/d
+sudo mount -t drvfs D: /mnt/d/
+```
+
+Assuming that `SONATA` is mounted as `D:` on Windows.
+The above commands should then work.
+Unfortunately, they do not.
+The cause of this is not currently known but will hopefully be fixed in a newer version of the Sonata RPi2040 firmware.
+
+### Seeing UART output
+
+If you ran the above `xmake run` commands, you will have noted that there is no output from the test suite.
+When you use a simulator, the UART output goes directly to the simulator's standard output.
+In contrast, when you run on an FPGA the output will go to a USB serial device.
+
+You will need to connect a terminal emulator to the corresponding serial port.
+The Sonata system exposes *four* serial devices, typically numbered 0-3.
+The UART is device 2.
+On Linux, this is usually `/dev/ttyUSB2` (if no other USB serial devices are connected).
+On macOS, the device name includes the serial number of the device and so will be something like `/dev/tty.usbserial-LN28292` (the last digit is the serial port number).
+On Windows, it will be a COM port, but unfortunately Windows is not always consistent about the order in which the ports appear.
+
+If you install a serial terminal (for example, `minicom` on *NIX or PuTTY on Windows), you can point it at the relevant serial port.
+
+The serial setup is the same as for the Arty A7 [above](#installing-and-running-the-firmware), aside from the different device name.
+
+Once a serial terminal is connected, running `xmake run` should show the output from the test suite.
+
+If you are unsure which of Sonata's serial ports is the correct one, you can connect your serial console to all four and see which produces output from the test suite.
