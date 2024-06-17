@@ -65,10 +65,6 @@ struct DebugWriter
 	 */
 	virtual void write(std::string_view) = 0;
 	/**
-	 * Write a string.
-	 */
-	virtual void write(std::string) = 0;
-	/**
 	 * Write a 32-bit unsigned integer.
 	 */
 	virtual void write(uint32_t) = 0;
@@ -289,15 +285,14 @@ struct DebugFormatArgumentAdaptor<std::string_view>
 };
 
 /**
- * String view specialisation, prints the string as-is.
+ * String view specialisation, use the C string handler.
  */
 template<>
 struct DebugFormatArgumentAdaptor<std::string>
 {
 	__always_inline static DebugFormatArgument construct(std::string &value)
 	{
-		return {reinterpret_cast<uintptr_t>(&value),
-		        DebugFormatArgumentKind::DebugFormatArgumentString};
+		return DebugFormatArgumentAdaptor<const char *>::construct(value.c_str());
 	}
 };
 

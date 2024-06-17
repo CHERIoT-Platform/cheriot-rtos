@@ -48,17 +48,6 @@ namespace
 		}
 
 		/**
-		 * Write a string.
-		 */
-		void write(std::string str) override
-		{
-			for (char c : str)
-			{
-				write(c);
-			}
-		}
-
-		/**
 		 * Outputs the permission set using the format G RWcgml Xa SU0 as
 		 * described in [/docs/Debugging.md].
 		 */
@@ -317,11 +306,6 @@ namespace
 							case DebugFormatArgumentKind::
 							  DebugFormatArgumentStringView:
 								write(*reinterpret_cast<std::string_view *>(
-								  argument.value));
-								break;
-							case DebugFormatArgumentKind::
-							  DebugFormatArgumentString:
-								write(*reinterpret_cast<std::string *>(
 								  argument.value));
 								break;
 							case DebugFormatArgumentKind::
