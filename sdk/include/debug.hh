@@ -294,8 +294,7 @@ struct DebugFormatArgumentAdaptor<std::string_view>
 template<>
 struct DebugFormatArgumentAdaptor<std::string>
 {
-	__always_inline static DebugFormatArgument
-	construct(std::string &value)
+	__always_inline static DebugFormatArgument construct(std::string &value)
 	{
 		return {reinterpret_cast<uintptr_t>(&value),
 		        DebugFormatArgumentKind::DebugFormatArgumentString};
