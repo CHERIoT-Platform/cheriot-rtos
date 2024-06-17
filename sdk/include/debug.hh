@@ -292,7 +292,8 @@ struct DebugFormatArgumentAdaptor<std::string>
 {
 	__always_inline static DebugFormatArgument construct(std::string &value)
 	{
-		return DebugFormatArgumentAdaptor<const char *>::construct(value.c_str());
+		return DebugFormatArgumentAdaptor<const char *>::construct(
+			value.c_str());
 	}
 };
 
