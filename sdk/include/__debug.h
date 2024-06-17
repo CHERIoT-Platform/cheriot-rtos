@@ -29,6 +29,8 @@ enum DebugFormatArgumentKind : ptraddr_t
 	DebugFormatArgumentCString,
 	/// String view, printed as-is.
 	DebugFormatArgumentStringView,
+	/// String, printed as-is.
+	DebugFormatArgumentString,
 };
 
 struct DebugFormatArgument
