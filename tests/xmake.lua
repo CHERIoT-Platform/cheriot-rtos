@@ -50,6 +50,8 @@ test("thread_pool")
 test("futex")
 -- Test locks built on top of the futex
 test("locks")
+-- Test the generic linked list from ds/
+test("list")
 -- Test queues
 test("queue")
 -- Test minimal stdio implementation
@@ -106,6 +108,7 @@ firmware("test-suite")
     add_deps("futex_test")
     add_deps("queue_test")
     add_deps("locks_test")
+    add_deps("list_test")
     add_deps("static_sealing_test", "static_sealing_inner")
     add_deps("crash_recovery_test", "crash_recovery_inner", "crash_recovery_outer")
     add_deps("multiwaiter_test")

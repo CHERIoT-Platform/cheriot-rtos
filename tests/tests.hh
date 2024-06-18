@@ -12,6 +12,7 @@ __cheri_compartment("thread_pool_test") void test_thread_pool();
 __cheri_compartment("futex_test") void test_futex();
 __cheri_compartment("queue_test") void test_queue();
 __cheri_compartment("locks_test") void test_locks();
+__cheri_compartment("list_test") void test_list();
 __cheri_compartment("crash_recovery_test") void test_crash_recovery();
 __cheri_compartment("multiwaiter_test") void test_multiwaiter();
 __cheri_compartment("stack_test") void test_stack();

@@ -122,6 +122,7 @@ void __cheri_compartment("test_runner") run_tests()
 		run_timed("Queue", test_queue);
 		run_timed("Futex", test_futex);
 		run_timed("Locks", test_locks);
+		run_timed("List", test_list);
 		run_timed("Event groups", test_eventgroup);
 		run_timed("Multiwaiter", test_multiwaiter);
 		run_timed("Allocator", test_allocator);

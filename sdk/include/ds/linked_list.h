@@ -4,6 +4,8 @@
 /**
  * @file A (circular) doubly linked list, abstracted over cons cell
  * representations.
+ *
+ * See `tests/list-test.cc` for additional information on how to use it.
  */
 
 #pragma once
@@ -356,7 +358,7 @@ namespace ds::linked_list
 	/**
 	 * Search through all elements of a ring *except* `elem`.  If `elem` is the
 	 * sentinel of a ring, then this is, as one expects, a `search` over all
-	 * non-sentinel memebers of the ring.
+	 * non-sentinel members of the ring.
 	 */
 	template<cell::HasCellOperations Cell, typename F>
 	__always_inline bool search(Cell *elem, F f)
