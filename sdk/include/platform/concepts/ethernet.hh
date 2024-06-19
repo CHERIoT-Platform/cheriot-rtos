@@ -57,6 +57,13 @@ concept EthernetAdaptor = requires(T                      adaptor,
 	{adaptor.mac_address_set()};
 
 	/**
+	 * Check if PHY link is up.
+	 */
+	{
+		adaptor.phy_link_status()
+		} -> std::convertible_to<bool>;
+
+	/**
 	 * Receive a frame.  Returns an optional value (convertible to bool) that
 	 * has a length and a buffer.  The return value owns the buffer for its
 	 * lifetime.
