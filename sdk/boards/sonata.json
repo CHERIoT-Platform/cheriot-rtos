@@ -59,6 +59,11 @@
             "number": 2,
             "priority": 3,
             "edge_triggered": true
+        },
+        {
+            "name": "EthernetInterrupt",
+            "number": 47,
+            "priority": 3
         }
     ],
     "defines" : [
