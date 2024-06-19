@@ -106,7 +106,8 @@ void __cheri_compartment("test_runner") run_tests()
 	          0x123456789012345ULL);
 	const char *testString = "Hello, world! with some trailing characters";
 	// Make sure that we don't print the trailing characters
-	debug_log("Trying to print std::string_view: {}", std::string_view{testString, 13});
+	debug_log("Trying to print std::string_view: {}",
+	          std::string_view{testString, 13});
 	const std::string S = "I am a walrus"s;
 	debug_log("Trying to print std::string: {}", S);
 	run_timed("All tests", []() {
