@@ -107,4 +107,12 @@ using _Bool = bool;
 #	define __clang_ignored_warning_pop()
 #endif
 
+/**
+ * Define the symbol for the libcall that the compiler will expand the `strlen`
+ * builtin to.  This builtin is used internally in libc++ (and possibly in
+ * other places) to avoid the namespace pollution from including `string.h` but
+ * is either constant folded in the front end or expanded to a libcall.
+ */
+unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
+
 #endif // _CDEFS_H_
