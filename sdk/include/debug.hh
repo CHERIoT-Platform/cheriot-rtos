@@ -285,6 +285,19 @@ struct DebugFormatArgumentAdaptor<std::string_view>
 };
 
 /**
+ * String view specialisation, use the C string handler.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<std::string>
+{
+	__always_inline static DebugFormatArgument construct(std::string &value)
+	{
+		return DebugFormatArgumentAdaptor<const char *>::construct(
+		  value.c_str());
+	}
+};
+
+/**
  * Enum specialisation, prints the enum as a string and then the numeric value.
  *
  * This specialisation uses the generic printing facility in the library call

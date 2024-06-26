@@ -4,8 +4,10 @@
 #include "tests.hh"
 #include <compartment.h>
 #include <simulator.h>
+#include <string>
 
 using namespace CHERI;
+using namespace std::string_literals;
 
 namespace
 {
@@ -104,10 +106,10 @@ void __cheri_compartment("test_runner") run_tests()
 	          0x123456789012345ULL);
 	const char *testString = "Hello, world! with some trailing characters";
 	// Make sure that we don't print the trailing characters
-	debug_log("Trying to print string: {}", std::string_view{testString, 13});
-	std::string hi = "Hello world";
-	debug_log("Trying to print std::string: {}", hi.c_str());
-
+	debug_log("Trying to print std::string_view: {}",
+	          std::string_view{testString, 13});
+	const std::string S = "I am a walrus"s;
+	debug_log("Trying to print std::string: {}", S);
 	run_timed("All tests", []() {
 		run_timed("Debug helpers (C++)", test_debug_cxx);
 		run_timed("Debug helpers (C)", test_debug_c);
