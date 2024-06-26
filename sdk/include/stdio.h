@@ -48,6 +48,7 @@ static inline int fprintf(FILE *stream, const char *format, ...)
 	return ret;
 }
 
+#ifdef stdout
 static inline int printf(const char *format, ...)
 {
 	va_list ap;
@@ -57,6 +58,7 @@ static inline int printf(const char *format, ...)
 	va_end(ap);
 	return ret;
 }
+#endif
 
 int __cheri_libcall snprintf(char *str, size_t size, const char *format, ...);
 int __cheri_libcall vsnprintf(const char *str,
