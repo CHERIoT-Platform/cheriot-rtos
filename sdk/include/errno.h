@@ -46,6 +46,8 @@
 #define ENOMSG 42          // No message of the desired type.
 #define EIDRM 43           // Identifier removed.
 #define EDEADLK 45         // Resource deadlock would occur.
+#define EUNATCH 49         // Protocol driver not attached.
+#define EBADE 52           // Invalid exchange.
 #define ENOSTR 60          // Not a STREAM.
 #define ENODATA 61         // No data available.
 #define ETIME 62           // Timer expired.
@@ -54,6 +56,7 @@
 #define EPROTO 71          // Protocol error.
 #define EMULTIHOP 72       // Reserved.
 #define EBADMSG 74         // Bad message.
+#define EFTYPE 79          // Inappropriate file type or format.
 #define EILSEQ 84          // Illegal byte sequence.
 #define ENOTSOCK 88        // Not a socket.
 #define EDESTADDRREQ 89    // Destination address required.
@@ -80,6 +83,7 @@
 #define EINPROGRESS 115    // Operation in progress.
 #define ESTALE 116         // Reserved.
 #define EDQUOT 122         // Reserved.
+#define ENOMEDIUM 123      // No medium inserted.
 #define ECANCELED 125      // Operation canceled.
 #define EOWNERDEAD 130     // Previous owner died.
 #define ENOTRECOVERABLE 131 // State not recoverable.
