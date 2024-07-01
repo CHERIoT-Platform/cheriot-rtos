@@ -20,8 +20,8 @@ using Debug = ConditionalDebug<true, "Config Source ">;
 #include "data.h"
 #include "sleep.h"
 
-// Helper to create some dummy config
-Data *gen_config(int count, const char *token)
+// Helper to set some dummy config
+void gen_config(const char *name, int count, const char *token)
 {
 	Data *d  = static_cast<Data *>(malloc(sizeof(Data)));
 	d->count = count;
@@ -29,60 +29,51 @@ Data *gen_config(int count, const char *token)
 	{
 		d->token[i] = token[i];
 	};
-	return d;
+	Debug::log("thread {} Set {}", thread_id_get(), name);
+	set_config(CONFIG_CAPABILITY, name, static_cast<void *>(d));
+	free(d);
 };
+
+void gen_bad_config(const char * name)
+{
+	Debug::log("thread {} Sending bad data for {}", thread_id_get(), name);
+	void *d = malloc(4);
+	set_config(CONFIG_CAPABILITY, name, d);
+	free(d);
+};
+
+
 
 // Hack function to generate some configuration  data
 void __cheri_compartment("config_source") init()
 {
-	// Hack for now to initialise the config data
-	Data *d;
-	d = gen_config(0, "Wile-E");
-	Debug::log("thread {} Set config1", thread_id_get());
-	set_config(CONFIG_CAPABILITY, "config1", static_cast<void *>(d));
-	free(d);
-
-	d = gen_config(0, "Coyote");
-	Debug::log("thread {} Set config2", thread_id_get());
-	set_config(CONFIG_CAPABILITY, "config2", static_cast<void *>(d));
-	free(d);
+	gen_config("config1", 0, "Wile-E");
+	gen_config("config2", 0, "Coyote");
 
 	int loop = 1;
-	while (true)
+    while (true)      
 	{
 		sleep(1500);
-		Debug::log("thread {} Set config1", thread_id_get());
-		d = gen_config(loop++, "Wile-E");
-		set_config(CONFIG_CAPABILITY, "config1", static_cast<void *>(d));
-		free(d);
+		gen_config("config1", loop++, "Wile-E");
 
 		sleep(1500);
-		Debug::log("thread {} Set config2", thread_id_get());
-		d = gen_config(loop++, "Coyote");
-		set_config(CONFIG_CAPABILITY, "config2", static_cast<void *>(d));
-		free(d);
-
+		gen_config("config2", loop++, "Coyote");
+               
 		// Check we're not leaking data;
 		// Debug::log("heap quota available: {}",
 		//   heap_quota_remaining(MALLOC_CAPABILITY));
-
+ 
 		// Give the compartments a chance to print their
 		// config values from timers
 		sleep(3000);
 	}
-}
+};
 
-// Entry point for a thread that periodically generates
-// invalid configuration data
 void __cheri_compartment("config_source") bad_dog()
 {
-	while (true)
-	{
+    while (true)
+    {
 		sleep(12000);
-
-		Debug::log("thread {} Sending bad data for config1", thread_id_get());
-		void *d = malloc(4);
-		set_config(CONFIG_CAPABILITY, "config1", d);
-		free(d);
+		gen_bad_config("config1");
 	}
-}
+};

@@ -26,7 +26,7 @@ using Debug = ConditionalDebug<true, "Config Broker ">;
 //
 // Data type of config data for a compartment
 //
-struct cbInfo
+struct CbInfo
 {
 	uint16_t id;
 	__cheri_callback void (*cb)(const char *, void *);
@@ -36,12 +36,12 @@ struct Config
 {
 	char                        *name;
 	bool                         updated;
-	std::vector<struct cbInfo *> cbList;
+	std::vector<struct CbInfo *> cbList;
 	void                        *data;
 };
 
 //
-// futex to signal when new data is available
+// count of un-sent updates; used as a futex
 //
 static uint32_t pending = 0;
 
@@ -53,17 +53,17 @@ std::vector<struct Config *> configData;
 //
 // unseal a config capability.
 //
-ConfigToken *config_capability_unseal(SObj sealed_cap)
+ConfigToken *config_capability_unseal(SObj sealedCap)
 {
 	auto            key    = STATIC_SEALING_TYPE(ConfigKey);
 	static uint16_t nextId = 1;
 
 	ConfigToken *token =
-	  token_unseal<ConfigToken>(key, Sealed<ConfigToken>{sealed_cap});
+	  token_unseal<ConfigToken>(key, Sealed<ConfigToken>{sealedCap});
 
 	if (token == nullptr)
 	{
-		Debug::log("invalid config capability {}", sealed_cap);
+		Debug::log("invalid config capability {}", sealedCap);
 		return nullptr;
 	}
 
@@ -75,9 +75,9 @@ ConfigToken *config_capability_unseal(SObj sealed_cap)
 
 		// Count how many config ids are defined to
 		// save us having to do this each time
-		for (auto i = 0; i < MAX_CONFIG_IDS; i++)
+		for (auto & __capability i : token->configId)
 		{
-			if (strlen(token->configId[i]))
+			if (strlen(i))
 			{
 				token->count++;
 			}
@@ -126,19 +126,19 @@ void add_callback(Config               *c,
                   uint16_t              id,
                   __cheri_callback void cb(const char *, void *))
 {
-	for (auto &cb_info : c->cbList)
+	for (auto &cbInfo : c->cbList)
 	{
-		if (cb_info->id == id)
+		if (cbInfo->id == id)
 		{
-			cb_info->cb = cb;
+			cbInfo->cb = cb;
 			return;
 		}
 	}
 
-	cbInfo *cb_info = static_cast<cbInfo *>(malloc(sizeof(cbInfo)));
-	cb_info->id     = id;
-	cb_info->cb     = cb;
-	c->cbList.push_back(cb_info);
+	CbInfo *cbInfo = static_cast<CbInfo *>(malloc(sizeof(CbInfo)));
+	cbInfo->id     = id;
+	cbInfo->cb     = cb;
+	c->cbList.push_back(cbInfo);
 }
 
 //
@@ -147,13 +147,13 @@ void add_callback(Config               *c,
 // set
 //
 void __cheri_compartment("config_broker")
-  set_config(SObj sealed_cap, const char *name, void *data)
+  set_config(SObj sealedCap, const char *name, void *data)
 {
-	ConfigToken *token = config_capability_unseal(sealed_cap);
+	ConfigToken *token = config_capability_unseal(sealedCap);
 
 	if (!token->is_source)
 	{
-		Debug::log("Not a source capability: {}", sealed_cap);
+		Debug::log("Not a source capability: {}", sealedCap);
 		return;
 	}
 
@@ -168,7 +168,7 @@ void __cheri_compartment("config_broker")
 	}
 	if (!valid)
 	{
-		Debug::log("Not a source capability for: {} {}", sealed_cap, name);
+		Debug::log("Not a source capability for: {} {}", sealedCap, name);
 		return;
 	}
 
@@ -204,11 +204,11 @@ void __cheri_compartment("config_broker")
 // will be called immediately.
 //
 void __cheri_compartment("config_broker")
-  on_config(SObj sealed_cap, __cheri_callback void cb(const char *, void *))
+  on_config(SObj sealedCap, __cheri_callback void cb(const char *, void *))
 {
 	// Get the calling compartments name from
 	// its sealed capability
-	ConfigToken *token = config_capability_unseal(sealed_cap);
+	ConfigToken *token = config_capability_unseal(sealedCap);
 
 	if (token == nullptr)
 	{
@@ -265,9 +265,9 @@ void __cheri_compartment("config_broker") init()
 			{
 				c->updated = false;
 				// Call all the callbacks
-				for (auto &cb_info : c->cbList)
+				for (auto &cbInfo : c->cbList)
 				{
-					cb_info->cb(c->name, c->data);
+					cbInfo->cb(c->name, c->data);
 				}
 			}
 		}
