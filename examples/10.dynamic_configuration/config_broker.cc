@@ -67,7 +67,7 @@ ConfigToken *config_capability_unseal(SObj sealedCap)
 		return nullptr;
 	}
 
-	Debug::log("Unsealed id: {} is_source: {} item: {}", token->id, token->is_source, (const char *)(token->configId));
+	Debug::log("Unsealed id: {} is_source: {} item: {}", token->id, token->is_source, token->configId);
 
 	if (token->id == 0)
 	{
