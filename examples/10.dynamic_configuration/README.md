@@ -7,7 +7,7 @@ In this model a configuration item is a named blob of data. There are compartmen
 
 ## Overview
 
-The model is is similar to a pub/sub architecture with a single retained message for each item and a security policy defined at build time though static sealed capabilities. The configuration data is declarative so there is no need or value in maintaining a full sequence of updates. Providing the role of the broker is a config_broker compartment, which has the unsealing key. Aligned the pub/sub model publishing items and subscribing for items can happen in any sequence; a subscriber will receive any data that is already published, and any subsequent updates. This avoids any timing issues during system startup.
+The model is similar to a pub/sub architecture with a single retained message for each item and a security policy defined at build time through static sealed capabilities. The configuration data is declarative so there is no need or value in maintaining a full sequence of updates. Providing the role of the broker is a config_broker compartment, which has the unsealing key. Aligned with the pub/sub model of publishing items and subscribing for items can happen in any sequence; a subscriber will receive any data that is already published, and any subsequent updates. This avoids any timing issues during system startup.
 
 By defining static sealed capabilities we can control at build time:
 * Which compartments are allowed to update which items
@@ -20,10 +20,10 @@ And finally the example shows how a separate sandpit compartment can be used by 
 ## Compartments in the example
 
 ### Config Source (Publisher)
-The **Config Source** compartment provides the publisher of configuration data. In a real system this would receive updates from the network, although its possible that some compartments might also need to publish internal configuration updates. For this example it simple creates new updates to two items, "config1"and "config2" on a periodic basis (for simplicity both items share the same structure).
+The **Config Source** compartment provides the publisher of configuration data. In a real system this would receive updates from the network, although its possible that some compartments might also need to publish internal configuration updates. For this example it simply creates new updates to two items, "config1" and "config2" on a periodic basis (for simplicity both items share the same structure).
 
 ### Config Broker (Broker)
-The **config broker** exposes two cross compartment methods, set_config() to publish and on_config() to subscribe. Internally it maintains the most recently published value of each item and the list of subscribers. Importantly it has no predefined knowledge of which items, publishers, or subscribes exist, and it's only level of trust is provided by the static sealed capabilities that only it can inspect.
+The **config broker** exposes two cross compartment methods, set_config() to publish and on_config() to subscribe. Internally it maintains the most recently published value of each item and the list of subscribers. Importantly it has no predefined knowledge of which items, publishers, or subscribers exist, and it's only level of trust is provided by the static sealed capabilities that only it can inspect.
 
 ### Compartment[1-3] (Subscribers)
 These compartments provide the role of subscribers; Compartment 1 is allowed to receive "config1", Compartment 2 is allowed receive "config2", and Compartment 3 is allowed to receive both "config1" and "config2".
@@ -67,7 +67,7 @@ The Config Broker also need to ensure that it can provide the data to any curren
 Any subscribers which need to have access the configuration data beyond the scope of the callback can also make their own claim on the object, and release it on the next update. 
 
 ## Sandpit Compartment
-Although the static sealed capabilities provide protection over who can update and receive configuration items, they can not offer any assurance over the content. To treat the data as initially untrusted we have to assume that not only may it contain invalid values, but that it may be constructed so as to cause harm when it is being parsed. In the example the first action of each callback is to pass the received value to a valuation method in a sandpit container, which has no access to the callers stack or context and cannot allocate any additional heap. An error handler in the validator compartment traps any violations, and if the validator does not return a success value the compartment simply ignores the update and keeps its claim on the previous object.
+Although the static sealed capabilities provide protection over who can update and receive configuration items, they can not offer any assurance over the content. To treat the data as initially untrusted we have to assume that not only may it contain invalid values, but that it may be constructed so as to cause harm when it is being parsed. In the example the first action of each callback is to pass the received value to a validation method in a sandpit container, which has no access to the callers stack or context and cannot allocate any additional heap. An error handler in the validator compartment traps any violations, and if the validator does not return a success value the compartment simply ignores the update and keeps its claim on the previous object.
 
 ## Running the example
 The example is built and run with the normal xmake commands, and has no external dependencies. 
@@ -122,4 +122,4 @@ _These are more considerations for an operational system than the example_
 
 Currently we use the same static sealing type for publish and subscribe capabilities, with a bool to define the permission. Although this is defined first in the struct and so should be easy to distinguish in the audit data, maybe separate sealing types would be even easier to audit.
 
-If two subscribers both have access to the same item then they will both validate it; it some cases this may be OK (they may have different validation requirements), but in others it could be inefficient (although it is always safe). It's not clear what could track the validated status; the item itself should be immutable (accessed via a read only capability), and the validator stateless. It might be possible for the validator to call the Config Broker, which could record the status and pass it on to subsequent callbacks - but the complexity of this and the additional attack surface it creates makes me feel its not worth it, esp since shared config values are probably the exception. 
+If two subscribers both have access to the same item then they will both validate it; in some cases this may be OK (they may have different validation requirements), but in others it could be inefficient (although it is always safe). It's not clear what could track the validated status; the item itself should be immutable (accessed via a read only capability), and the validator stateless. It might be possible for the validator to call the Config Broker, which could record the status and pass it on to subsequent callbacks - but the complexity of this and the additional attack surface it creates makes me feel its not worth it, esp since shared config values are probably the exception. 
