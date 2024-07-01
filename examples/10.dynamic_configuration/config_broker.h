@@ -8,7 +8,7 @@
 #include "token.h"
 #include <compartment.h>
 
-typedef char ConfigId[8];
+typedef char ConfigId[16];
 #define MAX_CONFIG_IDS 8
 
 struct ConfigToken
@@ -17,21 +17,11 @@ struct ConfigToken
 	uint16_t id;
 	uint8_t  count;
 	ConfigId configId;
-	//int configId;
 };
-
-/*
-#define DECLARE_CONFIG_CAPABILITY(name)                                        \
-	DECLARE_STATIC_SEALED_VALUE(                                               \
-	  struct ConfigToken, config_broker, ConfigKey, name);
-*/
 
 #define DEFINE_CONFIG_CAPABILITY(name)                                         \
                                                                                \
-	DECLARE_STATIC_SEALED_VALUE(                                               \
-	  struct ConfigToken, config_broker, ConfigKey, __config_capability_ ## name);                     \
-                                                                               \
-	DEFINE_STATIC_SEALED_VALUE(struct ConfigToken,                             \
+	DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(struct ConfigToken,                             \
 	                           config_broker,                                  \
 	                           ConfigKey,                                      \
 	                           __config_capability_ ## name,                     \
@@ -42,10 +32,7 @@ struct ConfigToken
 
 #define DEFINE_CONFIG_SOURCE_CAPABILITY(name)                                   \
                                                                                \
-	DECLARE_STATIC_SEALED_VALUE(                                               \
-	  struct ConfigToken, config_broker, ConfigKey, __config_capability_ ## name);                     \
-                                                                               \
-	DEFINE_STATIC_SEALED_VALUE(struct ConfigToken,                             \
+	DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(struct ConfigToken,                             \
 	                           config_broker,                                  \
 	                           ConfigKey,                                      \
 	                           __config_capability_ ## name,                            \
@@ -53,10 +40,6 @@ struct ConfigToken
 	                           0,                                              \
 	                           0,                                              \
 	                           name);
-
-/*
-DECLARE_CONFIG_CAPABILITY(__config_capability)
-*/
 
 
 #define CONFIG_CAPABILITY(name) STATIC_SEALED_VALUE(__config_capability_ ## name)
