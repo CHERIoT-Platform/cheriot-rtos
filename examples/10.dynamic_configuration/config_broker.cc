@@ -67,6 +67,8 @@ ConfigToken *config_capability_unseal(SObj sealedCap)
 		return nullptr;
 	}
 
+	Debug::log("Unsealed id: {} is_source: {} item: {}", token->id, token->is_source, (const char *)(token->configId));
+
 	if (token->id == 0)
 	{
 		// Assign an ID so we can track the callbacks added
@@ -75,13 +77,14 @@ ConfigToken *config_capability_unseal(SObj sealedCap)
 
 		// Count how many config ids are defined to
 		// save us having to do this each time
-		for (auto & __capability i : token->configId)
+/*		for (auto & __capability i : token->configId)
 		{
 			if (strlen(i))
 			{
 				token->count++;
 			}
 		}
+*/
 	}
 
 	return token;
@@ -147,7 +150,7 @@ void add_callback(Config               *c,
 // set
 //
 void __cheri_compartment("config_broker")
-  set_config(SObj sealedCap, const char *name, void *data)
+  set_config(SObj sealedCap, void *data)
 {
 	ConfigToken *token = config_capability_unseal(sealedCap);
 
@@ -158,6 +161,8 @@ void __cheri_compartment("config_broker")
 	}
 
 	bool valid = false;
+
+	/*
 	for (auto i = 0; i < token->count; i++)
 	{
 		if (strcmp(token->configId[i], name) == 0)
@@ -166,14 +171,16 @@ void __cheri_compartment("config_broker")
 			break;
 		}
 	}
+	
 	if (!valid)
 	{
 		Debug::log("Not a source capability for: {} {}", sealedCap, name);
 		return;
 	}
+	*/
 
 	// See if we already have a config structure
-	Config *c = find_config(name);
+	Config *c = find_config(token->configId);
 
 	// Free any claim we had on the previous data
 	if (c->data)
@@ -216,20 +223,20 @@ void __cheri_compartment("config_broker")
 		return;
 	}
 
-	for (auto i = 0; i < token->count; i++)
-	{
+	//for (auto i = 0; i < token->count; i++)
+	//{
 		Debug::log("thread {} on_config called for {} by id {}",
 		           thread_id_get(),
-		           static_cast<const char *>(token->configId[i]),
+		           static_cast<const char *>(token->configId),
 		           token->id);
 
-		auto c = find_config(token->configId[i]);
+		auto c = find_config(token->configId);
 		add_callback(c, token->id, cb);
 		if (c->data)
 		{
-			cb(token->configId[i], c->data);
+			cb(token->configId, c->data);
 		}
-	}
+	//}
 }
 
 //

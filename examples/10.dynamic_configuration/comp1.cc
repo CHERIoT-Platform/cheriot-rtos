@@ -11,7 +11,10 @@
 // Define a sealed capability that gives this compartment
 // read access to configuration data "config1"
 #include "config_broker.h"
-DEFINE_CONFIG_CAPABILITY("config1")
+
+#define CONFIG1 "config1"
+DEFINE_CONFIG_CAPABILITY(CONFIG1)
+
 
 // Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "Compartment #1">;
@@ -63,7 +66,7 @@ void __cheri_compartment("comp1") init()
 {
 	// Register to get config updates
 	Debug::log("thread {} Register for config updates", thread_id_get());
-	on_config(CONFIG_CAPABILITY, update);
+	on_config(CONFIG_CAPABILITY(CONFIG1), update);
 
 	// Loop printing our config value occasionally
 	while (true)

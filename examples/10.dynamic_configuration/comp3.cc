@@ -11,7 +11,11 @@
 // Define a sealed capability that gives this compartment
 // read access to configuration data "config1" and "config2"
 #include "config_broker.h"
-DEFINE_CONFIG_CAPABILITY("config1", "config2")
+#define CONFIG1 "config1"
+DEFINE_CONFIG_CAPABILITY(CONFIG1)
+#define CONFIG2 "config2"
+DEFINE_CONFIG_CAPABILITY(CONFIG2)
+
 
 // Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "Compartment #3">;
@@ -27,7 +31,7 @@ Data *config_2 = nullptr;
 // Callback to handle config updates.  We
 // have separate methods for each config item
 //
-void update_config_1(void *data)
+void __cheri_callback update_config_1(const char *id, void *data)
 {
 	// Validate the data in a sandpit compartment
 	bool valid = false;
@@ -57,7 +61,7 @@ void update_config_1(void *data)
 	print_config("Update", "config1", config_1);
 }
 
-void update_config_2(void *data)
+void __cheri_callback update_config_2(const char *id, void *data)
 {
 	// Validate the data in a sandpit compartment
 	bool valid = false;
@@ -87,17 +91,6 @@ void update_config_2(void *data)
 	print_config("Update", "config2", config_2);
 }
 
-void __cheri_callback update(const char *id, void *data)
-{
-	if (strcmp(id, "config1") == 0)
-	{
-		update_config_1(data);
-	}
-	else if (strcmp(id, "config2") == 0)
-	{
-		update_config_2(data);
-	}
-}
 
 //
 // Thread entry point.
@@ -106,7 +99,8 @@ void __cheri_compartment("comp3") init()
 {
 	// Register to get config updates
 	Debug::log("thread {} Register for config updates", thread_id_get());
-	on_config(CONFIG_CAPABILITY, update);
+	on_config(CONFIG_CAPABILITY(CONFIG1), update_config_1);
+	on_config(CONFIG_CAPABILITY(CONFIG2), update_config_2);
 
 	// Loop printing our config value occasionally
 	while (true)

@@ -8,7 +8,7 @@
 #include "token.h"
 #include <compartment.h>
 
-typedef char ConfigId[16];
+typedef char ConfigId[8];
 #define MAX_CONFIG_IDS 8
 
 struct ConfigToken
@@ -16,36 +16,50 @@ struct ConfigToken
 	bool     is_source;
 	uint16_t id;
 	uint8_t  count;
-	ConfigId configId[MAX_CONFIG_IDS];
+	ConfigId configId;
+	//int configId;
 };
 
+/*
 #define DECLARE_CONFIG_CAPABILITY(name)                                        \
 	DECLARE_STATIC_SEALED_VALUE(                                               \
 	  struct ConfigToken, config_broker, ConfigKey, name);
+*/
 
-#define DEFINE_CONFIG_CAPABILITY(...)                                          \
+#define DEFINE_CONFIG_CAPABILITY(name)                                         \
+                                                                               \
+	DECLARE_STATIC_SEALED_VALUE(                                               \
+	  struct ConfigToken, config_broker, ConfigKey, __config_capability_ ## name);                     \
+                                                                               \
 	DEFINE_STATIC_SEALED_VALUE(struct ConfigToken,                             \
 	                           config_broker,                                  \
 	                           ConfigKey,                                      \
-	                           __config_capability,                            \
+	                           __config_capability_ ## name,                     \
 	                           false,                                          \
 	                           0,                                              \
 	                           0,                                              \
-	                           __VA_ARGS__);
+	                           name);
 
-#define DEFINE_CONFIG_SOURCE_CAPABILITY(...)                                   \
+#define DEFINE_CONFIG_SOURCE_CAPABILITY(name)                                   \
+                                                                               \
+	DECLARE_STATIC_SEALED_VALUE(                                               \
+	  struct ConfigToken, config_broker, ConfigKey, __config_capability_ ## name);                     \
+                                                                               \
 	DEFINE_STATIC_SEALED_VALUE(struct ConfigToken,                             \
 	                           config_broker,                                  \
 	                           ConfigKey,                                      \
-	                           __config_capability,                            \
+	                           __config_capability_ ## name,                            \
 	                           true,                                           \
 	                           0,                                              \
 	                           0,                                              \
-	                           __VA_ARGS__);
+	                           name);
 
+/*
 DECLARE_CONFIG_CAPABILITY(__config_capability)
+*/
 
-#define CONFIG_CAPABILITY STATIC_SEALED_VALUE(__config_capability)
+
+#define CONFIG_CAPABILITY(name) STATIC_SEALED_VALUE(__config_capability_ ## name)
 
 /**
  * Register a callback to get notification of configuration
@@ -58,4 +72,4 @@ void __cheri_compartment("config_broker")
  * Set configuration data
  */
 void __cheri_compartment("config_broker")
-  set_config(SObj cap, const char *name, void *data);
+  set_config(SObj cap, void *data);
