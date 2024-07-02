@@ -193,85 +193,12 @@ namespace
 		}
 	}
 
-	/**
-	 * Returns a PermissionSet that is the set of permissions that the
-	 * hardware would return if asked to encode PermissionSet `ps` by
-	 * CAndPerms.
-	 *
-	 * The returned PermissionSet will always be a subset of `ps`.
-	 *
-	 * TODO make this a method of PermissionSet?
-	 */
-	PermissionSet permissions_to_representable(PermissionSet ps)
-	{
-		if (ps.contains(Permission::Execute,
-		                Permission::Load,
-		                Permission::LoadStoreCapability))
-		{
-			// Executable format
-			return PermissionSet{Permission::Global,
-			                     Permission::Execute,
-			                     Permission::Load,
-			                     Permission::LoadStoreCapability,
-			                     Permission::LoadGlobal,
-			                     Permission::LoadMutable,
-			                     Permission::AccessSystemRegisters} &
-			       ps;
-		}
-		if (ps.contains(Permission::Load,
-		                Permission::Store,
-		                Permission::LoadStoreCapability))
-		{
-			// cap-rw format
-			return PermissionSet{Permission::Global,
-			                     Permission::Load,
-			                     Permission::Store,
-			                     Permission::LoadStoreCapability,
-			                     Permission::LoadGlobal,
-			                     Permission::LoadMutable,
-			                     Permission::StoreLocal} &
-			       ps;
-		}
-		if (ps.contains(Permission::Load, Permission::LoadStoreCapability))
-		{
-			// cap-ro format
-			return PermissionSet{Permission::Global,
-			                     Permission::Load,
-			                     Permission::LoadStoreCapability,
-			                     Permission::LoadGlobal,
-			                     Permission::LoadMutable} &
-			       ps;
-		}
-		if (ps.contains(Permission::Store, Permission::LoadStoreCapability))
-		{
-			// cap-wo format
-			return PermissionSet{Permission::Global,
-			                     Permission::Store,
-			                     Permission::LoadStoreCapability} &
-			       ps;
-		}
-		if (ps.contains(Permission::Store) || ps.contains(Permission::Load))
-		{
-			// data-rw format
-			return PermissionSet{
-			         Permission::Global, Permission::Load, Permission::Store} &
-			       ps;
-		}
-		// sealing format
-		return PermissionSet{Permission::Global,
-		                     Permission::Seal,
-		                     Permission::Unseal,
-		                     Permission::User0} &
-		       ps;
-	}
-
 	template<typename T>
 	void test_restrict_capability(Capability<T> capability, PermissionSet mask)
 	{
 		PermissionSet requestedPermissions(mask);
 		requestedPermissions &= capability.permissions();
-		PermissionSet expectedPermissions =
-		  permissions_to_representable(requestedPermissions);
+		PermissionSet expectedPermissions = requestedPermissions.to_representable();
 		capability.permissions() &= mask;
 		TEST(capability.permissions() == expectedPermissions,
 		     "permissions {} did not match expected {}",
@@ -344,17 +271,6 @@ namespace
 		TEST(interruptsDisabledReturnSentry.type() == 4,
 		     "Expected type 4 but got {}",
 		     interruptsDisabledReturnSentry.type());
-	}
-
-	/*
-	 * Convenience function for getting the address of pointer. Should compile
-	 * down to cgetaddr.
-	 */
-	template<class T>
-	ptraddr_t address_of_pointer(T *p)
-	{
-		Capability cap{p};
-		return cap.address();
 	}
 
 	/**
@@ -469,7 +385,7 @@ namespace
 		Capability capToIntPointer = baseFilter(myGlobalIntPointer);
 		expectedMCause             = anExpectedMCause;
 		expectedCauseCode          = expectedFault;
-		expectedErrorPC            = address_of_pointer(faulting_load);
+		expectedErrorPC            = Capability{faulting_load}.address();
 		int previousCrashes        = crashes;
 		faulting_load(capToIntPointer);
 		TEST(crashes == previousCrashes + 1,
@@ -519,7 +435,7 @@ namespace
 		{
 			expectedMCause    = anExpectedMCause;
 			expectedCauseCode = expectedFault;
-			expectedErrorPC   = {address_of_pointer(faulting_store)};
+			expectedErrorPC   = Capability{faulting_store}.address();
 		}
 		int previousCrashes = crashes;
 		faulting_store(storeData, capToIntPointer);
