@@ -92,8 +92,9 @@ void __cheri_compartment("test_runner") run_tests()
 	size_t index = 0;
 	for (auto permission : Permissions)
 	{
-		TEST(permission == permissionArray[index++],
-		     "Iterator of PermissionSet failed");
+		TEST_EQUAL(permission,
+		           permissionArray[index++],
+		           "Iterator of PermissionSet failed");
 	}
 	// These need to be checked visually
 	debug_log("Trying to print 8-bit integer: {}", uint8_t(0x12));
