@@ -34,7 +34,7 @@ void __cheri_callback update(const char *id, void *data)
 	// to get_config() in init() below, but this callback isn't
 	// used or referenced anymore !
 
-	//print_config("Update", id, config);
+	print_config("Update", id, config);
 }
 
 
