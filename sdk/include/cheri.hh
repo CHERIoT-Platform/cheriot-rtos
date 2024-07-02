@@ -309,68 +309,71 @@ namespace CHERI
 		[[nodiscard]] constexpr PermissionSet get_max_format_perms() const
 		{
 			if (this->contains(Permission::Execute,
-							Permission::Load,
-							Permission::LoadStoreCapability))
+			                   Permission::Load,
+			                   Permission::LoadStoreCapability))
 			{
 				// Executable format
 				return PermissionSet{Permission::Global,
-									Permission::Execute,
-									Permission::Load,
-									Permission::LoadStoreCapability,
-									Permission::LoadGlobal,
-									Permission::LoadMutable,
-									Permission::AccessSystemRegisters};
+				                     Permission::Execute,
+				                     Permission::Load,
+				                     Permission::LoadStoreCapability,
+				                     Permission::LoadGlobal,
+				                     Permission::LoadMutable,
+				                     Permission::AccessSystemRegisters};
 			}
 			if (this->contains(Permission::Load,
-							Permission::Store,
-							Permission::LoadStoreCapability))
+			                   Permission::Store,
+			                   Permission::LoadStoreCapability))
 			{
 				// cap-rw format
 				return PermissionSet{Permission::Global,
-									Permission::Load,
-									Permission::Store,
-									Permission::LoadStoreCapability,
-									Permission::LoadGlobal,
-									Permission::LoadMutable,
-									Permission::StoreLocal};
+				                     Permission::Load,
+				                     Permission::Store,
+				                     Permission::LoadStoreCapability,
+				                     Permission::LoadGlobal,
+				                     Permission::LoadMutable,
+				                     Permission::StoreLocal};
 			}
-			if (this->contains(Permission::Load, Permission::LoadStoreCapability))
+			if (this->contains(Permission::Load,
+			                   Permission::LoadStoreCapability))
 			{
 				// cap-ro format
 				return PermissionSet{Permission::Global,
-									Permission::Load,
-									Permission::LoadStoreCapability,
-									Permission::LoadGlobal,
-									Permission::LoadMutable};
+				                     Permission::Load,
+				                     Permission::LoadStoreCapability,
+				                     Permission::LoadGlobal,
+				                     Permission::LoadMutable};
 			}
-			if (this->contains(Permission::Store, Permission::LoadStoreCapability))
+			if (this->contains(Permission::Store,
+			                   Permission::LoadStoreCapability))
 			{
 				// cap-wo format
 				return PermissionSet{Permission::Global,
-									Permission::Store,
-									Permission::LoadStoreCapability};
+				                     Permission::Store,
+				                     Permission::LoadStoreCapability};
 			}
-			if (this->contains(Permission::Store) || this->contains(Permission::Load))
+			if (this->contains(Permission::Store) ||
+			    this->contains(Permission::Load))
 			{
 				// data-rw format
 				return PermissionSet{
-						Permission::Global, Permission::Load, Permission::Store};
+				  Permission::Global, Permission::Load, Permission::Store};
 			}
 			// sealing format
 			return PermissionSet{Permission::Global,
-								Permission::Seal,
-								Permission::Unseal,
-								Permission::User0};
+			                     Permission::Seal,
+			                     Permission::Unseal,
+			                     Permission::User0};
 		}
 
 		/**
-		* Returns a new PermissionSet that is the set of permissions that the
-		* hardware would return if asked to encode this PermissionSet by
-		* CAndPerms.
-		*
-		* The returned PermissionSet will always be a (possibly empty) subset of
-		* `this`.
-		*/
+		 * Returns a new PermissionSet that is the set of permissions that the
+		 * hardware would return if asked to encode this PermissionSet by
+		 * CAndPerms.
+		 *
+		 * The returned PermissionSet will always be a (possibly empty) subset
+		 * of `this`.
+		 */
 		[[nodiscard]] constexpr PermissionSet to_representable() const
 		{
 			return this->get_max_format_perms() & (*this);

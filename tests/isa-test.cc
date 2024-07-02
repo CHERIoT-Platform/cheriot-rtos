@@ -198,7 +198,8 @@ namespace
 	{
 		PermissionSet requestedPermissions(mask);
 		requestedPermissions &= capability.permissions();
-		PermissionSet expectedPermissions = requestedPermissions.to_representable();
+		PermissionSet expectedPermissions =
+		  requestedPermissions.to_representable();
 		capability.permissions() &= mask;
 		TEST(capability.permissions() == expectedPermissions,
 		     "permissions {} did not match expected {}",
@@ -245,29 +246,36 @@ namespace
 	void test_sentries()
 	{
 		// XXX the following produces a linker error:
-		// error: ld.lld: error: Compartment 'isa_test' imports library function '__library_export_isa_test__ZN12_GLOBAL__N_129get_interrupts_enabled_sentryEv' as cross-compartment call
-		// possible compiler / linker bug?
+		// error: ld.lld: error: Compartment 'isa_test' imports library function
+		// '__library_export_isa_test__ZN12_GLOBAL__N_129get_interrupts_enabled_sentryEv'
+		// as cross-compartment call possible compiler / linker bug?
 
 		// Capability interruptsEnabledSentry = {get_interrupts_enabled_sentry};
-		// debug_log("interrupts enabled sentry {}", reinterpret_cast<void*>(interruptsEnabledSentry.get()));
+		// debug_log("interrupts enabled sentry {}",
+		// reinterpret_cast<void*>(interruptsEnabledSentry.get()));
 		// TEST(interruptsEnabledSentry.type() == 3,
 		//      "Expected type 3 but got {}",
 		//      interruptsEnabledSentry.type());
 
-		// Capability interruptsDisabledSentry = {&get_interrupts_disabled_sentry};
-		// debug_log("interrupts disabled sentry {}", reinterpret_cast<void*>(interruptsDisabledSentry.get()));
+		// Capability interruptsDisabledSentry =
+		// {&get_interrupts_disabled_sentry}; debug_log("interrupts disabled
+		// sentry {}", reinterpret_cast<void*>(interruptsDisabledSentry.get()));
 		// TEST(interruptsDisabledSentry.type() == 2,
 		//      "Expected type 2 but got {}",
 		//      interruptsDisabledSentry.type());
 
-		Capability interruptsEnabledReturnSentry = {get_interrupts_enabled_sentry()};
-		debug_log("interrupts enabled sentry {}", interruptsEnabledReturnSentry);
+		Capability interruptsEnabledReturnSentry = {
+		  get_interrupts_enabled_sentry()};
+		debug_log("interrupts enabled sentry {}",
+		          interruptsEnabledReturnSentry);
 		TEST(interruptsEnabledReturnSentry.type() == 5,
 		     "Expected type 5 but got {}",
 		     interruptsEnabledReturnSentry.type());
 
-		Capability interruptsDisabledReturnSentry = {get_interrupts_disabled_sentry()};
-		debug_log("interrupts disabled sentry {}", interruptsDisabledReturnSentry);
+		Capability interruptsDisabledReturnSentry = {
+		  get_interrupts_disabled_sentry()};
+		debug_log("interrupts disabled sentry {}",
+		          interruptsDisabledReturnSentry);
 		TEST(interruptsDisabledReturnSentry.type() == 4,
 		     "Expected type 4 but got {}",
 		     interruptsDisabledReturnSentry.type());
@@ -463,15 +471,16 @@ namespace
 		              permission_filter<PermissionSet{Permission::Load,
 		                                              Permission::Store}>);
 
-		// TODO this is no longer expected to trap -- but would be good to check tag is cleared
+		// TODO this is no longer expected to trap -- but would be good to check
+		// tag is cleared
 		debug_log("Attempting to store local capability in global");
 		do_store_test(
 		  std::nullopt,
 		  permission_filter<PermissionSet{Permission::Load,
 		                                  Permission::Store,
 		                                  Permission::LoadStoreCapability}>,
-										  identity_filter,
-										  std::nullopt);
+		  identity_filter,
+		  std::nullopt);
 
 		debug_log("Attempt to store capability via too small bounds");
 		do_store_test(
@@ -531,10 +540,7 @@ namespace
 		// was changed in an ISA update.
 		debug_log("Attempting to load capability via not-load-cap cap.");
 		test_restricted_load(
-		  false,
-		  {Permission::Load},
-		  false,
-		  GlobalPermissions);
+		  false, {Permission::Load}, false, GlobalPermissions);
 
 		debug_log(
 		  "Attempting to load untagged capability via not-load-mutable cap.");
@@ -602,9 +608,10 @@ namespace
 		do_jalr_test(CauseCode::PermitExecuteViolation,
 		             permission_filter<PermissionSet(Permission::Load)>);
 
-		// TODO we can no longer recover from this crash as the failure occurs at dest, not caller
-		// debug_log("Attempting to jump to capability with too small bounds");
-		// do_jalr_test(CauseCode::BoundsViolation, restrict_bounds_filter);
+		// TODO we can no longer recover from this crash as the failure occurs
+		// at dest, not caller debug_log("Attempting to jump to capability with
+		// too small bounds"); do_jalr_test(CauseCode::BoundsViolation,
+		// restrict_bounds_filter);
 	}
 
 	/*
