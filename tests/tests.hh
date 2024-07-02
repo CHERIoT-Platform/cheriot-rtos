@@ -42,6 +42,12 @@ void debug_log(const char *fmt, Args... args)
 }
 
 #define TEST(cond, msg, ...) Test::Invariant((cond), msg, ##__VA_ARGS__)
+#define TEST_EQUAL(e1, e2, msg)                                                \
+	{                                                                          \
+		auto v1 = e1;                                                          \
+		auto v2 = e2;                                                          \
+		Test::Invariant(v1 == v2, "{}: {} != {}", msg, v1, v2);                \
+	}
 
 /**
  * Helper to sleep for a number of ticks and not report the sleep time.
