@@ -14,80 +14,85 @@ includes(path.join(sdkdir, "lib"))
 option("board")
     set_default("ibex-safe-simulator")
 
+-- Library for configuration data
+library("config_data")
+    set_default(false)
+    add_files("data.cc")     
+
 -- Configuration Broker
+debugOption("config_broker");
 compartment("config_broker")
+    add_rules("cheriot.component-debug")
     add_files("config_broker.cc")
 
--- Configurtaion Source
-compartment("config_source")
-    add_files("config_source.cc")
+-- Configurtation Publisher
+compartment("publisher")
+    add_files("publisher.cc")
 
 -- Compartments to be configured
-compartment("comp1")
-    add_files("comp1.cc")
-compartment("comp2")
-    add_files("comp2.cc")
-compartment("comp3")
-    add_files("comp3.cc")
+compartment("subscriber1")
+    add_files("subscriber1.cc")
+compartment("subscriber2")
+    add_files("subscriber2.cc")
+compartment("subscriber3")
+    add_files("subscriber3.cc")
 
--- Valdation sandpit
-compartment("validator")
-    add_files("validator.cc")
+-- Sandbox Compartment
+compartment("sandbox")
+    add_files("sandbox.cc")
+
+-- Debug options
+debugOption("config_broker")
 
 -- Firmware image for the example.
 firmware("compartment_config")
     -- Both compartments require memcpy
     add_deps("freestanding", "debug")
-    add_deps("config_source")
+    add_deps("config_data")
+    add_deps("publisher")
     add_deps("config_broker")
-    add_deps("comp1", "comp2", "comp3")
-    add_deps("validator")
+    add_deps("subscriber1")
+    add_deps("subscriber2")
+    add_deps("subscriber3")
+    add_deps("sandbox")
     add_deps("string")
     on_load(function(target)
         target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
-                compartment = "config_broker",
-                priority = 4,
-                entry_point = "init",
-                stack_size = 0x400,
-                trusted_stack_frames = 3
-            },
-            {
-                compartment = "config_source",
+                compartment = "publisher",
                 priority = 2,
                 entry_point = "init",
-                stack_size = 0x400,
-                trusted_stack_frames = 2
+                stack_size = 0x500,
+                trusted_stack_frames = 4
             },
             {
-                compartment = "comp1",
+                compartment = "subscriber1",
                 priority = 3,
                 entry_point = "init",
-                stack_size = 0x400,
+                stack_size = 0x500,
                 trusted_stack_frames = 4
             },
             {
-                compartment = "comp2",
+                compartment = "subscriber2",
                 priority = 1,
                 entry_point = "init",
-                stack_size = 0x400,
+                stack_size = 0x500,
                 trusted_stack_frames = 4
             },
             {
-                compartment = "comp3",
+                compartment = "subscriber3",
                 priority = 1,
                 entry_point = "init",
-                stack_size = 0x400,
+                stack_size = 0x500,
                 trusted_stack_frames = 4
             },
             {
-                compartment = "config_source",
+                compartment = "publisher",
                 priority = 2,
                 entry_point = "bad_dog",
-                stack_size = 0x400,
-                trusted_stack_frames = 2
+                stack_size = 0x500,
+                trusted_stack_frames = 4
             },
-            
         }, {expand = false})
     end)

@@ -8,53 +8,79 @@
 #include "token.h"
 #include <compartment.h>
 
-struct ConfigToken
+enum ConfigTokenKind
 {
-	bool       is_source;
-	uint16_t   id;
-	const char configId[];
+	ReadToken,
+	WriteToken
 };
 
-#define DEFINE_CONFIG_CAPABILITY(name)                                         \
+// Interal representaion of a configuration token
+struct ConfigToken
+{
+	ConfigTokenKind kind;       // Set to true in write capabilites
+	uint16_t        id;         // id for the capability, assigned on first use
+	size_t          maxSize;    // Max size of the item
+	const char      ConfigId[]; // Name of the configuration item
+};
+
+#define DEFINE_READ_CONFIG_CAPABILITY(name)                                    \
                                                                                \
 	DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(                                    \
 	  struct {                                                                 \
-		  bool       is_source;                                                \
-		  uint16_t   id;                                                       \
-		  const char configId[sizeof(name)];                                   \
+		  ConfigTokenKind kind;                                                \
+		  uint16_t        id;                                                  \
+		  size_t          maxSize;                                             \
+		  const char      ConfigId[sizeof(name)];                              \
 	  },                                                                       \
 	  config_broker,                                                           \
 	  ConfigKey,                                                               \
-	  __config_capability_##name,                                              \
-	  false,                                                                   \
+	  __read_config_capability_##name,                                         \
+	  ReadToken,                                                               \
+	  0,                                                                       \
 	  0,                                                                       \
 	  name);
 
-#define DEFINE_CONFIG_SOURCE_CAPABILITY(name)                                  \
+#define READ_CONFIG_CAPABILITY(name)                                           \
+	STATIC_SEALED_VALUE(__read_config_capability_##name)
+
+#define DEFINE_WRITE_CONFIG_CAPABILITY(name, size)                             \
                                                                                \
 	DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(                                    \
 	  struct {                                                                 \
-		  bool       is_source;                                                \
-		  uint16_t   id;                                                       \
-		  const char configId[sizeof(name)];                                   \
+		  ConfigTokenKind kind;                                                \
+		  uint16_t        id;                                                  \
+		  size_t          maxSize;                                             \
+		  const char      ConfigId[sizeof(name)];                              \
 	  },                                                                       \
 	  config_broker,                                                           \
 	  ConfigKey,                                                               \
-	  __config_capability_##name,                                              \
-	  true,                                                                    \
+	  __write_config_capability_##name,                                        \
+	  WriteToken,                                                              \
 	  0,                                                                       \
+	  size,                                                                    \
 	  name);
 
-#define CONFIG_CAPABILITY(name) STATIC_SEALED_VALUE(__config_capability_##name)
+#define WRITE_CONFIG_CAPABILITY(name)                                          \
+	STATIC_SEALED_VALUE(__write_config_capability_##name)
 
-/**
- * Register a callback to get notification of configuration
- * changes.
- */
-void __cheri_compartment("config_broker")
-  on_config(SObj cap, __cheri_callback void cb(const char *, void *));
+//
+// Data type for a configuration item.  The version is used
+// as a futex when waiting for updates
+//
+struct ConfigItem
+{
+	uint32_t version; // version - used as a futex
+	void    *data;    // value
+};
 
 /**
  * Set configuration data
  */
-void __cheri_compartment("config_broker") set_config(SObj cap, void *data);
+int __cheri_compartment("config_broker")
+  set_config(SObj configWriteCapability, void *data, size_t size);
+
+/**
+ * Read a configuration value.
+ */
+ConfigItem *__cheri_compartment("config_broker")
+  get_config(SObj configReadCapability);
