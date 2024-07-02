@@ -5,11 +5,11 @@ This repository contains the core RTOS for the [CHERIoT platform](https://aka.ms
 This is currently a *research project* that has been open sourced to enable wider collaboration.
 It is not yet in a state where it should be used in production: in particular, security issues will currently be fixed in the main branch of the repo with no coordinated disclosure.
 
-To use this, you will also some dependencies.
+To use this, you will also need to install some dependencies.
 The [getting started guide](docs/GettingStarted.md) describes in detail how to build these:
 
  - A [version of LLVM with CHERIoT support](https://github.com/CHERIoT-Platform/llvm-project/tree/cheriot)
- - An implementation of the ISA (e.g. [CHERIoT-Ibex](https://github.com/Microsoft/cheriot-ibex) or the emulator generated from [the formal model](https://github.com/Microsoft/cheriot-sail)))
+ - An implementation of the ISA (e.g. [CHERIoT-Ibex](https://github.com/Microsoft/cheriot-ibex) or the emulator generated from [the formal model](https://github.com/Microsoft/cheriot-sail))
 
 These dependencies are pre-installed in the dev container that will be automatically downloaded if you open this repository in Visual Studio Code or by hitting `.` to open it in GitHub Code Spaces.
 
@@ -89,7 +89,7 @@ $ xmake config --sdk={path to CHERIoT LLVM tools}
 $ xmake
 ```
 
-This will create the output in `build/cheriot/cheriot/{release,debug}/{name of firmware target}.
+This will create the output in `build/cheriot/cheriot/{release,debug}/{name of firmware target}`.
 It will also create a `.dump` file in the same location giving the objdump output of the same target.
 
 ## Contributing
