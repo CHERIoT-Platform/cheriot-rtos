@@ -1,6 +1,7 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+#include "token.h"
 #define TEST_NAME "ISA"
 #include "tests.hh"
 #include <debug.hh>
@@ -214,18 +215,18 @@ namespace
 		const Capability CapabilityToGlobal{myGlobalIntPointer};
 		const Capability CapabilityToFunction{
 		  reinterpret_cast<const void *>(&test_and_perms)};
+		const Capability SealingCapability{token_key_new()};
 		debug_log("Checking and perms results...");
-		// TODO we could do with a sealing capability too, but then this would
-		// need to become a privileged compartment.
-		// Test all possible masks on our 'root' capabilities. For now we only
-		// test permissions on data / executable capabilities. Conveniently
-		// these occupy the lower 9 bits of the permissions field.
-		for (uint32_t p = 0; p <= 0x1ff; p++)
+		// Test all possible masks on our 'root' capabilities. Our sealing
+		// capability doesn't include the user perm so we exclude that for now
+		// meaning we only test the low 11 bits of the permissions field.
+		for (uint32_t p = 0; p <= 0x7ff; p++)
 		{
 			auto permissionMask = PermissionSet::from_raw(p);
 			test_restrict_capability(CapabilityToLocal, permissionMask);
 			test_restrict_capability(CapabilityToGlobal, permissionMask);
 			test_restrict_capability(CapabilityToFunction, permissionMask);
+			test_restrict_capability(SealingCapability, permissionMask);
 		}
 	}
 
