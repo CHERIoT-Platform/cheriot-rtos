@@ -33,8 +33,8 @@ In our capability format we introduced special permission bits:
 * `Global` (G), which is initially set on pointers to the heap and globals, and unset on the stack pointer.
 * `StoreLocal`, which is only set on the stack pointer and means you're allowed to store pointers that don't have G set (as well as those that do).
 
-The effect is that pointers to the stack can only be stored on the stack, and never in heap / globals.
-There are no restrictions on where pointers to globals can be stored.
-However it is possible to clear G on global pointers, effectively stopping them from being captured during a cross-compartment call.
-This adds a huge value to concurrent safety, because it means "local" memory (stack allocations, etc.) can't be stored to memory accessible from different concurrent threads.
+There are no restrictions on where pointers to globals can be stored, but if a pointer to the stack is stored in the heap or a global then it is invalidated so that any attempt to use it will trap. 
+The effect is that usable pointers to the stack can only be stored on the stack, and never in heap / globals.
+It is also possible to clear G on global pointers, effectively stopping them from being captured during a cross-compartment call.
+This adds a huge value to concurrent safety, because it means "local" memory (stack allocations, etc.) can't be used from memory accessible from different concurrent threads.
 A great example for that is [implemented](memory_safety_inner.cc:113) in the case for `StoreStackPtrToGlobal`, implemented in the inner compartment.
