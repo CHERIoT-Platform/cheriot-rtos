@@ -461,7 +461,7 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 		 * methods.
 		 */
 		template<typename T>
-		class pointer_atomic : primitive_atomic<T>
+		class pointer_atomic : public primitive_atomic<T>
 		{
 			public:
 			using primitive_atomic<T>::primitive_atomic;
