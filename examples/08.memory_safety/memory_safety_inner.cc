@@ -12,7 +12,8 @@ using Debug = ConditionalDebug<true, "Memory safety compartment">;
 
 using namespace CHERI;
 
-char *allocation = NULL;
+char *allocation;
+static char *volatile volatilePointer;
 
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
@@ -136,11 +137,13 @@ int memory_safety_inner_entry(MemorySafetyBugClass operation)
 			char buf[0x10];
 			Debug::log("Trigger storing a stack pointer {} into global",
 			           Capability{buf});
-			allocation = buf;
-
-			Debug::Assert(false,
+			volatilePointer = buf;
+			Capability tmp  = volatilePointer;
+			Debug::log("tmp: {}", tmp);
+			Debug::Assert(!tmp.is_valid(),
 			              "Code after storing stack pointer into global should "
 			              "be unreachable");
+			return tmp[0];
 		}
 	}
 
