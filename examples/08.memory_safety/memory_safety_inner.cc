@@ -140,9 +140,10 @@ int memory_safety_inner_entry(MemorySafetyBugClass operation)
 			volatilePointer = buf;
 			Capability tmp  = volatilePointer;
 			Debug::log("tmp: {}", tmp);
-			Debug::Assert(!tmp.is_valid(),
-			              "Code after storing stack pointer into global should "
-			              "be unreachable");
+			Debug::Assert(
+			  !tmp.is_valid(),
+			  "Code after accessing a stack pointer stored into global should "
+			  "be unreachable");
 			return tmp[0];
 		}
 	}
