@@ -127,7 +127,7 @@ int memory_safety_inner_entry(MemorySafetyBugClass operation)
 		case MemorySafetyBugClass::StoreStackPointerToGlobal:
 		{
 			/*
-			 * It's illegal to store a stack pointer to a global variable.
+			 * Storing a stack pointer to a global variable makes it invalid.
 			 * This is enforced by the Global (G) permission bit in the
 			 * capability.
 			 * This provides strong thread-isolation guarantees: data stored
@@ -140,10 +140,8 @@ int memory_safety_inner_entry(MemorySafetyBugClass operation)
 			volatilePointer = buf;
 			Capability tmp  = volatilePointer;
 			Debug::log("tmp: {}", tmp);
-			Debug::Assert(
-			  !tmp.is_valid(),
-			  "Code after accessing a stack pointer stored into global should "
-			  "be unreachable");
+			Debug::Assert(!tmp.is_valid(),
+			              "Stack pointer stored into global should be invalid");
 			return tmp[0];
 		}
 	}
