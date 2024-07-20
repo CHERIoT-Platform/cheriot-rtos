@@ -16,6 +16,10 @@
             "start" : 0x80100000,
             "end"   : 0x80100034
         },
+        "uart1": {
+            "start" : 0x80101000,
+            "end"   : 0x80101034
+        },
         "i2c0": {
             "start" : 0x80200000,
             "end"   : 0x80200080
@@ -57,24 +61,6 @@
         "end": 0x00140000
     },
     "revokable_memory_start": 0x00100000,
-    "interrupts": [
-        {
-            "name": "RevokerInterrupt",
-            "number": 72,
-            "priority": 2
-        },
-        {
-            "name": "UartRxWatermark",
-            "number": 2,
-            "priority": 3,
-            "edge_triggered": true
-        },
-        {
-            "name": "EthernetInterrupt",
-            "number": 47,
-            "priority": 3
-        }
-    ],
     "defines" : [
         "IBEX",
         "SUNBURST",
@@ -91,5 +77,65 @@
     "revoker" : "hardware",
     "stack_high_water_mark" : true,
     "simulator" : "${sdk}/../scripts/run-sonata.sh",
-    "simulation": false
+    "simulation": false,
+    "interrupts": [
+        {
+            "name": "Uart0TxWatermark",
+            "number": 1,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "Uart0RxWatermark",
+            "number": 2,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "Uart0TxEmpty",
+            "number": 3,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "Uart0RxOverflow",
+            "number": 4,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "Uart1TxWatermark",
+            "number": 9,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "Uart1RxWatermark",
+            "number": 10,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "Uart1TxEmpty",
+            "number": 11,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "Uart1RxOverflow",
+            "number": 12,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "EthernetInterrupt",
+            "number": 47,
+            "priority": 3
+        },
+        {
+            "name": "RevokerInterrupt",
+            "number": 72,
+            "priority": 2
+        }
+    ]
 }
