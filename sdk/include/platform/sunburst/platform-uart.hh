@@ -70,6 +70,39 @@ struct OpenTitanUart
 	 */
 	uint32_t timeoutControl;
 
+	/// OpenTitan UART Interrupts
+	typedef enum [[clang::flag_enum]]
+	: uint32_t{
+	    /// Raised if the transmit FIFO is empty.
+	    InterruptTransmitEmpty = 1 << 8,
+	    /// Raised if the receiver has detected a parity error.
+	    InterruptReceiveParityErr = 1 << 7,
+	    /// Raised if the receive FIFO has characters remaining in the FIFO
+	    /// without being
+	    /// retreived for the programmed time period.
+	    InterruptReceiveTimeout = 1 << 6,
+	    /// Raised if break condition has been detected on receive.
+	    InterruptReceiveBreakErr = 1 << 5,
+	    /// Raised if a framing error has been detected on receive.
+	    InterruptReceiveFrameErr = 1 << 4,
+	    /// Raised if the receive FIFO has overflowed.
+	    InterruptReceiveOverflow = 1 << 3,
+	    /// Raised if the transmit FIFO has emptied and no transmit is ongoing.
+	    InterruptTransmitDone = 1 << 2,
+	    /// Raised if the receive FIFO is past the high-water mark.
+	    InterruptReceiveWatermark = 1 << 1,
+	    /// Raised if the transmit FIFO is past the high-water mark.
+	    InterruptTransmitWatermark = 1 << 0,
+	  } OpenTitanUartInterrupt;
+
+	/// FIFO Control Register Fields
+	enum [[clang::flag_enum]] : uint32_t{
+	  /// Reset the transmit FIFO.
+	  FifoControlTransmitReset = 1 << 1,
+	  /// Reset the receive FIFO.
+	  FifoControlReceiveReset = 1 << 0,
+	};
+
 	/// Control Register Fields
 	enum : uint32_t
 	{
@@ -94,6 +127,97 @@ struct OpenTitanUart
 		/// Enable transmitting bits.
 		ControlTransmitEnable = 1 << 0,
 	};
+
+	/// The encoding for different transmit watermark levels.
+	enum class TransmitWatermark
+	{
+		Level1  = 0x0,
+		Level2  = 0x1,
+		Level4  = 0x2,
+		Level8  = 0x3,
+		Level16 = 0x4,
+	};
+
+	/// The encoding for different receive watermark levels.
+	enum class ReceiveWatermark
+	{
+		Level1  = 0x0,
+		Level2  = 0x1,
+		Level4  = 0x2,
+		Level8  = 0x3,
+		Level16 = 0x4,
+		Level32 = 0x5,
+		Level64 = 0x6,
+	};
+
+	/**
+	 * Configure parity.
+	 *
+	 * When `enableParity` is set, parity will be enabled.
+	 * When `oddParity` is set, the odd parity will be used.
+	 */
+	void parity(bool enableParity = true, bool oddParity = false) volatile
+	{
+		control = (control & ~(ControlParityEnable | ControlParityOdd)) |
+		          (enableParity ? ControlParityEnable : 0) |
+		          (oddParity ? ControlParityOdd : 0);
+	}
+
+	/**
+	 * Configure loopback.
+	 *
+	 * When `systemLoopback` is set, outgoing transmitted bits are routed back
+	 * the receiving line. When `lineLoopback` is set, incoming received bits
+	 * are forwarded to the transmit line.
+	 */
+	void loopback(bool systemLoopback = true,
+	              bool lineLoopback   = false) volatile
+	{
+		control = (control & ~(ControlSystemLoopback | ControlLineLoopback)) |
+		          (systemLoopback ? ControlSystemLoopback : 0) |
+		          (lineLoopback ? ControlLineLoopback : 0);
+	}
+
+	/// Clears the contents of the receive and transmit FIFOs.
+	void fifos_clear() volatile
+	{
+		fifoCtrl = (fifoCtrl & ~0b11) | FifoControlTransmitReset |
+		           FifoControlReceiveReset;
+	}
+
+	/**
+	 * Sets the level transmit watermark.
+	 *
+	 * When the number of bytes in the transmit FIFO reach this level,
+	 * the transmit watermark interrupt will fire.
+	 */
+	void transmit_watermark(TransmitWatermark level) volatile
+	{
+		fifoCtrl = static_cast<uint32_t>(level) << 5 | (fifoCtrl & 0x1f);
+	}
+
+	/**
+	 * Sets the level receive watermark.
+	 *
+	 * When the number of bytes in the receive FIFO reach this level,
+	 * the receive watermark interrupt will fire.
+	 */
+	void receive_watermark(ReceiveWatermark level) volatile
+	{
+		fifoCtrl = static_cast<uint32_t>(level) << 5 | (fifoCtrl & 0b11100011);
+	}
+
+	/// Enable the given interrupt.
+	void interrupt_enable(OpenTitanUartInterrupt interrupt) volatile
+	{
+		interruptEnable = interruptEnable | interrupt;
+	}
+
+	/// Disable the given interrupt.
+	void interrupt_disable(OpenTitanUartInterrupt interrupt) volatile
+	{
+		interruptEnable = interruptEnable & ~interrupt;
+	}
 
 	void init(unsigned baudRate = 115'200) volatile
 	{
