@@ -101,7 +101,7 @@ Clock configuration
 The clock rate is configured by two properties.
 The `timer_hz` field is the number of timer increments per second, typically the clock speed of the chip (the RISC-V timer is defined in terms of cycles).
 The `tickrate_hz` specifies how many scheduler ticks should happen per second.
-See the [timeout documentation](Timeout.md) for more discussion about ticks.
+See the [timeout documentation](Timeouts.md) for more discussion about ticks.
 
 Conditional compilation
 -----------------------
