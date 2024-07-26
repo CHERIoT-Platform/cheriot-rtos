@@ -72,5 +72,6 @@
     "timer_hz" : 33000000,
     "tickrate_hz" : 100,
     "revoker" : "hardware",
-    "stack_high_water_mark" : true
+    "stack_high_water_mark" : true,
+    "fast_stack_zeroing" : true
 }

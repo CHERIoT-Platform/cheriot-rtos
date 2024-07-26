@@ -19,6 +19,13 @@
  */
 #define CSR_MSHWMB 0xbc2
 
+/**
+ * The special capability register for the fast zeroing control.
+ * Writing a capability here starts zeroing from the address of this register
+ * down to the base.
+ */
+#define SCR_ZTOP 0x1b
+
 #define MAX_FAULTS_PER_COMPARTMENT_CALL 1024
 
 #define SPILL_SLOT_cs0 0
@@ -129,6 +136,46 @@ switcher_scheduler_entry_csp:
  * and integer register.  All three registers are clobbered.
  */
 .macro zero_stack base top scratch
+#ifdef CHERIOT_HAS_ZTOP
+	// Derive the capability to the range that should be zeroed.
+	// This will be stored in base, leaving top as a second scratch register to use
+	csub               \top, c\top, c\base
+	// Inexact bounds here may round up, but will still be within the bounds of
+	// the stack.  We must ensure that we zero the entire used region of the
+	// stack, zeroing slightly more is fine, in one direction.  Data on the stack that we must
+	// not corrupt is *above* the range that we are zeroing.  The hardware
+	// zeroing zeroes from the capability's address, downwards, and the address
+	// is set to the top of the to-zero range.  The inexact bounds may give us
+	// a base that is lower or a top that is higher.  Imprecision at the base
+	// can only zero already-zeroed parts of the stack.
+	csetbounds         c\base, c\base, \top
+	// The base register now contains the range to zero, top is available
+	cincoffset         c\base, c\base, \top
+
+	cspecialr          c\scratch, SCR_ZTOP
+
+	// If the current zeroing range is a subset of the range that we're about
+	// to zero, don't bother waiting for it to finish, just zero the larger
+	// range.
+	ctestsubset        \top, c\base, c\scratch
+	bnez               \top, 1f
+
+	// If ztop is untagged, no zeroing is happening and we can just start
+	// zeroing the new range.
+	cgettag            \top, c\scratch
+	beqz               \top, 1f
+
+	// If ztop is tagged, we're zeroing downwards.  Store a zero at the base of
+	// the to-zero region.  This will block until the zeroing is complete.
+	cgetbase           \top, c\scratch
+	csetaddr           c\top, c\scratch, \top
+	csb                zero, 0(c\top)
+1:
+	// Set the new value
+	cspecialw          SCR_ZTOP, c\base
+
+#else
+
 	addi               \scratch, \top, -32
 	addi               \top, \top, -16
 	bgt                \base, \scratch, 1f
@@ -146,6 +193,8 @@ switcher_scheduler_entry_csp:
 	csc                cnull, 0(c\base)
 	csc                cnull, 8(c\base)
 2:
+
+#endif
 .endm
 
 /**
@@ -215,7 +264,7 @@ __Z26compartment_switcher_entryz:
 	sub                s1, s0, s1
 	csetboundsexact    ct2, csp, s1
 	csetaddr           csp, ct2, s0
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	// Read the stack high water mark (which is 16-byte aligned)
 	csrr               gp, CSR_MSHWM
 	// Skip zeroing if high water mark >= stack pointer
@@ -227,7 +276,7 @@ __Z26compartment_switcher_entryz:
 #endif
 	zero_stack         t2, s0, gp
 after_zero:
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	// store new stack top as stack high water mark
 	csrw               CSR_MSHWM, sp
 #endif
@@ -382,11 +431,20 @@ exception_entry_asm:
 	csc                ct0, TrustedStack_offset_mepcc(csp)
 	csrr               t1, mstatus
 	csw                t1, TrustedStack_offset_mstatus(csp)
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	csrr               t1, CSR_MSHWM
 	csw                t1, TrustedStack_offset_mshwm(csp)
 	csrr               t1, CSR_MSHWMB
 	csw                t1, TrustedStack_offset_mshwmb(csp)
+#	ifdef CHERIOT_HAS_ZTOP
+	// Stop zeroing and capture the current zeroing value.  Note: cspecialr is
+	// encoded as cspecialrw and so we can't just use cnull as the source.  We
+	// probably could use the current ct1 value, since it's guaranteed to be
+	// untagged at this point in the code.
+	cmove              ct1, cnull
+	cspecialrw         ct1, SCR_ZTOP, ct1
+	csc                ct1, TrustedStack_offset_ztop(csp)
+#	endif
 #endif
 	csrr               t1, mcause
 	csw                t1, TrustedStack_offset_mcause(csp)
@@ -474,7 +532,7 @@ exception_entry_asm:
 .Linstall_context:
 	clw                x1, TrustedStack_offset_mstatus(csp)
 	csrw               mstatus, x1
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	clw                x1, TrustedStack_offset_mshwm(csp)
 	csrw               CSR_MSHWM, x1
 	clw                x1, TrustedStack_offset_mshwmb(csp)
@@ -484,7 +542,19 @@ exception_entry_asm:
 	csb                zero, TrustedStack_offset_inForcedUnwind(csp)
 	// c2 is csp, which will be loaded last and will overwrite the trusted
 	// stack pointer with the thread's stack pointer.
+#ifdef CHERIOT_HAS_ZTOP
+	// If we have ZTOP, each of these loads will take an extra cycle while the
+	// zeroing is running.  We know that they aren't part of the stack (if the
+	// trusted stack and the stack overlap, everything is broken) so restart
+	// the zeroing as late as possible.  We are reloading via csp, so it must
+	// be restored last.
+	reloadRegisters cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15
+	clc             c1, TrustedStack_offset_ztop(csp)
+	cspecialw       SCR_ZTOP, c1
+	reloadRegisters c1, csp
+#else
 	reloadRegisters c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, csp
+#endif
 	mret
 
 // If we detect an invalid entry and there is no error handler installed, we want
@@ -699,7 +769,7 @@ exception_entry_asm:
 
 	// Load the trusted stack pointer to ct1
 	cspecialr          ct1, mtdc
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	// Update the spilled copy of the stack high water mark to ensure that we
 	// will clear all of the stack used by the error handler and the spilled
 	// context.
@@ -742,7 +812,7 @@ exception_entry_asm:
 	j                  .Linstall_context
 
 .Lhandle_injected_error:
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	clw                x1, TrustedStack_offset_mshwm(csp)
 	csrw               CSR_MSHWM, x1
 	clw                x1, TrustedStack_offset_mshwmb(csp)
@@ -813,8 +883,8 @@ exception_entry_asm:
 	clc                cgp, SPILL_SLOT_cgp(csp)
 	cincoffset         csp, csp, SPILL_SLOT_SIZE
 #ifndef CONFIG_NO_SWITCHER_SAFETY
-#ifdef CONFIG_MSHWM
-	// read the stack high water mark, which is 16-byte aligned
+#ifdef CHERIOT_HAS_MSHWM
+	// Read the stack high water mark, which is 16-byte aligned
 	// we will use this as base address for stack clearing
 	// note that it cannot be greater than stack top as we 
 	// we set it to stack top when we pushed to trusted stack frame
@@ -825,7 +895,7 @@ exception_entry_asm:
 	cgetaddr           t1, csp
 	csetaddr           ct2, csp, tp
 	zero_stack         t2, t1, tp
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	csrw               CSR_MSHWM, sp
 #endif
 #endif // CONFIG_NO_SWITCHER_SAFETY

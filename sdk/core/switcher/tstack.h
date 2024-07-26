@@ -28,29 +28,36 @@ struct TrustedStackFrame
 	uint16_t errorHandlerCount;
 };
 
+#if defined(CHERIOT_HAS_ZTOP) && !defined(CHERIOT_HAS_MSHWM)
+#	error Platforms with ZTOP must have MSHWM
+#endif
+
 template<size_t NFrames>
 struct TrustedStackGeneric
 {
-	void  *mepcc;
-	void  *c1;
-	void  *csp;
-	void  *cgp;
-	void  *c4;
-	void  *c5;
-	void  *c6;
-	void  *c7;
-	void  *c8;
-	void  *c9;
-	void  *c10;
-	void  *c11;
-	void  *c12;
-	void  *c13;
-	void  *c14;
-	void  *c15;
-	void  *hazardPointers;
+	void *mepcc;
+	void *c1;
+	void *csp;
+	void *cgp;
+	void *c4;
+	void *c5;
+	void *c6;
+	void *c7;
+	void *c8;
+	void *c9;
+	void *c10;
+	void *c11;
+	void *c12;
+	void *c13;
+	void *c14;
+	void *c15;
+	void *hazardPointers;
+#ifdef CHERIOT_HAS_ZTOP
+	void *ztop;
+#endif
 	size_t mstatus;
 	size_t mcause;
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	uint32_t mshwm;
 	uint32_t mshwmb;
 #endif
@@ -66,7 +73,7 @@ struct TrustedStackGeneric
 	uint8_t inForcedUnwind;
 	// Padding up to multiple of 16-bytes.
 	uint8_t padding[
-#ifdef CONFIG_MSHWM
+#ifdef CHERIOT_HAS_MSHWM
 	  11
 #else
 	  3
