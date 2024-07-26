@@ -394,7 +394,7 @@ struct OpenTitanI2c
 	/// Clears the given interrupt.
 	void interrupt_clear(OpenTitanI2cInterrupt interrupt) volatile
 	{
-		interruptState = interruptState & ~interrupt_bit(interrupt);
+		interruptState = interrupt_bit(interrupt);
 	}
 
 	/// Enables the given interrupt.
