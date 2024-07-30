@@ -1,0 +1,95 @@
+{
+    "devices": {
+        "shadow" : {
+            "start" : 0x30000000,
+            "end"   : 0x30004000
+        },
+        "gpio" : {
+            "start" : 0x80000000,
+            "end"   : 0x80000020
+        },
+        "clint": {
+            "start" : 0x80040000,
+            "end"   : 0x80050000
+        },
+        "uart": {
+            "start" : 0x80100000,
+            "end"   : 0x80100034
+        },
+        "i2c0": {
+            "start" : 0x80200000,
+            "end"   : 0x80200080
+        },
+        "i2c1": {
+            "start" : 0x80201000,
+            "end"   : 0x80201080
+        },
+        "spi0": {
+            "start" : 0x80300000,
+            "end"   : 0x80301000
+        },
+        "spi1": {
+            "start" : 0x80301000,
+            "end"   : 0x80302000
+        },
+        "spi2": {
+            "start" : 0x80302000,
+            "end"   : 0x80303000
+        },
+        "rgbled" : {
+            "start" : 0x80009000,
+            "end"   : 0x80009020
+        },
+        "revoker": {
+            "start": 0x8000A000,
+            "length": 0x1000
+        },
+        "plic": {
+            "start" : 0x88000000,
+            "end"   : 0x88400000
+        }
+    },
+    "instruction_memory": {
+        "start": 0x00101000,
+        "end":   0x00140000
+    },
+    "heap": {
+        "end": 0x00140000
+    },
+    "revokable_memory_start": 0x00100000,
+    "interrupts": [
+        {
+            "name": "RevokerInterrupt",
+            "number": 72,
+            "priority": 2
+        },
+        {
+            "name": "UartRxWatermark",
+            "number": 2,
+            "priority": 3,
+            "edge_triggered": true
+        },
+        {
+            "name": "EthernetInterrupt",
+            "number": 47,
+            "priority": 3
+        }
+    ],
+    "defines" : [
+        "IBEX",
+        "SUNBURST",
+        "SUNBURST_SHADOW_BASE=0x30000000",
+        "SUNBURST_SHADOW_SIZE=0x4000"
+    ],
+    "driver_includes" : [
+        "../include/platform/sunburst",
+        "../include/platform/ibex",
+        "../include/platform/generic-riscv"
+    ],
+    "timer_hz" : 30000000,
+    "tickrate_hz" : 100,
+    "revoker" : "hardware",
+    "stack_high_water_mark" : true,
+    "simulator" : "${sdk}/../scripts/run-sonata.sh",
+    "simulation": false
+}
