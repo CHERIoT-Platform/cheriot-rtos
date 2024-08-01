@@ -6,30 +6,29 @@
 /// Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "Claimant compartment">;
 
-
 void *x;
 
-int __cheri_compartment("claimant") make_claim(void *ptr) {
+int __cheri_compartment("claimant") make_claim(void *ptr)
+{
+	Debug::log("Initial quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
-    Debug::log("Initial quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
-    
-    if (x != nullptr)
-    {
-        free(x);
-    }
+	if (x != nullptr)
+	{
+		free(x);
+	}
 
-    Timeout t{10};
-    heap_claim(MALLOC_CAPABILITY, ptr);
-    x = ptr;
-    
-    Debug::log("Make Claim : {}", x);		
-    Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
-    return 0;
+	Timeout t{10};
+	heap_claim(MALLOC_CAPABILITY, ptr);
+	x = ptr;
+
+	Debug::log("Make Claim : {}", x);
+	Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
+	return 0;
 };
 
-int __cheri_compartment("claimant") show_claim() {
+int __cheri_compartment("claimant") show_claim()
+{
+	Debug::log("Show Claim : {}", x);
 
-    Debug::log("Show Claim : {}", x);		
-    
-    return 0;		
+	return 0;
 }
