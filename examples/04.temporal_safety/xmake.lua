@@ -17,9 +17,14 @@ compartment("allocate")
     add_deps("freestanding", "debug")
     add_files("allocate.cc")
 
+compartment("claimant")
+    add_deps("debug")
+    add_files("claimant.cc")
+
 -- Firmware image for the example.
 firmware("temporal_safety")
     add_deps("allocate")
+    add_deps("claimant")
     on_load(function(target)
         target:values_set("board", "$(board)")
         target:values_set("threads", {
@@ -28,7 +33,7 @@ firmware("temporal_safety")
                 priority = 1,
                 entry_point = "entry",
                 stack_size = 0x400,
-                trusted_stack_frames = 2
+                trusted_stack_frames = 4
             }
         }, {expand = false})
     end)
