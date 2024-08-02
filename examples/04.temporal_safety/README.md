@@ -46,23 +46,27 @@ For example, if you remove `W` and `M` permissions from a pointer that you pass 
 Similarly, if you remove `G` and `L` then you have the guarantee that nothing reachable from the pointer will be captured.
 If you remove `G` but not `L` then you have the weaker guarantee that the pointer that you passed will not be captured but pointers reachable from it might be.
 
-The next three use cases show the handling of sub object, a capability that references a sub-range of the allocation.
+The next three use cases show the handling of a sub-object, a capability that references a sub-range of the allocation.
 
-In the first of these the sub object is passed to free(), but this has no impact until the original allocation is also freed (i.e an allocation does not become fragmented if you try to free the middle of it).
+In the first of these the sub object is passed to free().
+As no claims have been made, free() would take action only if a cap to the entire object were passed in.
+Thus, this call to free() has no effect on the heap or on the pointers held by the client.
+(In particular, unlike many historical implementations of malloc, freeing a sub-object will not erroneously return this sub-object's memory to the free pool.)
 
-In the second use case a claim is made on the sub object, which counts against the quota but now means that the sub object remains valid even if the enclosing allocation is freed.
-Both the sub object and the enclosing allocation become invalid when the claim is releases. 
+In the second use case a claim is made on the sub object.
+This charges the claimant's quota and ensures that the sub-object (and, indeed, the entire object) remains allocated for the duration of the claim, even when the enclosing allocation is passed to free().
+Thereafter, releasing the claim on the sub-object will cause the object to be freed, invalidating the pointers to the object and sub-object alike.
 
 The third use case shows the difference between a claim and a fast claim.
 Claims are persistent, count against the compartment's quota, and last until they are explicitly released, but they are expensive as they require a cross compartment call to the allocator.
 Fast claims are ephemeral and belong to the thread rather than the compartment.
-Each thread may only hold one fast claim (on up to two objects).
+Each thread may hold only at most one fast claim (on up to two objects).
 They do not count against a quota, but they only last until the thread makes a cross compartment call or another fast claim.
 In the example the claim on the sub object is made with a fast claim, but when the enclosing object is now freed the fast claim is dropped (as free() is a cross compartment call) so both the enclosing and sub objects become invalid.
 _This is a poor use of a fast claim used to illustrate the behaviour; The normal use case is to establish a claim early in the entry to a compartment to prevent an object becoming invalid while the compartment processes it, which may include making a persistent claim._    
 
-The final use case shows how an object initially allocated in one compartment be claimed by (add counted against the quota) of a second compartment.
-This allow, for example, a zero copy data buffer pattern.
-Even when the allocation is freed by (and removed from the quota of) the original compartment it remain valid because it is now claimed by the second compartment.
-Note that the quota is reduced by more when making a claim than an allocation because a small amount of additional heap is required for the claim headers.   
+The final use case shows how an object initially allocated in one compartment may be claimed by (add counted against the quota) of a second compartment.
+This allows, for example, a zero-copy data buffer pattern.
+Even when the allocation is freed by (and removed from the quota of) the original compartment, it remains valid, because it is now claimed by the second compartment.
+Note that the quota charge for a claim on an object is slightly larger than the size of the object itself, because a small amount of additional heap is required for the claim headers.
 
