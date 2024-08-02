@@ -63,9 +63,9 @@ Fast claims are ephemeral and belong to the thread rather than the compartment.
 Each thread may hold only at most one fast claim (on up to two objects).
 They do not count against a quota, but they only last until the thread makes a cross compartment call or another fast claim.
 In the example the claim on the sub-object is made with a fast claim, but when the enclosing object is now freed the fast claim is dropped (as free() is a cross compartment call) so both the enclosing and sub-objects become invalid.
-_This is a poor use of a fast claim used to illustrate the behaviour; The normal use case is to establish a claim early in the entry to a compartment to prevent an object becoming invalid while the compartment processes it, which may include making a persistent claim._    
+_This is a poor use of a fast claim used to illustrate the behaviour; The normal use case is to establish a claim early in the entry to a compartment to prevent an object becoming invalid while the compartment processes it, which may include making its own persistent claim._    
 
-The final use case shows how an object initially allocated in one compartment may be claimed by (add counted against the quota) of a second compartment.
+The final use case shows how an object initially allocated in one compartment may be claimed by (and counted against the quota) of a second compartment.
 This allows, for example, a zero-copy data buffer pattern.
 Even when the allocation is freed by (and removed from the quota of) the original compartment, it remains valid, because it is now claimed by the second compartment.
 Note that the quota charge for a claim on an object is slightly larger than the size of the object itself, because a small amount of additional heap is required for the claim headers.
