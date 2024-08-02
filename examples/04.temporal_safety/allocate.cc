@@ -109,7 +109,9 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 	}
 
-	// Using a claim in another compartment
+	// Using a claim in another compartment.
+	// Note that a claim in the same compartment would also work, but this
+	// shows the more typical use case
 	{
 		Debug::log("----- Claim in another compartment -----");
 		void *x = malloc(10);

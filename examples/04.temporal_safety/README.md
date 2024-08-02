@@ -48,12 +48,12 @@ If you remove `G` but not `L` then you have the weaker guarantee that the pointe
 
 The next three use cases show the handling of a sub-object, a capability that references a sub-range of the allocation.
 
-In the first of these the sub object is passed to free().
+In the first of these the sub-object is passed to free().
 As no claims have been made, free() would take action only if a cap to the entire object were passed in.
 Thus, this call to free() has no effect on the heap or on the pointers held by the client.
 (In particular, unlike many historical implementations of malloc, freeing a sub-object will not erroneously return this sub-object's memory to the free pool.)
 
-In the second use case a claim is made on the sub object.
+In the second use case a claim is made on the sub-object.
 This charges the claimant's quota and ensures that the sub-object (and, indeed, the entire object) remains allocated for the duration of the claim, even when the enclosing allocation is passed to free().
 Thereafter, releasing the claim on the sub-object will cause the object to be freed, invalidating the pointers to the object and sub-object alike.
 
@@ -62,7 +62,7 @@ Claims are persistent, count against the compartment's quota, and last until the
 Fast claims are ephemeral and belong to the thread rather than the compartment.
 Each thread may hold only at most one fast claim (on up to two objects).
 They do not count against a quota, but they only last until the thread makes a cross compartment call or another fast claim.
-In the example the claim on the sub object is made with a fast claim, but when the enclosing object is now freed the fast claim is dropped (as free() is a cross compartment call) so both the enclosing and sub objects become invalid.
+In the example the claim on the sub-object is made with a fast claim, but when the enclosing object is now freed the fast claim is dropped (as free() is a cross compartment call) so both the enclosing and sub-objects become invalid.
 _This is a poor use of a fast claim used to illustrate the behaviour; The normal use case is to establish a claim early in the entry to a compartment to prevent an object becoming invalid while the compartment processes it, which may include making a persistent claim._    
 
 The final use case shows how an object initially allocated in one compartment may be claimed by (add counted against the quota) of a second compartment.
