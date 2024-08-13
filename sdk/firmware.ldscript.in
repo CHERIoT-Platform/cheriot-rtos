@@ -107,6 +107,20 @@ SECTIONS
 	}
 	.allocator_globals_end = .;
 
+
+	@software_revoker_globals@
+
+	@gdc_ld@
+
+	__compart_cgps_end = .;
+
+	.sealed_objects :
+	{
+		@sealed_objects@
+	}
+
+	__shared_objects_start = .;
+	@shared_objects@
 	. = ALIGN(8);
 	__export_mem_hazard_pointers = .;
 	# Two hazard pointers per thread
@@ -117,17 +131,9 @@ SECTIONS
 	. += 4;
 	__export_mem_allocator_epoch_end = .;
 	
+	__shared_objects_end = .;
 
-	@software_revoker_globals@
-
-	@gdc_ld@
-
-	.sealed_objects :
-	{
-		@sealed_objects@
-	}
-
-	__compart_cgps_end = ALIGN(64);
+	. = ALIGN(64);
 
 	# Everything after this point can be discarded after the loader has
 	# finished.
