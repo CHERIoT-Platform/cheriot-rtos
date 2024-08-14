@@ -85,6 +85,9 @@ test("compartment_calls")
 test("check_pointer")
 -- Test various APIs that are too small to deserve their own test file
 test("misc")
+    on_load(function(target)
+        target:values_set("shared_objects", { exampleK = 1024, test_word = 4 }, {expand = false})
+    end)
 
 includes(path.join(sdkdir, "lib"))
 

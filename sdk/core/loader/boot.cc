@@ -471,22 +471,18 @@ namespace
 			Debug::Invariant(
 			  ((entry.address >= LA_ABS(__mmio_region_start)) &&
 			   (entry.address + entry.size() <= LA_ABS(__mmio_region_end))) ||
-			    ((entry.address == LA_ABS(__export_mem_allocator_epoch)) &&
-			     (entry.address + entry.size() ==
-			      LA_ABS(__export_mem_allocator_epoch_end))) ||
-			    ((entry.address == LA_ABS(__export_mem_hazard_pointers)) &&
-			     (entry.address + entry.size() ==
-			      LA_ABS(__export_mem_hazard_pointers_end))),
-			  "{}--{} is not in the MMIO range ({}--{}) or the hazard pointer "
-			  "range ({}--{}) or the allocator epoch range ({}--{})",
+			    ((entry.address >= LA_ABS(__shared_objects_start)) &&
+			     (entry.address + entry.size() <=
+			      LA_ABS(__shared_objects_end))),
+			  "{}--{} is not in the MMIO range ({}--{}) or the shared object "
+			  "range ({}--{})",
 			  entry.address,
 			  entry.address + entry.size(),
 			  LA_ABS(__mmio_region_start),
 			  LA_ABS(__mmio_region_end),
-			  LA_ABS(__export_mem_hazard_pointers),
-			  LA_ABS(__export_mem_hazard_pointers_end),
-			  LA_ABS(__export_mem_allocator_epoch),
-			  LA_ABS(__export_mem_allocator_epoch_end));
+			  LA_ABS(__shared_objects_start),
+			  LA_ABS(__shared_objects_end));
+
 			auto ret = build(entry.address, entry.size());
 			// Remove any permissions that shouldn't be held here.
 			ret.permissions() &= entry.permissions();
@@ -782,9 +778,9 @@ namespace
 		        Root::Type::RWGlobal,
 		        PermissionSet{Permission::Store,
 		                      Permission::LoadStoreCapability}>(
-		    LA_ABS(__export_mem_hazard_pointers),
-		    LA_ABS(__export_mem_hazard_pointers_end) -
-		      LA_ABS(__export_mem_hazard_pointers));
+		    LA_ABS(__cheriot_shared_object_allocator_hazard_pointers),
+		    LA_ABS(__cheriot_shared_object_allocator_hazard_pointers_end) -
+		      LA_ABS(__cheriot_shared_object_allocator_hazard_pointers));
 		// Space per thread for hazard pointers.
 		static constexpr size_t HazardPointerSpace =
 		  HazardPointersPerThread * sizeof(void *);

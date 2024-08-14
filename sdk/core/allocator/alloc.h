@@ -1030,7 +1030,7 @@ class MState
 	 */
 	[[nodiscard]] __always_inline auto hazard_list_begin()
 	{
-		auto    *lockWord{MMIO_CAPABILITY(uint32_t, allocator_epoch)};
+		auto    *lockWord{SHARED_OBJECT(uint32_t, allocator_epoch)};
 		uint32_t epoch = *lockWord >> 16;
 		Debug::Invariant(
 		  (epoch & 1) == 0,
@@ -1280,8 +1280,8 @@ class MState
 	{
 		// It is now safe to walk the hazard list.
 		Capability<void *> hazards =
-		  const_cast<void **>(MMIO_CAPABILITY_WITH_PERMISSIONS(
-		    void *, hazard_pointers, true, true, true, false));
+		  const_cast<void **>(SHARED_OBJECT_WITH_PERMISSIONS(
+		    void *, allocator_hazard_pointers, true, true, true, false));
 		size_t pointers = hazards.length() / sizeof(void *);
 		for (size_t i = 0; i < pointers; i++)
 		{

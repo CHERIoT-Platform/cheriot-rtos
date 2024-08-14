@@ -88,8 +88,9 @@ namespace
 		Capability m{tbase.cast<MState>()};
 
 		size_t hazardQuarantineSize =
-		  Capability{MMIO_CAPABILITY_WITH_PERMISSIONS(
-		               void *, hazard_pointers, true, true, true, false)}
+		  Capability{
+		    SHARED_OBJECT_WITH_PERMISSIONS(
+		      void *, allocator_hazard_pointers, true, true, true, false)}
 		    .length();
 
 		m.bounds()            = sizeof(*m);

@@ -3,9 +3,12 @@
 
 #define TEST_NAME "Test misc APIs"
 #include "tests.hh"
+#include <compartment-macros.h>
 #include <ds/pointer.h>
 #include <string.h>
 #include <timeout.h>
+
+using namespace CHERI;
 
 /**
  * Test timeouts.
@@ -112,9 +115,51 @@ void check_pointer_utilities()
 	     "The pointer proxy `=` operator does not correctly set the pointer.");
 }
 
+void check_shared_object(const char      *name,
+                         Capability<void> object,
+                         size_t           size,
+                         PermissionSet    permissions)
+{
+	debug_log("Checking shared object {}.", object);
+	TEST(object.length() == size,
+	     "Object {} is {} bytes, expected {}",
+	     name,
+	     object.length(),
+	     size);
+	TEST(object.permissions() == permissions,
+	     "Object {} has permissions {}, expected {}",
+	     name,
+	     PermissionSet{object.permissions()},
+	     permissions);
+}
+
 void test_misc()
 {
 	check_timeouts();
 	check_memchr();
 	check_pointer_utilities();
+	debug_log("Testing shared objects.");
+	check_shared_object("exampleK",
+	                    SHARED_OBJECT(void, exampleK),
+	                    1024,
+	                    {Permission::Global,
+	                     Permission::Load,
+	                     Permission::Store,
+	                     Permission::LoadStoreCapability,
+	                     Permission::LoadMutable});
+	check_shared_object(
+	  "exampleK",
+	  SHARED_OBJECT_WITH_PERMISSIONS(void, exampleK, true, true, false, false),
+	  1024,
+	  {Permission::Global, Permission::Load, Permission::Store});
+	check_shared_object(
+	  "test_word",
+	  SHARED_OBJECT_WITH_PERMISSIONS(void, test_word, true, false, true, false),
+	  4,
+	  {Permission::Global, Permission::Load, Permission::LoadStoreCapability});
+	check_shared_object("test_word",
+	                    SHARED_OBJECT_WITH_PERMISSIONS(
+	                      void, test_word, true, false, false, false),
+	                    4,
+	                    {Permission::Global, Permission::Load});
 }

@@ -683,6 +683,42 @@ rule("firmware")
 			end
 		end)
 
+		local shared_objects = {
+			-- 32-bit counter for the hazard-pointer epoch.
+			allocator_epoch = 4,
+			-- Two hazard pointers per thread.
+			allocator_hazard_pointers = #(threads) * 8 * 2
+			}
+		visit_all_dependencies(function (target)
+			local globals = target:values("shared_objects")
+			if globals then
+				for name, size in pairs(globals) do
+					if not (name == "__wrap_locked__") then
+						if shared_objects[global] and (not (shared_objects[global] == size)) then
+							raise("Global " .. global .. " is declared with different sizes.")
+						end
+						shared_objects[name] = size
+					end
+				end
+			end
+		end)
+		-- TODO: We should sort pre-shared globals by size to minimise padding.
+		-- Each global is emitted as a separate section so that we can use
+		-- CAPALIGN and let the linker insert the required padding.
+		local shared_objects_template =
+			"\n\t\t. = ALIGN(MIN(${size}, 8));" ..
+			"\n\t\t__cheriot_shared_object_section_${global} : CAPALIGN" ..
+			"\n\t\t{" ..
+			"\n\t\t\t__cheriot_shared_object_${global} = .;" ..
+			"\n\t\t\t. += ${size};" ..
+			"\n\t\t\t__cheriot_shared_object_${global}_end = .;" ..
+			"\n\t\t}\n"
+		local shared_objects_section = ""
+		for global, size in table.orderpairs(shared_objects) do
+			shared_objects_section = shared_objects_section .. string.gsub(shared_objects_template, "${([_%w]*)}", {global=global, size=size})
+		end
+		ldscript_substitutions.shared_objects = shared_objects_section
+
 		-- Add the counts of libraries and compartments to the substitution list.
 		ldscript_substitutions.compartment_count = compartment_count
 		ldscript_substitutions.library_count = library_count

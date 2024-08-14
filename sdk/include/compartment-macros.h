@@ -6,26 +6,27 @@
 #include <stdbool.h>
 
 /**
- * Helper macro, should not be used directly.
+ * Helper macro for MMIO and pre-shared object imports, should not be used
+ * directly.
  */
-#define MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                          \
-                                                name,                          \
-                                                mangledName,                   \
-                                                permitLoad,                    \
-                                                permitStore,                   \
-                                                permitLoadStoreCapabilities,   \
-                                                permitLoadMutable)             \
+#define IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                        \
+                                                  name,                        \
+                                                  prefix,                      \
+                                                  mangledName,                 \
+                                                  permitLoad,                  \
+                                                  permitStore,                 \
+                                                  permitLoadStoreCapabilities, \
+                                                  permitLoadMutable)           \
 	({                                                                         \
-		volatile type *ret; /* NOLINT(bugprone-macro-parentheses) */           \
+		type *ret; /* NOLINT(bugprone-macro-parentheses) */                    \
 		__asm(".ifndef " mangledName "\n"                                      \
 		      "  .type     " mangledName ",@object\n"                          \
 		      "  .section  .compartment_imports." #name                        \
 		      ",\"awG\",@progbits," #name ",comdat\n"                          \
 		      "  .globl    " mangledName "\n"                                  \
 		      "  .p2align  3\n" mangledName ":\n"                              \
-		      "  .word __export_mem_" #name "\n"                               \
-		      "  .word __export_mem_" #name "_end - __export_mem_" #name       \
-		      " + %c1\n"                                                       \
+		      "  .word " #prefix #name "\n"                                    \
+		      "  .word " #prefix #name "_end - " #prefix #name " + %c1\n"      \
 		      "  .size " mangledName ", 8\n"                                   \
 		      " .previous\n"                                                   \
 		      ".endif\n"                                                       \
@@ -40,6 +41,25 @@
 		            ((permitLoadMutable) ? (1 << 28) : 0)));                   \
 		ret;                                                                   \
 	})
+
+/**
+ * Helper macro, should not be used directly.
+ */
+#define MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                          \
+                                                name,                          \
+                                                mangledName,                   \
+                                                permitLoad,                    \
+                                                permitStore,                   \
+                                                permitLoadStoreCapabilities,   \
+                                                permitLoadMutable)             \
+	IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                            \
+	                                          name,                            \
+	                                          __export_mem_,                   \
+	                                          mangledName,                     \
+	                                          permitLoad,                      \
+	                                          permitStore,                     \
+	                                          permitLoadStoreCapabilities,     \
+	                                          permitLoadMutable)
 
 /**
  * Provide a capability of the type `volatile type *` referring to the MMIO
@@ -57,7 +77,7 @@
                                          permitLoadStoreCapabilities,          \
                                          permitLoadMutable)                    \
 	MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(                                   \
-	  type,                                                                    \
+	  volatile type, /* NOLINT(bugprone-macro-parentheses) */                  \
 	  name,                                                                    \
 	  "__import_mem_" #name "_" #permitLoad "_" #permitStore                   \
 	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
@@ -77,6 +97,44 @@
  */
 #define MMIO_CAPABILITY(type, name)                                            \
 	MMIO_CAPABILITY_WITH_PERMISSIONS(type, name, true, true, false, false)
+
+/**
+ * Provide a capability of the type `type *` referring to the pre-shared object
+ * with `name` as its name.  This macro can be used only in code (it cannot be
+ * used to initialise a global).
+ *
+ * The last arguments specify the set of permissions that this capability
+ * holds.  Pre-shared objects are always global and without store local.  They
+ * may optionally omit additional permissions.
+ */
+#define SHARED_OBJECT_WITH_PERMISSIONS(type,                                   \
+                                       name,                                   \
+                                       permitLoad,                             \
+                                       permitStore,                            \
+                                       permitLoadStoreCapabilities,            \
+                                       permitLoadMutable)                      \
+	IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(                                 \
+	  type, /* NOLINT(bugprone-macro-parentheses) */                           \
+	  name,                                                                    \
+	  __cheriot_shared_object_,                                                \
+	  "__import_cheriot_shared_object_" #name "_" #permitLoad "_" #permitStore \
+	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
+	  permitLoad,                                                              \
+	  permitStore,                                                             \
+	  permitLoadStoreCapabilities,                                             \
+	  permitLoadMutable)
+
+/**
+ * Provide a capability of the type `type *` referring to the pre-shared object
+ * with `name` as its name.  This macro can be used only in code (it cannot be
+ * used to initialise a global).
+ *
+ * Pre-shared object capabilities produced by this macro have load, store,
+ * load-mutable, and load/store-capability permissions.  To define a reduced
+ * set of permissions use `SHARED_OBJECT_WITH_PERMISSIONS`.
+ */
+#define SHARED_OBJECT(type, name)                                              \
+	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true)
 
 /**
  * Macro to test whether a device with a specific name exists in the board
