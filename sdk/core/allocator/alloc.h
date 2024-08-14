@@ -1281,7 +1281,7 @@ class MState
 		// It is now safe to walk the hazard list.
 		Capability<void *> hazards =
 		  const_cast<void **>(SHARED_OBJECT_WITH_PERMISSIONS(
-		    void *, allocator_hazard_pointers, true, true, true, false));
+		    void *, allocator_hazard_pointers, true, false, true, false));
 		size_t pointers = hazards.length() / sizeof(void *);
 		for (size_t i = 0; i < pointers; i++)
 		{
