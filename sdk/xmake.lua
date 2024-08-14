@@ -683,7 +683,12 @@ rule("firmware")
 			end
 		end)
 
-		local shared_objects = {}
+		local shared_objects = {
+			-- 32-bit counter for the hazard-pointer epoch.
+			allocator_epoch = 4,
+			-- Two hazard pointers per thread.
+			allocator_hazard_pointers = #(threads) * 8 * 2
+			}
 		visit_all_dependencies(function (target)
 			local globals = target:values("shared_objects")
 			if globals then

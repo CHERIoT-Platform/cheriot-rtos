@@ -778,9 +778,9 @@ namespace
 		        Root::Type::RWGlobal,
 		        PermissionSet{Permission::Store,
 		                      Permission::LoadStoreCapability}>(
-		    LA_ABS(__export_mem_hazard_pointers),
-		    LA_ABS(__export_mem_hazard_pointers_end) -
-		      LA_ABS(__export_mem_hazard_pointers));
+		    LA_ABS(__cheriot_shared_object_allocator_hazard_pointers),
+		    LA_ABS(__cheriot_shared_object_allocator_hazard_pointers_end) -
+		      LA_ABS(__cheriot_shared_object_allocator_hazard_pointers));
 		// Space per thread for hazard pointers.
 		static constexpr size_t HazardPointerSpace =
 		  HazardPointersPerThread * sizeof(void *);
