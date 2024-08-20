@@ -282,7 +282,7 @@ rule("firmware")
 		simulator = string.gsub(simulator, "${(%w*)}", { sdk=scriptdir, board=boarddir })
 		local firmware = target:targetfile()
 		local directory = path.directory(firmware)
-		firmware = path.basename(firmware)
+		firmware = path.filename(firmware)
 		local run = function(simulator)
 			os.execv(simulator, { firmware }, { curdir = directory })
 		end
