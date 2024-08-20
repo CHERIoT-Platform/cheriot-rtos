@@ -711,7 +711,7 @@ class Ksz8851Ethernet
 			framesToProcess -= 1;
 
 			Capability<uint8_t> boundedBuffer{receiveBuffer.get()};
-			boundedBuffer.bounds() = length;
+			boundedBuffer.bounds().set_inexact(length);
 			// Remove all permissions except load.  This also removes global, so
 			// that this cannot be captured.
 			boundedBuffer.permissions() &=
