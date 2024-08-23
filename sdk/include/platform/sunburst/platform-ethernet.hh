@@ -32,7 +32,7 @@ class Ksz8851Ethernet
 	/**
 	 * Flag set to log messages when frames are dropped.
 	 */
-	static constexpr bool DebugDroppedFrames = false;
+	static constexpr bool DebugDroppedFrames = true;
 
 	/**
 	 * Maxmium size of a single Ethernet frame.
@@ -43,6 +43,12 @@ class Ksz8851Ethernet
 	 * Helper for conditional debug logs and assertions.
 	 */
 	using Debug = ConditionalDebug<DebugEthernet, "Ethernet driver">;
+
+	/**
+	 * Helper for conditional debug logs and assertions for dropped frames.
+	 */
+	using DebugFrameDrops =
+	  ConditionalDebug<DebugDroppedFrames, "Ethernet driver">;
 
 	/**
 	 * Import the Capability helper from the CHERI namespace.
@@ -649,10 +655,7 @@ class Ksz8851Ethernet
 
 			if (!valid)
 			{
-				if (DebugDroppedFrames)
-				{
-					Debug::log("Dropping frame with status: {}", status);
-				}
+				DebugFrameDrops::log("Dropping frame with status: {}", status);
 
 				drop_error_frame();
 				continue;
@@ -660,10 +663,7 @@ class Ksz8851Ethernet
 
 			if (length == 0)
 			{
-				if (DebugDroppedFrames)
-				{
-					Debug::log("Dropping frame with zero length");
-				}
+				DebugFrameDrops::log("Dropping frame with zero length");
 
 				drop_error_frame();
 				continue;
@@ -674,10 +674,8 @@ class Ksz8851Ethernet
 			uint16_t paddedLength = (length + 3) & ~0x3;
 			if (paddedLength > MaxFrameSize)
 			{
-				if (DebugDroppedFrames)
-				{
-					Debug::log("Dropping frame that is too large: {}", length);
-				}
+				DebugFrameDrops::log("Dropping frame that is too large: {}",
+				                     length);
 
 				drop_error_frame();
 				continue;
