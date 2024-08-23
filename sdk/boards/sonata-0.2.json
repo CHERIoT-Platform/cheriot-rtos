@@ -70,7 +70,9 @@
         "IBEX",
         "SUNBURST",
         "SUNBURST_SHADOW_BASE=0x30000000",
-        "SUNBURST_SHADOW_SIZE=0x4000"
+        "SUNBURST_SHADOW_SIZE=0x4000",
+        "ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM=1",
+        "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM=1"
     ],
     "driver_includes" : [
         "../include/platform/sunburst",
