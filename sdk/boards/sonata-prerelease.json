@@ -67,6 +67,10 @@
         "pwm": {
             "start" : 0x80001000,
             "length": 0x00001000
+        },
+        "adc": {
+            "start" : 0x8000B000,
+            "length": 0x00001000
         }
     },
     "instruction_memory": {
