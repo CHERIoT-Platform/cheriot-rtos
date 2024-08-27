@@ -63,6 +63,10 @@
         "plic": {
             "start" : 0x88000000,
             "end"   : 0x88400000
+        },
+        "pwm": {
+            "start" : 0x80001000,
+            "length": 0x00001000
         }
     },
     "instruction_memory": {
