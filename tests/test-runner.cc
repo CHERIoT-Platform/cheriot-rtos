@@ -111,6 +111,8 @@ void __cheri_compartment("test_runner") run_tests()
 	          std::string_view{testString, 13});
 	const std::string S = "I am a walrus"s;
 	debug_log("Trying to print std::string: {}", S);
+	debug_log("Trying to print function pointer {}", compartment_error_handler);
+
 	run_timed("All tests", []() {
 		run_timed("Debug helpers (C++)", test_debug_cxx);
 		run_timed("Debug helpers (C)", test_debug_c);
@@ -118,6 +120,7 @@ void __cheri_compartment("test_runner") run_tests()
 		run_timed("stdio", test_stdio);
 		run_timed("Static sealing", test_static_sealing);
 		run_timed("Crash recovery", test_crash_recovery);
+		run_timed("ISA", test_isa);
 		run_timed("Compartment calls", test_compartment_call);
 		run_timed("check_pointer", test_check_pointer);
 		run_timed("Misc APIs", test_misc);
