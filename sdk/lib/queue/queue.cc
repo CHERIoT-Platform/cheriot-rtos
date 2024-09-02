@@ -509,19 +509,26 @@ int queue_send(Timeout *timeout, struct QueueHandle *handle, const void *src)
 		if (LockGuard g{l, timeout})
 		{
 			uint32_t producerCounter = counter_load(producer);
-			uint32_t consumerCounter = counter_load(consumer);
+			uint32_t consumerValue   = consumer->load();
+			uint32_t consumerCounter =
+			  consumerValue & ~(HighBitFlagLock::reserved_bits());
 			Debug::log("Producer counter: {}, consumer counter: {}, Size: {}",
 			           producerCounter,
 			           consumerCounter,
 			           handle->queueSize);
 			while (is_full(handle->queueSize, producerCounter, consumerCounter))
 			{
-				if (consumer->wait(timeout, consumerCounter) == -ETIMEDOUT)
+				// Wait on the value to change.  If we hit this path while the
+				// consumer lock is held, then the high bits will be set.  Make
+				// sure that we yield.
+				if (consumer->wait(timeout, consumerValue) == -ETIMEDOUT)
 				{
 					Debug::log("Timed out on futex");
 					return -ETIMEDOUT;
 				}
-				consumerCounter = counter_load(consumer);
+				consumerValue = consumer->load();
+				consumerCounter =
+				  consumerValue & ~(HighBitFlagLock::reserved_bits());
 			}
 			auto entry = buffer_at_counter(*handle, producerCounter);
 			if (int claim = heap_claim_fast(timeout, handle->buffer, src);
@@ -575,7 +582,9 @@ int queue_receive(Timeout *timeout, struct QueueHandle *handle, void *dst)
 		HighBitFlagLock l{*consumer};
 		if (LockGuard g{l, timeout})
 		{
-			uint32_t producerCounter = counter_load(producer);
+			uint32_t producerValue = producer->load();
+			uint32_t producerCounter =
+			  producerValue & ~(HighBitFlagLock::reserved_bits());
 			uint32_t consumerCounter = counter_load(consumer);
 			Debug::log("Producer counter: {}, consumer counter: {}, Size: {}",
 			           producerCounter,
@@ -583,11 +592,16 @@ int queue_receive(Timeout *timeout, struct QueueHandle *handle, void *dst)
 			           handle->queueSize);
 			while (is_empty(producerCounter, consumerCounter))
 			{
-				if (producer->wait(timeout, producerCounter) == -ETIMEDOUT)
+				// Wait on the value to change.  If we hit this path while the
+				// producer lock is held, then the high bits will be set.  Make
+				// sure that we yield.
+				if (producer->wait(timeout, producerValue) == -ETIMEDOUT)
 				{
 					return -ETIMEDOUT;
 				}
-				producerCounter = counter_load(producer);
+				producerValue = producer->load();
+				producerCounter =
+				  producerValue & ~(HighBitFlagLock::reserved_bits());
 			}
 			auto entry = buffer_at_counter(*handle, consumerCounter);
 			if (int claim = heap_claim_fast(timeout, handle->buffer, dst);
