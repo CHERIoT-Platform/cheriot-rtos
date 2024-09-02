@@ -435,6 +435,12 @@ class Ksz8851Ethernet
 	RecursiveMutex receiveBufferMutex;
 
 	/**
+	 * Reads and writes of the GPIO space use the same bits of the MMIO region
+	 * and so need to be protected.
+	 */
+	FlagLockPriorityInherited gpioLock;
+
+	/**
 	 * Buffer used by receive_frame.
 	 */
 	std::unique_ptr<uint8_t[]> receiveBuffer;
@@ -620,6 +626,7 @@ class Ksz8851Ethernet
 
 	std::optional<Frame> receive_frame()
 	{
+		LockGuard g{gpioLock};
 		if (framesToProcess == 0)
 		{
 			uint16_t isr = register_read(RegisterOffset::InterruptStatus);
@@ -758,6 +765,8 @@ class Ksz8851Ethernet
 		{
 			return false;
 		}
+
+		LockGuard g{gpioLock};
 
 		// Wait for the transmit buffer to be available on the device side.
 		// This needs to include the header.
