@@ -3,9 +3,9 @@
 
 #include <string.h>
 
-const void *__cheri_libcall memchr(const void *voidString,
-                                   int         intChar,
-                                   size_t      n)
+void *__cheri_libcall memchr(const void *voidString,
+                             int         intChar,
+                             size_t      n)
 {
 	const unsigned char  c = (unsigned char)intChar;
 	const unsigned char *s = (const unsigned char *)voidString;
@@ -14,7 +14,7 @@ const void *__cheri_libcall memchr(const void *voidString,
 	{
 		if (*s == c)
 		{
-			return (const void *)s;
+			return (void *)s;
 		}
 		s++;
 	}
