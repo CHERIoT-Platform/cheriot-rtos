@@ -10,7 +10,7 @@ int __cheri_libcall   memcmp(const void *str1, const void *str2, size_t count);
 void *__cheri_libcall memcpy(void *dest, const void *src, size_t n);
 void *__cheri_libcall memset(void *, int, size_t);
 void *__cheri_libcall memmove(void *dest, const void *src, size_t n);
-const void *__cheri_libcall memchr(const void *, int, size_t);
+void *__cheri_libcall memchr(const void *, int, size_t);
 size_t __cheri_libcall      strlen(const char *str);
 int __cheri_libcall         strncmp(const char *s1, const char *s2, size_t n);
 char *__cheri_libcall       strncpy(char *dest, const char *src, size_t n);
