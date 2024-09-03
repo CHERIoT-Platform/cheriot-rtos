@@ -12,6 +12,7 @@ This directory contains a number of examples to understand the system:
  7. [Handling errors in compartments](07.error_handling) shows how to recover from crashes in compartments.
  8. [Memory safety examples](08.memory_safety) demonstrates how the CHERIoT platform enforces memory safety.
  9. [JavaScript](09.javascript) is a simple example embedding a JavaScript VM in a compartment.
+10. [A bogomips estimator](10.bogomips) for comparing target "devices" (mostly simulators).
 
 Each example contains a readme file explaining what it is showing.
 
