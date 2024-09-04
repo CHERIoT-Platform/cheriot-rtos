@@ -21,6 +21,7 @@
 #include <multiwaiter.h>
 #include <queue.h>
 #include <riscvreg.h>
+#include <stdalign.h>
 #include <stdarg.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -28,6 +29,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdnoreturn.h>
 #include <string.h>
 #include <strings.h>
 #include <switcher.h>
