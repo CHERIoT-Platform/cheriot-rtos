@@ -90,6 +90,43 @@ void check_memchr()
 }
 
 /**
+ * Test memrchr.
+ *
+ * This test checks the following:
+ *
+ * - memrchr finds the first occurrence of the character when it is present
+ *   (test for different values, particularly the first and the last one).
+ * - memrchr returns NULL when the string does not contain the character (test
+ *   for non-NULL terminated string).
+ * - memrchr does not stop at \0 characters.
+ * - memrchr returns NULL for 0-size pointers.
+ */
+void check_memrchr()
+{
+	debug_log("Test memrchr.");
+
+	char string[] = {'C', 'H', 'E', 'R', 'R', 'I', 'O', 'T'};
+
+	TEST(memchr(string, 'C', sizeof(string)) == &string[0],
+	     "memrchr must return the first occurence of the character.");
+	TEST(memrchr(string, 'R', sizeof(string)) == &string[4],
+	     "memrchr must return the first occurence of the character.");
+	TEST(memrchr(string, 'T', sizeof(string)) == &string[7],
+	     "memrchr must return the first occurence of the character.");
+	TEST(memrchr(string, 'X', sizeof(string)) == NULL,
+	     "memrchr must return NULL when a character is not present.");
+
+	char stringWithNull[] = {'F', 'U', '\0', 'B', 'A', 'R', '\0'};
+
+	TEST(memrchr(stringWithNull, 'F', sizeof(stringWithNull)) ==
+	       &stringWithNull[0],
+	     "memrchr must not stop at NULL characters.");
+
+	TEST(memrchr(stringWithNull, 'Y', 0) == NULL,
+	     "memrchr must return NULL for zero-size pointers.");
+}
+
+/**
  * Test pointer utilities.
  *
  * Not comprehensive, would benefit from being expanded at some point.
@@ -137,6 +174,7 @@ void test_misc()
 {
 	check_timeouts();
 	check_memchr();
+	check_memrchr();
 	check_pointer_utilities();
 	debug_log("Testing shared objects.");
 	check_shared_object("exampleK",
