@@ -11,12 +11,12 @@
 #	if __STDC_VERSION__ < 202311L
 
 /**
- * C++-compatible spelling for `_Alisnas`.
+ * C++-compatible spelling for `_Alignas`.
  */
 #		define alignas(__x) _Alignas(__x)
 
 /**
- * C++-compatible spelling for `_Alisnof`.
+ * C++-compatible spelling for `_Alignof`.
  */
 #		define alignof(__x) _Alignof(__x)
 

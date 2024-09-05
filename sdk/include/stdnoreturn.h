@@ -11,7 +11,7 @@
 #	if __STDC_VERSION__ < 202311L
 
 /**
- * C++-compatible spelling for `_Alisnas`.
+ * C++-compatible spelling for `_Noreturn`.
  */
 #		define noreturn _Noreturn
 
