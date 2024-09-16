@@ -434,10 +434,10 @@ SystickReturn __cheri_compartment("sched") thread_systemtick_get()
 	return ret;
 }
 
-__cheriot_minimum_stack(0x80) int __cheri_compartment("sched")
+__cheriot_minimum_stack(0x90) int __cheri_compartment("sched")
   thread_sleep(Timeout *timeout, uint32_t flags)
 {
-	STACK_CHECK(0x80);
+	STACK_CHECK(0x90);
 	if (!check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
@@ -449,12 +449,12 @@ __cheriot_minimum_stack(0x80) int __cheri_compartment("sched")
 	return 0;
 }
 
-__cheriot_minimum_stack(0xa0) int futex_timed_wait(Timeout        *timeout,
+__cheriot_minimum_stack(0xb0) int futex_timed_wait(Timeout        *timeout,
                                                    const uint32_t *address,
                                                    uint32_t        expected,
                                                    uint32_t        flags)
 {
-	STACK_CHECK(0xa0);
+	STACK_CHECK(0xb0);
 	if (!check_timeout_pointer(timeout) ||
 	    !check_pointer<PermissionSet{Permission::Load}>(address))
 	{
@@ -536,9 +536,9 @@ __cheriot_minimum_stack(0xa0) int futex_timed_wait(Timeout        *timeout,
 	return 0;
 }
 
-__cheriot_minimum_stack(0x90) int futex_wake(uint32_t *address, uint32_t count)
+__cheriot_minimum_stack(0xa0) int futex_wake(uint32_t *address, uint32_t count)
 {
-	STACK_CHECK(0x90);
+	STACK_CHECK(0xa0);
 	if (!check_pointer<PermissionSet{Permission::Store}>(address))
 	{
 		return -EINVAL;
@@ -577,13 +577,13 @@ __cheriot_minimum_stack(0x90) int futex_wake(uint32_t *address, uint32_t count)
 	return woke;
 }
 
-__cheriot_minimum_stack(0x50) int multiwaiter_create(
+__cheriot_minimum_stack(0x60) int multiwaiter_create(
   Timeout           *timeout,
   struct SObjStruct *heapCapability,
   MultiWaiter      **ret,
   size_t             maxItems)
 {
-	STACK_CHECK(0x50);
+	STACK_CHECK(0x60);
 	int error;
 	// Don't bother checking if timeout is valid, the allocator will check for
 	// us.
@@ -597,20 +597,20 @@ __cheriot_minimum_stack(0x50) int multiwaiter_create(
 	return write_result(reinterpret_cast<void **>(ret), mw);
 }
 
-__cheriot_minimum_stack(0x60) int multiwaiter_delete(
+__cheriot_minimum_stack(0x70) int multiwaiter_delete(
   struct SObjStruct *heapCapability,
   MultiWaiter       *mw)
 {
-	STACK_CHECK(0x60);
+	STACK_CHECK(0x70);
 	return deallocate<MultiWaiterInternal>(heapCapability, mw);
 }
 
-__cheriot_minimum_stack(0xb0) int multiwaiter_wait(Timeout           *timeout,
+__cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
                                                    MultiWaiter       *waiter,
                                                    EventWaiterSource *events,
                                                    size_t newEventsCount)
 {
-	STACK_CHECK(0xb0);
+	STACK_CHECK(0xc0);
 	return typed_op<MultiWaiterInternal>(waiter, [&](MultiWaiterInternal &mw) {
 		if (newEventsCount > mw.capacity())
 		{
@@ -699,9 +699,9 @@ namespace
 } // namespace
 
 [[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
-  0x20) const uint32_t *interrupt_futex_get(struct SObjStruct *sealed)
+  0x30) const uint32_t *interrupt_futex_get(struct SObjStruct *sealed)
 {
-	STACK_CHECK(0x20);
+	STACK_CHECK(0x30);
 	auto     *interruptCapability = Handle::unseal<InterruptCapability>(sealed);
 	uint32_t *result              = nullptr;
 	if (interruptCapability && interruptCapability->state.mayWait)
@@ -719,9 +719,9 @@ namespace
 }
 
 [[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
-  0x10) int interrupt_complete(struct SObjStruct *sealed)
+  0x20) int interrupt_complete(struct SObjStruct *sealed)
 {
-	STACK_CHECK(0x10);
+	STACK_CHECK(0x20);
 	auto *interruptCapability = Handle::unseal<InterruptCapability>(sealed);
 	if (interruptCapability && interruptCapability->state.mayComplete)
 	{
