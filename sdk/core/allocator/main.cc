@@ -828,10 +828,10 @@ namespace
 
 } // namespace
 
-__cheriot_minimum_stack(0x80) ssize_t
+__cheriot_minimum_stack(0x90) ssize_t
   heap_quota_remaining(struct SObjStruct *heapCapability)
 {
-	STACK_CHECK(0x80);
+	STACK_CHECK(0x90);
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
@@ -841,9 +841,9 @@ __cheriot_minimum_stack(0x80) ssize_t
 	return cap->quota;
 }
 
-__cheriot_minimum_stack(0xb0) void heap_quarantine_empty()
+__cheriot_minimum_stack(0xc0) void heap_quarantine_empty()
 {
-	STACK_CHECK(0xb0);
+	STACK_CHECK(0xc0);
 	LockGuard g{lock};
 	while (gm->heapQuarantineSize > 0)
 	{
@@ -857,12 +857,12 @@ __cheriot_minimum_stack(0xb0) void heap_quarantine_empty()
 	}
 }
 
-__cheriot_minimum_stack(0x200) void *heap_allocate(Timeout *timeout,
+__cheriot_minimum_stack(0x210) void *heap_allocate(Timeout *timeout,
                                                    SObj     heapCapability,
                                                    size_t   bytes,
                                                    uint32_t flags)
 {
-	STACK_CHECK(0x200);
+	STACK_CHECK(0x210);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
@@ -882,10 +882,10 @@ __cheriot_minimum_stack(0x200) void *heap_allocate(Timeout *timeout,
 	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags);
 }
 
-__cheriot_minimum_stack(0x1b0) ssize_t
+__cheriot_minimum_stack(0x1c0) ssize_t
   heap_claim(SObj heapCapability, void *pointer)
 {
-	STACK_CHECK(0x1b0);
+	STACK_CHECK(0x1c0);
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
@@ -912,18 +912,18 @@ __cheriot_minimum_stack(0x1b0) ssize_t
 	return 0;
 }
 
-__cheriot_minimum_stack(0xe0) int heap_can_free(SObj  heapCapability,
+__cheriot_minimum_stack(0xf0) int heap_can_free(SObj  heapCapability,
                                                 void *rawPointer)
 {
-	STACK_CHECK(0xe0);
+	STACK_CHECK(0xf0);
 	LockGuard g{lock};
 	return heap_free_internal(heapCapability, rawPointer, false);
 }
 
-__cheriot_minimum_stack(0x250) int heap_free(SObj  heapCapability,
+__cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
                                              void *rawPointer)
 {
-	STACK_CHECK(0x250);
+	STACK_CHECK(0x260);
 	LockGuard g{lock};
 	int       ret = heap_free_internal(heapCapability, rawPointer, true);
 	if (ret != 0)
@@ -942,9 +942,9 @@ __cheriot_minimum_stack(0x250) int heap_free(SObj  heapCapability,
 	return 0;
 }
 
-__cheriot_minimum_stack(0x180) ssize_t heap_free_all(SObj heapCapability)
+__cheriot_minimum_stack(0x190) ssize_t heap_free_all(SObj heapCapability)
 {
-	STACK_CHECK(0x180);
+	STACK_CHECK(0x190);
 	LockGuard g{lock};
 	auto     *capability = malloc_capability_unseal(heapCapability);
 	if (capability == nullptr)
@@ -981,13 +981,13 @@ __cheriot_minimum_stack(0x180) ssize_t heap_free_all(SObj heapCapability)
 	return freed;
 }
 
-__cheriot_minimum_stack(0x200) void *heap_allocate_array(Timeout *timeout,
+__cheriot_minimum_stack(0x210) void *heap_allocate_array(Timeout *timeout,
                                                          SObj   heapCapability,
                                                          size_t nElements,
                                                          size_t elemSize,
                                                          uint32_t flags)
 {
-	STACK_CHECK(0x200);
+	STACK_CHECK(0x210);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
@@ -1158,14 +1158,14 @@ SKey token_key_new()
 	return nullptr;
 }
 
-__cheriot_minimum_stack(0x270) SObj
+__cheriot_minimum_stack(0x280) SObj
   token_sealed_unsealed_alloc(Timeout *timeout,
                               SObj     heapCapability,
                               SKey     key,
                               size_t   sz,
                               void   **unsealed)
 {
-	STACK_CHECK(0x270);
+	STACK_CHECK(0x280);
 	if (!check_timeout_pointer(timeout))
 	{
 		return INVALID_SOBJ;
@@ -1185,12 +1185,12 @@ __cheriot_minimum_stack(0x270) SObj
 	return INVALID_SOBJ;
 }
 
-__cheriot_minimum_stack(0x250) SObj token_sealed_alloc(Timeout *timeout,
+__cheriot_minimum_stack(0x260) SObj token_sealed_alloc(Timeout *timeout,
                                                        SObj     heapCapability,
                                                        SKey     rawKey,
                                                        size_t   sz)
 {
-	STACK_CHECK(0x250);
+	STACK_CHECK(0x260);
 	return allocate_sealed_unsealed(
 	         timeout, heapCapability, rawKey, sz, {Permission::Seal})
 	  .first;
@@ -1218,11 +1218,11 @@ __noinline static SealedAllocation unseal_internal(SKey rawKey, SObj obj)
 	return unseal_if_valid(obj);
 }
 
-__cheriot_minimum_stack(0x250) int token_obj_destroy(SObj heapCapability,
+__cheriot_minimum_stack(0x260) int token_obj_destroy(SObj heapCapability,
                                                      SKey key,
                                                      SObj object)
 {
-	STACK_CHECK(0x250);
+	STACK_CHECK(0x260);
 	void *unsealed;
 	{
 		LockGuard g{lock};
@@ -1240,11 +1240,11 @@ __cheriot_minimum_stack(0x250) int token_obj_destroy(SObj heapCapability,
 	return heap_free(heapCapability, unsealed);
 }
 
-__cheriot_minimum_stack(0xe0) int token_obj_can_destroy(SObj heapCapability,
+__cheriot_minimum_stack(0xf0) int token_obj_can_destroy(SObj heapCapability,
                                                         SKey key,
                                                         SObj object)
 {
-	STACK_CHECK(0xe0);
+	STACK_CHECK(0xf0);
 	void *unsealed;
 	{
 		LockGuard g{lock};

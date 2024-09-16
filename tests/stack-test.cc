@@ -127,17 +127,17 @@ __cheri_callback void (*volatile crossCompartmentCall)();
  */
 void test_stack()
 {
-	int ret = test_with_small_stack(128);
-	TEST(ret == 0,
-	     "test_with_small_stack failed, returned {} with 128-byte stack",
-	     ret);
-	ret = test_with_small_stack(144);
+	int ret = test_with_small_stack(144);
 	TEST(ret == 0,
 	     "test_with_small_stack failed, returned {} with 144-byte stack",
 	     ret);
-	ret = test_with_small_stack(112);
+	ret = test_with_small_stack(160);
+	TEST(ret == 0,
+	     "test_with_small_stack failed, returned {} with 160-byte stack",
+	     ret);
+	ret = test_with_small_stack(128);
 	TEST(ret == -ENOTENOUGHSTACK,
-	     "test_with_small_stack failed, returned {} with 112-byte stack",
+	     "test_with_small_stack failed, returned {} with 128-byte stack",
 	     ret);
 	__cheri_callback void (*callback)() = cross_compartment_call;
 

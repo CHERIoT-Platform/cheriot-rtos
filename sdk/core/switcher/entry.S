@@ -227,6 +227,8 @@ __Z26compartment_switcher_entryz:
 #endif
 	zero_stack         t2, s0, gp
 after_zero:
+	// Reserve space for unwind state and so on.
+	cincoffset 	       csp, csp, -16
 #ifdef CONFIG_MSHWM
 	// store new stack top as stack high water mark
 	csrw               CSR_MSHWM, sp
@@ -256,6 +258,8 @@ after_zero:
 	// At this point, we have already truncated the stack and so the length of
 	// the stack is the length that the callee can use.
 	cgetlen            t2, csp
+	// Include the space we reserved for the unwind state.
+	addi               t2, t2, -16
 	bgtu               tp, t2, .Lstack_too_small
 
 	// Get the flags field into tp
