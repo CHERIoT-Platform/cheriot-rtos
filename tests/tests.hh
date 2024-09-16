@@ -23,6 +23,7 @@ __cheri_compartment("static_sealing_test") void test_static_sealing();
 __cheri_compartment("stdio_test") void test_stdio();
 __cheri_compartment("debug_test") void test_debug_cxx();
 __cheri_compartment("debug_test") void test_debug_c();
+__cheri_compartment("unwind_cleanup_test") void test_unwind_cleanup();
 
 // Simple tests don't need a separate compartment.
 void test_global_constructors();
