@@ -88,6 +88,7 @@ test("misc")
     on_load(function(target)
         target:values_set("shared_objects", { exampleK = 1024, test_word = 4 }, {expand = false})
     end)
+test("unwind_cleanup")
 
 includes(path.join(sdkdir, "lib"))
 
@@ -122,6 +123,7 @@ firmware("test-suite")
     add_deps("misc_test")
     add_deps("stdio_test")
     add_deps("debug_test")
+    add_deps("unwind_cleanup_test")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
         target:values_set("board", "$(board)")
