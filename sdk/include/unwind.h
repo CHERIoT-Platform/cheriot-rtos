@@ -1,6 +1,7 @@
 #pragma once
 #include <cdefs.h>
 #include <setjmp.h>
+#include <switcher.h>
 
 /**
  * On-stack linked list of cleanup handlers.
@@ -23,9 +24,8 @@ struct CleanupList
 __always_inline static inline struct CleanupList **cleanup_list_head()
 {
 	void     *csp = __builtin_cheri_stack_get();
-	ptraddr_t top =
-	  __builtin_cheri_base_get(csp) + __builtin_cheri_length_get(csp);
-	csp = __builtin_cheri_address_set(csp, top - 8);
+	ptraddr_t top = __builtin_cheri_top_get(csp);
+	csp           = __builtin_cheri_address_set(csp, top - 8);
 	return (struct CleanupList **)csp;
 }
 
@@ -37,6 +37,7 @@ __always_inline static inline void cleanup_unwind(void)
 	CleanupList **__head = cleanup_list_head();
 	CleanupList  *__top  = *__head;
 	*__head              = __top->next;
+	switcher_handler_invocation_count_reset();
 	longjmp(&__top->env, 1);
 }
 
@@ -79,7 +80,7 @@ __always_inline static inline void cleanup_unwind(void)
  * `cleanup_unwind` are not called, but this function returns normally and so
  * destructors of objects above this on the stack will be called normally.
  */
-void on_error(auto fn, auto err)
+static inline void on_error(auto fn, auto err)
 {
 	CHERIOT_DURING
 	fn();
@@ -91,7 +92,7 @@ void on_error(auto fn, auto err)
 /**
  * On-error helper with no error handler (returns normally from forced unwind).
  */
-void on_error(auto fn)
+static inline void on_error(auto fn)
 {
 	on_error(fn, []() {});
 }

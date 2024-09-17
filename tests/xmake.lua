@@ -89,6 +89,7 @@ test("misc")
         target:values_set("shared_objects", { exampleK = 1024, test_word = 4 }, {expand = false})
     end)
 test("unwind_cleanup")
+    add_deps("unwind_error_handler")
 
 includes(path.join(sdkdir, "lib"))
 

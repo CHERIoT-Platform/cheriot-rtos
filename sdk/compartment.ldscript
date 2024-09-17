@@ -13,7 +13,9 @@ SECTIONS
 		# delta.  The final layout will be the compartment import table
 		# followed by the text segment.  There won't be any padding, because
 		# the compartment import table is more strongly aligned than text.
-		LONG(DEFINED(compartment_error_handler) ? compartment_error_handler - __compartment_code_start + SIZEOF(.compartment_import_table) : -1);
+		SHORT(DEFINED(compartment_error_handler) ? compartment_error_handler - __compartment_code_start + SIZEOF(.compartment_import_table) : 0xffff);
+		# The stackless compartment error handler, if it is defined.
+		SHORT(DEFINED(compartment_error_handler_stackless) ? compartment_error_handler_stackless - __compartment_code_start + SIZEOF(.compartment_import_table) : 0xffff);
 		# Array of compartment exports
 		*(.compartment_exports .compartment_exports.*);
 	}
@@ -34,6 +36,7 @@ SECTIONS
 		# If there is a compartment error handler, make sure that it is before
 		# anything that can have linker relaxations so that its displacement
 		# from __compartment_code_start is a constant.
+		*(.compartment_error_handler_stackless));
 		*(.compartment_error_handler);
 		*(.text .text.*);
 	}

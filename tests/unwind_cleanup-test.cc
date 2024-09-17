@@ -75,6 +75,16 @@ namespace
 		TEST_EQUAL(x, 53, "After longjmp, object should have been modified");
 	}
 
+	__noinline void overflow_stack(volatile int *x)
+	{
+		int hugeBuffer[4096];
+		debug_log("Overflowing stack: {}", hugeBuffer);
+	}
+
+	/**
+	 * Make sure that we can unwind out of a trap.  This will invoke the normal
+	 * error handler.
+	 */
 	void test_from_trap()
 	{
 		volatile int x = 0;
@@ -89,7 +99,30 @@ namespace
 			x = 53;
 		}
 		CHERIOT_END_HANDLER
-		TEST_EQUAL(x, 53, "After longjmp, object should have been modified");
+		TEST_EQUAL(
+		  x, 53, "After error handler, object should have been modified");
+	}
+
+	/**
+	 * Make sure that we can unwind out of a stack overflow.  This will invoke
+	 * the stackless error handler.
+	 */
+	void test_from_stack_overflow()
+	{
+		volatile int x = 0;
+		CHERIOT_DURING
+		{
+			x = 42;
+			overflow_stack(&x);
+		}
+		CHERIOT_HANDLER
+		{
+			debug_log("Error handler");
+			TEST_EQUAL(x, 42, "In the handler, x should have been modified");
+			x = 53;
+		}
+		CHERIOT_END_HANDLER
+		TEST_EQUAL(x, 53, "After handler, object should have been modified");
 	}
 
 } // namespace
@@ -99,6 +132,12 @@ void test_unwind_cleanup()
 	test_setjmp();
 	test_on_error();
 	test_c_macros();
+	// Try these in both orders to make sure that both error handlers correctly
+	// clean up.
+	test_from_trap();
+	test_from_stack_overflow();
+
+	test_from_stack_overflow();
 	test_from_trap();
 	debug_log("Test unwind_cleanup passed");
 }
