@@ -58,9 +58,7 @@ void test_compartment_call()
 	TEST(!trusted_stack_has_space(9),
 	     "Trusted stack should not have space for 9 more calls");
 
-	register char *cspRegister asm("csp");
-	asm("" : "=C"(cspRegister));
-	CHERI::Capability<void> csp{cspRegister};
+	CHERI::Capability<void> csp{__builtin_cheri_stack_get()};
 	CHERI::Capability<void> originalCSP{switcher_recover_stack()};
 	csp.address() = originalCSP.address();
 	TEST(csp == originalCSP,

@@ -11,4 +11,5 @@ includes(
 	"queue",
 	"stdio",
 	"string",
-	"thread_pool")
+	"thread_pool",
+	"unwind_error_handler")

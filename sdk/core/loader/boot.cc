@@ -855,6 +855,9 @@ namespace
 
 			// Stack pointer points to the top of the stack.
 			stack.address() += config.stack.size();
+			// Reserve space at the start of the stack for error handling and so
+			// on.
+			stack.address() -= STACK_ENTRY_RESERVED_SPACE;
 			Debug::log("Thread's stack is {}", stack);
 			threadTStack->csp = stack;
 
@@ -881,6 +884,8 @@ namespace
 			threadTStack->frameoffset = offsetof(TrustedStack, frames[1]);
 			threadTStack->frames[0].calleeExportTable =
 			  build(compartment.exportTable);
+			// Special case: The first frame has the initial csp.
+			threadTStack->frames[0].csp = stack;
 
 			Debug::log("Thread's trusted stack is {}", threadTStack);
 

@@ -228,7 +228,7 @@ __Z26compartment_switcher_entryz:
 	zero_stack         t2, s0, gp
 after_zero:
 	// Reserve space for unwind state and so on.
-	cincoffset 	       csp, csp, -16
+	cincoffset 	       csp, csp, -STACK_ENTRY_RESERVED_SPACE
 #ifdef CONFIG_MSHWM
 	// store new stack top as stack high water mark
 	csrw               CSR_MSHWM, sp
@@ -259,7 +259,7 @@ after_zero:
 	// the stack is the length that the callee can use.
 	cgetlen            t2, csp
 	// Include the space we reserved for the unwind state.
-	addi               t2, t2, -16
+	addi               t2, t2, -STACK_ENTRY_RESERVED_SPACE
 	bgtu               tp, t2, .Lstack_too_small
 
 	// Get the flags field into tp
@@ -597,36 +597,85 @@ exception_entry_asm:
 
 	// Load the interrupted thread's stack pointer into ct0
 	clc                ct0, TrustedStack_offset_csp(csp)
-	// Fetch the base of compartment stack before cincoffset for later
-	// comparison. The subsequent cincoffset could cause the base to change, if
-	// the capability becomes unrepresentable. That would clear the tag, and so
-	// we'd fault later.  Faulting in the switcher will then trigger a forced
-	// unwind.
-	cgetbase           tp, ct0
-	// Allocate space for the register save frame on the stack.  If we didn't
-	// have enough space here, we'll fault setting up the call frame, which
-	// will detect a trap in the switcher and force unwind.
-	cincoffset         ct0, ct0, -(16*8)
 	// See if we can find a handler:
 	clhu               tp, TrustedStack_offset_frameoffset(csp)
 	li                 t1, TrustedStack_offset_frames
 	beq                tp, t1, .Lend_of_stack
 	addi               tp, tp, -TrustedStackFrame_size
+
 	// ctp points to the current available trusted stack frame.
 	cincoffset         ctp, csp, tp
-	// ct1 now contains the export table for the callee
+	// a0 indicates whether we're calling a stackless error handler (0: stack,
+	// 1: stackless)
+	li                 a0, 0
+
+	// Allocate space for the register save frame on the stack.
+	cincoffset         ct0, ct0, -(16*8)
+
+	// WARNING: ENCODING SPECIFIC.
+	// The following depends on the fact that before-the-start values are not
+	// representable in the CHERIoT encoding and so will clear the tag.  If
+	// this property changes then this will need to be replaced by a check that
+	// against the base of the stack.  Note that this check can't be a simple
+	// cgetbase on ct0, because moving the address below the base sufficiently
+	// far that it's out of *representable* bounds will move the reported base
+	// value (base is a displacement from the address).
+	cgettag            t1, ct0
+	// If there isn't enough space on the stack, see if there's a stackless
+	// handler.
+	beqz               t1, .Ltry_stackless_handler
+
 	clc                ct1, TrustedStackFrame_offset_calleeExportTable(ctp)
-	// Reset the export table pointer to point to the *start* of the export
+	// Set the export table pointer to point to the *start* of the export
 	// table.  It will currently point to the entry point that was raised.
 	// TODO: We might want to pass this to the error handler, it might be
 	// useful for providing per-entry-point error results.
 	cgetbase           s0, ct1
 	csetaddr           ct1, ct1, s0
-	clw                s0, ExportTable_offset_errorHandler(ct1)
-	// A value of -1 indicates no error handler
+	clhu               s0, ExportTable_offset_errorHandler(ct1)
+	// A value of 0xffff indicates no error handler
+	// If we found one, use it, otherwise fall through and try to find a
+	// stackless handler.
+	li                 s1, 0xffff
+	bne                s0, s1, .Lhandler_found
+
+.Ltry_stackless_handler:
+	clc                ct1, TrustedStackFrame_offset_calleeExportTable(ctp)
+	// Set the export table pointer to point to the *start* of the export
+	// table.  It will currently point to the entry point that was raised.
+	cgetbase           s0, ct1
+	csetaddr           ct1, ct1, s0
+	clhu               s0, ExportTable_offset_errorHandlerStackless(ct1)
+	// A value of 0xffff indicates no error handler
 	// Give up if there is no error handler for this compartment.
-	addi               s1, s0, 1
-	beqz               s1, .Lno_handler_found
+	li                 s1, 0xffff
+	beq                s0, s1, .Lno_handler_found
+
+	// The stack may have had its tag cleared at this point, so for stackless
+	// handlers we need to restore the on-entry stack.
+	// Get the previous trusted stack frame
+
+	// Load the caller's csp
+	clc                ca0, TrustedStackFrame_offset_csp(ctp)
+
+	// If this is the top stack frame, then the csp field is the value on
+	// entry.  If it's any other frame then we need to go to the previous one
+	cincoffset         cs1, csp, TrustedStack_offset_frames
+	beq                s1, t1, .Lrecovered_stack
+
+	// The address of the stack pointer will point to the bottom of the
+	// caller's save area, so we set the bounds to be the base up to the
+	// current address.
+	cgetaddr           a1, ca0
+	cgetbase           a2, ca0
+	sub                a1, a1, a2
+	csetaddr           ca0, ca0, a2
+	// The code that installs the context expects csp to be in ct0
+	csetboundsexact    ct0, ca0, a1
+.Lrecovered_stack:
+	li                 a0, 1
+
+.Lhandler_found:
 
 	// If we have found a handler, mark this threads as no longer on the
 	// force-unwind path.  Any future fault will trigger a forced unwind.
@@ -660,6 +709,16 @@ exception_entry_asm:
 	csetaddr           cra, cra, s1
 	cincoffset         cra, cra, s0
 
+	// If we're in an error handler with a stack, set up the stack, otherwise
+	// we just need to set up argument registers.
+	beqz               a0, .Lset_up_stack_handler
+	clw                a0, TrustedStack_offset_mcause(csp)
+	csrr               a1, mtval
+	li                 a2, 0
+	cmove              csp, ct0
+	j                  .Linvoke_error_handler
+
+.Lset_up_stack_handler:
 	// Set up the on-stack context for the callee
 	clc                cs1, 0(csp)
 	ccleartag          cs1, cs1
@@ -675,6 +734,8 @@ exception_entry_asm:
 	clw                a1, TrustedStack_offset_mcause(csp)
 	csrr               a2, mtval
 	cmove              csp, ca0
+
+.Linvoke_error_handler:
 	// Clear all registers except:
 	// cra is set by cjalr.  csp and cgp are needed for the called compartment.
 	// ca0, used for the register state
@@ -880,8 +941,24 @@ __Z22switcher_recover_stackv:
 	// two instructions.
 	cspecialr          ca0, mtdc
 	clhu               a1, TrustedStack_offset_frameoffset(ca0)
+	addi               a1, a1, -TrustedStackFrame_size
 	cincoffset         ca0, ca0, a1
 	clc                ca0, TrustedStackFrame_offset_csp(ca0)
+	// If this is the first frame, then the recovered stack will be the stack
+	// on entry.  If this is not the first frame then then we need to find the
+	// saved CSP from the caller and reset the bounds.  The address of the
+	// saved CSP will be the value after the switcher spilled registers and so
+	// will be the top of the callee's stack.
+	li                 a2, TrustedStack_offset_frames
+	beq                a1, a2, 0f
+
+	// Find the previous frame's csp and reset the bounds
+	cgetaddr           a1, ca0
+	cgetbase           a2, ca0
+	sub                a1, a1, a2
+	csetaddr           ca0, ca0, a2
+	csetboundsexact    ca0, ca0, a1
+0:
 	cret
 
 	.section .text, "ax", @progbits

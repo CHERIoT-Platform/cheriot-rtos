@@ -115,4 +115,8 @@ using _Bool = bool;
  */
 unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
 
+#if !defined(CLANG_TIDY) && !__has_builtin(__builtin_cheri_top_get)
+#	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
+#endif
+
 #endif // _CDEFS_H_

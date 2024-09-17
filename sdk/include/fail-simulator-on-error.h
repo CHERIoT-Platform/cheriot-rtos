@@ -56,10 +56,12 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		  frame->get_register_value<CHERI::RegisterNumber::CSP>()};
 		CHERI::Capability returnCapability{
 		  frame->get_register_value<CHERI::RegisterNumber::CRA>()};
+		// The top of the stack is 16 bytes above the stack pointer on entry,
+		// to provide space for unwind lists and so on.
 		if (registerNumber == CHERI::RegisterNumber::CRA &&
 		    returnCapability.address() == 0 &&
 		    exceptionCode == CHERI::CauseCode::TagViolation &&
-		    stackCapability.top() == stackCapability.address())
+		    (stackCapability.top() - 16) == stackCapability.address())
 		{
 			// looks like thread exit -- just log it then ForceUnwind
 			DebugErrorHandler::log(

@@ -111,6 +111,15 @@ void __cheri_compartment("test_runner") run_tests()
 	          std::string_view{testString, 13});
 	const std::string S = "I am a walrus"s;
 	debug_log("Trying to print std::string: {}", S);
+	// Test stack pointer recovery in the root compartment.
+	CHERI::Capability<void> csp{__builtin_cheri_stack_get()};
+	CHERI::Capability<void> originalCSP{switcher_recover_stack()};
+	csp.address() = originalCSP.address();
+	TEST(csp == originalCSP,
+	     "Original stack pointer: {}\ndoes not match current stack pointer: {}",
+	     originalCSP,
+	     csp);
+
 	run_timed("All tests", []() {
 		run_timed("Debug helpers (C++)", test_debug_cxx);
 		run_timed("Debug helpers (C)", test_debug_c);

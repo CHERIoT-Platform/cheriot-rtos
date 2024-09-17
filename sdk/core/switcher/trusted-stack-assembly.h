@@ -66,3 +66,10 @@ EXPORT_ASSEMBLY_SIZE(TrustedStackFrame, (8 * 3))
  *  Load, Store, LoadStoreCapability, LoadMutable StoreLocal and LoadGlobal
  */
 #define COMPARTMENT_STACK_PERMISSIONS 0x7e
+
+/**
+ * Space reserved at the top of a stack on entry to the compartment.
+ *
+ * This *must* be a multiple of 16, which is the stack alignment.
+ */
+#define STACK_ENTRY_RESERVED_SPACE 16
