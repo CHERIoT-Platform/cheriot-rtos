@@ -815,7 +815,11 @@ namespace CHERI
 		 */
 		[[nodiscard]] ptraddr_t top() const
 		{
+#if 0 && __has_builtin(__builtin_cheri_top_get)
+			return __builtin_cheri_top_get(ptr);
+#else
 			return base() + length();
+#endif
 		}
 
 		/**

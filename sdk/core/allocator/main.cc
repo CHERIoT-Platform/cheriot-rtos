@@ -942,9 +942,9 @@ __cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
 	return 0;
 }
 
-__cheriot_minimum_stack(0x190) ssize_t heap_free_all(SObj heapCapability)
+__cheriot_minimum_stack(0x1a0) ssize_t heap_free_all(SObj heapCapability)
 {
-	STACK_CHECK(0x190);
+	STACK_CHECK(0x1a0);
 	LockGuard g{lock};
 	auto     *capability = malloc_capability_unseal(heapCapability);
 	if (capability == nullptr)
