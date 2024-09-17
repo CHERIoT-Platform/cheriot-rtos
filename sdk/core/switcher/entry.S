@@ -992,6 +992,25 @@ __Z25stack_lowest_used_addressv:
 	csrr               a0, CSR_MSHWM
 	cret
 
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z39switcher_handler_invocation_count_resetv,@function
+__Z39switcher_handler_invocation_count_resetv:
+	// Trusted stack pointer in ca1
+	cspecialr          ca1, mtdc
+	// Offset of the current trusted stack frame to a1
+	clhu               a0, TrustedStack_offset_frameoffset(ca1)
+	addi               a0, a0, -TrustedStackFrame_size
+	// Current trusted stack frame to ca1, a0 is dead
+	cincoffset         ca1, ca1, a0
+	// Current invocation count (for return) in a0
+	clh                a0, TrustedStackFrame_offset_errorHandlerCount(ca1)
+	// Reset invocation count
+	csh                zero, TrustedStackFrame_offset_errorHandlerCount(ca1)
+	// Zero trusted stack frame pointer register
+	li                 a1, 0
+	cret
+
 // The linker expects export tables to start with space for cgp and pcc, then
 // the compartment error handler.  We should eventually remove that requirement
 // for library export tables, but since they don't consume RAM after loading
@@ -1026,3 +1045,4 @@ export __Z23switcher_current_threadv
 export __Z28switcher_thread_hazard_slotsv
 export __Z13thread_id_getv
 export __Z25stack_lowest_used_addressv
+export __Z39switcher_handler_invocation_count_resetv
