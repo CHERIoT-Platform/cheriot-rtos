@@ -622,11 +622,11 @@ exception_entry_asm:
 	// useful for providing per-entry-point error results.
 	cgetbase           s0, ct1
 	csetaddr           ct1, ct1, s0
-	clw                s0, ExportTable_offset_errorHandler(ct1)
-	// A value of -1 indicates no error handler
+	clhu               s0, ExportTable_offset_errorHandler(ct1)
+	// A value of 0xffff indicates no error handler
 	// Give up if there is no error handler for this compartment.
-	addi               s1, s0, 1
-	beqz               s1, .Lno_handler_found
+	li                 s1, 0xffff
+	beq                s0, s1, .Lno_handler_found
 
 	// If we have found a handler, mark this threads as no longer on the
 	// force-unwind path.  Any future fault will trigger a forced unwind.

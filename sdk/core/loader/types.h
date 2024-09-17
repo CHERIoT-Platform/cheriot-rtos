@@ -1022,10 +1022,17 @@ namespace loader
 
 		/**
 		 * The offset of the compartment's error handler from the start of
-		 * `pcc`.  This must always be positive, a value of -1 is used to
-		 * indicate that this compartment does not provide an error handler.
+		 * `pcc`.  A value of 0xffff indicates that this compartment does not
+		 * provide an error handler.
 		 */
-		ptrdiff_t errorHandler;
+		uint16_t errorHandler;
+
+		/**
+		 * The offset of the compartment's stackless error handler from the
+		 * start of `pcc`.  A value of 0xffff indicates that this compartment
+		 * does not provide a stackless error handler.
+		 */
+		uint16_t errorHandlerStackless;
 	};
 
 	/**
