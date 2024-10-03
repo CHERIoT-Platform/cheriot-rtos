@@ -21,7 +21,7 @@ DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(interruptCapability,
                                         true);
 #endif
 
-void test_futex()
+int test_futex()
 {
 	static uint32_t futex;
 	int             ret;
@@ -185,4 +185,5 @@ void test_futex()
 	     "PI futex with a zero thread ID returned {}, should be {}",
 	     ret,
 	     -EINVAL);
+	return 0;
 }

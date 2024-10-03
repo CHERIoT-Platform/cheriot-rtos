@@ -615,7 +615,7 @@ namespace
 /**
  * Allocator test entry point.
  */
-void test_allocator()
+int test_allocator()
 {
 	GlobalConstructors::run();
 
@@ -682,4 +682,5 @@ void test_allocator()
 	TEST(quotaLeft == MALLOC_QUOTA,
 	     "After alloc and free from 0x100000-byte quota, {} bytes left",
 	     quotaLeft);
+	return 0;
 }

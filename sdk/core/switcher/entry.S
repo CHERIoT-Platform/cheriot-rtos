@@ -485,24 +485,11 @@ exception_entry_asm:
 	csrw               CSR_MSHWMB, x1
 #endif
 	cspecialw          mepcc, ct2
-	csb                zero, TrustedStack_offset_inForcedUnwind(csp)
 	// c2 is csp, which will be loaded last and will overwrite the trusted
 	// stack pointer with the thread's stack pointer.
 	reloadRegisters c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, csp
 	mret
 
-// If we detect an invalid entry and there is no error handler installed, we want
-// to resume rather than unwind.
-.Linvalid_entry:
-// Mark this threads as in the middle of a forced unwind.
-	li                 a0, 1
-	csb                a0, TrustedStack_offset_inForcedUnwind(ctp)
-// Make sure we don't leak anything to the compartment.
-// Registers might been used by the call and therefore need zeroing.
-	zeroAllRegistersExcept a0, s0, s1, sp, a2, gp
-// Store an error value in return registers, which will be passed to the
-// caller on unwind. a1 is zeroed by zeroAllRegistersExcept.
-	li                 a0, -1
 // We are starting a forced unwind.  This is reached either when we are unable
 // to run an error handler, or when we do run an error handler and it instructs
 // us to return.  This treats all register values as undefined on entry.
@@ -510,57 +497,32 @@ exception_entry_asm:
 	// Pop the trusted stack frame.
 	cjal               .Lpop_trusted_stack_frame
 	cmove              cra, ca2
-.Lout_of_trusted_stack:
-	cmove              ct0, csp
-	// Fetch the trusted stack pointer.
-	cspecialr          csp, mtdc
-	// csp now points to the save reg frame that we can use.
-	// Spill all of the registers that we want to propagate to the caller:
-	// c1(cra), c2(csp), c3(cgp), c8(cs0), c9(cs1), c10(ca0), c11(ca1)
-	csc                ct0, TrustedStack_offset_csp(csp)
-	spillRegisters c1, cgp, c8, c9, c10, c11
-	// Store an unsealed version of cra in the mepcc slot, where it will be
-	// used for mret later.  mret requires an unsealed capability in mepcc, so
-	// we have to unseal it if it is sealed.
-	LoadCapPCC         cs0, compartment_switcher_sealing_key
-	// ca2 at this point was loaded by .Lpop_trusted_stack_frame from the pcc
-	// in the trusted stack and so should always be sealed as a sentry type.
-	cgettype           gp, cra
-	csetaddr           cs0, cs0, gp
-	cunseal            cra, cra, cs0
-	csc                cra, TrustedStack_offset_mepcc(csp)
-	clw                t0, TrustedStack_offset_mstatus(csp)
-	// If gp==2 then the we need to disable interrupts on return, otherwise we
-	// need to enable them.  The interrupt enable bit is bit 7.  We want to set
-	// bit 7 if interrupts are enabled, clear it if they are disabled, but not
-	// toggle any other bits.
-	// Clear the interrupt enable bit unconditionally
-	andi               t0, t0, ~0x80
-	// Set it again if we should have interrupts enabled
-	li                 a3, 2
-	beq                gp, a3, .Ldo_not_enable
-	ori                t0, t0, 0x80
-.Ldo_not_enable:
-	csw                t0, TrustedStack_offset_mstatus(csp)
+	// Zero all registers apart from RA, GP, SP and return args.
+	// cra, cs0, cs1, and cgp were restored from the compartment's stack
+	// csp restored from the trusted stack.
+	// ca0, used for first return value
+	// ca1, used for second return value
+	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
+	li                 a0, -ECOMPARTMENTFAIL
+	li                 a1, 0
+	cret
 
-	// Zero all registers that we aren't explicitly restoring to avoid leaks
-	// from the faulting callee to the caller.
-	csc                cnull, TrustedStack_offset_c4(csp)
-	csc                cnull, TrustedStack_offset_c5(csp)
-	csc                cnull, TrustedStack_offset_c6(csp)
-	csc                cnull, TrustedStack_offset_c7(csp)
-	csc                cnull, TrustedStack_offset_c12(csp)
-	csc                cnull, TrustedStack_offset_c13(csp)
-	csc                cnull, TrustedStack_offset_c14(csp)
-	csc                cnull, TrustedStack_offset_c15(csp)
-	// Mark this threads as in the middle of a forced unwind.
-	li                 a0, 1
-	csb                a0, TrustedStack_offset_inForcedUnwind(csp)
-	// Spill a fake status and cap cause (CHERI fault, no cause)
-	li                 a0, 0x1c
-	csw                a0, TrustedStack_offset_mcause(csp)
-	csrw               mtval, zero
-	// Fall through to handle error
+
+// If we have run out of trusted stack, then just restore the caller's state
+// and return an error value.
+.Lout_of_trusted_stack:
+	// Restore the spilled values
+	clc                cs0, SPILL_SLOT_cs0(csp)
+	clc                cs1, SPILL_SLOT_cs1(csp)
+	clc                cra, SPILL_SLOT_pcc(csp)
+	clc                cgp, SPILL_SLOT_cgp(csp)
+	cincoffset         csp, csp, SPILL_SLOT_SIZE
+	// Set the return registers
+	li                 a0, -ENOTENOUGHTRUSTEDSTACK
+	li                 a1, 0
+	// Zero everything else
+	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
+	cret
 
 // If we have a possibly recoverable error, see if we have a useful error
 // handler.  At this point, the register state will have been saved in the
@@ -600,7 +562,7 @@ exception_entry_asm:
 	// See if we can find a handler:
 	clhu               tp, TrustedStack_offset_frameoffset(csp)
 	li                 t1, TrustedStack_offset_frames
-	beq                tp, t1, .Lend_of_stack
+	beq                tp, t1, .Lreset_mepcc_and_install_context
 	addi               tp, tp, -TrustedStackFrame_size
 
 	// ctp points to the current available trusted stack frame.
@@ -649,7 +611,7 @@ exception_entry_asm:
 	// A value of 0xffff indicates no error handler
 	// Give up if there is no error handler for this compartment.
 	li                 s1, 0xffff
-	beq                s0, s1, .Lno_handler_found
+	beq                s0, s1, .Lforce_unwind
 
 	// The stack may have had its tag cleared at this point, so for stackless
 	// handlers we need to restore the on-entry stack.
@@ -676,10 +638,6 @@ exception_entry_asm:
 	li                 a0, 1
 
 .Lhandler_found:
-
-	// If we have found a handler, mark this threads as no longer on the
-	// force-unwind path.  Any future fault will trigger a forced unwind.
-	csb                zero, TrustedStack_offset_inForcedUnwind(csp)
 
 	// Increment the handler invocation count.
 	clhu               s1, TrustedStackFrame_offset_errorHandlerCount(ctp)
@@ -816,23 +774,11 @@ exception_entry_asm:
 	j                  .Lhandle_error
 
 
-// We have reached the end of the stack.  If we are in a forced unwind then we
-// just install the context, if we've gone off the top of the stack then we
-// should report this gracefully.
-.Lend_of_stack:
-	clb                a2, TrustedStack_offset_inForcedUnwind(csp)
-	bnez               a2, .Lreset_mepcc_and_install_context
 	// Value 24 is reserved for custom use.
 .Lset_mcause_and_exit_thread:
 	csrw               mcause, 24
 	j                  .Lthread_exit
 
-// No handler was found.  If we are in the middle of unwinding, then we want to
-// just install the context but if this is a fault then we keep going up the
-// stack.
-.Lno_handler_found:
-	clb                a2, TrustedStack_offset_inForcedUnwind(csp)
-	beqz               a2, .Lforce_unwind
 	// The continue-resume path expects the location that we will mret to to be
 	// in ct2.  If we're just resuming, then resume from the stashed link
 	// register value.

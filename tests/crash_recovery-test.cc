@@ -36,7 +36,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 	return ErrorRecoveryBehaviour::InstallContext;
 }
 
-void test_crash_recovery()
+int test_crash_recovery()
 {
 	debug_log("Calling crashy compartment indirectly");
 	test_crash_recovery_outer(0);
@@ -46,30 +46,34 @@ void test_crash_recovery()
 	          "nested call crashed");
 
 	debug_log("Calling crashy compartment to fault and unwind");
-	test_crash_recovery_inner(0);
+	void *ret = test_crash_recovery_inner(0);
 	check_stack();
-	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
-	TEST(crashes == 1, "Failed to notice crash");
+	debug_log("Calling crashy compartment returned ({})", ret);
+	TEST(crashes == 0, "Should not have crashed");
+	TEST(ret != nullptr, "Failed to notice crash");
 
 	debug_log("Calling crashy compartment to return normally");
-	test_crash_recovery_inner(1);
+	ret = test_crash_recovery_inner(1);
 	check_stack();
 	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
-	TEST(crashes == 1, "Should not have crashed");
+	TEST(crashes == 0, "Should not have crashed");
+	TEST(ret == nullptr, "Failed to notice crash");
 	debug_log("Returning normally from crash test");
 
 	debug_log("Calling crashy compartment to double fault and unwind");
-	test_crash_recovery_inner(2);
+	ret = test_crash_recovery_inner(2);
 	check_stack();
 	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
-	TEST(crashes == 2, "Failed to notice crash");
+	TEST(crashes == 0, "Should not have crashed");
+	TEST(ret != nullptr, "Failed to notice crash");
 
 	debug_log(
 	  "Calling crashy compartment to corrupt CSP in stack pointer and unwind");
-	test_crash_recovery_inner(3);
+	ret = test_crash_recovery_inner(3);
 	check_stack();
 	debug_log("Calling crashy compartment returned (crashes: {})", crashes);
-	TEST(crashes == 3, "Failed to notice crash");
+	TEST(crashes == 0, "Should not have crashed");
+	TEST(ret != nullptr, "Failed to notice crash");
 
 	ptraddr_t handlerCount = switcher_handler_invocation_count_reset();
 	TEST(handlerCount == crashes * 2,
@@ -90,5 +94,6 @@ void test_crash_recovery()
 		// does not return and so will not generate code following it.
 		asm volatile("c.unimp");
 	}
-	TEST(crashes == 3 + MaxCrashes, "Failed to notice crash");
+	TEST(crashes == MaxCrashes, "Failed to notice crash");
+	return 0;
 }

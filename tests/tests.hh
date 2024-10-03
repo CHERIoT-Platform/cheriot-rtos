@@ -5,25 +5,25 @@
 #include <debug.hh>
 #include <thread.h>
 
-__cheri_compartment("eventgroup_test") void test_eventgroup();
-__cheri_compartment("mmio_test") void test_mmio();
-__cheri_compartment("allocator_test") void test_allocator();
-__cheri_compartment("thread_pool_test") void test_thread_pool();
-__cheri_compartment("futex_test") void test_futex();
-__cheri_compartment("queue_test") void test_queue();
-__cheri_compartment("locks_test") void test_locks();
-__cheri_compartment("list_test") void test_list();
-__cheri_compartment("crash_recovery_test") void test_crash_recovery();
-__cheri_compartment("multiwaiter_test") void test_multiwaiter();
-__cheri_compartment("stack_test") void test_stack();
-__cheri_compartment("compartment_calls_test") void test_compartment_call();
-__cheri_compartment("check_pointer_test") void test_check_pointer();
-__cheri_compartment("misc_test") void test_misc();
-__cheri_compartment("static_sealing_test") void test_static_sealing();
-__cheri_compartment("stdio_test") void test_stdio();
-__cheri_compartment("debug_test") void test_debug_cxx();
-__cheri_compartment("debug_test") void test_debug_c();
-__cheri_compartment("unwind_cleanup_test") void test_unwind_cleanup();
+__cheri_compartment("eventgroup_test") int test_eventgroup();
+__cheri_compartment("mmio_test") int test_mmio();
+__cheri_compartment("allocator_test") int test_allocator();
+__cheri_compartment("thread_pool_test") int test_thread_pool();
+__cheri_compartment("futex_test") int test_futex();
+__cheri_compartment("queue_test") int test_queue();
+__cheri_compartment("locks_test") int test_locks();
+__cheri_compartment("list_test") int test_list();
+__cheri_compartment("crash_recovery_test") int test_crash_recovery();
+__cheri_compartment("multiwaiter_test") int test_multiwaiter();
+__cheri_compartment("stack_test") int test_stack();
+__cheri_compartment("compartment_calls_test") int test_compartment_call();
+__cheri_compartment("check_pointer_test") int test_check_pointer();
+__cheri_compartment("misc_test") int test_misc();
+__cheri_compartment("static_sealing_test") int test_static_sealing();
+__cheri_compartment("stdio_test") int test_stdio();
+__cheri_compartment("debug_test") int test_debug_cxx();
+__cheri_compartment("debug_test") int test_debug_c();
+__cheri_compartment("unwind_cleanup_test") int test_unwind_cleanup();
 
 // Simple tests don't need a separate compartment.
 void test_global_constructors();

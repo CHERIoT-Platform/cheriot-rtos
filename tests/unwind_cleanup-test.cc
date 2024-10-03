@@ -127,7 +127,7 @@ namespace
 
 } // namespace
 
-void test_unwind_cleanup()
+int test_unwind_cleanup()
 {
 	test_setjmp();
 	test_on_error();
@@ -140,4 +140,5 @@ void test_unwind_cleanup()
 	test_from_stack_overflow();
 	test_from_trap();
 	debug_log("Test unwind_cleanup passed");
+	return 0;
 }

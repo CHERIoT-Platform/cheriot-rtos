@@ -396,7 +396,7 @@ namespace
 
 } // namespace
 
-void test_locks()
+int test_locks()
 {
 	test_lock(flagLock);
 	test_lock(flagLockPriorityInherited);
@@ -412,4 +412,5 @@ void test_locks()
 	test_ticket_lock_ordering();
 	test_ticket_lock_overflow();
 	test_recursive_mutex();
+	return 0;
 }

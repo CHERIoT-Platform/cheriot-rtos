@@ -25,7 +25,7 @@ namespace
 	}
 } // namespace
 
-void test_eventgroup()
+int test_eventgroup()
 {
 	EventGroup *group;
 
@@ -70,4 +70,5 @@ void test_eventgroup()
 	ret = eventgroup_clear(&t, group, &bits, 0b100);
 	TEST(ret == 0, "Failed to clear event group bits: {}", ret);
 	TEST(bits == 0b1000, "Bits should be 0b1000, but is {}", bits);
+	return 0;
 }

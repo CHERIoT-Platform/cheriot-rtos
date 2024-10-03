@@ -128,7 +128,8 @@ void check_pointer_strict_mode(int *ptr)
 	     "with a raw capability.");
 }
 
-void test_check_pointer()
+int test_check_pointer()
 {
 	check_pointer_strict_mode(&object);
+	return 0;
 }

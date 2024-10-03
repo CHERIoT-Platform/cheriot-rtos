@@ -1,7 +1,7 @@
 #include <compartment.h>
 #include <debug.h>
 
-__cheri_compartment("debug_test") void test_debug_c()
+__cheri_compartment("debug_test") int test_debug_c()
 {
 	unsigned char x = 'c';
 	_Bool         t = true;
@@ -22,4 +22,5 @@ __cheri_compartment("debug_test") void test_debug_c()
 	CHERIOT_INVARIANT(true, "Testing C++ invariant failure");
 	CHERIOT_INVARIANT(
 	  true, "Testing C++ invariant failure: 42:{}", 42, 1, 3, 4, "oops");
+	return 0;
 }

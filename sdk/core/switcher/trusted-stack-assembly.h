@@ -28,12 +28,12 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStack, mshwmb, (18 * 8) + 4)
 
 // Size of everything up to this point
 #	define TSTACK_REGFRAME_SZ (19 * 8)
-// frameoffset, inForcedUnwind and padding
+// frameoffset and padding
 #	define TSTACK_HEADER_SZ 16
 #else
 // Size of everything up to this point
 #	define TSTACK_REGFRAME_SZ ((17 * 8) + (2 * 4))
-// frameoffset, inForcedUnwind and padding
+// frameoffset and padding
 #	define TSTACK_HEADER_SZ 8
 #endif
 // The basic trusted stack is the size of the save area, 8 bytes of state for
@@ -47,7 +47,6 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStack,
                        TSTACK_REGFRAME_SZ + TSTACK_HEADER_SZ)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, frameoffset, TSTACK_REGFRAME_SZ)
 EXPORT_ASSEMBLY_OFFSET(TrustedStack, threadID, TSTACK_REGFRAME_SZ + 2)
-EXPORT_ASSEMBLY_OFFSET(TrustedStack, inForcedUnwind, TSTACK_REGFRAME_SZ + 4)
 
 EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, csp, 0)
 EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, calleeExportTable, 8)
