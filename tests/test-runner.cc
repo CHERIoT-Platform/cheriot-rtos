@@ -11,6 +11,9 @@ using namespace std::string_literals;
 
 namespace
 {
+	/// Have we detected a crash in any of the compartments?
+	volatile bool crashDetected = false;
+
 	/**
 	 * Read the cycle counter.
 	 */
@@ -33,15 +36,27 @@ namespace
 	 */
 	void run_timed(const char *msg, auto &&fn)
 	{
-		int startCycles = rdcycle();
-		fn();
+		bool failed      = false;
+		int  startCycles = rdcycle();
+		if constexpr (std::is_same_v<std::invoke_result_t<decltype(fn)>, void>)
+		{
+			fn();
+		}
+		else
+		{
+			failed = (fn() != 0);
+		}
 		int cycles = rdcycle();
-		debug_log("{} finished in {} cycles", msg, cycles - startCycles);
+
+		if (failed)
+		{
+			debug_log("{} failed", msg);
+			crashDetected = true;
+		}
+		else
+			debug_log("{} finished in {} cycles", msg, cycles - startCycles);
 	}
 } // namespace
-
-/// Have we detected a crash in any of the compartments?
-volatile bool crashDetected = false;
 
 extern "C" enum ErrorRecoveryBehaviour
 compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)

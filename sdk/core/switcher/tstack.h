@@ -59,17 +59,12 @@ struct TrustedStackGeneric
 	 * The ID of the current thread.  Never modified during execution.
 	 */
 	uint16_t threadID;
-	/**
-	 * Flag indicating whether this thread is in the process of a forced
-	 * unwind.  If so, this is one, otherwise it is zero.
-	 */
-	uint8_t inForcedUnwind;
 	// Padding up to multiple of 16-bytes.
 	uint8_t padding[
 #ifdef CONFIG_MSHWM
-	  11
+	  12
 #else
-	  3
+	  4
 #endif
 	];
 	/**

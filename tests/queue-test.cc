@@ -185,10 +185,11 @@ void test_queue_freertos()
 	debug_log("All FreeRTOS queue tests successful");
 }
 
-void test_queue()
+int test_queue()
 {
 	test_queue_unsealed();
 	test_queue_sealed();
 	test_queue_freertos();
 	debug_log("All queue tests successful");
+	return 0;
 }

@@ -89,6 +89,7 @@
 #define ENOTRECOVERABLE 131 // State not recoverable.
 #define EOVERFLOW 139       // Value too large to be stored in data type.
 #define ENOTENOUGHSTACK 140 // Insufficient stack space for cross-compartment call.
+#define ENOTENOUGHTRUSTEDSTACK 141 // Insufficient stack space for cross-compartment call.
 #define EWOULDBLOCK EAGAIN  // Operation would block.
 #define ENOTSUP EOPNOTSUPP  // Not supported.
 #define __ELASTERROR 2000   // Users can add values starting here.

@@ -170,7 +170,7 @@ void check_shared_object(const char      *name,
 	     permissions);
 }
 
-void test_misc()
+int test_misc()
 {
 	check_timeouts();
 	check_memchr();
@@ -200,4 +200,5 @@ void test_misc()
 	                      void, test_word, true, false, false, false),
 	                    4,
 	                    {Permission::Global, Permission::Load});
+	return 0;
 }

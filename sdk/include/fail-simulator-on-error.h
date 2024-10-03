@@ -67,11 +67,6 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 			DebugErrorHandler::log(
 			  "Thread exit CSP={}, PCC={}", stackCapability, frame->pcc);
 		}
-		else if (exceptionCode == CHERI::CauseCode::None)
-		{
-			// An unwind occurred from a called compartment, just resume.
-			return ErrorRecoveryBehaviour::InstallContext;
-		}
 		else
 		{
 			// An unexpected error -- log it and end the simulation

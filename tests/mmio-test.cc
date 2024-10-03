@@ -14,7 +14,7 @@ void check_permissions(Capability<volatile void> mmio, PermissionSet p)
 	     p);
 }
 
-void test_mmio()
+int test_mmio()
 {
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, false, false),
@@ -74,4 +74,5 @@ void test_mmio()
 	   Permission::Store,
 	   Permission::LoadStoreCapability,
 	   Permission::LoadMutable});
+	return 0;
 }

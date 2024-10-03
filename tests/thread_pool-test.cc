@@ -44,7 +44,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 	return ErrorRecoveryBehaviour::InstallContext;
 }
 
-void test_thread_pool()
+int test_thread_pool()
 {
 	// We can't share stack variables, so create a heap allocation that we can
 	// capture as an explicit pointer.
@@ -137,7 +137,7 @@ void test_thread_pool()
 	Timeout t{3};
 	thread_sleep(&t);
 	TEST(interrupted, "Worker thread was not interrupted");
-	return;
+	return 0;
 	static cheriot::atomic<uint32_t> barrier{3};
 	auto                             barrierWait = []() {
         uint32_t value = barrier--;
@@ -156,4 +156,5 @@ void test_thread_pool()
 	async(barrierWait);
 	barrierWait();
 	debug_log("Thread pool quiesced");
+	return 0;
 }

@@ -14,7 +14,7 @@
 using namespace CHERI;
 using namespace thread_pool;
 
-void test_multiwaiter()
+int test_multiwaiter()
 {
 	static uint32_t futex  = 0;
 	static uint32_t futex2 = 0;
@@ -130,4 +130,5 @@ void test_multiwaiter()
 
 	free(queueMemory);
 	multiwaiter_delete(MALLOC_CAPABILITY, mw);
+	return 0;
 }

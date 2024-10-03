@@ -63,7 +63,7 @@ namespace
  */
 ds::linked_list::Sentinel<LinkedObject::ObjectRing> objects = {};
 
-void test_list()
+int test_list()
 {
 	debug_log("Testing the list implementation.");
 
@@ -238,4 +238,5 @@ void test_list()
 	     heapAtEnd);
 
 	debug_log("Done testing the list.");
+	return 0;
 }

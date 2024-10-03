@@ -3,7 +3,7 @@
 #include "tests.hh"
 #include <stdio.h>
 
-void test_stdio()
+int test_stdio()
 {
 	debug_log("Printing 'Hello, world!' to stdout");
 	printf("Hello, world!\n");
@@ -19,4 +19,5 @@ void test_stdio()
 	TEST(strcmp(buffer, "-42") == 0,
 	     "snprintf(\"%d\", -42) gave {}",
 	     std::string_view{buffer, BufferSize});
+	return 0;
 }

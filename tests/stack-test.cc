@@ -125,7 +125,7 @@ __cheri_callback void (*volatile crossCompartmentCall)();
  *	- compartment stack with incorrect permissions
  *  - invalid compartment stack
  */
-void test_stack()
+int test_stack()
 {
 	int ret = test_with_small_stack(144);
 	TEST(ret == 0,
@@ -178,4 +178,5 @@ void test_stack()
 	expect_handler(false);
 
 	test_stack_invalid_on_call(callback);
+	return 0;
 }
