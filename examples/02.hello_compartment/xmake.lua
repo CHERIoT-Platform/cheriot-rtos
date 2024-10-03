@@ -6,9 +6,6 @@ sdkdir = "../../sdk"
 includes(sdkdir)
 set_toolchains("cheriot-clang")
 
--- Support libraries
-includes(path.join(sdkdir, "lib"))
-
 option("board")
     set_default("sail")
 
