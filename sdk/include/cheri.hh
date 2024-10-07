@@ -361,6 +361,30 @@ namespace CHERI
 	};
 
 	/**
+	 * Rounds `len` up to a CHERI representable length for the current
+	 * architecture.
+	 */
+	__always_inline inline size_t representable_length(size_t length)
+	{
+		return __builtin_cheri_round_representable_length(length);
+	}
+
+	/**
+	 * Returns the alignment mask required for a given length.
+	 */
+	__always_inline inline size_t representable_alignment_mask(size_t length)
+	{
+		return __builtin_cheri_representable_alignment_mask(length);
+	}
+
+	/// Can the range [base, base + size) be precisely covered by a capability?
+	inline bool is_precise_range(ptraddr_t base, size_t size)
+	{
+		return (base & ~representable_alignment_mask(size)) == 0 &&
+		       representable_length(size) == size;
+	}
+
+	/**
 	 * Helper class for accessing capability properties on pointers.
 	 */
 	template<typename T>
@@ -519,6 +543,56 @@ namespace CHERI
 			BoundsProxy &set_inexact(size_t bounds)
 			{
 				set(__builtin_cheri_bounds_set(ptr(), bounds));
+				return *this;
+			}
+
+			/**
+			 * Set the bounds to `length` if `length` is representable with the
+			 * current alignment of `buffer`. If not, then reduce `length` until
+			 * it is representable.  Unlike set_inexact(), the resulting base
+			 * will always be the current address; that is, there will be no
+			 * padding below the current address.
+			 *
+			 * See is_precise_range().
+			 */
+			BoundsProxy &set_inexact_at_most(size_t &bounds)
+			{
+				ptraddr_t alignmentMask = representable_alignment_mask(bounds);
+
+				ptraddr_t newBaseAddress =
+				  static_cast<ptraddr_t>(reinterpret_cast<uintptr_t>(ptr()));
+
+				// If the new base address has bits set below the alignment
+				// requirement for representability of the requested length,
+				// then we need to do some bit-twiddling to find the largest
+				// length that is both not larger than the request and
+				// representable given the base address.
+				if ((newBaseAddress & alignmentMask) != newBaseAddress)
+				{
+					// The number of bits in CHERIoT's capability encoding's
+					// mantissa.  This is part of the capability encoding and
+					// so, ideally, wouldn't be hard coded here.
+					static constexpr size_t MantissaBits = 9;
+
+					// The maximum possible representable length given the new
+					// base is a full mantissa width of 1s followed by 0s with
+					// its least significant 1 aligned to the least significant
+					// 1 in the base address.
+					size_t maximumLength = ((1 << MantissaBits) - 1)
+					                       << __builtin_ctz(newBaseAddress);
+
+					// Ensure that the requested length is representable by
+					// making sure that it fits within a mantissa width,
+					// rounding down by dropping any lower bits.  This is
+					// equivalent to masking by a mantissa width of 1s with its
+					// MSB aligned to the highest set bit in the requested
+					// length.
+					size_t alignedLength = bounds & alignmentMask;
+
+					// Select the smaller of those two lengths.
+					bounds = std::min<size_t>(alignedLength, maximumLength);
+				}
+				*this = bounds;
 				return *this;
 			}
 		};
@@ -1018,30 +1092,6 @@ namespace CHERI
 			return *this;
 		}
 	};
-
-	/**
-	 * Rounds `len` up to a CHERI representable length for the current
-	 * architecture.
-	 */
-	__always_inline inline size_t representable_length(size_t length)
-	{
-		return __builtin_cheri_round_representable_length(length);
-	}
-
-	/**
-	 * Returns the alignment mask required for a given length.
-	 */
-	__always_inline inline size_t representable_alignment_mask(size_t length)
-	{
-		return __builtin_cheri_representable_alignment_mask(length);
-	}
-
-	/// Can the range [base, base + size) be precisely covered by a capability?
-	inline bool is_precise_range(ptraddr_t base, size_t size)
-	{
-		return (base & ~representable_alignment_mask(size)) == 0 &&
-		       representable_length(size) == size;
-	}
 
 	/**
 	 * Concept that matches pointers.
