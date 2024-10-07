@@ -61,7 +61,6 @@ using _Bool = bool;
 #define __section(x) __attribute__((section(x)))
 #define __alloc_size(x) __attribute__((alloc_size(x)))
 #define __alloc_align(x) __attribute__((alloc_align(x)))
-#define __cheri_callback __attribute__((cheri_ccallback))
 #if __has_attribute(cheriot_minimum_stack)
 #	define __cheriot_minimum_stack(x) __attribute__((cheriot_minimum_stack(x)))
 #else
@@ -69,15 +68,34 @@ using _Bool = bool;
 	  "cheriot_minimum_stack attribute not supported, please update your compiler"
 #	define __cheriot_minimum_stack(x)
 #endif
+
 // When running clang-tidy, we use the same compile flags for everything and so
 // will get errors about things being defined in the wrong compartment, so
 // define away the compartment name and pretend everything is local for now.
-#ifdef CLANG_TIDY
+#if defined(CLANG_TIDY) || defined(__CHERIOT_BAREMETAL__)
 #	define __cheri_compartment(x)
 #else
 #	define __cheri_compartment(x) __attribute__((cheri_compartment(x)))
 #endif
-#define __cheri_libcall __attribute__((cheri_libcall))
+
+// Define the CHERIoT calling-convention attributes macros to nothing if we're
+// targeting bare metal and to the correct attributes if we're targeting the
+// RTOS.
+#ifdef __CHERIOT_BAREMETAL__
+#	define __cheri_libcall
+#	define __cheri_callback
+#else
+#	define __cheri_libcall __attribute__((cheri_libcall))
+#	define __cheri_callback __attribute__((cheri_ccallback))
+
+/**
+ * Define the symbol for the libcall that the compiler will expand the `strlen`
+ * builtin to.  This builtin is used internally in libc++ (and possibly in
+ * other places) to avoid the namespace pollution from including `string.h` but
+ * is either constant folded in the front end or expanded to a libcall.
+ */
+unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
+#endif
 
 #define offsetof(a, b) __builtin_offsetof(a, b)
 
@@ -106,14 +124,6 @@ using _Bool = bool;
 #	define __clang_ignored_warning_push(x)
 #	define __clang_ignored_warning_pop()
 #endif
-
-/**
- * Define the symbol for the libcall that the compiler will expand the `strlen`
- * builtin to.  This builtin is used internally in libc++ (and possibly in
- * other places) to avoid the namespace pollution from including `string.h` but
- * is either constant folded in the front end or expanded to a libcall.
- */
-unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
 
 #if !defined(CLANG_TIDY) && !__has_builtin(__builtin_cheri_top_get)
 #	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
