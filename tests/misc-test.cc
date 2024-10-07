@@ -170,12 +170,44 @@ void check_shared_object(const char      *name,
 	     permissions);
 }
 
+void check_capability_set_inexact_at_most()
+{
+	void *p = malloc(2048);
+
+	debug_log("Test Capability::BoundsProxy::set_inexact_at_most with {}", p);
+
+	{
+		Capability<void> q = {p};
+		q.address() += 2; // misalign
+
+		size_t reqlen = 1024;
+		q.bounds().set_inexact_at_most(reqlen);
+		debug_log("Requesting 1024 at align 2 resulted in {}: {}", reqlen, q);
+		TEST(reqlen < 1024, "set_inexact_at_most failed to truncate");
+		TEST(q.length() == reqlen, "set_inexact_at_most failed to bound");
+	}
+
+	{
+		Capability<void> q = {p};
+		q.address() += 1; // misalign
+
+		size_t reqlen = 511;
+		q.bounds().set_inexact_at_most(reqlen);
+		debug_log("Requesting 511 at align 1 resulted in {}: {}", reqlen, q);
+		TEST(reqlen == 511, "set_inexact_at_most truncated unnecessarily");
+		TEST(q.length() == reqlen, "set_inexact_at_most failed to bound");
+	}
+
+	free(p);
+}
+
 int test_misc()
 {
 	check_timeouts();
 	check_memchr();
 	check_memrchr();
 	check_pointer_utilities();
+	check_capability_set_inexact_at_most();
 	debug_log("Testing shared objects.");
 	check_shared_object("exampleK",
 	                    SHARED_OBJECT(void, exampleK),
