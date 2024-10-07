@@ -361,6 +361,30 @@ namespace CHERI
 	};
 
 	/**
+	 * Rounds `len` up to a CHERI representable length for the current
+	 * architecture.
+	 */
+	__always_inline inline size_t representable_length(size_t length)
+	{
+		return __builtin_cheri_round_representable_length(length);
+	}
+
+	/**
+	 * Returns the alignment mask required for a given length.
+	 */
+	__always_inline inline size_t representable_alignment_mask(size_t length)
+	{
+		return __builtin_cheri_representable_alignment_mask(length);
+	}
+
+	/// Can the range [base, base + size) be precisely covered by a capability?
+	inline bool is_precise_range(ptraddr_t base, size_t size)
+	{
+		return (base & ~representable_alignment_mask(size)) == 0 &&
+		       representable_length(size) == size;
+	}
+
+	/**
 	 * Helper class for accessing capability properties on pointers.
 	 */
 	template<typename T>
@@ -1018,30 +1042,6 @@ namespace CHERI
 			return *this;
 		}
 	};
-
-	/**
-	 * Rounds `len` up to a CHERI representable length for the current
-	 * architecture.
-	 */
-	__always_inline inline size_t representable_length(size_t length)
-	{
-		return __builtin_cheri_round_representable_length(length);
-	}
-
-	/**
-	 * Returns the alignment mask required for a given length.
-	 */
-	__always_inline inline size_t representable_alignment_mask(size_t length)
-	{
-		return __builtin_cheri_representable_alignment_mask(length);
-	}
-
-	/// Can the range [base, base + size) be precisely covered by a capability?
-	inline bool is_precise_range(ptraddr_t base, size_t size)
-	{
-		return (base & ~representable_alignment_mask(size)) == 0 &&
-		       representable_length(size) == size;
-	}
 
 	/**
 	 * Concept that matches pointers.
