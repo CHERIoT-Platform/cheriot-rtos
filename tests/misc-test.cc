@@ -170,32 +170,47 @@ void check_shared_object(const char      *name,
 	     permissions);
 }
 
+// This test is somewhat intimately familiar with parameters of CHERIoT's
+// capability encoding and so might need revision if that changes.
 void check_capability_set_inexact_at_most()
 {
-	void *p = malloc(2048);
+	void *p = malloc(3128);
 
 	debug_log("Test Capability::BoundsProxy::set_inexact_at_most with {}", p);
 
+	// Too many bits for mantissa, regardless of base alignment
 	{
-		Capability<void> q = {p};
-		q.address() += 2; // misalign
-
-		size_t reqlen = 1024;
+		Capability<void> q      = {p};
+		size_t           reqlen = 2047;
 		q.bounds().set_inexact_at_most(reqlen);
-		debug_log("Requesting 1024 at align 2 resulted in {}: {}", reqlen, q);
-		TEST(reqlen < 1024, "set_inexact_at_most failed to truncate");
-		TEST(q.length() == reqlen, "set_inexact_at_most failed to bound");
+		debug_log("Requesting 2047 gives {}: {}", q.length(), q);
+		TEST(q.is_valid(), "set_inexact_at_most untagged");
+		TEST(q.length() < 2047, "set_inexact_at_most failed to truncate");
+		TEST(q.base() == q.address(), "set_inexact_at_most nonzero offset");
 	}
 
+	// Fits in mantissa, but not reachable from misaligned base
 	{
 		Capability<void> q = {p};
-		q.address() += 1; // misalign
+		q.address() += 2;
+		size_t reqlen = 1024;
+		q.bounds().set_inexact_at_most(reqlen);
+		debug_log("Requesting 1024 at align 2 gives {}: {}", q.length(), q);
+		TEST(q.is_valid(), "set_inexact_at_most untagged");
+		TEST(q.length() < 1024, "set_inexact_at_most failed to truncate");
+		TEST(q.base() == q.address(), "set_inexact_at_most nonzero offset");
+	}
 
+	// Fits in mantissa and reachable from misaligned base
+	{
+		Capability<void> q = {p};
+		q.address() += 1;
 		size_t reqlen = 511;
 		q.bounds().set_inexact_at_most(reqlen);
-		debug_log("Requesting 511 at align 1 resulted in {}: {}", reqlen, q);
-		TEST(reqlen == 511, "set_inexact_at_most truncated unnecessarily");
-		TEST(q.length() == reqlen, "set_inexact_at_most failed to bound");
+		debug_log("Requesting 511 at align 1 gives {}: {}", q.length(), q);
+		TEST(q.is_valid(), "set_inexact_at_most untagged");
+		TEST(q.length() == 511, "set_inexact_at_most truncated unnecessarily");
+		TEST(q.base() == q.address(), "set_inexact_at_most nonzero offset");
 	}
 
 	free(p);

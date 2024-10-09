@@ -414,12 +414,12 @@ namespace CHERI
 		 */
 		class PropertyProxyBase
 		{
+			protected:
 			/**
 			 * The capability that this proxy refers to.
 			 */
 			Capability &cap;
 
-			protected:
 			/**
 			 * Replaces the underlying capability
 			 */
@@ -546,54 +546,66 @@ namespace CHERI
 				return *this;
 			}
 
+			private:
+			BoundsProxy &set_inexact_at_most_slow(size_t bounds)
+			{
+				ptraddr_t newBaseAddress = this->cap.address();
+
+				// The number of bits in CHERIoT's capability encoding's
+				// mantissa.  This is part of the capability encoding and
+				// so, ideally, wouldn't be hard coded here.
+				static constexpr size_t MantissaBits = 9;
+
+				// The maximum possible representable length given the new
+				// base is a full mantissa width of 1s followed by 0s with
+				// its least significant 1 aligned to the least significant
+				// 1 in the base address.
+				size_t maximumLength = ((1 << MantissaBits) - 1)
+				                       << __builtin_ctz(newBaseAddress);
+
+				// Ensure that the requested length is representable by
+				// making sure that it fits within a mantissa width,
+				// rounding down by dropping any lower bits.  This might be
+				// excessive by up to one bit position, because the
+				// representable alignment mask is designed to work with the
+				// rounding-up inexact bounds setting instruction.  As a result,
+				// we might not return the largest possible representable
+				// length, but we won't return a wildly too small one, either.
+				size_t alignedLength =
+				  bounds & representable_alignment_mask(bounds);
+
+				// Select the smaller of those two lengths.
+				bounds = std::min<size_t>(alignedLength, maximumLength);
+				*this  = bounds;
+				return *this;
+			}
+
+			public:
 			/**
 			 * Set the bounds to `length` if `length` is representable with the
-			 * current alignment of `buffer`. If not, then reduce `length` until
-			 * it is representable.  Unlike set_inexact(), the resulting base
-			 * will always be the current address; that is, there will be no
-			 * padding below the current address.
+			 * current alignment of `buffer`. If not, then select a smaller
+			 * `length` that is representable.  Unlike set_inexact(), the
+			 * resulting base will always be the current address; that is, there
+			 * will be no padding below the current address.
+			 *
+			 * The caller must call .length() on the resulting capability to
+			 * determine the imposed bounds.
 			 *
 			 * See is_precise_range().
 			 */
-			BoundsProxy &set_inexact_at_most(size_t &bounds)
+			__always_inline BoundsProxy &set_inexact_at_most(size_t bounds)
 			{
-				ptraddr_t alignmentMask = representable_alignment_mask(bounds);
-
-				ptraddr_t newBaseAddress =
-				  static_cast<ptraddr_t>(reinterpret_cast<uintptr_t>(ptr()));
-
-				// If the new base address has bits set below the alignment
-				// requirement for representability of the requested length,
-				// then we need to do some bit-twiddling to find the largest
-				// length that is both not larger than the request and
-				// representable given the base address.
-				if ((newBaseAddress & alignmentMask) != newBaseAddress)
+				// Just try to set the requested bounds, first.  If that works,
+				// there's no need for bit-twiddling at all.
+				Capability p = ptr();
+				p.bounds()   = bounds;
+				if (p.is_valid())
 				{
-					// The number of bits in CHERIoT's capability encoding's
-					// mantissa.  This is part of the capability encoding and
-					// so, ideally, wouldn't be hard coded here.
-					static constexpr size_t MantissaBits = 9;
-
-					// The maximum possible representable length given the new
-					// base is a full mantissa width of 1s followed by 0s with
-					// its least significant 1 aligned to the least significant
-					// 1 in the base address.
-					size_t maximumLength = ((1 << MantissaBits) - 1)
-					                       << __builtin_ctz(newBaseAddress);
-
-					// Ensure that the requested length is representable by
-					// making sure that it fits within a mantissa width,
-					// rounding down by dropping any lower bits.  This is
-					// equivalent to masking by a mantissa width of 1s with its
-					// MSB aligned to the highest set bit in the requested
-					// length.
-					size_t alignedLength = bounds & alignmentMask;
-
-					// Select the smaller of those two lengths.
-					bounds = std::min<size_t>(alignedLength, maximumLength);
+					set(static_cast<T *>(p));
+					return *this;
 				}
-				*this = bounds;
-				return *this;
+
+				return set_inexact_at_most_slow(bounds);
 			}
 		};
 
