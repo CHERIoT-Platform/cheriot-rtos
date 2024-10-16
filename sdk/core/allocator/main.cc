@@ -1268,3 +1268,10 @@ size_t heap_available()
 {
 	return gm->heapFreeSize;
 }
+
+[[cheri::interrupt_state(disabled)]] void heap_render()
+{
+#if HEAP_RENDER
+	gm->render();
+#endif
+}
