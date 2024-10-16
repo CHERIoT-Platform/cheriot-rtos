@@ -777,8 +777,11 @@ exception_entry_asm:
 	// Value 24 is reserved for custom use.
 .Lset_mcause_and_exit_thread:
 	csrw               mcause, 24
-	// The thread exit code expects the trusted stack pointer to be in csp.
-	cspecialr          csp, mtdc
+	// The thread exit code expects the trusted stack pointer to be in csp and
+	// the stack pointer to be in mtdc.  After thread exit, we don't need the
+	// stack pointer so just put zero there.
+	zeroOne            sp
+	cspecialrw         csp, mtdc, csp
 	j                  .Lthread_exit
 
 	// The continue-resume path expects the location that we will mret to to be
