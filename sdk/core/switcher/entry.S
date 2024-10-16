@@ -777,6 +777,8 @@ exception_entry_asm:
 	// Value 24 is reserved for custom use.
 .Lset_mcause_and_exit_thread:
 	csrw               mcause, 24
+	// The thread exit code expects the trusted stack pointer to be in csp.
+	cspecialr          csp, mtdc
 	j                  .Lthread_exit
 
 	// The continue-resume path expects the location that we will mret to to be
@@ -802,9 +804,14 @@ exception_entry_asm:
 	// make sure there is a frame left in the trusted stack
 	clhu               t2, TrustedStack_offset_frameoffset(ctp)
 	li                 tp, TrustedStack_offset_frames
+	// Move to the previous trusted stack frame.
+	addi               t2, t2, -TrustedStackFrame_size
+	// If this is the first trusted stack frame, then the csp that we would be
+	// loading is the csp on entry, which does not have a spilled area.  In
+	// this case, we would fault when loading, so would exit the thread, but we
+	// should instead gracefully exit the thread.
 	bgeu               tp, t2, .Lset_mcause_and_exit_thread
 	cspecialr          ctp, mtdc
-	addi               t2, t2, -TrustedStackFrame_size
 	cincoffset         ct1, ctp, t2
 	// Restore the stack pointer.  All other spilled values are spilled there.
 	clc                csp, TrustedStackFrame_offset_csp(ct1)
