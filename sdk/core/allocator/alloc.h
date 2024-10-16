@@ -2811,4 +2811,155 @@ class MState
 	{
 		ABORT();
 	}
+
+#if HEAP_RENDER
+	public:
+	/**
+	 * "Render" the heap for debugging.
+	 */
+	template<bool Asserts = false>
+	void render()
+	{
+		size_t measuredAllocated = 0, measuredFree = 0, measuredQuarantined = 0;
+
+		auto toAddr = [](void *p) {
+			return static_cast<ptraddr_t>(CHERI::Capability{p}.address());
+		};
+
+		auto header =
+		  static_cast<MChunkHeader *>(static_cast<void *>(heapStart));
+
+		Debug::log("Dumping MState={} start={} end={}",
+		           toAddr(this),
+		           toAddr(heapStart),
+		           heapStart.top());
+
+		while (toAddr(header) != heapStart.top())
+		{
+			Debug::log("  header {}: size={} inuse={} pinuse={}",
+			           toAddr(header),
+			           header->size_get(),
+			           header->isCurrInUse,
+			           header->isPrevInUse);
+
+			if (!header->is_in_use())
+			{
+				measuredFree += header->size_get();
+
+				auto chunk = MChunk::from_header(header);
+				if (!ds::linked_list::is_singleton(&chunk->ring))
+				{
+					Debug::log(
+					  "   free ring <{},{}>",
+					  toAddr(MChunk::from_ring(chunk->ring.cell_prev())),
+					  toAddr(MChunk::from_ring(chunk->ring.cell_next())));
+				}
+				else
+				{
+					Debug::log("   free ring empty");
+				}
+
+				if (!is_small(header->size_get()))
+				{
+					auto t = TChunk::from_mchunk(chunk);
+
+					if (t->is_tree_ring())
+					{
+						Debug::log("   tree ring, index={}", t->index);
+					}
+					else
+					{
+						Debug::log(
+						  "   tree, index={} parent={} children=[{},{}]",
+						  t->index,
+						  toAddr(t->parent),
+						  toAddr(t->child[0]),
+						  toAddr(t->child[1]));
+					}
+				}
+			}
+			else
+			{
+				measuredAllocated += header->size_get();
+			}
+
+			header = header->cell_next();
+		}
+
+		auto showQuarantineRing = [&](ChunkFreeLink *&p) {
+			auto header = MChunkHeader::from_body(MChunk::from_ring(p));
+			Debug::log(
+			  "   quarantined {} size={}", toAddr(header), header->size_get());
+			measuredQuarantined += header->size_get();
+			if constexpr (Asserts)
+			{
+				Debug::Assert(ds::linked_list::is_well_formed(p),
+				              "Quarantine list node malformed");
+			}
+			return false;
+		};
+
+		{
+			decltype(quarantinePendingRing)::Ix head = 0, tail = 0;
+
+			quarantinePendingRing.head_get(head);
+			quarantinePendingRing.tail_get(tail);
+			Debug::log(" Quarantine status: empty={} head={} tail={}",
+			           quarantinePendingRing.is_empty(),
+			           head,
+			           tail);
+		}
+
+		if (quarantineFinishedSentinel.is_empty())
+		{
+			Debug::log("  finished ring empty");
+		}
+		else
+		{
+			Debug::log("  finished ring <{},{}>:",
+			           toAddr(quarantineFinishedSentinel.last()),
+			           toAddr(quarantineFinishedSentinel.first()));
+			quarantine_finished_get()->search(showQuarantineRing);
+		}
+
+		for (size_t ix = 0; ix < QuarantineRings; ix++)
+		{
+			if (quarantinePendingChunks[ix].is_empty())
+			{
+				Debug::log(
+				  "  index={} epoch={} empty", ix, quarantinePendingEpoch[ix]);
+			}
+			else
+			{
+				Debug::log(
+				  "  index={} epoch={}:", ix, quarantinePendingEpoch[ix]);
+				quarantine_pending_get(ix)->search(showQuarantineRing);
+			}
+		}
+
+		auto measuredTotal = measuredAllocated + measuredFree;
+
+		Debug::log("Sizes: alloc={} free={} (expect {}) quar={} (expect {}) "
+		           "total={} (expect {})",
+		           measuredAllocated,
+		           measuredFree,
+		           heapFreeSize,
+		           measuredQuarantined,
+		           heapQuarantineSize,
+		           measuredTotal,
+		           heapTotalSize);
+
+		if constexpr (Asserts)
+		{
+			Debug::Assert(measuredFree == heapFreeSize,
+			              "Bad accounting in free size");
+
+			Debug::Assert(measuredQuarantined == heapQuarantineSize,
+			              "Bad accounting in quarantine size");
+
+			Debug::Assert(measuredTotal == heapTotalSize,
+			              "Bad accounting in total size");
+		}
+	}
+#endif
 };
