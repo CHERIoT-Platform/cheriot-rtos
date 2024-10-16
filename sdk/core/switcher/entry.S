@@ -219,14 +219,14 @@ __Z26compartment_switcher_entryz:
 	// Read the stack high water mark (which is 16-byte aligned)
 	csrr               gp, CSR_MSHWM
 	// Skip zeroing if high water mark >= stack pointer
-	bge                t2, sp, after_zero
+	bge                t2, sp, .Lafter_zero
 	// Use stack high water mark as base address for zeroing.  If this faults
 	// then it will trigger a force unwind.  This can happen only if the caller
 	// is doing something bad.
 	csetaddr           ct2, csp, gp
 #endif
 	zero_stack         t2, s0, gp
-after_zero:
+.Lafter_zero:
 	// Reserve space for unwind state and so on.
 	cincoffset 	       csp, csp, -STACK_ENTRY_RESERVED_SPACE
 #ifdef CONFIG_MSHWM
