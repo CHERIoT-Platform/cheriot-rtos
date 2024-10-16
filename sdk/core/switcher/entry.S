@@ -27,6 +27,25 @@
 #define SPILL_SLOT_pcc 24
 #define SPILL_SLOT_SIZE 32
 
+/*
+ * The switcher uniformly speaks of registers using their RISC-V ELF psABI names
+ * and not their raw index, as, broadly speaking, we use registers in a similar
+ * way to C functions.  However, it's probably convenient to have a mapping
+ * readily accessible, so here 'tis:
+ *
+ *  #     x0   x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15
+ *  psABI zero ra sp gp tp t0 t1 t2 s0 s1 a0  a1  a2  a3  a4  a5
+ *
+ * When we use the psABI name without a 'c' prefix, we are sometimes meaning to
+ * refer to the address component of the capability.
+ *
+ * Despite the use of psABI names and conformance at the interface (argument
+ * registers used for arguments, return address register used for its canonical
+ * purpose, &c), one should not read too much of the psABI calling convention
+ * into the code here.  Within the switcher, the machine is a raw register
+ * machine and C is a distant, high-level language.
+ */
+
 switcher_code_start:
 
 # Global for the sealing key.  Stored in the switcher's code section.
@@ -298,7 +317,7 @@ __Z26compartment_switcher_entryz:
 	csrsi              mstatus, 0x8
 .Lskip_interrupt_disable:
 	// Registers passed to the callee are:
-	// c1 (ra), c2 (csp), and c3 (cgp) are passed unconditionally.
+	// cra (c1), csp (c2), and cgp (c3) are passed unconditionally.
 	// ca0-ca5 (c10-c15) and ct0 (c5) are either passed as arguments or cleared
 	// above.  This should add up to 10 registers, with the remaining 5 being
 	// cleared now:
@@ -367,8 +386,8 @@ exception_entry_asm:
 
 	// csp now points to the save reg frame that we can use.
 	// The guest csp (c2) is now in mtdc. Will be spilled later, but we
-	// spill all other registers now.
-	spillRegisters     c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15
+	// spill all the other 14 registers now.
+	spillRegisters     cra, cgp, ctp, ct0, ct1, ct2, cs0, cs1, ca0, ca1, ca2, ca3, ca4, ca5
 
 	// If a thread has exited then it will set a fake value in the mcause so
 	// that the scheduler knows not to try to resume it.
@@ -476,18 +495,18 @@ exception_entry_asm:
 // ct2 to be the pcc to jump to.  All other registers are in unspecified states
 // and will be overwritten when we install the context.
 .Linstall_context:
-	clw                x1, TrustedStack_offset_mstatus(csp)
-	csrw               mstatus, x1
+	clw                ra, TrustedStack_offset_mstatus(csp)
+	csrw               mstatus, ra
 #ifdef CONFIG_MSHWM
-	clw                x1, TrustedStack_offset_mshwm(csp)
-	csrw               CSR_MSHWM, x1
-	clw                x1, TrustedStack_offset_mshwmb(csp)
-	csrw               CSR_MSHWMB, x1
+	clw                ra, TrustedStack_offset_mshwm(csp)
+	csrw               CSR_MSHWM, ra
+	clw                ra, TrustedStack_offset_mshwmb(csp)
+	csrw               CSR_MSHWMB, ra
 #endif
 	cspecialw          mepcc, ct2
-	// c2 is csp, which will be loaded last and will overwrite the trusted
-	// stack pointer with the thread's stack pointer.
-	reloadRegisters c1, cgp, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, csp
+	// csp (c2) will be loaded last and will overwrite the trusted stack pointer
+	// with the thread's stack pointer.
+	reloadRegisters cra, cgp, ctp, ct0, ct1, ct2, cs0, cs1, ca0, ca1, ca2, ca3, ca4, ca5, csp
 	mret
 
 // We are starting a forced unwind.  This is reached either when we are unable
@@ -682,9 +701,9 @@ exception_entry_asm:
 	ccleartag          cs1, cs1
 	csc                cs1, 0(ct0)
 	// Source for context copy.
-	cincoffset         ca2, csp, TrustedStack_offset_c1
+	cincoffset         ca2, csp, TrustedStack_offset_cra
 	// Destination for context copy
-	cincoffset         ca3, ct0, TrustedStack_offset_c1
+	cincoffset         ca3, ct0, TrustedStack_offset_cra
 	copyContext        ca3, ca2, cs1, a4
 
 	// Set up the arguments for the call
@@ -747,9 +766,9 @@ exception_entry_asm:
 	csetaddr           ct2, ct0, ra
 	// Now copy everything else from the stack into the saved context
 	// Source
-	cincoffset         ca2, csp, TrustedStack_offset_c1
+	cincoffset         ca2, csp, TrustedStack_offset_cra
 	// Destination
-	cincoffset         ca3, ct1, TrustedStack_offset_c1
+	cincoffset         ca3, ct1, TrustedStack_offset_cra
 	copyContext        ca3, ca2, cs1, a4
 	// Increment the handler invocation count.  We have now returned and
 	// finished touching any data from the error handler that might cause a
@@ -766,10 +785,10 @@ exception_entry_asm:
 
 .Lhandle_injected_error:
 #ifdef CONFIG_MSHWM
-	clw                x1, TrustedStack_offset_mshwm(csp)
-	csrw               CSR_MSHWM, x1
-	clw                x1, TrustedStack_offset_mshwmb(csp)
-	csrw               CSR_MSHWMB, x1
+	clw                ra, TrustedStack_offset_mshwm(csp)
+	csrw               CSR_MSHWM, ra
+	clw                ra, TrustedStack_offset_mshwmb(csp)
+	csrw               CSR_MSHWMB, ra
 #endif
 	j                  .Lhandle_error
 
