@@ -69,15 +69,40 @@ SObj __cheri_compartment("alloc")
                      size_t);
 
 /**
- * Unseal the obj given the key.
+ * Unseal the object given the key.
  *
- * The key must have the permit-unseal permission.
+ * The key may be either a static or dynamic key and the object may be either
+ * allocated dynamically or statically.
  *
- * @return unsealed obj if key and obj are valid and they match. nullptr
- * otherwise
+ * Returns the unsealed object if the key and object are valid and of the
+ * correct type, null otherwise.
  */
 [[cheri::interrupt_state(disabled)]] void *
   __cheri_libcall token_obj_unseal(SKey, SObj);
+
+/**
+ * Unseal the object given the key.
+ *
+ * The key may be a static sealing key and the object must be a statically
+ * sealed object.
+ *
+ * Returns the unsealed object if the key and object are valid and of the
+ * correct type, null otherwise.
+ */
+[[cheri::interrupt_state(disabled)]] void *
+  __cheri_libcall token_obj_unseal_static(SKey, SObj);
+
+/**
+ * Unseal the object given the key.
+ *
+ * The key may be either a static or dynamic key and the object must be
+ * allocated dynamically.
+ *
+ * Returns the unsealed object if the key and object are valid and of the
+ * correct type, null otherwise.
+ */
+[[cheri::interrupt_state(disabled)]] void *
+  __cheri_libcall token_obj_unseal_dynamic(SKey, SObj);
 
 /**
  * Destroy the obj given its key, freeing memory.
