@@ -32,21 +32,21 @@ template<size_t NFrames>
 struct TrustedStackGeneric
 {
 	void  *mepcc;
-	void  *c1;
-	void  *csp;
-	void  *cgp;
-	void  *c4;
-	void  *c5;
-	void  *c6;
-	void  *c7;
-	void  *c8;
-	void  *c9;
-	void  *c10;
-	void  *c11;
-	void  *c12;
-	void  *c13;
-	void  *c14;
-	void  *c15;
+	void  *cra; // c1
+	void  *csp; // c2
+	void  *cgp; // c3
+	void  *ctp; // c4
+	void  *ct0; // c5
+	void  *ct1; // c6
+	void  *ct2; // c7
+	void  *cs0; // c8
+	void  *cs1; // c9
+	void  *ca0; // c10
+	void  *ca1; // c11
+	void  *ca2; // c12
+	void  *ca3; // c13
+	void  *ca4; // c14
+	void  *ca5; // c15
 	void  *hazardPointers;
 	size_t mstatus;
 	size_t mcause;
