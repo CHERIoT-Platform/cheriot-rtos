@@ -348,7 +348,7 @@ namespace sched
 	template<typename T>
 	int typed_op(void *sealed, auto &&fn)
 	{
-		auto *unsealed = Handle::unseal<T>(sealed);
+		auto *unsealed = T::template unseal<T>(sealed);
 		// If we can't unseal the sealed capability and have it be of the
 		// correct type then return an error.
 		if (!unsealed)
@@ -394,29 +394,6 @@ namespace sched
 			heap_free(heapCapability, &unsealed);
 			return 0;
 		});
-	}
-
-	/**
-	 * Return path from `*_create` functions.  Performs a return check with
-	 * interrupts disabled and stores the object managed by `object` via `ret`
-	 * (consuming ownership) if `ret` has valid permissions.  Returns the value
-	 * that the caller should return to the public API.
-	 *
-	 * This function runs with interrupts disabled so that the majority of
-	 * `*_create` can have them enabled.
-	 */
-	template<typename T>
-	[[cheri::interrupt_state(disabled)]] int write_result(void         **ret,
-	                                                      HeapObject<T> &object)
-	{
-		if (!check_pointer<PermissionSet{Permission::Store,
-		                                 Permission::LoadStoreCapability}>(ret))
-		{
-			return -EINVAL;
-		}
-
-		*ret = compart_seal(object.release());
-		return 0;
 	}
 
 } // namespace sched
@@ -594,7 +571,12 @@ __cheriot_minimum_stack(0x60) int multiwaiter_create(
 		return error;
 	}
 
-	return write_result(reinterpret_cast<void **>(ret), mw);
+	// This can trap, but only if the caller has provided a bad pointer.
+	// In this case, the caller can leak memory, but only memory allocated
+	// against its own quota.
+	*reinterpret_cast<void **>(ret) = mw;
+
+	return 0;
 }
 
 __cheriot_minimum_stack(0x70) int multiwaiter_delete(
@@ -668,28 +650,17 @@ __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
 namespace
 {
 	/**
-	 *
+	 * An interrupt capability.
 	 */
-	struct InterruptCapability : Handle
+	struct InterruptCapability : Handle</*IsDynamic=*/false>
 	{
 		/**
-		 * Type marker used by `Handle`, tells it to use the dynamic path.
+		 * Sealing type used by `Handle`.
 		 */
-		static constexpr auto TypeMarker = Handle::Type::Dynamic;
-
-		/**
-		 * Dynamic type marker used by `Handle`.
-		 */
-		static Capability<void> dynamic_type_marker()
+		static SKey sealing_type()
 		{
 			return STATIC_SEALING_TYPE(InterruptKey);
 		}
-
-		/**
-		 * Padding for compatibility with the token layout.  This can go away
-		 * at some point.
-		 */
-		uint32_t padding;
 
 		/**
 		 * The public structure state.
@@ -702,8 +673,9 @@ namespace
   0x30) const uint32_t *interrupt_futex_get(struct SObjStruct *sealed)
 {
 	STACK_CHECK(0x30);
-	auto     *interruptCapability = Handle::unseal<InterruptCapability>(sealed);
-	uint32_t *result              = nullptr;
+	auto *interruptCapability =
+	  InterruptCapability::unseal<InterruptCapability>(sealed);
+	uint32_t *result = nullptr;
 	if (interruptCapability && interruptCapability->state.mayWait)
 	{
 		InterruptController::master()
@@ -722,7 +694,8 @@ namespace
   0x20) int interrupt_complete(struct SObjStruct *sealed)
 {
 	STACK_CHECK(0x20);
-	auto *interruptCapability = Handle::unseal<InterruptCapability>(sealed);
+	auto *interruptCapability =
+	  InterruptCapability::unseal<InterruptCapability>(sealed);
 	if (interruptCapability && interruptCapability->state.mayComplete)
 	{
 		InterruptController::master().interrupt_complete(

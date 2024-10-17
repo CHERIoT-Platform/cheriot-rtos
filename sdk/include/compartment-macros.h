@@ -142,16 +142,6 @@
  */
 #define DEVICE_EXISTS(x) defined(DEVICE_EXISTS_##x)
 
-#define SEALING_CAP()                                                          \
-	({                                                                         \
-		void *ret;                                                             \
-		__asm("1:	"                                                            \
-		      "	auipcc		%0, %%cheriot_compartment_hi(__sealingkey)\n"          \
-		      "	clc			%0, %%cheriot_compartment_lo_i(1b)(%0)\n"                \
-		      : "=C"(ret));                                                    \
-		ret;                                                                   \
-	})
-
 /**
  * Helper macro, used by `STATIC_SEALING_TYPE`.  Do not use this directly, it
  * exists to avoid error-prone copying and pasting of the mangled name for a

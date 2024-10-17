@@ -17,6 +17,16 @@
 #include <token.h>
 #include <utils.hh>
 
+#define SEALING_CAP()                                                          \
+	({                                                                         \
+		void *ret;                                                             \
+		__asm("1:\n"                                                           \
+		      "    auipcc  %0, %%cheriot_compartment_hi(__sealingkey)\n"       \
+		      "    clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"           \
+		      : "=C"(ret));                                                    \
+		ret;                                                                   \
+	})
+
 using namespace CHERI;
 
 Revocation::Revoker revoker;

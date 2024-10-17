@@ -69,15 +69,49 @@ SObj __cheri_compartment("alloc")
                      size_t);
 
 /**
- * Unseal the obj given the key.
+ * Unseal the object given the key.
  *
- * The key must have the permit-unseal permission.
+ * The key may be either a static or dynamic key (i.e. one created with the
+ * `STATIC_SEALING_TYPE` macro or with `token_key_new`) and the object may be
+ * either allocated dynamically (via the token APIs) or statically (via the
+ * `DEFINE_STATIC_SEALED_VALUE` macro).
  *
- * @return unsealed obj if key and obj are valid and they match. nullptr
- * otherwise
+ * Returns the unsealed object if the key and object are valid and of the
+ * correct type, null otherwise.
+ *
+ * This function is equivalent to calling both `token_obj_unseal_static` and
+ * `token_obj_unseal_dynamic` and returning the result of the first one that
+ * succeeds, or null if both fail.
  */
 [[cheri::interrupt_state(disabled)]] void *
   __cheri_libcall token_obj_unseal(SKey, SObj);
+
+/**
+ * Unseal the object given the key.
+ *
+ * The key must be a static sealing key (i.e. one created with the
+ * `STATIC_SEALING_TYPE` macro) and the object must be a statically sealed
+ * object (i.e. one created with the `DEFINE_STATIC_SEALED_VALUE` macro).
+ *
+ * Returns the unsealed object if the key and object are valid and of the
+ * correct type, null otherwise.
+ */
+[[cheri::interrupt_state(disabled)]] void *
+  __cheri_libcall token_obj_unseal_static(SKey, SObj);
+
+/**
+ * Unseal the object given the key.
+ *
+ * The key may be either a static or dynamic key (i.e. one created with the
+ * `STATIC_SEALING_TYPE` macro or with `token_key_new`) and the object must be
+ * allocated dynamically with `token_sealed_alloc` or
+ * `token_sealed_unsealed_alloc`.
+ *
+ * Returns the unsealed object if the key and object are valid and of the
+ * correct type, null otherwise.
+ */
+[[cheri::interrupt_state(disabled)]] void *
+  __cheri_libcall token_obj_unseal_dynamic(SKey, SObj);
 
 /**
  * Destroy the obj given its key, freeing memory.

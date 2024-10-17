@@ -8,6 +8,7 @@
 #include <cheri.hh>
 #include <debug.hh>
 #include <stdlib.h>
+#include <token.h>
 #include <type_traits>
 
 namespace
@@ -45,57 +46,14 @@ namespace
 	StackUsageCheck<StackMode, expected, __PRETTY_FUNCTION__> stackCheck
 
 	/**
-	 * Base class for types that are exported from the scheduler with a common
-	 * sealing type.  Includes an inline type marker.
+	 * Base class for sealed objects that are exported from the scheduler.
+	 *
+	 * Subclasses must implement a static `sealing_type` method that returns
+	 * the sealing key.
 	 */
+	template<bool IsDynamic>
 	struct Handle
 	{
-		protected:
-		/**
-		 * The real type of this subclass.
-		 *
-		 * This must be 32 bits and must be the first word of the class, so that
-		 * we are layout-compatible with the static sealing capabilities.  We
-		 * use low-value numbers for things that we dynamically allocate to
-		 * check types.  Anything that is statically allocated will have this
-		 * field initialised by the loader.
-		 *
-		 * Note that allocator-allocated and static types have a word of
-		 * padding here.  This is necessary to ensure that the base of the sub
-		 * object is capability-aligned.  In cases created with subclassing,
-		 * this is not required - the compiler will insert padding if it needs
-		 * to, but we can also put small fields in this space.  For anything
-		 * statically allocated, we will need to handle this separately.
-		 */
-		enum class Type : uint32_t
-		{
-			Invalid = 0,
-
-			/**
-			 * Multiwaiter type.
-			 */
-			MultiWaiter,
-
-			/**
-			 * Used only as the type marker, not for comparisons.  This
-			 * indicates that the type uses a dynamically allocated type value
-			 * that is provided in the `dynamic_type_marker()` static function.
-			 */
-			Dynamic,
-		} type;
-
-		/**
-		 * Constructor, takes the type of the subclass.
-		 */
-		Handle(Type type) : type(type) {}
-		~Handle()
-		{
-			__clang_ignored_warning_push("-Watomic-alignment") __atomic_store_n(
-			  reinterpret_cast<uint8_t *>(&type), 0, __ATOMIC_RELAXED);
-			__clang_ignored_warning_pop()
-		}
-
-		public:
 		/**
 		 * Unseal `unsafePointer` as a pointer to an object of the specified
 		 * type.  Returns nullptr if `unsafePointer` is not a valid sealed
@@ -106,6 +64,7 @@ namespace
 		{
 			return static_cast<Handle *>(unsafePointer)->unseal_as<T>();
 		}
+
 		/**
 		 * Unseal this object as the specified type.  Returns nullptr if this
 		 * is not a valid sealed object of the correct type.
@@ -116,25 +75,18 @@ namespace
 			static_assert(std::is_base_of_v<Handle, T>,
 			              "Cannot down-cast something that is not a subclass "
 			              "of Handle");
-			static_assert(offsetof(T, type) == 0,
-			              "Type field must be at the start of the object");
-			auto unsealed = compart_unseal(this);
-			if constexpr (T::TypeMarker == Type::Dynamic)
+			void *result;
+			if constexpr (IsDynamic)
 			{
-				if (unsealed.is_valid() && uint32_t(unsealed->type) ==
-				                             T::dynamic_type_marker().address())
-				{
-					return unsealed.cast<T>();
-				}
+				result = token_obj_unseal_dynamic(T::sealing_type(),
+				                                  reinterpret_cast<SObj>(this));
 			}
 			else
 			{
-				if (unsealed.is_valid() && unsealed->type == T::TypeMarker)
-				{
-					return unsealed.cast<T>();
-				}
+				result = token_obj_unseal_static(T::sealing_type(),
+				                                 reinterpret_cast<SObj>(this));
 			}
-			return nullptr;
+			return static_cast<T *>(result);
 		}
 	};
 
@@ -190,152 +142,5 @@ namespace
 	__BEGIN_DECLS
 	void exception_entry_asm(void);
 	__END_DECLS
-
-	/**
-	 * Wrapper around `std::unique_ptr` for objects allocated with a specific
-	 * heap capability.  The scheduler is not authorised to allocate memory
-	 * except on behalf of callers.
-	 */
-	template<typename T>
-	class HeapObject
-	{
-		/**
-		 * Deleter for use with `std::unique_ptr`, for memory allocated with an
-		 * explicit capability.
-		 */
-		class Deleter
-		{
-			/**
-			 * The capability that should authorise access to the heap.
-			 */
-			struct SObjStruct *heapCapability;
-
-			public:
-			/**
-			 * Constructor, captures the capability to use for deallocation.
-			 */
-			__always_inline Deleter(struct SObjStruct *heapCapability)
-			  : heapCapability(heapCapability)
-			{
-			}
-
-			/**
-			 * Apply function, calls the destructor and cleans up the underlying
-			 * memory.
-			 */
-			__always_inline void operator()(T *object)
-			{
-				object->~T();
-				heap_free(heapCapability, object);
-			}
-		};
-
-		protected:
-		/**
-		 * The underlying unique pointer.
-		 */
-		std::unique_ptr<T, Deleter> pointer = {nullptr, nullptr};
-
-		public:
-		/// Default constructor, creates a null object.
-		HeapObject() = default;
-		/**
-		 * Constructor for use with externally heap-allocated objects and
-		 * placement new.  Takes ownership of `allocatedObject`. The heap
-		 * capability will be used to free the object on destruction.
-		 */
-		HeapObject(struct SObjStruct *heapCapability, T *allocatedObject)
-		  : pointer(allocatedObject, heapCapability)
-		{
-			if (!__builtin_cheri_tag_get(allocatedObject))
-			{
-				pointer = nullptr;
-			}
-		}
-
-		/**
-		 * Attempt to allocate memory for, and construct, an instance of `T`
-		 * with the specified arguments.  If memory allocation fails, this will
-		 * construct an object wrapping a null pointer and not call the
-		 * constructor.  The bool-conversion operator can be used to check for
-		 * success.
-		 */
-		template<typename... Args>
-		HeapObject(Timeout           *timeout,
-		           struct SObjStruct *heapCapability,
-		           Args... args)
-		  : pointer(static_cast<T *>(
-		              heap_allocate(timeout, heapCapability, sizeof(T))),
-		            {heapCapability})
-		{
-			if (__builtin_cheri_tag_get(pointer.raw()))
-			{
-				new (pointer.get()) T(std::forward<Args>(args)...);
-			}
-			else
-			{
-				pointer = nullptr;
-			}
-		}
-
-		/**
-		 * Convert to bool.  Returns true if the unique pointer owns a non-null
-		 * pointer.
-		 */
-		operator bool()
-		{
-			return !!pointer;
-		}
-
-		/**
-		 * Returns the wrapped pointer without transferring ownership.
-		 */
-		T *get()
-		{
-			return pointer.get();
-		}
-
-		/**
-		 * Returns the wrapped pointer, transferring ownership to the caller.
-		 */
-		T *release()
-		{
-			return pointer.release();
-		}
-	};
-
-	/**
-	 * Wrapper for a buffer of a dynamic length, allocated on the heap owned by
-	 * another compartment.
-	 */
-	struct HeapBuffer : public HeapObject<char>
-	{
-		HeapBuffer() = default;
-
-		/**
-		 * Construct an array of `count` elemets, each of which is `size` bytes
-		 * long, using `heapCapability` to authorise allocation.
-		 */
-		HeapBuffer(Timeout           *timeout,
-		           struct SObjStruct *heapCapability,
-		           size_t             size,
-		           size_t             count)
-		  : HeapObject(
-		      heapCapability,
-		      static_cast<char *>(
-		        heap_allocate_array(timeout, heapCapability, size, count)))
-		{
-		}
-
-		/**
-		 * Update the address of the wrapped pointer.
-		 */
-		void set_address(ptraddr_t address)
-		{
-			CHERI::Capability old{pointer.release()};
-			old.address() = address;
-			pointer.reset(old);
-		}
-	};
 
 } // namespace
