@@ -19,7 +19,7 @@
 	.p2align 1
 	.type    _Z16token_obj_unsealP10SKeyStructP10SObjStruct,@function
 
-_Z16token_obj_unsealP10SKeyStructP10SObjStruct:
+.Ltoken_unseal_internal:
   /*
    * Register allocation:
    *
@@ -27,6 +27,8 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
    *    replaced with the unsealed value or NULL
    *
    *  - ca1 holds the user's sealed object pointer
+   *
+   *  - a2 contains the expected sealing type.
    *
    *  - t0/ct0 holds a copy of the user key
    *
@@ -59,6 +61,7 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
 .Lload_sealing_key:
   auipcc ca0, %cheriot_compartment_hi(__sealingkey)
   clc    ca0, %cheriot_compartment_lo_i(.Lload_sealing_key)(ca0)
+  csetaddr ca0, ca0, a2
 
   /* Unseal, clobbering authority */
   cunseal ca0, ca1, ca0
@@ -96,6 +99,18 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
   /* And that's an unwrap. */
   cret
 
+_Z16token_obj_unsealP10SKeyStructP10SObjStruct:
+	cgettype a2, ca1
+	j        .Ltoken_unseal_internal
+
+_Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct:
+	li       a2, 12
+	j        .Ltoken_unseal_internal
+
+_Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct:
+	li       a2, 11
+	j        .Ltoken_unseal_internal
+
 .Lexit_failure:
   /* Failure; clobber potential sensitive state in ca0 and return null */
   cmove ca0, cnull
@@ -104,5 +119,15 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
 /* TODO: Eventually this goes away, when the assembler can generate it for us */
 CHERIOT_EXPORT_LIBCALL \
   _Z16token_obj_unsealP10SKeyStructP10SObjStruct, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, zero two registers */
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, zero two registers */
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct, \
   0 /* No stack usage */, \
   0b00010010 /* IRQs deferred, zero two registers */

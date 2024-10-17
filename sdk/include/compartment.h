@@ -4,46 +4,11 @@
 #pragma once
 #include <cdefs.h>
 #include <compartment-macros.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 #	include <cheri.hh>
-template<typename T>
-static inline CHERI::Capability<T> compart_seal(T *in)
-{
-	void *key = SEALING_CAP();
-
-	return CHERI::Capability{in}.seal(key);
-}
-
-template<typename T>
-static inline CHERI::Capability<T> compart_unseal(T *in)
-{
-	void *key = SEALING_CAP();
-
-	return CHERI::Capability{in}.unseal(key);
-}
-
-template<typename T>
-static inline auto compart_unseal(void *in)
-{
-	return compart_unseal(static_cast<T *>(in));
-}
-#else
-#	include <cheri-builtins.h>
-static inline void *compart_seal(void *in)
-{
-	void *key = SEALING_CAP();
-
-	return cseal(in, key);
-}
-
-static inline void *compart_unseal(void *in)
-{
-	void *key = SEALING_CAP();
-
-	return cunseal(in, key);
-}
 #endif
 
 /**

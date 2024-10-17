@@ -101,13 +101,16 @@ namespace
 	/**
 	 * Multiwaiter object.  This contains space for all of the triggers.
 	 */
-	class MultiWaiterInternal : public Handle
+	class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	{
 		public:
 		/**
-		 * Type marker used for `Handle::unseal_as`.
+		 * Sealing type used by `Handle`.
 		 */
-		static constexpr auto TypeMarker = Handle::Type::MultiWaiter;
+		static SKey sealing_type()
+		{
+			return STATIC_SEALING_TYPE(MultiWaiterKey);
+		}
 
 		private:
 		/**
@@ -176,12 +179,13 @@ namespace
 		 * Factory method.  Creates a multiwaiter of the specified size.  On
 		 * failure, sets `error` to the errno constant corresponding to the
 		 * failure reason and return `nullptr`.
+		 *
+		 * The result is a *sealed* multiwaiter handle.
 		 */
-		static HeapObject<MultiWaiterInternal>
-		create(Timeout           *timeout,
-		       struct SObjStruct *heapCapability,
-		       size_t             length,
-		       int               &error)
+		static SObj create(Timeout           *timeout,
+		                   struct SObjStruct *heapCapability,
+		                   size_t             length,
+		                   int               &error)
 		{
 			static_assert(sizeof(MultiWaiterInternal) <= 2 * sizeof(void *),
 			              "Header for event queue is too large");
@@ -190,17 +194,21 @@ namespace
 				error = -EINVAL;
 				return {};
 			}
-			void *q = heap_allocate(timeout,
-			                        heapCapability,
-			                        sizeof(MultiWaiterInternal) +
-			                          (length * sizeof(EventWaiter)));
-			if (!__builtin_cheri_tag_get(q))
+			void *memory = nullptr;
+			SObj  sealed = token_sealed_unsealed_alloc(
+			   timeout,
+			   heapCapability,
+			   sealing_type(),
+			   sizeof(MultiWaiterInternal) + (length * sizeof(EventWaiter)),
+			   &memory);
+			if (!memory)
 			{
 				error = -ENOMEM;
-				return {};
+				return nullptr;
 			}
+			new (memory) MultiWaiterInternal(length);
 			error = 0;
-			return {heapCapability, new (q) MultiWaiterInternal(length)};
+			return sealed;
 		}
 
 		/**
@@ -369,9 +377,7 @@ namespace
 		/**
 		 * Private constructor, called only from the factory method (`create`).
 		 */
-		MultiWaiterInternal(size_t length) : Handle(TypeMarker), Length(length)
-		{
-		}
+		MultiWaiterInternal(size_t length) : Length(length) {}
 
 		/**
 		 * Priority-sorted wait queue for threads that are blocked on a

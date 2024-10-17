@@ -101,14 +101,19 @@ namespace
 		SealedTrustedStacks,
 
 		/**
-		 * The scheduler has a sealing type for waitable objects.
-		 */
-		Scheduler,
-
-		/**
-		 * The allocator has a sealing type for the software sealing mechanism.
+		 * The allocator has a sealing type for the software sealing mechanism
+		 * with dynamically allocated objects.
 		 */
 		Allocator,
+
+		/**
+		 * The loader reserves a sealing type for the software sealing
+		 * mechanism.  The permit-unseal capability for this is destroyed after
+		 * the loader has run, which guarantees that anything sealed with this
+		 * type was present in the original firmware image.  The token library
+		 * has the only permit-unseal capability for this type.
+		 */
+		StaticToken,
 
 		/**
 		 * The first sealing key that is reserved for use by the allocator's
@@ -122,6 +127,17 @@ namespace
 		 */
 		FirstDynamicSoftware = 0x1000000,
 	};
+
+	// The allocator and static sealing types must be contiguous so that the
+	// token library can hold a permit-unseal capability for both.
+	static_assert(int(Allocator) + 1 == int(StaticToken),
+	              "Allocator and StaticToken must be consecutive");
+
+	// The token library includes the types for allocator and statically sealed
+	// objects.  This enumeration and the assembly must be kept in sync.  This
+	// will fail if the enumeration value changes.
+	static_assert(int(Allocator) == 11,
+	              "If this fails, update token_unseal.S to the new value");
 
 	// We currently have a 3-bit hardware otype, with different sealing spaces
 	// for code and data capabilities, giving the range 0-0xf reserved for
@@ -582,12 +598,6 @@ namespace
 				        Root::Type::RWGlobal,
 				        PermissionSet{Permission::Load, Permission::Store}>(
 				    entry.address);
-				// Is the software sealing type owned by the scheduler?  If so,
-				// we're going to seal the object with the scheduler's sealing
-				// type, not the allocator's.  This lets the scheduler export
-				// software-defined capabilities without adding the allocator
-				// to the TCB for availability.
-				bool isSchedulerObject = false;
 				// TODO: This currently places a restriction that data memory
 				// can't be in the low 64 KiB of the address space.  That may be
 				// too restrictive. If we haven't visited this sealed object
@@ -613,11 +623,7 @@ namespace
                         return false;
 					};
 					bool found = findExport(image.allocator());
-					if (!found && findExport(image.scheduler()))
-					{
-						found             = true;
-						isSchedulerObject = true;
-					}
+					found |= findExport(image.scheduler());
 					for (auto &compartment : image.compartments())
 					{
 						if (found)
@@ -632,8 +638,8 @@ namespace
 				}
 				Capability sealedObject = build(entry.address, entry.size());
 				// Seal with the allocator's sealing key
-				sealedObject.seal(build<void, Root::Type::Seal>(
-				  isSchedulerObject ? Scheduler : Allocator, 1));
+				sealedObject.seal(
+				  build<void, Root::Type::Seal>(StaticToken, 1));
 				Debug::log("Static sealed object: {}", sealedObject);
 				return sealedObject;
 			}
@@ -1184,11 +1190,10 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	trustedStackKey.bounds()  = 1;
 	switcherKey.address()     = SealedImportTableEntries;
 	switcherKey.bounds()      = 1;
-	setSealingKey(imgHdr.scheduler(), Scheduler);
 	setSealingKey(imgHdr.allocator(), Allocator);
 	setSealingKey(imgHdr.token_library(),
 	              Allocator,
-	              1,
+	              2, // Allocator and StaticToken
 	              0,
 	              PermissionSet{Permission::Global, Permission::Unseal});
 	constexpr size_t DynamicSealingLength =
