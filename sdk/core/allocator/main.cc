@@ -17,15 +17,16 @@
 #include <token.h>
 #include <utils.hh>
 
-#define SEALING_CAP()                                                          \
-	({                                                                         \
-		void *ret;                                                             \
-		__asm("1:\n"                                                           \
-		      "    auipcc  %0, %%cheriot_compartment_hi(__sealingkey)\n"       \
-		      "    clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"           \
-		      : "=C"(ret));                                                    \
-		ret;                                                                   \
-	})
+/**
+ * The sealing key for dynamically allocated software-sealed objects.
+ */
+__attribute__((section(".sealing_key1"))) void *allocatorSealingKey;
+
+/**
+ * The root for the software sealing key.
+ */
+__attribute__((section(".sealing_key2"))) Capability<SKeyStruct>
+  softwareSealingKey;
 
 using namespace CHERI;
 
@@ -1031,19 +1032,6 @@ namespace
 	uint32_t nextSealingType = std::numeric_limits<uint32_t>::max();
 
 	/**
-	 * Returns the root for the software sealing key.
-	 */
-	__always_inline Capability<SKeyStruct> software_sealing_key()
-	{
-		SKeyStruct *ret;
-		__asm("1:   "
-		      " auipcc      %0, %%cheriot_compartment_hi(__sealingkey2)\n"
-		      " clc         %0, %%cheriot_compartment_lo_i(1b)(%0)\n"
-		      : "=C"(ret));
-		return {ret};
-	}
-
-	/**
 	 * Helper that unseals `in` if it is a valid sealed capability sealed with
 	 * our hardware sealing key.  Returns the unsealed pointer, `nullptr` if it
 	 * cannot be helped.
@@ -1054,8 +1042,7 @@ namespace
 		// FIXME: At the moment the ISA is still shuffling types around, but
 		// eventually we want to know the type statically and don't need dynamic
 		// instructions.
-		Capability key{SEALING_CAP()};
-		in.unseal(key);
+		in.unseal(allocatorSealingKey);
 		return in.is_valid() ? in : SealedAllocation{nullptr};
 	}
 
@@ -1136,7 +1123,7 @@ namespace
 
 		obj->type   = key.address();
 		auto sealed = obj;
-		sealed.seal(SEALING_CAP());
+		sealed.seal(allocatorSealingKey);
 		obj.address() += ObjHdrSize; // Exclude the header.
 		obj.bounds() = obj.top() - obj.address();
 		Debug::Assert(
@@ -1151,7 +1138,7 @@ SKey token_key_new()
 	// structures and so can have its own lock.
 	static FlagLock tokenLock;
 	LockGuard       g{tokenLock};
-	auto            keyRoot = software_sealing_key();
+	auto            keyRoot = softwareSealingKey;
 	// For now, strip the user permissions.  We might want to use them for
 	// permit-allocate and permit-free.
 	keyRoot.permissions() &=

@@ -653,11 +653,9 @@ rule("firmware")
 				"\n\t\tSHORT(.software_revoker_end - .software_revoker_start);" ..
 				"\n\t\tLONG(.software_revoker_globals);" ..
 				"\n\t\tSHORT(SIZEOF(.software_revoker_globals));" ..
-				-- The import table offset is computed from the start by code
-				-- that assumes that the first two words are space for sealing
-				-- keys, so we set it to 16 here to provide a computed size of
-				-- 0.
-				"\n\t\tSHORT(16)" ..
+				-- The software revoker has no import table.
+				"\n\t\tLONG(0)" ..
+				"\n\t\tSHORT(0)" ..
 				"\n\t\tLONG(.software_revoker_export_table);" ..
 				"\n\t\tSHORT(.software_revoker_export_table_end - .software_revoker_export_table);\n" ..
 				"\n\t\tLONG(0);" ..

@@ -10,5 +10,5 @@ struct TestType
 	int value;
 };
 
-void __cheri_compartment("static_sealing_inner")
+int __cheri_compartment("static_sealing_inner")
   test_static_sealed_object(Sealed<TestType>);

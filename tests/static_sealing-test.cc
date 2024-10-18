@@ -19,6 +19,5 @@ int test_static_sealing()
 {
 	// Get a pointer to it and ask for it to be unsealed.
 	Sealed<TestType> value{STATIC_SEALED_VALUE(test)};
-	test_static_sealed_object(value);
-	return 0;
+	return test_static_sealed_object(value);
 }
