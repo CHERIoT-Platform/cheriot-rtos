@@ -365,6 +365,7 @@ namespace loader
 			/**
 			 * The PCC-relative location of the cross-compartment call return
 			 * path, used to build the initial return addresses for threads.
+			 * That is, "switcher_after_compartment_call".
 			 */
 			uint16_t crossCallReturnEntry;
 

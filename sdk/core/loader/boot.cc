@@ -850,6 +850,8 @@ namespace
 		 * than by fiat of initial construction.  The switcher will detect the
 		 * trusted stack underflow and will signal the scheduler that the thread
 		 * has exited and should not be brought back on core.
+		 *
+		 * See core/switcher/entry.S:/^switcher_after_compartment_call.
 		 */
 		auto threadInitialReturn =
 		  build<void, Root::Type::Execute, SwitcherPccPermissions>(
