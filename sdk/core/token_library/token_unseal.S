@@ -90,9 +90,7 @@ __sealingkey:
 
   /* Subset bounds to ->data */
   // Get the top into t1
-  cgetlen         t1, ca0
-  cgetbase        t0, ca0
-  add             t1, t1, t0
+  cgettop         t1, ca0
   // Move the address to the start of the data
   cincoffset      ca0, ca0, TokenSObj_offset_data
   // Subtract the address of the (to-be-returned-unsealed) data from the top to
