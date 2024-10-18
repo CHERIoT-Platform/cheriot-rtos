@@ -1095,7 +1095,7 @@ namespace loader
 
 		/**
 		 * Flags.  The low three bits indicate the number of registers that
-		 * should be cleared in the compartment switcher.  The next two bits
+		 * should be passed in the compartment switcher.  The next two bits
 		 * indicate the interrupt status.  The remaining three are currently
 		 * unused.
 		 */
