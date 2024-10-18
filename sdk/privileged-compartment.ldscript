@@ -17,17 +17,19 @@ SECTIONS
 		# Array of compartment exports
 		*(.compartment_exports .compartment_exports.*);
 	}
+	# Reserve space at the start for privileged compartments that need special sealing keys.
+	.compartment_sealing_keys : ALIGN(8)
+	{
+		# Start of the compartment's PCC region
+		HIDDEN(__compartment_pcc_start = .);
+		# The sealing keys for this compartment is before the import table, if they exist
+		*(.sealing_key1*)
+		*(.sealing_key2*)
+	}
 	# Lay out the compartment imports section.  This will end up on PCC.
 	.compartment_import_table : ALIGN(8)
 	{
 		# Array of compartment imports 
-		HIDDEN(__compartment_pcc_start = .);
-		# The sealing key for this compartment is before the import table.
-		HIDDEN(__sealingkey = .);
-		. = . + 8;
-		# Space for a second sealing key, used only by the allocator.
-		HIDDEN(__sealingkey2 = .);
-		. = . + 8;
 		# The first import table entry is the compartment switcher.
 		HIDDEN(.compartment_switcher = .);
 		. = . + 8;

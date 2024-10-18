@@ -4,10 +4,11 @@
 #define TEST_NAME "Static sealing (inner compartment)"
 #include "static_sealing.h"
 #include "tests.hh"
+#include <fail-simulator-on-error.h>
 
 using namespace CHERI;
 
-void test_static_sealed_object(Sealed<TestType> obj)
+int test_static_sealed_object(Sealed<TestType> obj)
 {
 	// Get our static sealing key.
 	SKey       key = STATIC_SEALING_TYPE(SealingType);
@@ -48,4 +49,5 @@ void test_static_sealed_object(Sealed<TestType> obj)
 	                                  Permission::Global}>(unsealed, 1)),
 	     "Incorrect permissions on unsealed statically sealed object {}",
 	     unsealed);
+	return 0;
 }
