@@ -596,9 +596,9 @@ namespace
 			{
 				if (contains<ExportEntry>(lib.exportTable, possibleLibcall))
 				{
-					// TODO: Library export tables are not used after the
-					// loader has run, we could move them to the end of the
-					// image and make that space available for the heap.
+					// Library export tables are not used after the loader has
+					// run; our linker script places them to the end of the
+					// image, which we make available for the heap.
 					return createLibCall(build_pcc(lib));
 				}
 			}
