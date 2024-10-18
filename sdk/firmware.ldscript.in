@@ -46,6 +46,8 @@ SECTIONS
 	scheduler_code : CAPALIGN
 	{
 		.scheduler_start = .;
+		*.scheduler.compartment(.compartment_sealing_keys);
+		.scheduler_import_start = .;
 		*.scheduler.compartment(.compartment_import_table);
 		.scheduler_import_end = .;
 		*.scheduler.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
@@ -55,6 +57,8 @@ SECTIONS
 	allocator_code : CAPALIGN
 	{
 		.allocator_start = .;
+		*/cheriot.allocator.compartment(.compartment_sealing_keys);
+		.allocator_import_start = .;
 		*/cheriot.allocator.compartment(.compartment_import_table);
 		.allocator_import_end = .;
 		allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
@@ -66,6 +70,8 @@ SECTIONS
 	token_library_code : CAPALIGN
 	{
 		.token_library_start = .;
+		*/cheriot.token_library.library(.compartment_sealing_keys);
+		.token_library_import_start = .;
 		*/cheriot.token_library.library(.compartment_import_table);
 		.token_library_import_end = .;
 		token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
@@ -178,8 +184,10 @@ SECTIONS
 		LONG(.scheduler_globals);
 		# Scheduler globals end size
 		SHORT(SIZEOF(.scheduler_globals));
+		# Start of the scheduler's import table
+		LONG(.scheduler_import_start);
 		# Size of the scheduler import table
-		SHORT(.scheduler_import_end - .scheduler_start);
+		SHORT(.scheduler_import_end - .scheduler_import_start);
 		# Address of scheduler export table
 		LONG(.scheduler_export_table);
 		# Size of the scheduler export table
@@ -197,8 +205,10 @@ SECTIONS
 		LONG(.allocator_globals);
 		# Allocator globals end
 		SHORT(SIZEOF(.allocator_globals));
+		# Start of the allocator's import table
+		LONG(.allocator_import_start);
 		# Size of the allocator import table
-		SHORT(.allocator_import_end - .allocator_start);
+		SHORT(.allocator_import_end - .allocator_import_start);
 		# Address of allocator export table
 		LONG(.allocator_export_table);
 		# Size of the allocator export table
@@ -215,8 +225,10 @@ SECTIONS
 		# No data segment
 		LONG(0);
 		SHORT(0);
+		# Start of the token_library's import table
+		LONG(.token_library_import_start);
 		# Size of the token server import table
-		SHORT(.token_library_import_end - .token_library_start);
+		SHORT(.token_library_import_end - .token_library_import_start);
 		# Address of the token server export table
 		LONG(.token_library_export_table);
 		# Size of the token server export table

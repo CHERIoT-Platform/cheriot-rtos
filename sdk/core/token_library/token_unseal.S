@@ -2,6 +2,16 @@
 #include <cheri-builtins.h>
 #include "../allocator/token.h"
 
+	.hidden __sealingkey
+	.type   __sealingkey,@object
+	.section    .sealing_key1,"aw",@progbits
+	.globl  __sealingkey
+	.p2align    3
+__sealingkey:
+	.chericap   0
+	.size   __sealingkey, 8
+
+
 /*
  * An in-assembler implementation of
  *
@@ -11,13 +21,9 @@
  * The name has been manually mangled as per the C++ rules.
  */
 
-	.section .text._Z16token_obj_unsealP10SKeyStructP10SObjStruct,"axG", \
-		@progbits,_Z16token_obj_unsealP10SKeyStructP10SObjStruct,comdat
+.section .text,"ax",@progbits
 
-	.hidden  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
-	.globl   _Z16token_obj_unsealP10SKeyStructP10SObjStruct
-	.p2align 1
-	.type    _Z16token_obj_unsealP10SKeyStructP10SObjStruct,@function
+.p2align 1
 
 .Ltoken_unseal_internal:
   /*
@@ -99,14 +105,20 @@
   /* And that's an unwrap. */
   cret
 
+	.hidden _Z16token_obj_unsealP10SKeyStructP10SObjStruct
+	.globl  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
 	cgettype a2, ca1
 	j        .Ltoken_unseal_internal
 
+	.hidden  _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
+	.globl   _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
 _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct:
 	li       a2, 12
 	j        .Ltoken_unseal_internal
 
+	.hidden  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
+	.globl   _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct:
 	li       a2, 11
 	j        .Ltoken_unseal_internal

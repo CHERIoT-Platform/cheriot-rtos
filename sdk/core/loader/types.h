@@ -447,7 +447,7 @@ namespace loader
 			 * The distance from the start of the code region to the end of the
 			 * import table.
 			 */
-			uint16_t importTableSize;
+			AddressRange importTable;
 
 			/**
 			 * The export table for the scheduler.
@@ -465,11 +465,7 @@ namespace loader
 			 */
 			[[nodiscard]] AddressRange import_table() const
 			{
-				// Skip the sealing keys
-				const size_t SealingKeysSize = 2 * sizeof(void *);
-				return {
-				  code.start() + SealingKeysSize,
-				  static_cast<uint16_t>(importTableSize - SealingKeysSize)};
+				return importTable;
 			}
 
 			/**
