@@ -10,7 +10,13 @@
 
 struct TrustedStackFrame
 {
-	/// caller's stack
+	/**
+	 * Caller's stack pointer, at time of cross-compartment entry, pointing at
+	 * switcher's register spills (.Lswitch_entry_first_spill and following).
+	 *
+	 * The address of this pointer is the (upper) limit of the stack capability
+	 * given to the callee.
+	 */
 	void *csp;
 	/**
 	 * The callee's export table.  This is stored here so that we can find the
@@ -28,6 +34,13 @@ struct TrustedStackFrame
 	uint16_t errorHandlerCount;
 };
 
+/**
+ * Each thread in the system has, and is identified by, its Trusted Stack.
+ * These structures hold an activation frame (a TrustedStackFrame) for each
+ * active cross-compartment call as well as a "spill" register context, used
+ * mostly for preemption (but also as staging space when a thread is adopting a
+ * new context as part of exception handlng).
+ */
 template<size_t NFrames>
 struct TrustedStackGeneric
 {
