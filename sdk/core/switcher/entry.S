@@ -44,6 +44,23 @@
  * purpose, &c), one should not read too much of the psABI calling convention
  * into the code here.  Within the switcher, the machine is a raw register
  * machine and C is a distant, high-level language.
+ *
+ * Since this is the part of the map labeled "here be dragons", we have added
+ * "Register Atlas" comments throughout.
+ *
+ * Labels associated with interesting control flow are annotated with
+ *
+ *  - "FROM:", a list of predecessor blocks and/or
+ *    - "above": the immediately prior block
+ *    - "malice": untrusted code outside the switcher
+ *    - "error": a trap from within the switcher
+ *
+ *  - "IRQ:", either "deferred" or "enabled".
+ *
+ *  - "LIVE IN:", a list of live-in registers and/or
+ *    - "*": the entire general purpose register file
+ *    - "mcause"
+ *    - "mtdc"
  */
 
 switcher_code_start:
@@ -129,6 +146,7 @@ switcher_scheduler_entry_csp:
 	// least load permission - we'll check the other permissions properly
 	// later) by loading a byte.  If this doesn't work, we'll fall off this
 	// path into the exception handler and force unwind.
+	// See .Lhandle_error_switcher_pcc_check
 	clb                t2, 0(\reg)
 	// make sure the caller's CSP has the expected permissions
 	cgetperm           t2, \reg
@@ -145,7 +163,8 @@ switcher_scheduler_entry_csp:
  * Zero the stack.  The three operands are the base address, the top address,
  * and a scratch register to use.  The base must be a capability but it must
  * be provided without the c prefix because it is used as both a capability
- * and integer register.  All three registers are clobbered.
+ * and integer register.  All three registers are clobbered, but base and top
+ * are still capabilities afterwards.
  */
 .macro zero_stack base top scratch
 	addi               \scratch, \top, -32
@@ -183,166 +202,314 @@ switcher_scheduler_entry_csp:
 	.p2align 2
 	.type __Z26compartment_switcher_entryz,@function
 __Z26compartment_switcher_entryz:
+	/*
+	 * FROM: malice
+	 * IRQ: deferred
+	 * LIVE IN: mtdc, ra, sp, gp, s0, s1, t0, t1, a0, a1, a2, a3, a4, a5
+	 *
+	 * Atlas:
+	 *  mtdc: thread trusted stack pointer
+	 *  ra: caller return address (nominally; corruption is on them)
+	 *  sp: nominally, caller's stack pointer; will check integrity below
+	 *  gp: caller state, to be spilled, value unused in switcher
+	 *  s0, s1: caller state, to be spilled, value unused in switcher
+	 *  t0: possible caller argument to callee, passed or zered
+	 *  t1: sealed export table entry for the target callee
+	 *      (see LLVM's RISCVExpandPseudo::expandCompartmentCall)
+	 *  a0, a1, a2, a3, a4, a5: possible caller arguments to callee, passed/0ed
+	 *  tp, t2: scratch
+	 */
+	/*
+	 * Traps on an invalid csp or an overflow (even mid-way through this spill
+	 * sequence) will trigger invocation of the compartment's error handler, or
+	 * forcibly unwind if none.  The register file is safe to expose to the
+	 * caller.
+	 */
 	cincoffset        csp, csp, -SPILL_SLOT_SIZE
 	csc               cs0, SPILL_SLOT_cs0(csp)
 	csc               cs1, SPILL_SLOT_cs1(csp)
 	csc               cgp, SPILL_SLOT_cgp(csp)
 	csc               cra, SPILL_SLOT_pcc(csp)
-	// before we access any privileged state, we can verify the
-	// compartment's csp is valid. If not, force unwind.
-	// Note that this check is purely to protect the callee, not the switcher
-	// itself.
+	// Atlas: ra, gp, s0, s1: scratch (presently, redundant caller values)
+
+	/*
+	 * Before we access any privileged state, we can verify the compartment's
+	 * csp is valid. If not, force unwind.  This check is purely to protect the
+	 * callee, not the switcher itself.
+	 *
+	 * Uses tp and t2 as scratch scalars.  Might vector to .Lforce_unwind
+	 * directly or via a trap.
+	 */
 	check_compartment_stack_integrity csp
+	// Atlas: sp: the caller's stack pointer, now validated
 	// The caller should back up all callee saved registers.
 	// mtdc should always have an offset of 0.
 	cspecialr          ct2, mtdc
+	// Atlas: t2: a pointer to this thread's TrustedStack structure
+	// The register file is (briefly) unsafe to expose to the caller
 #ifndef NDEBUG
 	// XXX: This line is useless, only for mtdc to show up in debugging.
 	cmove              ct2, ct2
 #endif
-	clear_hazard_slots ct2, ctp
+	clear_hazard_slots /* trusted stack = */ ct2, /* scratch = */ ctp
 
 	// make sure the trusted stack is still in bounds
 	clhu               tp, TrustedStack_offset_frameoffset(ct2)
 	cgetlen            t2, ct2
+	/*
+	 * Atlas:
+	 *  t2: scalar length of the trusted stack
+	 *  tp: scalar index of the currently frame of the trusted stack
+	 */
+	// The register file is (briefly) safe to expose to the caller
 	bgeu               tp, t2, .Lout_of_trusted_stack
-	// we are past the stacks checks. Reload ct2; tp is still as it was
+	// we are past the stacks checks.
 	cspecialr          ct2, mtdc
-	// ctp points to the current available trusted stack frame.
+	// Atlas: t2: a pointer to this thread's TrustedStack structure (again)
+	// The register file is (again) unsafe to expose to the caller
 	cincoffset         ctp, ct2, tp
+	// Atlas: tp: a pointer to the current available TrustedStackFrame
+	/*
+	 * Populate that stack frame by...
+	 * 1. spilling the caller's stack pointer
+	 */
 	csc                csp, TrustedStackFrame_offset_csp(ctp)
-	// We have just entered this call, so no faults triggered during this call
-	// yet.
+	/*
+	 * 2. zeroing the number of error handler invocations (we have just entered
+	 *    this call, so no faults triggered during this call yet).
+	 */
 	csh                zero, TrustedStackFrame_offset_errorHandlerCount(ctp)
-	// For now, store a null export entry so that we don't ever try to pass
-	// switcher state to an error handler.
+	/*
+	 * 3. For now, store a null export entry.  This is largely cosmetic; we will
+	 *    not attempt to access this value before it is set to the real export
+	 *    table entry below.  Should we trap, the logic at
+	 *    .Lhandle_error_switcher_pcc will cause us to force unwind, popping
+	 *    this frame before any subsequent action.
+	 */
 	csc                cnull, TrustedStackFrame_offset_calleeExportTable(ctp)
+	/*
+	 * Update the frame offset, using s1 to hold a scratch scalar.  Any fault
+	 * before this point (wrong target cap, unaligned stack, etc.) is seen as a
+	 * fault in the caller. After writing the new tstack offset, any fault is
+	 * seen as a callee fault.
+	 */
 	clhu               s1, TrustedStack_offset_frameoffset(ct2)
 	addi               s1, s1, TrustedStackFrame_size
-	// Update the frame offset.
-	// Any fault before this point (wrong target cap, unaligned stack, etc.) is
-	// seen as a fault in the caller. From this point after writing the new
-	// tstack offset, any fault is seen as a callee fault.  With a null export
-	// table entry on the trusted stack, a fault here will cause a forced
-	// unwind until we set the correct one.
 	csh                s1, TrustedStack_offset_frameoffset(ct2)
-	// Chop off the stack.
+
+	// Chop off the stack, using s1 to hold a scratch scalar
 	cgetaddr           s0, csp
 	cgetbase           s1, csp
 	csetaddr           csp, csp, s1
 	sub                s1, s0, s1
 	csetboundsexact    ct2, csp, s1
 	csetaddr           csp, ct2, s0
+	/*
+	 * Atlas:
+	 *  s0: address of stack boundary between caller and callee frames
+	 *  t2: pointer to stack, with bounds from stack base to boundary in s0,
+	 *      cursor at stack base
+	 *  sp: pointer to stack, with bounds as t2, cursor at boundary in s0
+	 *  tp: (still) a pointer to the current available TrustedStackFrame
+	 *  t1: (still) sealed export table entry for the target callee
+	 *  a0, a1, a2, a3, a4, a5, t0: (still) call argument values / to be zeroed
+	 */
 #ifdef CONFIG_MSHWM
 	// Read the stack high water mark (which is 16-byte aligned)
 	csrr               gp, CSR_MSHWM
 	// Skip zeroing if high water mark >= stack pointer
 	bge                t2, sp, .Lafter_zero
-	// Use stack high water mark as base address for zeroing.  If this faults
-	// then it will trigger a force unwind.  This can happen only if the caller
-	// is doing something bad.
+	/*
+	 * Use stack high water mark as base address for zeroing.  If this faults
+	 * then it will trigger a force unwind.  This can happen only if the caller
+	 * is doing something bad.
+	 */
 	csetaddr           ct2, csp, gp
 #endif
-	zero_stack         t2, s0, gp
+	zero_stack         /* base = */ t2, /* top = */ s0, /* scratch = */ gp
 .Lafter_zero:
+	/*
+	 * LIVE IN: mtdc, sp, tp, t0, t1, a0, a1, a2, a3, a4, a5
+	 *
+	 * Atlas:
+	 *  t2, gp: caller stack capabilities (dead)
+	 *  s0: scratch scalar (dead)
+	 */
 	// Reserve space for unwind state and so on.
 	cincoffset 	       csp, csp, -STACK_ENTRY_RESERVED_SPACE
+	// Atlas: sp: pointer to stack, below compartment invocation local storage
 #ifdef CONFIG_MSHWM
 	// store new stack top as stack high water mark
 	csrw               CSR_MSHWM, sp
 #endif
-	// Fetch the sealing key
+
+	// Fetch the sealing key, using gp as a scratch scalar
 	LoadCapPCC         cs0, compartment_switcher_sealing_key
-	li                 gp, 9
+	// Atlas: s0: switcher sealing key
+	li                 gp, 9 // loader/boot.cc:/SealedImportTableEntries
 	csetaddr           cs0, cs0, gp
-	// The target capability is in ct1. Unseal, check tag and load the entry point offset.
+	// The target capability is in t1. Unseal and load the entry point offset.
 	cunseal            ct1, ct1, cs0
-	// Load the entry point offset.  If cunseal failed then this will fault and
-	// we will force unwind.
+	/*
+	 * Atlas:
+	 *  t1: unsealed pointer with bounds encompassing callee compartment
+	 *      ExportTable and ExportEntry array and cursor pointing at the
+	 *      callee ExportEntry
+	 */
+	/*
+	 * Load the entry point offset.  If cunseal failed then this will fault and
+	 * we will force unwind; see .Lhandle_error_switcher_pcc_check.
+	 */
 	clhu               s0, ExportEntry_offset_functionStart(ct1)
-	// At this point, we know that the cunseal has succeeded (we didn't trap on
-	// the load) and so it's safe to store the unsealed value of the export
-	// table pointer.  Nothing between this point and transition to the callee
-	// should fault.
+	// Atlas: s0: callee compartment function entrypoint offset (scalar)
+	/*
+	 * At this point, we know that the cunseal has succeeded (we didn't trap on
+	 * the load) and so it's safe to store the unsealed value of the export
+	 * table pointer.  Nothing between this point and transition to the callee
+	 * should fault.
+	 */
 	csc                ct1, TrustedStackFrame_offset_calleeExportTable(ctp)
 
-	// Load the minimum stack size required by the callee.
+	/*
+	 * Load the minimum stack size required by the callee.  At this point we
+	 * drop the register file's reference to the TrustedStackFrame, bringing us
+	 * closer to a register file that is not secret from the callee.
+	 */
 	clbu               tp, ExportEntry_offset_minimumStackSize(ct1)
+	// Atlas: tp: scratch scalar
 	// The stack size is in 8-byte units, so multiply by 8.
 	slli               tp, tp, 3
-	// Check that the stack is large enough for the callee.
-	// At this point, we have already truncated the stack and so the length of
-	// the stack is the length that the callee can use.
+	/*
+	 * Check that the stack is large enough for the callee.
+	 * At this point, we have already truncated the stack and so the length of
+	 * the stack is the length that the callee can use.
+	 */
 	cgetlen            t2, csp
+	// Atlas: t2: scratch scalar
 	// Include the space we reserved for the unwind state.
 	addi               t2, t2, -STACK_ENTRY_RESERVED_SPACE
+	// LIVE OUT: mtdc
 	bgtu               tp, t2, .Lstack_too_small
 
 	// Get the flags field into tp
 	clbu               tp, ExportEntry_offset_flags(ct1)
+	// Atlas: tp: callee entry flags field
+
+	// All ExportEntry state has been consulted; move to ExportTable header
 	cgetbase           s1, ct1
 	csetaddr           ct1, ct1, s1
-	// Load the target CGP
+	/*
+	 * Atlas:
+	 *  t1: pointer to the callee compartment ExportTable structure.  Bounds
+	 *      still inclusive of ExportEntry array, but that will not be accessed.
+	 */
+	// At this point we begin loading callee compartment state.
 	clc                cgp, ExportTable_offset_cgp(ct1)
-	// Load the target PCC and point to the function.
+	// Atlas: gp: target compartment CGP
 	clc                cra, ExportTable_offset_pcc(ct1)
 	cincoffset         cra, cra, s0
-	// Get the number of registers to zero in t2
-	andi               t2, tp, 0x7
-	// Get the interrupt-disable bit in t1
-	andi               t1, tp, 0x10
+	// Atlas: ra: target function entry vector (pcc base + offset from s0)
+
 	// Zero any unused argument registers
-	// The low 3 bits of the flags field contain the number of arguments to
-	// pass.  We create a small sled that zeroes them and jump into the middle
-	// of it at an offset defined by the number of registers that the export
-	// entry told us to pass.
+	/*
+	 * The low 3 bits of the flags field contain the number of argument
+	 * registers to pass.  We create a small sled that zeroes them in the order
+	 * they are used as argument registers, and we jump into the middle of it at
+	 * an offset defined by that value, preserving the prefix of the sequence.
+	 */
 .Lload_zero_arguments_start:
 	auipcc             cs0, %cheriot_compartment_hi(.Lzero_arguments_start)
 	cincoffset         cs0, cs0, %cheriot_compartment_lo_i(.Lload_zero_arguments_start)
+	// Atlas: s0: .Lzero_arguments_start
+	andi               t2, tp, 0x7 // loader/types.h's ExportEntry::flags
 	// Change from the number of registers to pass into the number of 2-byte
 	// instructions to skip.
 	sll                t2, t2, 1
-	// Offset the jump target by the number of registers that we should be
-	// passing.
+	// Offset the jump target by the number of instructions to skip
 	cincoffset         cs0, cs0, t2
 	// Jump into the sled.
 	cjr                cs0
 .Lzero_arguments_start:
 	zeroRegisters      a0, a1, a2, a3, a4, a5, t0
-	// Enable interrupts of the interrupt-disable bit is not set in flags
+
+	/*
+	 * Enable interrupts if the interrupt-disable bit is not set in flags.  See
+	 * loader/types.h's InterruptStatus and ExportEntry::InterruptStatusMask
+	 */
+	andi               t1, tp, 0x10
 	bnez               t1, .Lskip_interrupt_disable
 	csrsi              mstatus, 0x8
 .Lskip_interrupt_disable:
-	// Registers passed to the callee are:
-	// cra (c1), csp (c2), and cgp (c3) are passed unconditionally.
-	// ca0-ca5 (c10-c15) and ct0 (c5) are either passed as arguments or cleared
-	// above.  This should add up to 10 registers, with the remaining 5 being
-	// cleared now:
+
+	/*
+	 * Atlas:
+	 *  ra: (still) target function entry vector
+	 *  sp: (still) pointer to stack, below compartment invocation local storage
+	 *  gp: (still) target compartment CGP
+	 *  a0, a1, a2, a3, a4, a5, t0: arguments or zeroed, as above
+	 */
+	/*
+	 * Up to 10 registers are carrying state for the callee or are properly
+	 * zeroed.  Clear the remaining 5 now.
+	 */
 	zeroRegisters      tp, t1, t2, s0, s1
 	cjalr              cra
 
+	/*
+	 * The backwards-arc return sentry given to the callee as part of that cjalr
+	 * could be captured by the callee or passed back to the caller.  We cannot
+	 * assume well-bracketed control flow.  However, the requirements of the
+	 * next block of code are minimal: mtdc must be a TrustedStack pointer.  The
+	 * contents of a0 and a1 will be exposed to the compartment above the one
+	 * currently executing, or the thread will be terminated if there is no
+	 * such.
+	 */
+
 .Lskip_compartment_call:
-	// If we are doing a forced unwind of the trusted stack then we do almost
-	// exactly the same as a normal unwind.  We will jump here from the
-	// exception path.
+	/*
+	 * FROM: malice, above, .Lstack_too_small
+	 * LIVE IN: mtdc, a0, a1
+	 *
+	 * Atlas:
+	 *  mtdc: thread trusted stack pointer
+	 *  a0, a1: return value(s).  The callee function must ensure that it clears
+	 *          these as appropriate if it is returning 0 or 1 values and not 2.
+	 *  ra, sp, gp: dead or callee state (to be replaced by caller)
+	 *  tp, s0, s1, t0, t1, t2, a2, a3, a4, a5: dead or callee state (to be 0ed)
+	 */
+
+	/*
+	 * If we are doing a forced unwind of the trusted stack then we do almost
+	 * exactly the same as a normal unwind.  We will jump here from the
+	 * exception path.
+	 */
 	cjal               .Lpop_trusted_stack_frame
 	cmove              cra, ca2
-	// Zero all registers apart from RA, GP, SP and return args.
-	// cra, csp and cgp needed for the compartment
-	// cs0 saved and restored on trusted stack
-	// cs1 saved and restored on trusted stack
-	// ca0, used for first return value
-	// ca1, used for second return value
+	/*
+	 * Atlas:
+	 *  ra, sp, gp, s0, s1: restored caller values
+	 *  a0, a1: (still) return value(s), as above
+	 */
 	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
 	cret
 
-	// If the stack is too small, we don't do the call, but to avoid leaking
-	// any other state we still go through the same return path as normal.  We
-	// set the return registers to -ENOTENOUGHSTACK and 0, so users can see
-	// that this is the failure reason.
+	/*
+	 * If the stack is too small, we don't do the call, but to avoid leaking
+	 * any other state we still go through the same return path as normal.  We
+	 * set the return registers to -ENOTENOUGHSTACK and 0, so users can see
+	 * that this is the failure reason.
+	 */
 .Lstack_too_small:
+	/*
+	 * FROM: __Z26compartment_switcher_entryz
+	 * LIVE IN: mtdc
+	 *
+	 * Atlas:
+	 *  mtdc: thread trusted stack pointer
+	 */
 	li                 a0, -ENOTENOUGHSTACK
 	li                 a1, 0
+	// LIVE OUT: mtdc, a0, a1
 	j                  .Lskip_compartment_call
 .size compartment_switcher_entry, . - compartment_switcher_entry
 
@@ -351,48 +518,87 @@ __Z26compartment_switcher_entryz:
 	.global  exception_entry_asm
 	.p2align 2
 exception_entry_asm:
-	// We do not trust the interruptee's context. We cannot use its stack in any way.
-	// The save reg frame we can use is fetched from the tStack.
-	// In general, mtdc holds the trusted stack register.  We are here with
-	// interrupts off and precious few registers available to us, so swap it
-	// with the csp (we'll put it back, later).
+	/*
+	 * FROM: malice, error
+	 * IRQ: deferred
+	 * LIVE IN: mcause, mtdc, *
+	 *
+	 * Atlas:
+	 *  mtdc: either a TrustedStack pointer or zero
+	 */
+	/*
+	 * We do not trust the interruptee's context. We cannot use its stack in any
+	 * way.  The save reg frame we can use is fetched from the tStack.
+	 * In general, mtdc holds the trusted stack register.  We are here with
+	 * interrupts off and precious few registers available to us, so swap it
+	 * with the csp (we'll put it back, later).
+	 */
 	cspecialrw         csp, mtdc, csp
 #ifndef NDEBUG
 	// XXX: This move is useless, but just for debugging in the simulator.
 	cmove              csp, csp
 #endif
 
-	// If we read out zero, we've reentered the exception and are about to
-	// trap.  Make sure that we end up in an architectural trap loop: clobber
-	// mtcc, so that trapping attempts to vector to an untagged PCC, thereby
-	// causing another (i.e., a third) trap in spillRegisters, below.
-	//
-	// While that's a good start, it does not guarantee that we end up in a
-	// trap loop: the reentry will probably have put something non-zero into
-	// mtdc, so we wouldn't hit this, and wouldn't loop, when we take that
-	// third trap.  (Exactly what we'd do instead is hard to say; we'd try
-	// spilling registers to an attacker-controlled pointer, at the very
-	// least.) Therefore, clobber mtcc (!) to ensure that the certainly
-	// upcoming third trap puts us in an architectural trap loop.  This is
-	// slightly preferable to clearing mtdc, which would also ensure that we
-	// looped, because the architectural loop is tighter and involves no
-	// program text, making it easier for microarchitecture to detect.
+	/*
+	 * If we read out zero, we've reentered the exception and are about to trap
+	 * (in spillRegisters, which uses sp as its authority).  Make sure that we
+	 * end up in an architectural trap loop: clobber mtcc, so that that trap
+	 * attempts to vector to an untagged PCC, thereby causing another trap,
+	 * which immediately traps, and so on.
+	 *
+	 * We could instead zero mtdc, ensuring that we spin through several
+	 * instructions (taking a trap then each of cspecialrw, bnez, cspecialw, and
+	 * then the traping csc), but this is less architecturally visible.
+	 *
+	 * Failure to do either would mean that the trap in spillRegisters below
+	 * would re-enter the trap-handler with an unknown value (the first trap's
+	 * sp) in mtdc, which the rest of this code would take to be a valid
+	 * TrustedStack.  Exactly what would happen then is hard to say; we'd try
+	 * spilling registers to a potentially attacker-controlled pointer, at the
+	 * very least, and that's something to avoid.
+	 */
 	bnez               sp, .Lexception_entry_still_alive
 	cspecialw          mtcc, csp
 .Lexception_entry_still_alive:
+	/*
+	 * LIVE IN: mcause, mtdc, sp
+	 *
+	 * Atlas:
+	 *  mtdc: the interrupted context's sp
+	 *  sp: TrustedStack (and, in particular, a spill frame we can use)
+	 */
 
-	// csp now points to the save reg frame that we can use.
-	// The guest csp (c2) is now in mtdc. Will be spilled later, but we
-	// spill all the other 14 registers now.
+	/*
+	 * The guest sp/csp (x2/c2) is now in mtdc. Will be spilled later, but we
+	 * spill all the other 14 registers now.
+	 */
 	spillRegisters     cra, cgp, ctp, ct0, ct1, ct2, cs0, cs1, ca0, ca1, ca2, ca3, ca4, ca5
 
-	// If a thread has exited then it will set a fake value in the mcause so
-	// that the scheduler knows not to try to resume it.
+	/*
+	 * This label's name is somewhat confusing.  Not all threads arriving here
+	 * are doomed to exit, and indeed, we expect very few of the trips through
+	 * this code to involve thread exit, but when a thread is actually exiting,
+	 * it should end up here, as if it had taken an exception.  If a thread has
+	 * exited then it will set a reserved value in the mcause so
+	 * that the scheduler knows not to try to resume it.
+	 */
 .Lthread_exit:
-	// mtdc got swapped with the thread's csp, store it and clobber mtdc with
-	// zero.  The trusted stack pointer is solely in csp, now; if we take
-	// another trap before a new one is installed, or if the scheduler enables
-	// interrupts and we take one, we'll pull this zero out of mtdc, above.
+	/*
+	 * FROM: above, .Lset_mcause_and_exit_thread
+	 * IRQ: deferred
+	 * LIVE IN: mcause, mtdc, sp
+	 *
+	 * Atlas:
+	 *  mtdc: the interrupted context's sp
+	 *  sp: TrustedStack (and in particular a spill frame we can use)
+	 */
+
+	/*
+	 * mtdc got swapped with the thread's csp, store it and clobber mtdc with
+	 * zero.  The trusted stack pointer is solely in csp, now; if we take
+	 * another trap before a new one is installed, or if the scheduler enables
+	 * interrupts and we take one, we'll pull this zero out of mtdc, above.
+	 */
 	zeroOne            t1
 	cspecialrw         ct1, mtdc, ct1
 	csc                ct1, TrustedStack_offset_csp(csp)
@@ -562,6 +768,7 @@ exception_entry_asm:
 	li                 a0, -1
 	li                 a1, 0
 
+.Lhandle_error_switcher_pcc:
 	// We want to make sure we can't leak any switcher state into error
 	// handlers, so if we're faulting in the switcher then we should force
 	// unwind.  We never change the base of PCC in the switcher, so we can
