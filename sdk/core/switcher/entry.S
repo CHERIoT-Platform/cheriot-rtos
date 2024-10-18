@@ -234,7 +234,6 @@ __Z26compartment_switcher_entryz:
 	// table entry on the trusted stack, a fault here will cause a forced
 	// unwind until we set the correct one.
 	csh                s1, TrustedStack_offset_frameoffset(ct2)
-#ifndef CONFIG_NO_SWITCHER_SAFETY
 	// Chop off the stack.
 	cgetaddr           s0, csp
 	cgetbase           s1, csp
@@ -260,8 +259,6 @@ __Z26compartment_switcher_entryz:
 	// store new stack top as stack high water mark
 	csrw               CSR_MSHWM, sp
 #endif
-#endif // CONFIG_NO_SWITCHER_SAFETY
-.Lout:
 	// Fetch the sealing key
 	LoadCapPCC         cs0, compartment_switcher_sealing_key
 	li                 gp, 9
@@ -887,7 +884,6 @@ exception_entry_asm:
 	clc                ca2, SPILL_SLOT_pcc(csp)
 	clc                cgp, SPILL_SLOT_cgp(csp)
 	cincoffset         csp, csp, SPILL_SLOT_SIZE
-#ifndef CONFIG_NO_SWITCHER_SAFETY
 #ifdef CONFIG_MSHWM
 	// read the stack high water mark, which is 16-byte aligned
 	// we will use this as base address for stack clearing
@@ -903,7 +899,6 @@ exception_entry_asm:
 #ifdef CONFIG_MSHWM
 	csrw               CSR_MSHWM, sp
 #endif
-#endif // CONFIG_NO_SWITCHER_SAFETY
 	cret
 
 
