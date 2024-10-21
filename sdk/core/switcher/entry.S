@@ -412,6 +412,23 @@ switcher_after_compartment_call:
 	li                 a0, -ENOTENOUGHSTACK
 	li                 a1, 0
 	j                  switcher_after_compartment_call
+
+// If we have run out of trusted stack, then just restore the caller's state
+// and return an error value.
+.Lout_of_trusted_stack:
+	// Restore the spilled values
+	clc                cs0, SPILL_SLOT_cs0(csp)
+	clc                cs1, SPILL_SLOT_cs1(csp)
+	clc                cra, SPILL_SLOT_pcc(csp)
+	clc                cgp, SPILL_SLOT_cgp(csp)
+	cincoffset         csp, csp, SPILL_SLOT_SIZE
+	// Set the return registers
+	li                 a0, -ENOTENOUGHTRUSTEDSTACK
+	li                 a1, 0
+	// Zero everything else
+	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
+	cret
+
 .size compartment_switcher_entry, . - compartment_switcher_entry
 
 	// the entry point of all exceptions and interrupts
@@ -581,23 +598,6 @@ exception_entry_asm:
 	li                 a0, -ECOMPARTMENTFAIL
 	li                 a1, 0
 	j                  switcher_after_compartment_call
-
-
-// If we have run out of trusted stack, then just restore the caller's state
-// and return an error value.
-.Lout_of_trusted_stack:
-	// Restore the spilled values
-	clc                cs0, SPILL_SLOT_cs0(csp)
-	clc                cs1, SPILL_SLOT_cs1(csp)
-	clc                cra, SPILL_SLOT_pcc(csp)
-	clc                cgp, SPILL_SLOT_cgp(csp)
-	cincoffset         csp, csp, SPILL_SLOT_SIZE
-	// Set the return registers
-	li                 a0, -ENOTENOUGHTRUSTEDSTACK
-	li                 a1, 0
-	// Zero everything else
-	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
-	cret
 
 // If we have a possibly recoverable error, see if we have a useful error
 // handler.  At this point, the register state will have been saved in the
