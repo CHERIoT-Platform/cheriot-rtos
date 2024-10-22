@@ -238,7 +238,7 @@ __Z26compartment_switcher_entryz:
 	// Read the stack high water mark (which is 16-byte aligned)
 	csrr               gp, CSR_MSHWM
 	// Skip zeroing if high water mark >= stack pointer
-	bge                t2, sp, .Lafter_zero
+	bge                gp, sp, .Lafter_zero
 	// Use stack high water mark as base address for zeroing.  If this faults
 	// then it will trigger a force unwind.  This can happen only if the caller
 	// is doing something bad.
