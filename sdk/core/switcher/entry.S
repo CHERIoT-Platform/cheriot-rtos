@@ -637,7 +637,7 @@ exception_entry_asm:
 	// Get the previous trusted stack frame
 
 	// Load the caller's csp
-	clc                ca0, TrustedStackFrame_offset_csp(ctp)
+	clc                ct0, TrustedStackFrame_offset_csp(ctp)
 
 	// If this is the top stack frame, then the csp field is the value on
 	// entry.  If it's any other frame then we need to go to the previous one
@@ -647,12 +647,12 @@ exception_entry_asm:
 	// The address of the stack pointer will point to the bottom of the
 	// caller's save area, so we set the bounds to be the base up to the
 	// current address.
-	cgetaddr           a1, ca0
-	cgetbase           a2, ca0
+	cgetaddr           a1, ct0
+	cgetbase           a2, ct0
 	sub                a1, a1, a2
-	csetaddr           ca0, ca0, a2
+	csetaddr           ct0, ct0, a2
 	// The code that installs the context expects csp to be in ct0
-	csetboundsexact    ct0, ca0, a1
+	csetboundsexact    ct0, ct0, a1
 .Lrecovered_stack:
 	li                 a0, 1
 
