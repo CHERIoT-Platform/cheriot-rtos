@@ -642,7 +642,7 @@ exception_entry_asm:
 	// If this is the top stack frame, then the csp field is the value on
 	// entry.  If it's any other frame then we need to go to the previous one
 	cincoffset         cs1, csp, TrustedStack_offset_frames
-	beq                s1, t1, .Lrecovered_stack
+	beq                s1, tp, .Lrecovered_stack
 
 	// The address of the stack pointer will point to the bottom of the
 	// caller's save area, so we set the bounds to be the base up to the
