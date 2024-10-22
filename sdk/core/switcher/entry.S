@@ -614,12 +614,6 @@ exception_entry_asm:
 	// We're now out of the exception path, so make sure that mtdc contains
 	// the trusted stack pointer.
 	cspecialw   mtdc, csp
-	// Store an error value in return registers, which will be passed to the
-	// caller on unwind.  They are currently undefined, if we leave this path
-	// for a forced unwind then we will return whatever is in ca0 and ca1 to
-	// the caller so must ensure that we don't leak anything.
-	li                 a0, -1
-	li                 a1, 0
 
 	// We want to make sure we can't leak any switcher state into error
 	// handlers, so if we're faulting in the switcher then we should force
@@ -790,17 +784,10 @@ exception_entry_asm:
 	 */
 	csrci              mstatus, 0x8
 
-	// Move the return value to a register that will be cleared in a forced
-	// unwind and zero the return registers.
-	move               s0, a0
-	// Store an error value in return registers, which will be passed to the
-	// caller on unwind.
-	li                 a0, -1
-	li                 a1, 0
 	// Return values are 0 for install context, 1 for forced unwind.  Anything
 	// that is not either of these is invalid and so we should do a forced
 	// unwind anyway.
-	bne                s0, zero, .Lforce_unwind
+	bnez               a0, .Lforce_unwind
 
 	// We have been asked to install the new register context and resume.
 	// We do this by copying the register frame over the save area and entering
