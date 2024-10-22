@@ -75,6 +75,7 @@ namespace priv
 	constexpr size_t MCAUSE_LOAD_PAGE_FAULT     = 13;
 	constexpr size_t MCAUSE_STORE_PAGE_FAULT    = 15;
 	constexpr size_t MCAUSE_THREAD_EXIT         = 24;
+	constexpr size_t MCAUSE_THREAD_INTERRUPT    = 25;
 	constexpr size_t MCAUSE_CHERI               = 28;
 
 	constexpr size_t MSTATUS_UIE = (1 << 0);

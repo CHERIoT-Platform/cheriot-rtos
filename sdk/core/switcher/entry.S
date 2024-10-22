@@ -490,7 +490,7 @@ exception_entry_asm:
 	// If we hit one of the exception conditions that we should let
 	// compartments handle then deliver it to the compartment.
 	// CHERI exception code.
-	li                 a0, 0x1c
+	li                 a0, MCAUSE_CHERI
 	beq                a0, t1, .Lhandle_error
 	// Misaligned instruction, instruction access, illegal instruction,
 	// breakpoint, misaligned load, load fault, misaligned store, and store
@@ -549,11 +549,11 @@ exception_entry_asm:
 	// mret, so reentrancy is no longer a concern.
 	cspecialw          mtdc, csp
 
-	// If mcause is 25, then we will jump into the error handler: another
-	// thread has signalled that this thread should be interrupted.  25 is a
-	// reserved exception number that we repurpose to indicate explicit
-	// interruption.
-	li                 t1, 25
+	// If mcause is MCAUSE_THREAD_INTERRUPT, then we will jump into the error
+	// handler: another thread has signalled that this thread should be
+	// interrupted.  MCAUSE_THREAD_INTERRUPT is a reserved exception number that
+	// we repurpose to indicate explicit interruption.
+	li                 t1, MCAUSE_THREAD_INTERRUPT
 	beq                t0, t1, .Lhandle_injected_error
 
 	// Environment call from M-mode is exception code 11.
@@ -859,7 +859,7 @@ exception_entry_asm:
 
 	// Value 24 is reserved for custom use.
 .Lset_mcause_and_exit_thread:
-	csrw               mcause, 24
+	csrw               mcause, MCAUSE_THREAD_EXIT
 	// The thread exit code expects the trusted stack pointer to be in csp and
 	// the stack pointer to be in mtdc.  After thread exit, we don't need the
 	// stack pointer so just put zero there.
@@ -1011,7 +1011,7 @@ __Z25switcher_interrupt_threadPv:
 
 	// Mark the thread as interrupted.
 	// Store a magic value in mcause
-	li                 a2, 25
+	li                 a2, MCAUSE_THREAD_INTERRUPT
 	csw                a2, TrustedStack_offset_mcause(ca1)
 	// Return success
 	li                 a0, 1
