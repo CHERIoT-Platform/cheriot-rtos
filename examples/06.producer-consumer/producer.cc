@@ -16,17 +16,16 @@ using Debug = ConditionalDebug<true, "Producer">;
 void __cheri_compartment("producer") run()
 {
 	// Allocate the queue
-	SObj sendHandle;
-	SObj receiveHandle;
+	SObj queue;
 	non_blocking<queue_create_sealed>(
-	  MALLOC_CAPABILITY, &sendHandle, &receiveHandle, sizeof(int), 16);
+	  MALLOC_CAPABILITY, &queue, sizeof(int), 16);
 	// Pass the queue handle to the consumer.
-	set_queue(receiveHandle);
+	set_queue(queue);
 	Debug::log("Starting producer loop");
 	// Loop, sending some numbers to the other thread.
 	for (int i = 1; i < 200; i++)
 	{
-		int ret = blocking_forever<queue_send_sealed>(sendHandle, &i);
+		int ret = blocking_forever<queue_send_sealed>(queue, &i);
 		// Abort if the queue send errors.
 		Debug::Invariant(ret == 0, "Queue send failed {}", ret);
 	}
