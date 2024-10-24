@@ -121,28 +121,6 @@ switcher_scheduler_entry_csp:
 .endm
 
 /**
- * Verify the compartment stack is valid, with the expected permissions and
- * unsealed.
- * This macro assumes t2 and tp are available to use.
- */
-.macro check_compartment_stack_integrity reg
-	// Check that the caller's CSP is a tagged, unsealed capability (with at
-	// least load permission - we'll check the other permissions properly
-	// later) by loading a byte.  If this doesn't work, we'll fall off this
-	// path into the exception handler and force unwind.
-	clb                t2, 0(\reg)
-	// make sure the caller's CSP has the expected permissions
-	cgetperm           t2, \reg
-	li                 tp, COMPARTMENT_STACK_PERMISSIONS
-	bne                tp, t2, .Lforce_unwind
-	// Check that the top and base are 16-byte aligned
-	cgetbase           t2, csp
-	or                 t2, t2, sp
-	andi               t2, t2, 0xf
-	bnez               t2, .Lforce_unwind
-.endm
-
-/**
  * Zero the stack.  The three operands are the base address, the top address,
  * and a scratch register to use.  The base must be a capability but it must
  * be provided without the c prefix because it is used as both a capability
@@ -197,11 +175,25 @@ __Z26compartment_switcher_entryz:
 	csc               cgp, SPILL_SLOT_cgp(ct2)
 	csc               cra, SPILL_SLOT_pcc(ct2)
 	cmove             csp, ct2
-	// before we access any privileged state, we can verify the
-	// compartment's csp is valid. If not, force unwind.
-	// Note that this check is purely to protect the callee, not the switcher
-	// itself.
-	check_compartment_stack_integrity csp
+
+	/*
+	 * Before we access any privileged state, we can verify the
+	 * compartment's csp is valid. If not, force unwind.  Note that this
+	 * check is purely to protect the callee, not the switcher itself.
+         *
+	 * Make sure the caller's CSP has the expected permissions and that its
+	 * top and base are 16-byte aligned.  We have already checked that it is
+	 * tagged and unsealed and 8-byte aligned by virtue of surviving the
+	 * stores above.
+	 */
+	cgetperm           t2, csp
+	li                 tp, COMPARTMENT_STACK_PERMISSIONS
+	bne                tp, t2, .Lforce_unwind
+	cgetbase           t2, csp
+	or                 t2, t2, sp
+	andi               t2, t2, 0xf
+	bnez               t2, .Lforce_unwind
+
 	// The caller should back up all callee saved registers.
 	// mtdc should always have an offset of 0.
 	cspecialr          ct2, mtdc
