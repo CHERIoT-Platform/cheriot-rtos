@@ -541,10 +541,10 @@ exception_entry_asm:
 	// in that posture until the mret in install_context.
 
 	// Switch onto the new thread's trusted stack
-	LoadCapPCC         ct0, compartment_switcher_sealing_key
+	LoadCapPCC         csp, compartment_switcher_sealing_key
 	li                 gp, SEAL_TYPE_SealedTrustedStacks
-	csetaddr           ct0, ct0, gp
-	cunseal            csp, ca0, ct0
+	csetaddr           csp, csp, gp
+	cunseal            csp, ca0, csp
 	clw                t0, TrustedStack_offset_mcause(csp)
 
 	// Only now that we have done something that actually requires the tag of
