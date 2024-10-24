@@ -666,7 +666,9 @@ int test_allocator()
 	  !array.is_valid(), "Allocating too large an array succeeded: {}", array);
 	array = heap_allocate_array(&t, MALLOC_CAPABILITY, 16, 2);
 	TEST(array.is_valid(), "Allocating array failed: {}", array);
-	TEST(array.length() == 32,
+	// If there's heap fragmentation, this may be rounded up to 40 because we
+	// can't use the 8 bytes after the end for another object.
+	TEST((array.length() >= 32) && (array.length() <= 40),
 	     "Allocating array returned incorrect length: {}",
 	     array);
 	ret = heap_free(MALLOC_CAPABILITY, array);

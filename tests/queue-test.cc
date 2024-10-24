@@ -4,7 +4,7 @@
 #include "compartment.h"
 #include "token.h"
 #include <cstdlib>
-#define TEST_NAME "Queue"
+#define TEST_NAME "MessageQueue"
 #include "tests.hh"
 #include <FreeRTOS-Compat/queue.h>
 #include <debug.hh>
@@ -28,77 +28,76 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 
 void test_queue_unsealed()
 {
-	char               bytes[ItemSize];
-	static QueueHandle queue;
-	static void       *queueMemory;
-	Timeout            timeout{0, 0};
+	char                 bytes[ItemSize];
+	static MessageQueue *queue;
+	Timeout              timeout{0, 0};
 	debug_log("Testing queue send operations");
 	auto checkSpace = [&](size_t         expected,
 	                      SourceLocation loc = SourceLocation::current()) {
 		size_t items;
-		queue_items_remaining(&queue, &items);
+		queue_items_remaining(queue, &items);
 		TEST(items == expected,
-		     "Queue test line {} reports {} items, should contain {}",
+		     "MessageQueue test line {} reports {} items, should contain {}",
 		     loc.line(),
 		     items,
 		     expected);
 	};
-	int rv = queue_create(
-	  &timeout, MALLOC_CAPABILITY, &queue, &queueMemory, ItemSize, MaxItems);
-	TEST(queue.elementSize == ItemSize,
-	     "Queue element size is {}, expected {}",
-	     queue.elementSize,
+	int rv =
+	  queue_create(&timeout, MALLOC_CAPABILITY, &queue, ItemSize, MaxItems);
+	TEST(queue->elementSize == ItemSize,
+	     "MessageQueue element size is {}, expected {}",
+	     queue->elementSize,
 	     ItemSize);
-	TEST(queue.queueSize == MaxItems,
-	     "Queue size is {}, expected {}",
-	     queue.queueSize,
+	TEST(queue->queueSize == MaxItems,
+	     "MessageQueue size is {}, expected {}",
+	     queue->queueSize,
 	     MaxItems);
-	TEST(rv == 0, "Queue creation failed with {}", rv);
-	rv = queue_send(&timeout, &queue, Message[0]);
+	TEST(rv == 0, "MessageQueue creation failed with {}", rv);
+	rv = queue_send(&timeout, queue, Message[0]);
 	checkSpace(1);
 	TEST(rv == 0, "Sending the first message failed with {}", rv);
 	checkSpace(1);
-	rv = queue_send(&timeout, &queue, Message[1]);
+	rv = queue_send(&timeout, queue, Message[1]);
 	TEST(rv == 0, "Sending the second message failed with {}", rv);
 	checkSpace(2);
-	// Queue is full, it should time out.
+	// MessageQueue is full, it should time out.
 	timeout.remaining = 5;
-	rv                = queue_send(&timeout, &queue, Message[1]);
+	rv                = queue_send(&timeout, queue, Message[1]);
 	TEST(rv == -ETIMEDOUT,
 	     "Sending to a full queue didn't time out as expected, returned {}",
 	     rv);
 	checkSpace(2);
 	debug_log("Testing queue receive operations");
 	timeout.remaining = 10;
-	rv                = queue_receive(&timeout, &queue, bytes);
+	rv                = queue_receive(&timeout, queue, bytes);
 	TEST(rv == 0, "Receiving the first message failed with {}", rv);
 	TEST(memcmp(Message[0], bytes, ItemSize) == 0,
 	     "First message received but not as expected. Got {}",
 	     bytes);
 	checkSpace(1);
-	rv = queue_receive(&timeout, &queue, bytes);
+	rv = queue_receive(&timeout, queue, bytes);
 	TEST(rv == 0, "Receiving the second message failed with {}", rv);
 	TEST(memcmp(Message[1], bytes, ItemSize) == 0,
 	     "Second message received but not as expected. Got {}",
 	     bytes);
 	checkSpace(0);
 	timeout.remaining = 5;
-	rv                = queue_receive(&timeout, &queue, bytes);
+	rv                = queue_receive(&timeout, queue, bytes);
 	TEST(
 	  rv == -ETIMEDOUT,
 	  "Receiving from an empty queue didn't time out as expected, returned {}",
 	  rv);
 	// Check that the items remaining calculations are correct after overflow.
-	queue_send(&timeout, &queue, Message[1]);
+	queue_send(&timeout, queue, Message[1]);
 	checkSpace(1);
-	queue_receive(&timeout, &queue, bytes);
+	queue_receive(&timeout, queue, bytes);
 	checkSpace(0);
-	queue_send(&timeout, &queue, Message[1]);
+	queue_send(&timeout, queue, Message[1]);
 	checkSpace(1);
-	queue_receive(&timeout, &queue, bytes);
+	queue_receive(&timeout, queue, bytes);
 	checkSpace(0);
-	rv = queue_destroy(MALLOC_CAPABILITY, &queue);
-	TEST(rv == 0, "Queue deletion failed with {}", rv);
+	rv = queue_destroy(MALLOC_CAPABILITY, queue);
+	TEST(rv == 0, "MessageQueue deletion failed with {}", rv);
 	debug_log("All queue library tests successful");
 }
 
@@ -108,10 +107,18 @@ void test_queue_sealed()
 	Timeout t{1};
 	SObj    receiveHandle;
 	SObj    sendHandle;
+	SObj    queue;
 	char    bytes[ItemSize];
-	int     ret = queue_create_sealed(
-	      &t, MALLOC_CAPABILITY, &sendHandle, &receiveHandle, ItemSize, MaxItems);
-	TEST(ret == 0, "Queue creation failed with {}", ret);
+	int     ret =
+	  queue_create_sealed(&t, MALLOC_CAPABILITY, &queue, ItemSize, MaxItems);
+	TEST(ret == 0, "MessageQueue creation failed with {}", ret);
+	ret = queue_receive_handle_create_sealed(
+	  &t, MALLOC_CAPABILITY, queue, &receiveHandle);
+	TEST(
+	  ret == 0, "MessageQueue receive endpoint creation failed with {}", ret);
+	ret = queue_send_handle_create_sealed(
+	  &t, MALLOC_CAPABILITY, queue, &sendHandle);
+	TEST(ret == 0, "MessageQueue send endpoint creation failed with {}", ret);
 
 	t   = UnlimitedTimeout;
 	ret = queue_send_sealed(&t, receiveHandle, Message[1]);
@@ -159,11 +166,14 @@ void test_queue_sealed()
 
 	t   = 1;
 	ret = queue_destroy_sealed(&t, MALLOC_CAPABILITY, sendHandle);
-	TEST(ret == 0, "Queue send destruction failed with {}", ret);
+	TEST(ret == 0, "MessageQueue send destruction failed with {}", ret);
 
 	t   = 1;
 	ret = queue_destroy_sealed(&t, MALLOC_CAPABILITY, receiveHandle);
-	TEST(ret == 0, "Queue receive destruction failed with {}", ret);
+	TEST(ret == 0, "MessageQueue receive destruction failed with {}", ret);
+
+	ret = queue_destroy_sealed(&t, MALLOC_CAPABILITY, queue);
+	TEST(ret == 0, "MessageQueue destruction failed with {}", ret);
 
 	TEST(heap_quota_remaining(MALLOC_CAPABILITY) == heapSpace,
 	     "Heap space leaked");

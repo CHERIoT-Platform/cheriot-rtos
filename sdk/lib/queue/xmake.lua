@@ -9,6 +9,7 @@ library("message_queue_library")
   add_files("queue.cc")
 
 compartment("message_queue")
+  add_deps("unwind_error_handler")
   add_deps("message_queue_library")
   set_default(false)
   add_files("queue_compartment.cc")

@@ -8,17 +8,7 @@
 /**
  * Queue handle.  This is used to reference queues in the API functions.
  */
-typedef struct
-{
-	/**
-	 * The real handle, holds pointers to the relevant elements of the queue.
-	 */
-	struct QueueHandle handle;
-	/**
-	 * The pointer used to free the queue.
-	 */
-	void *freePointer;
-} * QueueHandle_t;
+typedef struct MessageQueue *QueueHandle_t;
 
 /**
  * Receive a message on a queue.  The message is received into `buffer`, which
@@ -34,7 +24,7 @@ static inline BaseType_t
 xQueueReceive(QueueHandle_t queueHandle, void *buffer, TickType_t waitTicks)
 {
 	struct Timeout timeout = {0, waitTicks};
-	int            rv = queue_receive(&timeout, &queueHandle->handle, buffer);
+	int            rv = queue_receive(&timeout, queueHandle, buffer);
 
 	if (rv == 0)
 		return pdPASS;
@@ -54,7 +44,7 @@ static inline BaseType_t xQueueSendToBack(QueueHandle_t queueHandle,
                                           TickType_t    waitTicks)
 {
 	struct Timeout timeout = {0, waitTicks};
-	int            rv      = queue_send(&timeout, &queueHandle->handle, buffer);
+	int            rv      = queue_send(&timeout, queueHandle, buffer);
 
 	if (rv == 0)
 		return pdPASS;
@@ -86,24 +76,13 @@ xQueueSendToBackFromISR(QueueHandle_t queueHandle,
 static inline QueueHandle_t xQueueCreate(UBaseType_t uxQueueLength,
                                          UBaseType_t uxItemSize)
 {
-	QueueHandle_t  ret;
+	QueueHandle_t  ret = NULL;
 	struct Timeout timeout = {0, UnlimitedTimeout};
-	ret                    = (QueueHandle_t)malloc(sizeof(*ret));
-	if (!ret)
-	{
-		return NULL;
-	}
 	int rc = queue_create(&timeout,
 	                      MALLOC_CAPABILITY,
-	                      &ret->handle,
-	                      &ret->freePointer,
+	                      &ret,
 	                      uxItemSize,
 	                      uxQueueLength);
-	if (rc)
-	{
-		free(ret);
-		return NULL;
-	}
 	return ret;
 }
 #endif
@@ -113,8 +92,7 @@ static inline QueueHandle_t xQueueCreate(UBaseType_t uxQueueLength,
  */
 static inline void vQueueDelete(QueueHandle_t xQueue)
 {
-	free(xQueue->freePointer);
-	free(xQueue);
+	queue_destroy(MALLOC_CAPABILITY, xQueue);
 }
 
 /**
@@ -126,7 +104,7 @@ static inline void vQueueDelete(QueueHandle_t xQueue)
 static inline UBaseType_t uxQueueMessagesWaiting(const QueueHandle_t xQueue)
 {
 	size_t ret;
-	int    rv = queue_items_remaining(&xQueue->handle, &ret);
+	int    rv = queue_items_remaining(xQueue, &ret);
 
 	assert(rv == 0);
 

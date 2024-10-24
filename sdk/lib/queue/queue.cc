@@ -7,11 +7,12 @@
 #include <stdint.h>
 #include <timeout.h>
 #include <type_traits>
+#include <unwind.h>
 
 using namespace CHERI;
 using cheriot::atomic;
 
-using Debug = ConditionalDebug<false, "Queue library">;
+using Debug = ConditionalDebug<false, "MessageQueue library">;
 
 #ifdef __cplusplus
 using MessageQueueCounter = atomic<uint32_t>;
@@ -208,15 +209,15 @@ namespace
 	/**
 	 * Returns a pointer to the element in the queue indicated by `counter`.
 	 */
-	Capability<void> buffer_at_counter(struct QueueHandle &handle,
-	                                   uint32_t            counter)
+	Capability<void> buffer_at_counter(struct MessageQueue &handle,
+	                                   uint32_t             counter)
 	{
 		// Handle wrap for the second run around the counter.
 		size_t index =
 		  counter >= handle.queueSize ? counter - handle.queueSize : counter;
 		auto             offset = index * handle.elementSize;
-		Capability<void> pointer{handle.buffer};
-		pointer.address() += offset;
+		Capability<void> pointer{&handle};
+		pointer.address() += sizeof(MessageQueue) + offset;
 		return pointer;
 	}
 
@@ -332,102 +333,30 @@ namespace
 		  old, (old & HighBitFlagLock::reserved_bits()) | value));
 	}
 
-	/// Permissions for read-only access to a counter.
-	static constexpr PermissionSet ReadOnly{Permission::Global,
-	                                        Permission::Load};
-	/// Permissions for read-only access to a buffer.
-	static constexpr PermissionSet ReadOnlyCapability{
-	  Permission::Global,
-	  Permission::Load,
-	  Permission::LoadStoreCapability,
-	  Permission::LoadGlobal,
-	  Permission::LoadGlobal};
-	/// Permissions for write-only access to a buffer.
-	static constexpr PermissionSet WriteOnlyCapability{
-	  Permission::Global,
-	  Permission::Store,
-	  Permission::LoadStoreCapability};
-
-	/**
-	 * Helper to drop our short-lived claims.
-	 */
-	void drop_claims()
-	{
-		Timeout t{0};
-		heap_claim_fast(&t, nullptr, nullptr);
-	}
-
-	void bound_queue_buffer(struct QueueHandle handle)
-	{
-		Capability buffer   = handle.buffer;
-		Capability producer = handle.producer;
-		// Restrict the bounds using the address of the producer, which
-		// comes immediately after the queue buffer. This should be
-		// strictly equivalent to calculating the size of the queue
-		// from the number of elements and the size of elements (we
-		// assert that below).
-		buffer.bounds() = producer.address() - buffer.address();
-		Debug::Assert(
-		  [&]() -> bool {
-			  size_t bufferSize;
-			  bool   overflow = __builtin_mul_overflow(
-			      handle.queueSize, handle.elementSize, &bufferSize);
-			  bufferSize = CHERI::representable_length(bufferSize);
-			  return (!overflow) && (buffer.bounds() == bufferSize);
-		  },
-		  "Mismatch between the size of the queue as reported by `queueSize` "
-		  "and `elementSize` and its real size.");
-	}
-
 } // namespace
 
-struct QueueHandle queue_make_receive_handle(struct QueueHandle handle)
-{
-	Capability buffer   = handle.buffer;
-	Capability producer = handle.producer;
-	bound_queue_buffer(handle);
-	buffer.permissions() &= ReadOnlyCapability;
-	producer.permissions() &= ReadOnly;
-	handle.buffer   = buffer;
-	handle.producer = producer;
-	return handle;
-}
-
-struct QueueHandle queue_make_send_handle(struct QueueHandle handle)
-{
-	Capability buffer   = handle.buffer;
-	Capability consumer = handle.consumer;
-	bound_queue_buffer(handle);
-	buffer.permissions() &= WriteOnlyCapability;
-	consumer.permissions() &= ReadOnly;
-	handle.buffer   = buffer;
-	handle.consumer = consumer;
-	return handle;
-}
-
-int queue_destroy(struct SObjStruct *heapCapability, struct QueueHandle *handle)
+int queue_destroy(struct SObjStruct   *heapCapability,
+                  struct MessageQueue *handle)
 {
 	int ret = 0;
 	// Only upgrade the locks for destruction if we know that we will be
 	// able to free the queue at the end. This will fail if passed a
 	// restricted buffer, which will happen if `queue_destroy` is called on
 	// a restricted queue.
-	if (ret = heap_can_free(heapCapability, handle->buffer); ret != 0)
+	if (ret = heap_can_free(heapCapability, handle); ret != 0)
 	{
 		return ret;
 	}
 
-	auto           *producer = handle->producer;
-	HighBitFlagLock producerLock{*producer};
+	HighBitFlagLock producerLock{handle->producer};
 	producerLock.upgrade_for_destruction();
 
-	auto           *consumer = handle->consumer;
-	HighBitFlagLock consumerLock{*consumer};
+	HighBitFlagLock consumerLock{handle->consumer};
 	consumerLock.upgrade_for_destruction();
 
 	// This should not fail because of the `heap_can_free` check, unless we
 	// run out of stack.
-	if (ret = heap_free(heapCapability, handle->buffer); ret != 0)
+	if (ret = heap_free(heapCapability, handle); ret != 0)
 	{
 		return ret;
 	}
@@ -435,27 +364,16 @@ int queue_destroy(struct SObjStruct *heapCapability, struct QueueHandle *handle)
 	return ret;
 }
 
-int queue_create(Timeout            *timeout,
-                 struct SObjStruct  *heapCapability,
-                 struct QueueHandle *outQueue,
-                 void              **outAllocation,
-                 size_t              elementSize,
-                 size_t              elementCount)
+ssize_t queue_allocation_size(size_t elementSize, size_t elementCount)
 {
 	size_t bufferSize;
 	size_t allocSize;
 	bool   overflow =
 	  __builtin_mul_overflow(elementCount, elementSize, &bufferSize);
-	// We must be able to accurately represent the buffer, so round it up to a
-	// representable length.
-	bufferSize = CHERI::representable_length(bufferSize);
 	static constexpr size_t CounterSize = sizeof(uint32_t);
-	// Round up the size to be correctly aligned for the counters at the end
-	// (if necessary) and add two counters worth of space.
-	overflow |= __builtin_add_overflow(
-	  bufferSize,
-	  (2 * CounterSize) + (CounterSize - (bufferSize & (CounterSize - 1))),
-	  &allocSize);
+	// We also need space for the header
+	overflow |=
+	  __builtin_add_overflow(sizeof(MessageQueue), bufferSize, &allocSize);
 	if (overflow)
 	{
 		return -EINVAL;
@@ -471,6 +389,21 @@ int queue_create(Timeout            *timeout,
 		return -EINVAL;
 	}
 
+	return allocSize;
+}
+
+int queue_create(Timeout              *timeout,
+                 struct SObjStruct    *heapCapability,
+                 struct MessageQueue **outQueue,
+                 size_t                elementSize,
+                 size_t                elementCount)
+{
+	ssize_t allocSize = queue_allocation_size(elementSize, elementCount);
+	if (allocSize < 0)
+	{
+		return allocSize;
+	}
+
 	// Allocate the space for the queue.
 	Capability buffer{heap_allocate(timeout, heapCapability, allocSize)};
 	if (!buffer.is_valid())
@@ -478,86 +411,79 @@ int queue_create(Timeout            *timeout,
 		return -ENOMEM;
 	}
 
-	Capability<std::atomic<uint32_t>> producer{
-	  buffer.cast<std::atomic<uint32_t>>()};
-	Capability<std::atomic<uint32_t>> consumer{
-	  buffer.cast<std::atomic<uint32_t>>()};
-	// Make the producer and consumer point after the buffer
-	producer.address() += bufferSize;
-	consumer.address() += bufferSize + CounterSize;
-	// Set their bounds to 4 bytes.
-	producer.bounds() = CounterSize;
-	consumer.bounds() = CounterSize;
-	// The pointer used to free the allocation
-	*outAllocation = buffer;
-	Debug::log("Created queue with buffer: {}", buffer);
-	// The handle
-	*outQueue = {elementSize, elementCount, buffer, producer, consumer};
-
+	*outQueue = new (buffer.get()) MessageQueue(elementSize, elementCount);
 	return 0;
 }
 
-int queue_send(Timeout *timeout, struct QueueHandle *handle, const void *src)
+int queue_send(Timeout *timeout, struct MessageQueue *handle, const void *src)
 {
 	Debug::log("Send called on: {}", handle);
-	auto *producer   = handle->producer;
-	auto *consumer   = handle->consumer;
+	auto *producer   = &handle->producer;
+	auto *consumer   = &handle->consumer;
 	bool  shouldWake = false;
 	{
 		Debug::log("Lock word: {}", producer->load());
 		HighBitFlagLock l{*producer};
 		if (LockGuard g{l, timeout})
 		{
-			uint32_t producerCounter = counter_load(producer);
-			uint32_t consumerValue   = consumer->load();
-			uint32_t consumerCounter =
-			  consumerValue & ~(HighBitFlagLock::reserved_bits());
-			Debug::log("Producer counter: {}, consumer counter: {}, Size: {}",
-			           producerCounter,
-			           consumerCounter,
-			           handle->queueSize);
-			while (is_full(handle->queueSize, producerCounter, consumerCounter))
+			volatile int ret = 0;
+			// In an error-handling context, try to add the element to the
+			// queue.  If the permissions on src are invalid, or either `handle`
+			// or `src` is freed concurrently, we will hit the path that returns
+			// -EPERM.  The counter update happens last, so any failure will
+			// simply leave the queue in the old state.
+			on_error(
+			  [&] {
+				  uint32_t producerCounter = counter_load(producer);
+				  uint32_t consumerValue   = consumer->load();
+				  uint32_t consumerCounter =
+				    consumerValue & ~(HighBitFlagLock::reserved_bits());
+				  Debug::log(
+				    "Producer counter: {}, consumer counter: {}, Size: {}",
+				    producerCounter,
+				    consumerCounter,
+				    handle->queueSize);
+				  while (is_full(
+				    handle->queueSize, producerCounter, consumerCounter))
+				  {
+					  // Wait on the value to change.  If we hit this path while
+					  // the consumer lock is held, then the high bits will be
+					  // set.  Make sure that we yield.
+					  if (consumer->wait(timeout, consumerValue) == -ETIMEDOUT)
+					  {
+						  Debug::log("Timed out on futex");
+						  ret = -ETIMEDOUT;
+						  return;
+					  }
+					  consumerValue = consumer->load();
+					  consumerCounter =
+					    consumerValue & ~(HighBitFlagLock::reserved_bits());
+				  }
+				  auto entry = buffer_at_counter(*handle, producerCounter);
+				  Debug::log("Send copying {} bytes from {} to {}",
+				             handle->elementSize,
+				             src,
+				             entry);
+				  memcpy(entry, src, handle->elementSize);
+				  counter_store(
+				    &handle->producer,
+				    increment_and_wrap(handle->queueSize, producerCounter));
+				  // Check if the queue was empty before we updated the producer
+				  // counter.  By the time that we reach this point, anything on
+				  // the consumer side will be on the path to a futex_wait with
+				  // the old version of the producer counter and so will bounce
+				  // out again.
+				  shouldWake =
+				    is_empty(producerCounter, counter_load(consumer));
+			  },
+			  [&]() {
+				  ret = -EPERM;
+				  Debug::log("Error in send");
+			  });
+			if (ret != 0)
 			{
-				// Wait on the value to change.  If we hit this path while the
-				// consumer lock is held, then the high bits will be set.  Make
-				// sure that we yield.
-				if (consumer->wait(timeout, consumerValue) == -ETIMEDOUT)
-				{
-					Debug::log("Timed out on futex");
-					return -ETIMEDOUT;
-				}
-				consumerValue = consumer->load();
-				consumerCounter =
-				  consumerValue & ~(HighBitFlagLock::reserved_bits());
+				return ret;
 			}
-			auto entry = buffer_at_counter(*handle, producerCounter);
-			if (int claim = heap_claim_fast(timeout, handle->buffer, src);
-			    claim != 0)
-			{
-				Debug::log("Claim failed: {}", claim);
-				return claim;
-			}
-			if (!check_pointer<PermissionSet{Permission::Load}, false>(
-			      src, handle->elementSize))
-			{
-				drop_claims();
-				Debug::log("Load / bounds check failed: {}");
-				return -EPERM;
-			}
-			Debug::log("Send copying {} bytes from {} to {}",
-			           handle->elementSize,
-			           src,
-			           entry);
-			memcpy(entry, src, handle->elementSize);
-			drop_claims();
-			counter_store(
-			  handle->producer,
-			  increment_and_wrap(handle->queueSize, producerCounter));
-			// Check if the queue was empty before we updated the producer
-			// counter.  By the time that we reach this point, anything on the
-			// consumer side will be on the path to a futex_wait with the old
-			// version of the producer counter and so will bounce out again.
-			shouldWake = is_empty(producerCounter, counter_load(consumer));
 		}
 		else
 		{
@@ -567,71 +493,77 @@ int queue_send(Timeout *timeout, struct QueueHandle *handle, const void *src)
 	}
 	if (shouldWake)
 	{
-		handle->producer->notify_all();
+		handle->producer.notify_all();
 	}
 	return 0;
 }
 
-int queue_receive(Timeout *timeout, struct QueueHandle *handle, void *dst)
+int queue_receive(Timeout *timeout, struct MessageQueue *handle, void *dst)
 {
 	Debug::log("Receive called on: {}", handle);
-	auto *producer   = handle->producer;
-	auto *consumer   = handle->consumer;
+	auto *producer   = &handle->producer;
+	auto *consumer   = &handle->consumer;
 	bool  shouldWake = false;
 	{
 		HighBitFlagLock l{*consumer};
 		if (LockGuard g{l, timeout})
 		{
-			uint32_t producerValue = producer->load();
-			uint32_t producerCounter =
-			  producerValue & ~(HighBitFlagLock::reserved_bits());
-			uint32_t consumerCounter = counter_load(consumer);
-			Debug::log("Producer counter: {}, consumer counter: {}, Size: {}",
-			           producerCounter,
-			           consumerCounter,
-			           handle->queueSize);
-			while (is_empty(producerCounter, consumerCounter))
+			volatile int ret = 0;
+			// In an error-handling context, try to add the element to the
+			// queue.  If the permissions on `dst` are invalid, or either
+			// `handle` or `dst` is freed concurrently, we will hit the path
+			// that returns `-EPERM`.  The counter update happens last, so any
+			// failure will simply leave the queue in the old state.
+			on_error(
+			  [&] {
+				  uint32_t producerValue = producer->load();
+				  uint32_t producerCounter =
+				    producerValue & ~(HighBitFlagLock::reserved_bits());
+				  uint32_t consumerCounter = counter_load(consumer);
+				  Debug::log(
+				    "Producer counter: {}, consumer counter: {}, Size: {}",
+				    producerCounter,
+				    consumerCounter,
+				    handle->queueSize);
+				  while (is_empty(producerCounter, consumerCounter))
+				  {
+					  // Wait on the value to change.  If we hit this path while
+					  // the producer lock is held, then the high bits will be
+					  // set.  Make sure that we yield.
+					  if (producer->wait(timeout, producerValue) == -ETIMEDOUT)
+					  {
+						  ret = -ETIMEDOUT;
+						  return;
+					  }
+					  producerValue = producer->load();
+					  producerCounter =
+					    producerValue & ~(HighBitFlagLock::reserved_bits());
+				  }
+				  auto entry = buffer_at_counter(*handle, consumerCounter);
+				  Debug::log("Receive copying {} bytes from {} to {}",
+				             handle->elementSize,
+				             entry,
+				             dst);
+				  memcpy(dst, entry, handle->elementSize);
+				  counter_store(
+				    consumer,
+				    increment_and_wrap(handle->queueSize, consumerCounter));
+				  // Check if the queue was full before we updated the consumer
+				  // counter.  By the time that we reach this point, anything on
+				  // the producer side will be on the path to a futex_wait with
+				  // the old version of the consumer counter and so will bounce
+				  // out again.
+				  shouldWake = is_full(
+				    handle->queueSize, counter_load(producer), consumerCounter);
+			  },
+			  [&]() {
+				  ret = -EPERM;
+				  Debug::log("Error in receive");
+			  });
+			if (ret != 0)
 			{
-				// Wait on the value to change.  If we hit this path while the
-				// producer lock is held, then the high bits will be set.  Make
-				// sure that we yield.
-				if (producer->wait(timeout, producerValue) == -ETIMEDOUT)
-				{
-					return -ETIMEDOUT;
-				}
-				producerValue = producer->load();
-				producerCounter =
-				  producerValue & ~(HighBitFlagLock::reserved_bits());
+				return ret;
 			}
-			auto entry = buffer_at_counter(*handle, consumerCounter);
-			if (int claim = heap_claim_fast(timeout, handle->buffer, dst);
-			    claim != 0)
-			{
-				return claim;
-			}
-			if (!check_pointer<PermissionSet{Permission::Store}, false>(
-			      dst, handle->elementSize))
-			{
-				drop_claims();
-				Debug::log("Check pointer failed with {} for {} byte write",
-				           dst,
-				           handle->elementSize);
-				return -EPERM;
-			}
-			Debug::log("Receive copying {} bytes from {} to {}",
-			           handle->elementSize,
-			           entry,
-			           dst);
-			memcpy(dst, entry, handle->elementSize);
-			drop_claims();
-			counter_store(
-			  consumer, increment_and_wrap(handle->queueSize, consumerCounter));
-			// Check if the queue was full before we updated the consumer
-			// counter.  By the time that we reach this point, anything on the
-			// producer side will be on the path to a futex_wait with the old
-			// version of the consumer counter and so will bounce out again.
-			shouldWake = is_full(
-			  handle->queueSize, counter_load(producer), consumerCounter);
 		}
 		else
 		{
@@ -639,17 +571,19 @@ int queue_receive(Timeout *timeout, struct QueueHandle *handle, void *dst)
 			return -ETIMEDOUT;
 		}
 	}
+	// If the queue is concurrently freed, this can trap, but we won't leak any
+	// locks.
 	if (shouldWake)
 	{
-		handle->consumer->notify_all();
+		handle->consumer.notify_all();
 	}
 	return 0;
 }
 
-int queue_items_remaining(struct QueueHandle *handle, size_t *items)
+int queue_items_remaining(struct MessageQueue *handle, size_t *items)
 {
-	auto producerCounter = counter_load(handle->producer);
-	auto consumerCounter = counter_load(handle->consumer);
+	auto producerCounter = counter_load(&handle->producer);
+	auto consumerCounter = counter_load(&handle->consumer);
 	*items =
 	  items_remaining(handle->queueSize, producerCounter, consumerCounter);
 	Debug::log("Producer counter: {}, consumer counter: {}, items: {}",
@@ -660,20 +594,20 @@ int queue_items_remaining(struct QueueHandle *handle, size_t *items)
 }
 
 void multiwaiter_queue_send_init(struct EventWaiterSource *source,
-                                 struct QueueHandle       *handle)
+                                 struct MessageQueue      *handle)
 {
-	uint32_t producer   = counter_load(handle->producer);
-	uint32_t consumer   = counter_load(handle->consumer);
-	source->eventSource = handle->consumer;
+	uint32_t producer   = counter_load(&handle->producer);
+	uint32_t consumer   = counter_load(&handle->consumer);
+	source->eventSource = &handle->consumer;
 	source->value =
 	  is_full(handle->queueSize, producer, consumer) ? consumer : -1;
 }
 
 void multiwaiter_queue_receive_init(struct EventWaiterSource *source,
-                                    struct QueueHandle       *handle)
+                                    struct MessageQueue      *handle)
 {
-	uint32_t producer   = counter_load(handle->producer);
-	uint32_t consumer   = counter_load(handle->consumer);
-	source->eventSource = handle->producer;
+	uint32_t producer   = counter_load(&handle->producer);
+	uint32_t consumer   = counter_load(&handle->consumer);
+	source->eventSource = &handle->producer;
 	source->value       = is_empty(producer, consumer) ? producer : -1;
 }

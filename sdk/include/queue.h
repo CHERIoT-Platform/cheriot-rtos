@@ -31,50 +31,71 @@
 #include <timeout.h>
 
 /**
- * A handle to a queue endpoint.
+ * Structure representing a queue.  This structure represents the queue
+ * metadata, the buffer is stored at the end.
  *
- * Dropping permissions can make this a receive-only or a send-only handle.
+ * A queue is a ring buffer of fixed-sized elements with a producer and consumer
+ * counter.
  */
-struct QueueHandle
+struct MessageQueue
 {
 	/**
-	 * The size of one element in this queue.
+	 * The size of one element in this queue.  This should not be modified after
+	 * construction.
 	 */
 	size_t elementSize;
 	/**
-	 * The size of the queue.
+	 * The size of the queue.  This should not be modified after construction.
 	 */
 	size_t queueSize;
 	/**
-	 * The buffer used for storing queue elements.
-	 */
-	void *buffer;
-	/**
 	 * The producer counter.
 	 */
-	_Atomic(uint32_t) *producer;
+	_Atomic(uint32_t) producer;
 	/**
 	 * The consumer counter.
 	 */
-	_Atomic(uint32_t) *consumer;
+	_Atomic(uint32_t) consumer;
+#ifdef __cplusplus
+	MessageQueue(size_t elementSize, size_t queueSize)
+	  : elementSize(elementSize), queueSize(queueSize)
+	{
+	}
+#endif
 };
+
+_Static_assert(sizeof(struct MessageQueue) % sizeof(void *) == 0,
+               "MessageQueue structure must end correctly aligned for storing "
+               "capabilities.");
 
 __BEGIN_DECLS
 
 /**
+ * Returns the allocation size needed for a queue with the specified number and
+ * size of elements.  This can be used to statically allocate queues.
+ *
+ * Returns the allocation size on success, or `-EINVAL` if the arguments would
+ * cause an overflow.
+ */
+ssize_t __cheri_libcall queue_allocation_size(size_t elementSize,
+                                              size_t elementCount);
+
+/**
  * Allocates space for a queue using `heapCapability` and stores a handle to it
- * via `outQueue`.  The underlying allocation (which is necessary to free the
- * queue) is returned via `outAllocation`.
+ * via `outQueue`.
  *
  * The queue is has space for `elementCount` entries.  Each entry is a fixed
  * size, `elementSize` bytes.
+ *
+ * Returns 0 on success, `-ENOMEM` on allocation failure, and `-EINVAL` if the
+ * arguments are invalid (for example, if the requested number of elements
+ * multiplied by the element size would overflow).
  */
-int __cheri_libcall queue_create(Timeout            *timeout,
-                                 struct SObjStruct  *heapCapability,
-                                 struct QueueHandle *outQueue,
-                                 void              **outAllocation,
-                                 size_t              elementSize,
-                                 size_t              elementCount);
+int __cheri_libcall queue_create(Timeout              *timeout,
+                                 struct SObjStruct    *heapCapability,
+                                 struct MessageQueue **outQueue,
+                                 size_t                elementSize,
+                                 size_t                elementCount);
 
 /**
  * Destroys a queue. This wakes up all threads waiting to produce or consume,
@@ -87,29 +108,8 @@ int __cheri_libcall queue_create(Timeout            *timeout,
  * Returns 0 on success. On failure, returns `-EPERM` if the queue handle is
  * restricted (see comment above).
  */
-int __cheri_libcall queue_destroy(struct SObjStruct  *heapCapability,
-                                  struct QueueHandle *handle);
-
-/**
- * Convert a queue handle returned from `queue_create` into one that can be
- * used *only* for receiving.
- *
- * Note: This is primarily defence in depth.  A malicious holder of this queue
- * handle can still set the consumer counter to invalid values.
- */
-struct QueueHandle __cheri_libcall
-queue_make_receive_handle(struct QueueHandle handle);
-
-/**
- * Convert a queue handle returned from `queue_create` into one that can be
- * used *only* for sending.
- *
- * Note: This is primarily defence in depth.  A malicious holder of this queue
- * handle can still set the producer counter to invalid values and overwrite
- * arbitrary queue locations.
- */
-struct QueueHandle __cheri_libcall
-queue_make_send_handle(struct QueueHandle handle);
+int __cheri_libcall queue_destroy(struct SObjStruct   *heapCapability,
+                                  struct MessageQueue *handle);
 
 /**
  * Send a message to the queue specified by `handle`.  This expects to be able
@@ -122,9 +122,9 @@ queue_make_send_handle(struct QueueHandle handle);
  * This expected to be called with a valid queue handle.  It does not validate
  * that this is correct.  It uses `safe_memcpy` and so will check the buffer.
  */
-int __cheri_libcall queue_send(Timeout            *timeout,
-                               struct QueueHandle *handle,
-                               const void         *src);
+int __cheri_libcall queue_send(Timeout             *timeout,
+                               struct MessageQueue *handle,
+                               const void          *src);
 
 /**
  * Receive a message over a queue specified by `handle`.  This expects to be
@@ -135,9 +135,9 @@ int __cheri_libcall queue_send(Timeout            *timeout,
  * Returns 0 on success, `-ETIMEOUT` if the timeout was exhausted, `-EINVAL` on
  * invalid arguments.
  */
-int __cheri_libcall queue_receive(Timeout            *timeout,
-                                  struct QueueHandle *handle,
-                                  void               *dst);
+int __cheri_libcall queue_receive(Timeout             *timeout,
+                                  struct MessageQueue *handle,
+                                  void                *dst);
 
 /**
  * Returns the number of items in the queue specified by `handle` via `items`.
@@ -150,27 +150,28 @@ int __cheri_libcall queue_receive(Timeout            *timeout,
  * may change in between the return of this function and the caller acting on
  * the result.
  */
-int __cheri_libcall queue_items_remaining(struct QueueHandle *handle,
-                                          size_t             *items);
+int __cheri_libcall queue_items_remaining(struct MessageQueue *handle,
+                                          size_t              *items);
 
 /**
  * Allocate a new message queue that is managed by the message queue
- * compartment.  This is returned as two sealed pointers to send and receive
- * ends of the queue.
+ * compartment.  The resulting queue handle (returned in `outQueue`) is a
+ * sealed capability to a queue that can be used for both sending and
+ * receiving.
  */
 int __cheri_compartment("message_queue")
   queue_create_sealed(Timeout            *timeout,
                       struct SObjStruct  *heapCapability,
-                      struct SObjStruct **outQueueSend,
-                      struct SObjStruct **outQueReceive,
+                      struct SObjStruct **outQueue,
                       size_t              elementSize,
                       size_t              elementCount);
 
 /**
- * Destroy a queue using a sealed queue endpoint handle.  The queue is not
- * actually freed until *both* endpoints are destroyed, which means that you
- * can safely call this from the sending end without the receiving end losing
- * access to messages held in the queue.
+ * Destroy a queue handle.  If this is called on a restricted endpoint
+ * (returned from `queue_receive_handle_create_sealed` or
+ * `queue_send_handle_create_sealed`), this frees only the handle.  If called
+ * with the queue handle returned from `queue_create_sealed`, this will destroy
+ * the queue.
  */
 int __cheri_compartment("message_queue")
   queue_destroy_sealed(Timeout           *timeout,
@@ -215,7 +216,7 @@ int __cheri_compartment("message_queue")
  */
 void __cheri_libcall
 multiwaiter_queue_receive_init(struct EventWaiterSource *source,
-                               struct QueueHandle       *handle);
+                               struct MessageQueue      *handle);
 
 /**
  * Initialise an event waiter source so that it will wait for the queue to be
@@ -224,7 +225,7 @@ multiwaiter_queue_receive_init(struct EventWaiterSource *source,
  */
 void __cheri_libcall
 multiwaiter_queue_send_init(struct EventWaiterSource *source,
-                            struct QueueHandle       *handle);
+                            struct MessageQueue      *handle);
 
 /**
  * Initialise an event waiter source as in `multiwaiter_queue_receive_init`,
@@ -249,5 +250,33 @@ int __cheri_compartment("message_queue")
 int __cheri_compartment("message_queue")
   multiwaiter_queue_send_init_sealed(struct EventWaiterSource *source,
                                      struct SObjStruct        *handle);
+
+/**
+ * Convert a queue handle returned from `queue_create_sealed` into one that can
+ * be used *only* for receiving.
+ *
+ * Returns 0 on success and writes the resulting restricted handle via
+ * `outHandle`.  Returns `-ENOMEM` on allocation failure or `-EINVAL` if the
+ * handle is not valid.
+ */
+int __cheri_compartment("message_queue")
+  queue_receive_handle_create_sealed(struct Timeout     *timeout,
+                                     struct SObjStruct  *heapCapability,
+                                     struct SObjStruct  *handle,
+                                     struct SObjStruct **outHandle);
+
+/**
+ * Convert a queue handle returned from `queue_create_sealed` into one that can
+ * be used *only* for sending.
+ *
+ * Returns 0 on success and writes the resulting restricted handle via
+ * `outHandle`.  Returns `-ENOMEM` on allocation failure or `-EINVAL` if the
+ * handle is not valid.
+ */
+int __cheri_compartment("message_queue")
+  queue_send_handle_create_sealed(struct Timeout     *timeout,
+                                  struct SObjStruct  *heapCapability,
+                                  struct SObjStruct  *handle,
+                                  struct SObjStruct **outHandle);
 
 __END_DECLS
