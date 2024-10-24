@@ -94,6 +94,40 @@ void exhaust_thread_stack()
 	TEST(false, "Should be unreachable");
 }
 
+/**
+ * Arrange to exhaust the stack inside the cross-compartment switcher's spill of
+ * callee-saved state.  The result should simply be an error return, rather than
+ * a forced-unwind.
+ */
+void exhaust_thread_stack_spill(__cheri_callback void (*fn)())
+{
+	register auto      rfn asm("ct1") = fn;
+	register uintptr_t res asm("ca0") = 0;
+
+	__asm__ volatile(
+	  // Save the stack to put back later
+	  "cmove     cs0, csp\n"
+
+	  // Shrink the available stack space
+	  "cgetbase  s1, csp\n"
+	  "addi      s1, s1, %[stackleft]\n"
+	  "csetaddr  csp, csp, s1\n"
+
+	  // Make the call
+	  "1:\n"
+	  "auipcc ct2, %%cheriot_compartment_hi(.compartment_switcher)\n"
+	  "clc ct2, %%cheriot_compartment_lo_i(1b)(ct2)\n"
+	  "cjalr ct2\n"
+
+	  "cmove     csp, cs0\n"
+	  : /* outs */ "+C"(res)
+	  : /* ins */[stackleft] "i"(sizeof(void *))
+	  : /* clobbers */ "ct2", "cs0", "cs1");
+
+	*threadStackTestFailed = false;
+	TEST(res == -ENOTENOUGHSTACK, "Bad return {}", res);
+}
+
 void set_csp_permissions_on_fault(PermissionSet newPermissions)
 {
 	__asm__ volatile(

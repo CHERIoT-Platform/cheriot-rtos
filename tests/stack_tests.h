@@ -8,6 +8,8 @@ __cheri_compartment("stack_integrity_thread") void exhaust_trusted_stack(
   __cheri_callback void (*fn)(),
   bool *outLeakedSwitcherCapability);
 __cheri_compartment("stack_integrity_thread") void exhaust_thread_stack();
+__cheri_compartment("stack_integrity_thread") void exhaust_thread_stack_spill(
+  __cheri_callback void (*fn)());
 __cheri_compartment("stack_integrity_thread") void set_csp_permissions_on_fault(
   PermissionSet newPermissions);
 __cheri_compartment("stack_integrity_thread") void set_csp_permissions_on_call(

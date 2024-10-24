@@ -183,11 +183,19 @@ switcher_scheduler_entry_csp:
 	.p2align 2
 	.type __Z26compartment_switcher_entryz,@function
 __Z26compartment_switcher_entryz:
-	cincoffset        csp, csp, -SPILL_SLOT_SIZE
-	csc               cs0, SPILL_SLOT_cs0(csp)
-	csc               cs1, SPILL_SLOT_cs1(csp)
-	csc               cgp, SPILL_SLOT_cgp(csp)
-	csc               cra, SPILL_SLOT_pcc(csp)
+	/*
+	 * Spill caller-save registers carefully.  If we find ourselves unable to do
+	 * so, we'll return an error to the caller (via the exception path; see
+	 * .Lhandle_error_in_switcher).  The error handling path assumes that the
+	 * first spill is to the lowest address and guaranteed to trap if any would.
+	 */
+	cincoffset        ct2, csp, -SPILL_SLOT_SIZE
+.Lswitcher_entry_first_spill:
+	csc               cs0, SPILL_SLOT_cs0(ct2)
+	csc               cs1, SPILL_SLOT_cs1(ct2)
+	csc               cgp, SPILL_SLOT_cgp(ct2)
+	csc               cra, SPILL_SLOT_pcc(ct2)
+	cmove             csp, ct2
 	// before we access any privileged state, we can verify the
 	// compartment's csp is valid. If not, force unwind.
 	// Note that this check is purely to protect the callee, not the switcher
@@ -337,6 +345,7 @@ __Z26compartment_switcher_entryz:
 	// ca0, used for first return value
 	// ca1, used for second return value
 	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
+.Ljust_return:
 	cret
 
 	// If the stack is too small, we don't do the call, but to avoid leaking
@@ -573,8 +582,8 @@ exception_entry_asm:
 	auipcc             ct0, 0
 	clc                ct1, TrustedStack_offset_mepcc(csp)
 	cgetbase           t0, ct0
-	cgetbase           t1, ct1
-	beq                t0, t1, .Lforce_unwind
+	cgetbase           tp, ct1
+	beq                t0, tp, .Lhandle_error_in_switcher
 
 	// Load the interrupted thread's stack pointer into ct0
 	clc                ct0, TrustedStack_offset_csp(csp)
@@ -809,6 +818,32 @@ exception_entry_asm:
 .Lreset_mepcc_and_install_context:
 	clc                ct2, TrustedStack_offset_mepcc(csp)
 	j                  .Linstall_context
+
+	/*
+	 * Some switcher instructions' traps are handled specially, by looking at
+	 * the offset of mepcc.  Otherwise, we're off to a force unwind.
+	 */
+.Lhandle_error_in_switcher:
+	auipcc             ctp, %cheriot_compartment_hi(.Lswitcher_entry_first_spill)
+	cincoffset         ctp, ctp, %cheriot_compartment_lo_i(.Lhandle_error_in_switcher)
+	bne                t1, tp, .Lforce_unwind
+	li                 a0, -ENOTENOUGHSTACK
+	li                 a1, 0
+
+	/*
+	 * Cause the interrupted thread to resume as if a return had just executed.
+	 * We do this by vectoring to a `cjalr ra` (`cret`) instruction through
+	 * `mepcc`; whee!  Overwrites the stored context a0 and a1 with the current
+	 * values of those registers, effectively passing them through
+	 * .Linstall_context.
+	 */
+.Linstall_return_context:
+	auipcc             ct2, %cheriot_compartment_hi(.Ljust_return)
+	cincoffset         ct2, ct2, %cheriot_compartment_lo_i(.Linstall_return_context)
+	csc                ca0, TrustedStack_offset_ca0(csp)
+	csc                ca1, TrustedStack_offset_ca1(csp)
+	j                  .Linstall_context
+
 
 .size exception_entry_asm, . - exception_entry_asm
 
