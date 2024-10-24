@@ -298,10 +298,6 @@ __Z26compartment_switcher_entryz:
 	// Load the target PCC and point to the function.
 	clc                cra, ExportTable_offset_pcc(ct1)
 	cincoffset         cra, cra, s0
-	// Get the number of registers to zero in t2
-	andi               t2, tp, 0x7
-	// Get the interrupt-disable bit in t1
-	andi               t1, tp, 0x10
 	// Zero any unused argument registers
 	// The low 3 bits of the flags field contain the number of arguments to
 	// pass.  We create a small sled that zeroes them and jump into the middle
@@ -310,6 +306,7 @@ __Z26compartment_switcher_entryz:
 .Lload_zero_arguments_start:
 	auipcc             cs0, %cheriot_compartment_hi(.Lzero_arguments_start)
 	cincoffset         cs0, cs0, %cheriot_compartment_lo_i(.Lload_zero_arguments_start)
+	andi               t2, tp, 0x7 // loader/types.h's ExportEntry::flags
 	// Change from the number of registers to pass into the number of 2-byte
 	// instructions to skip.
 	sll                t2, t2, 1
@@ -321,6 +318,7 @@ __Z26compartment_switcher_entryz:
 .Lzero_arguments_start:
 	zeroRegisters      a0, a1, a2, a3, a4, a5, t0
 	// Enable interrupts of the interrupt-disable bit is not set in flags
+	andi               t1, tp, 0x10
 	bnez               t1, .Lskip_interrupt_disable
 	csrsi              mstatus, 0x8
 .Lskip_interrupt_disable:
