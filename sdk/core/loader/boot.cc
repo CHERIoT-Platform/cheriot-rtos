@@ -11,7 +11,6 @@
 #include <string.h>
 
 #include "../switcher/tstack.h"
-#include "../switcher/misc-assembly.h"
 #include "constants.h"
 #include "debug.hh"
 #include "defines.h"
@@ -145,6 +144,14 @@ namespace
 		FirstDynamicSoftware = 0x1000000,
 	};
 
+	// The switcher assembly includes the types of import table entries and
+	// trusted stacks.  This enumeration and the assembly must be kept in sync.
+	// This will fail if the enumeration value changes.
+	static_assert(int(SealedImportTableEntries) == 9,
+	              "If this fails, update switcher/entry.S to the new value");
+	static_assert(int(SealedTrustedStacks) == 10,
+	              "If this fails, update switcher/entry.S to the new value");
+
 	// The allocator and static sealing types must be contiguous so that the
 	// token library can hold a permit-unseal capability for both.
 	static_assert(int(Allocator) + 1 == int(StaticToken),
@@ -162,6 +169,18 @@ namespace
 	// enum are outside of the hardware space).
 	static_assert(magic_enum::enum_count<SealingType>() <= 12,
 	              "Too many sealing types reserved for a 3-bit otype field");
+
+} // namespace
+
+/*
+ * Unusually late, include this where we have access to the above enum
+ * SealingType, but early enough that the constants defined herein are available
+ * to the rest of the code.
+ */
+#include "../switcher/misc-assembly.h"
+
+namespace
+{
 
 	constexpr auto StoreLPerm = Root::Permissions<Root::Type::RWStoreL>;
 	/// PCC permissions for the switcher.

@@ -257,7 +257,7 @@ __Z26compartment_switcher_entryz:
 
 	// Fetch the sealing key
 	LoadCapPCC         cs0, compartment_switcher_sealing_key
-	li                 gp, 9
+	li                 gp, SEAL_TYPE_SealedImportTableEntries
 	csetaddr           cs0, cs0, gp
 	// The target capability is in ct1. Unseal, check tag and load the entry point offset.
 	cunseal            ct1, ct1, cs0
@@ -535,7 +535,7 @@ exception_entry_asm:
 
 	// Switch onto the new thread's trusted stack
 	LoadCapPCC         ct0, compartment_switcher_sealing_key
-	li                 gp, 10
+	li                 gp, SEAL_TYPE_SealedTrustedStacks
 	csetaddr           ct0, ct0, gp
 	cunseal            csp, ca0, ct0
 	clw                t0, TrustedStack_offset_mcause(csp)
@@ -965,7 +965,7 @@ __Z25switcher_interrupt_threadPv:
 	// Load the unsealing key into a register that we will clobber two
 	// instructions later.
 	LoadCapPCC         ca1, compartment_switcher_sealing_key
-	li                 a2, 10
+	li                 a2, SEAL_TYPE_SealedTrustedStacks
 	csetaddr           ca1, ca1, a2
 	// The target capability is in ct1. Unseal, check tag and load the entry point offset.
 	cunseal            ca1, ca0, ca1
@@ -1024,7 +1024,7 @@ __Z25switcher_interrupt_threadPv:
 	.type __Z23switcher_current_threadv,@function
 __Z23switcher_current_threadv:
 	LoadCapPCC         ca0, compartment_switcher_sealing_key
-	li                 a1, 10
+	li                 a1, SEAL_TYPE_SealedTrustedStacks
 	csetaddr           ca0, ca0, a1
 	cspecialr          ca1, mtdc
 	cseal              ca0, ca1, ca0
