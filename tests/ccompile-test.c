@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <cdefs.h>
 #include <cheri-builtins.h>
+#include <cheri.h>
 #include <compartment.h>
 #include <ctype.h>
 #include <errno.h>
@@ -38,4 +39,4 @@
 #include <time.h>
 #include <timeout.h>
 #include <token.h>
-#include <cheri.h>
+#include <unwind.h>
