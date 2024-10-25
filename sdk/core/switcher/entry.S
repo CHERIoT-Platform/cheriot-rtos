@@ -349,15 +349,14 @@ switcher_after_compartment_call:
 	clear_hazard_slots ctp, ct2
 	// make sure there is a frame left in the trusted stack
 	clhu               t2, TrustedStack_offset_frameoffset(ctp)
-	li                 tp, TrustedStack_offset_frames
+	li                 t0, TrustedStack_offset_frames
 	// Move to the previous trusted stack frame.
 	addi               t2, t2, -TrustedStackFrame_size
 	// If this is the first trusted stack frame, then the csp that we would be
 	// loading is the csp on entry, which does not have a spilled area.  In
 	// this case, we would fault when loading, so would exit the thread, but we
 	// should instead gracefully exit the thread.
-	bgeu               tp, t2, .Lcommon_defer_irqs_and_thread_exit
-	cspecialr          ctp, mtdc
+	bgeu               t0, t2, .Lcommon_defer_irqs_and_thread_exit
 	cincoffset         ct1, ctp, t2
 	// Restore the stack pointer.  All other spilled values are spilled there.
 	clc                csp, TrustedStackFrame_offset_csp(ct1)
