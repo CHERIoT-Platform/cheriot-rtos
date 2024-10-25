@@ -9,9 +9,9 @@
 struct CleanupList
 {
 	/// Next pointer.
-	CleanupList *next;
+	struct CleanupList *next;
 	/// Jump buffer to return to.
-	__jmp_buf env;
+	struct __jmp_buf env;
 };
 
 /**
@@ -34,9 +34,9 @@ __always_inline static inline struct CleanupList **cleanup_list_head()
  */
 __always_inline static inline void cleanup_unwind(void)
 {
-	CleanupList **__head = cleanup_list_head();
-	CleanupList  *__top  = *__head;
-	*__head              = __top->next;
+	struct CleanupList **__head = cleanup_list_head();
+	struct CleanupList  *__top  = *__head;
+	*__head                     = __top->next;
 	switcher_handler_invocation_count_reset();
 	longjmp(&__top->env, 1);
 }
@@ -53,10 +53,10 @@ __always_inline static inline void cleanup_unwind(void)
  */
 #define CHERIOT_DURING                                                         \
 	{                                                                          \
-		CleanupList cleanupListEntry;                                          \
-		auto      **__head    = cleanup_list_head();                           \
-		cleanupListEntry.next = *__head;                                       \
-		*__head               = &cleanupListEntry;                             \
+		struct CleanupList   cleanupListEntry;                                 \
+		struct CleanupList **__head = cleanup_list_head();                     \
+		cleanupListEntry.next       = *__head;                                 \
+		*__head                     = &cleanupListEntry;                       \
 		if (setjmp(&cleanupListEntry.env) == 0)                                \
 		{
 /// See CHERIOT_DURING.
