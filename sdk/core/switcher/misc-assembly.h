@@ -34,3 +34,10 @@ using namespace priv;
 EXPORT_ASSEMBLY_NAME(MCAUSE_THREAD_EXIT, 24)
 EXPORT_ASSEMBLY_NAME(MCAUSE_THREAD_INTERRUPT, 25)
 EXPORT_ASSEMBLY_NAME(MCAUSE_CHERI, 28)
+
+EXPORT_ASSEMBLY_EXPRESSION(SEAL_TYPE_SealedImportTableEntries,
+                           SealingType::SealedImportTableEntries,
+                           9)
+EXPORT_ASSEMBLY_EXPRESSION(SEAL_TYPE_SealedTrustedStacks,
+                           SealingType::SealedTrustedStacks,
+                           10)
