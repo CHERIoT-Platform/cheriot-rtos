@@ -16,6 +16,7 @@
 #include "defines.h"
 #include "types.h"
 #include <cheri.hh>
+#include <compartment.h>
 #include <platform-uart.hh>
 #include <priv/riscv.h>
 #include <riscvreg.h>
@@ -49,6 +50,11 @@ namespace
 	// It must also be aligned sufficiently for trusted stacks, so ensure that
 	// we've captured that requirement above.
 	static_assert(alignof(TrustedStack) <= 16);
+
+	static_assert(sizeof(ErrorState) == offsetof(TrustedStack, hazardPointers));
+	static_assert(offsetof(ErrorState, pcc) == offsetof(TrustedStack, mepcc));
+	static_assert(offsetof(ErrorState, registers) ==
+	              offsetof(TrustedStack, cra));
 	__END_DECLS
 
 	static_assert(

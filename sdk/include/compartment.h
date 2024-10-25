@@ -14,7 +14,8 @@
 /**
  * State for error handlers to use.
  *
- * Note: This structure should have the same layout as the register-save area.
+ * Note: This structure should have the same layout as the register-save area
+ * (that is, the initial sequence of a TrustedStack, up through ca5, inclusive).
  */
 struct ErrorState
 {
