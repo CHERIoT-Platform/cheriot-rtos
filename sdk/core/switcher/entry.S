@@ -205,10 +205,9 @@ __Z26compartment_switcher_entryz:
 
 	// make sure the trusted stack is still in bounds
 	clhu               tp, TrustedStack_offset_frameoffset(ct2)
-	cgetlen            t2, ct2
-	bgeu               tp, t2, .Lout_of_trusted_stack
-	// we are past the stacks checks. Reload ct2; tp is still as it was
-	cspecialr          ct2, mtdc
+	cgetlen            s0, ct2
+	bgeu               tp, s0, .Lout_of_trusted_stack
+	// we are past the stacks checks.
 	// ctp points to the current available trusted stack frame.
 	cincoffset         ctp, ct2, tp
 	csc                csp, TrustedStackFrame_offset_csp(ctp)
