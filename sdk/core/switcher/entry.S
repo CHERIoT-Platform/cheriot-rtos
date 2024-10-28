@@ -197,10 +197,6 @@ __Z26compartment_switcher_entryz:
 	// The caller should back up all callee saved registers.
 	// mtdc should always have an offset of 0.
 	cspecialr          ct2, mtdc
-#ifndef NDEBUG
-	// XXX: This line is useless, only for mtdc to show up in debugging.
-	cmove              ct2, ct2
-#endif
 	clear_hazard_slots ct2, ctp
 
 	// make sure the trusted stack is still in bounds
@@ -438,10 +434,6 @@ exception_entry_asm:
 	// interrupts off and precious few registers available to us, so swap it
 	// with the csp (we'll put it back, later).
 	cspecialrw         csp, mtdc, csp
-#ifndef NDEBUG
-	// XXX: This move is useless, but just for debugging in the simulator.
-	cmove              csp, csp
-#endif
 
 	// If we read out zero, we've reentered the exception and are about to
 	// trap.  Make sure that we end up in an architectural trap loop: clobber
