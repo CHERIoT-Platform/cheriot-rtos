@@ -253,12 +253,7 @@ __Z26compartment_switcher_entryz:
 #endif
 	zero_stack         t2, s0, gp
 .Lafter_zero:
-	// Reserve space for unwind state and so on.
-	cincoffset 	       csp, csp, -STACK_ENTRY_RESERVED_SPACE
-#ifdef CONFIG_MSHWM
-	// store new stack top as stack high water mark
-	csrw               CSR_MSHWM, sp
-#endif
+
 	// Fetch the sealing key
 	LoadCapPCC         cs0, compartment_switcher_sealing_key
 	li                 gp, 9
@@ -285,6 +280,13 @@ __Z26compartment_switcher_entryz:
 	// Include the space we reserved for the unwind state.
 	addi               t2, t2, -STACK_ENTRY_RESERVED_SPACE
 	bgtu               tp, t2, .Lstack_too_small
+
+	// Reserve space for unwind state and so on.
+	cincoffset 	       csp, csp, -STACK_ENTRY_RESERVED_SPACE
+#ifdef CONFIG_MSHWM
+	// store new stack top as stack high water mark
+	csrw               CSR_MSHWM, sp
+#endif
 
 	// Get the flags field into tp
 	clbu               tp, ExportEntry_offset_flags(ct1)
