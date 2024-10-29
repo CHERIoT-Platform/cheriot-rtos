@@ -150,6 +150,12 @@ int test_stack()
 	expect_handler(false);
 	exhaust_thread_stack();
 
+	debug_log("exhausting the compartment stack during a switcher call");
+	expect_handler(false);
+	threadStackTestFailed = true;
+	exhaust_thread_stack_spill(callback);
+	TEST(threadStackTestFailed == false, "switcher did not return error");
+
 	debug_log("modifying stack permissions on fault");
 	PermissionSet compartmentStackPermissions = get_stack_permissions();
 	for (auto permissionToRemove : compartmentStackPermissions)

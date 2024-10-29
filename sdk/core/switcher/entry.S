@@ -183,11 +183,19 @@ switcher_scheduler_entry_csp:
 	.p2align 2
 	.type __Z26compartment_switcher_entryz,@function
 __Z26compartment_switcher_entryz:
-	cincoffset        csp, csp, -SPILL_SLOT_SIZE
-	csc               cs0, SPILL_SLOT_cs0(csp)
-	csc               cs1, SPILL_SLOT_cs1(csp)
-	csc               cgp, SPILL_SLOT_cgp(csp)
-	csc               cra, SPILL_SLOT_pcc(csp)
+	/*
+	 * Spill caller-save registers carefully.  If we find ourselves unable to do
+	 * so, we'll return an error to the caller (via the exception path; see
+	 * .Lhandle_error_in_switcher).  The error handling path assumes that the
+	 * first spill is to the lowest address and guaranteed to trap if any would.
+	 */
+	cincoffset        ct2, csp, -SPILL_SLOT_SIZE
+.Lswitcher_entry_first_spill:
+	csc               cs0, SPILL_SLOT_cs0(ct2)
+	csc               cs1, SPILL_SLOT_cs1(ct2)
+	csc               cgp, SPILL_SLOT_cgp(ct2)
+	csc               cra, SPILL_SLOT_pcc(ct2)
+	cmove             csp, ct2
 	// before we access any privileged state, we can verify the
 	// compartment's csp is valid. If not, force unwind.
 	// Note that this check is purely to protect the callee, not the switcher
@@ -226,7 +234,6 @@ __Z26compartment_switcher_entryz:
 	// table entry on the trusted stack, a fault here will cause a forced
 	// unwind until we set the correct one.
 	csh                s1, TrustedStack_offset_frameoffset(ct2)
-#ifndef CONFIG_NO_SWITCHER_SAFETY
 	// Chop off the stack.
 	cgetaddr           s0, csp
 	cgetbase           s1, csp
@@ -238,7 +245,7 @@ __Z26compartment_switcher_entryz:
 	// Read the stack high water mark (which is 16-byte aligned)
 	csrr               gp, CSR_MSHWM
 	// Skip zeroing if high water mark >= stack pointer
-	bge                t2, sp, .Lafter_zero
+	bge                gp, sp, .Lafter_zero
 	// Use stack high water mark as base address for zeroing.  If this faults
 	// then it will trigger a force unwind.  This can happen only if the caller
 	// is doing something bad.
@@ -246,14 +253,7 @@ __Z26compartment_switcher_entryz:
 #endif
 	zero_stack         t2, s0, gp
 .Lafter_zero:
-	// Reserve space for unwind state and so on.
-	cincoffset 	       csp, csp, -STACK_ENTRY_RESERVED_SPACE
-#ifdef CONFIG_MSHWM
-	// store new stack top as stack high water mark
-	csrw               CSR_MSHWM, sp
-#endif
-#endif // CONFIG_NO_SWITCHER_SAFETY
-.Lout:
+
 	// Fetch the sealing key
 	LoadCapPCC         cs0, compartment_switcher_sealing_key
 	li                 gp, 9
@@ -280,6 +280,13 @@ __Z26compartment_switcher_entryz:
 	// Include the space we reserved for the unwind state.
 	addi               t2, t2, -STACK_ENTRY_RESERVED_SPACE
 	bgtu               tp, t2, .Lstack_too_small
+
+	// Reserve space for unwind state and so on.
+	cincoffset 	       csp, csp, -STACK_ENTRY_RESERVED_SPACE
+#ifdef CONFIG_MSHWM
+	// store new stack top as stack high water mark
+	csrw               CSR_MSHWM, sp
+#endif
 
 	// Get the flags field into tp
 	clbu               tp, ExportEntry_offset_flags(ct1)
@@ -337,6 +344,7 @@ __Z26compartment_switcher_entryz:
 	// ca0, used for first return value
 	// ca1, used for second return value
 	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
+.Ljust_return:
 	cret
 
 	// If the stack is too small, we don't do the call, but to avoid leaking
@@ -573,8 +581,8 @@ exception_entry_asm:
 	auipcc             ct0, 0
 	clc                ct1, TrustedStack_offset_mepcc(csp)
 	cgetbase           t0, ct0
-	cgetbase           t1, ct1
-	beq                t0, t1, .Lforce_unwind
+	cgetbase           tp, ct1
+	beq                t0, tp, .Lhandle_error_in_switcher
 
 	// Load the interrupted thread's stack pointer into ct0
 	clc                ct0, TrustedStack_offset_csp(csp)
@@ -637,22 +645,22 @@ exception_entry_asm:
 	// Get the previous trusted stack frame
 
 	// Load the caller's csp
-	clc                ca0, TrustedStackFrame_offset_csp(ctp)
+	clc                ct0, TrustedStackFrame_offset_csp(ctp)
 
 	// If this is the top stack frame, then the csp field is the value on
 	// entry.  If it's any other frame then we need to go to the previous one
 	cincoffset         cs1, csp, TrustedStack_offset_frames
-	beq                s1, t1, .Lrecovered_stack
+	beq                s1, tp, .Lrecovered_stack
 
 	// The address of the stack pointer will point to the bottom of the
 	// caller's save area, so we set the bounds to be the base up to the
 	// current address.
-	cgetaddr           a1, ca0
-	cgetbase           a2, ca0
+	cgetaddr           a1, ct0
+	cgetbase           a2, ct0
 	sub                a1, a1, a2
-	csetaddr           ca0, ca0, a2
+	csetaddr           ct0, ct0, a2
 	// The code that installs the context expects csp to be in ct0
-	csetboundsexact    ct0, ca0, a1
+	csetboundsexact    ct0, ct0, a1
 .Lrecovered_stack:
 	li                 a0, 1
 
@@ -810,6 +818,32 @@ exception_entry_asm:
 	clc                ct2, TrustedStack_offset_mepcc(csp)
 	j                  .Linstall_context
 
+	/*
+	 * Some switcher instructions' traps are handled specially, by looking at
+	 * the offset of mepcc.  Otherwise, we're off to a force unwind.
+	 */
+.Lhandle_error_in_switcher:
+	auipcc             ctp, %cheriot_compartment_hi(.Lswitcher_entry_first_spill)
+	cincoffset         ctp, ctp, %cheriot_compartment_lo_i(.Lhandle_error_in_switcher)
+	bne                t1, tp, .Lforce_unwind
+	li                 a0, -ENOTENOUGHSTACK
+	li                 a1, 0
+
+	/*
+	 * Cause the interrupted thread to resume as if a return had just executed.
+	 * We do this by vectoring to a `cjalr ra` (`cret`) instruction through
+	 * `mepcc`; whee!  Overwrites the stored context a0 and a1 with the current
+	 * values of those registers, effectively passing them through
+	 * .Linstall_context.
+	 */
+.Linstall_return_context:
+	auipcc             ct2, %cheriot_compartment_hi(.Ljust_return)
+	cincoffset         ct2, ct2, %cheriot_compartment_lo_i(.Linstall_return_context)
+	csc                ca0, TrustedStack_offset_ca0(csp)
+	csc                ca1, TrustedStack_offset_ca1(csp)
+	j                  .Linstall_context
+
+
 .size exception_entry_asm, . - exception_entry_asm
 
 /**
@@ -852,7 +886,6 @@ exception_entry_asm:
 	clc                ca2, SPILL_SLOT_pcc(csp)
 	clc                cgp, SPILL_SLOT_cgp(csp)
 	cincoffset         csp, csp, SPILL_SLOT_SIZE
-#ifndef CONFIG_NO_SWITCHER_SAFETY
 #ifdef CONFIG_MSHWM
 	// read the stack high water mark, which is 16-byte aligned
 	// we will use this as base address for stack clearing
@@ -868,7 +901,6 @@ exception_entry_asm:
 #ifdef CONFIG_MSHWM
 	csrw               CSR_MSHWM, sp
 #endif
-#endif // CONFIG_NO_SWITCHER_SAFETY
 	cret
 
 
