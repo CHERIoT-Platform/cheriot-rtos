@@ -450,9 +450,7 @@ exception_entry_asm:
 	// slightly preferable to clearing mtdc, which would also ensure that we
 	// looped, because the architectural loop is tighter and involves no
 	// program text, making it easier for microarchitecture to detect.
-	bnez               sp, .Lexception_entry_still_alive
-	cspecialw          mtcc, csp
-.Lexception_entry_still_alive:
+	beqz               sp, .Lexception_reentered
 
 	// csp now points to the save reg frame that we can use.
 	// The guest csp (c2) is now in mtdc. Will be spilled later, but we
@@ -874,6 +872,11 @@ exception_entry_asm:
 	csc                ca1, TrustedStack_offset_ca1(csp)
 	j                  .Linstall_context
 
+.Lexception_reentered:
+	cmove              csp, cnull
+	cspecialw          mtcc, csp
+	clc                csp, 0(csp)
+	j                  .Lexception_reentered
 
 .size exception_entry_asm, . - exception_entry_asm
 
