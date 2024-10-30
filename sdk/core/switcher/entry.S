@@ -342,8 +342,65 @@ __Z26compartment_switcher_entryz:
 .Lskip_compartment_call:
 	// If we are doing a forced unwind of the trusted stack then we do almost
 	// exactly the same as a normal unwind.  We will jump here from the
-	// exception path.
-	cjal               .Lpop_trusted_stack_frame
+	// exception path (.Lforce_unwind)
+
+	/*
+	 * Pop a frame from the trusted stack, leaving all registers in the state
+	 * expected by the caller of a cross-compartment call, except for the return
+	 * address which is left in ca2.  The callee is responsible for zeroing
+	 * argument and temporary registers.
+	 *
+	 * The below should not fault before returning back to the caller. If a
+	 * fault occurs there must be a serious bug elsewhere.
+	 */
+
+	cspecialr          ctp, mtdc
+	clear_hazard_slots ctp, ct2
+	// make sure there is a frame left in the trusted stack
+	clhu               t2, TrustedStack_offset_frameoffset(ctp)
+	li                 tp, TrustedStack_offset_frames
+	// Move to the previous trusted stack frame.
+	addi               t2, t2, -TrustedStackFrame_size
+	// If this is the first trusted stack frame, then the csp that we would be
+	// loading is the csp on entry, which does not have a spilled area.  In
+	// this case, we would fault when loading, so would exit the thread, but we
+	// should instead gracefully exit the thread.
+	bgeu               tp, t2, .Lset_mcause_and_exit_thread
+	cspecialr          ctp, mtdc
+	cincoffset         ct1, ctp, t2
+	// Restore the stack pointer.  All other spilled values are spilled there.
+	clc                csp, TrustedStackFrame_offset_csp(ct1)
+	// Update the current frame offset.
+	csh                t2, TrustedStack_offset_frameoffset(ctp)
+	// Do the loads *after* moving the trusted stack pointer.  In theory, the
+	// checks in `check_compartment_stack_integrity` make it impossible for
+	// this to fault, but if we do fault here then we'd end up in an infinite
+	// loop trying repeatedly to pop the same trusted stack frame.  This would
+	// be bad.  Instead, we move the trusted stack pointer *first* and so, if
+	// the accesses to the untrusted stack fault, we will detect a fault in the
+	// switcher, enter the force-unwind path, and pop the frame for the
+	// compartment that gave us a malicious csp.
+	clc                cs0, SPILL_SLOT_cs0(csp)
+	clc                cs1, SPILL_SLOT_cs1(csp)
+	clc                ca2, SPILL_SLOT_pcc(csp)
+	clc                cgp, SPILL_SLOT_cgp(csp)
+	cincoffset         csp, csp, SPILL_SLOT_SIZE
+#ifdef CONFIG_MSHWM
+	// read the stack high water mark, which is 16-byte aligned
+	// we will use this as base address for stack clearing
+	// note that it cannot be greater than stack top as we
+	// we set it to stack top when we pushed to trusted stack frame
+	csrr               tp, CSR_MSHWM
+#else
+	cgetbase           tp, csp
+#endif
+	cgetaddr           t1, csp
+	csetaddr           ct2, csp, tp
+	zero_stack         t2, t1, tp
+#ifdef CONFIG_MSHWM
+	csrw               CSR_MSHWM, sp
+#endif
+
 	cmove              cra, ca2
 	// Zero all registers apart from RA, GP, SP and return args.
 	// cra, csp and cgp needed for the compartment
@@ -844,65 +901,6 @@ exception_entry_asm:
 
 
 .size exception_entry_asm, . - exception_entry_asm
-
-/**
- * Pops a frame from the trusted stack.  Leaves all registers in the state
- * expected by the caller of a cross-compartment call, except for the return
- * address which is left in ca2.  The callee is responsible for zeroing
- * argument and temporary registers.
- */
-.Lpop_trusted_stack_frame:
-	// The below should not fault before returning back to the caller. If a fault occurs there must
-	// be a serious bug elsewhere.
-	cspecialr          ctp, mtdc
-	clear_hazard_slots ctp, ct2
-	// make sure there is a frame left in the trusted stack
-	clhu               t2, TrustedStack_offset_frameoffset(ctp)
-	li                 tp, TrustedStack_offset_frames
-	// Move to the previous trusted stack frame.
-	addi               t2, t2, -TrustedStackFrame_size
-	// If this is the first trusted stack frame, then the csp that we would be
-	// loading is the csp on entry, which does not have a spilled area.  In
-	// this case, we would fault when loading, so would exit the thread, but we
-	// should instead gracefully exit the thread.
-	bgeu               tp, t2, .Lset_mcause_and_exit_thread
-	cspecialr          ctp, mtdc
-	cincoffset         ct1, ctp, t2
-	// Restore the stack pointer.  All other spilled values are spilled there.
-	clc                csp, TrustedStackFrame_offset_csp(ct1)
-	// Update the current frame offset.
-	csh                t2, TrustedStack_offset_frameoffset(ctp)
-	// Do the loads *after* moving the trusted stack pointer.  In theory, the
-	// checks in `check_compartment_stack_integrity` make it impossible for
-	// this to fault, but if we do fault here then we'd end up in an infinite
-	// loop trying repeatedly to pop the same trusted stack frame.  This would
-	// be bad.  Instead, we move the trusted stack pointer *first* and so, if
-	// the accesses to the untrusted stack fault, we will detect a fault in the
-	// switcher, enter the force-unwind path, and pop the frame for the
-	// compartment that gave us a malicious csp.
-	clc                cs0, SPILL_SLOT_cs0(csp)
-	clc                cs1, SPILL_SLOT_cs1(csp)
-	clc                ca2, SPILL_SLOT_pcc(csp)
-	clc                cgp, SPILL_SLOT_cgp(csp)
-	cincoffset         csp, csp, SPILL_SLOT_SIZE
-#ifdef CONFIG_MSHWM
-	// read the stack high water mark, which is 16-byte aligned
-	// we will use this as base address for stack clearing
-	// note that it cannot be greater than stack top as we 
-	// we set it to stack top when we pushed to trusted stack frame
-	csrr               tp, CSR_MSHWM
-#else
-	cgetbase           tp, csp
-#endif
-	cgetaddr           t1, csp
-	csetaddr           ct2, csp, tp
-	zero_stack         t2, t1, tp
-#ifdef CONFIG_MSHWM
-	csrw               CSR_MSHWM, sp
-#endif
-	cret
-
-
 
 /*******************************************************************************
  * Switcher-exported library functions.
