@@ -42,56 +42,36 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
 	if (mcause == priv::MCAUSE_CHERI)
 	{
+		// An unexpected error -- log it and end the simulation with error.
+		// Note: handle CZR differently as `get_register_value` will return a
+		// nullptr which we cannot dereference.
+
 		auto [exceptionCode, registerNumber] =
 		  CHERI::extract_cheri_mtval(mtval);
-		// The thread entry point is called with a NULL return address so the
-		// cret at the end of the entry point function will trap if it is
-		// reached. We don't want to treat this as an error but thankfully we
-		// detect it quite specifically by checking for all of:
-		// 1) CHERI cause is tag violation
-		// 2) faulting register is CRA
-		// 3) value of CRA is NULL
-		// 4) we've reached the top of the thread's stack
-		CHERI::Capability stackCapability{
-		  frame->get_register_value<CHERI::RegisterNumber::CSP>()};
-		CHERI::Capability returnCapability{
-		  frame->get_register_value<CHERI::RegisterNumber::CRA>()};
-		// The top of the stack is 16 bytes above the stack pointer on entry,
-		// to provide space for unwind lists and so on.
-		if (registerNumber == CHERI::RegisterNumber::CRA &&
-		    returnCapability.address() == 0 &&
-		    exceptionCode == CHERI::CauseCode::TagViolation &&
-		    (stackCapability.top() - 16) == stackCapability.address())
-		{
-			// looks like thread exit -- just log it then ForceUnwind
-			DebugErrorHandler::log(
-			  "Thread exit CSP={}, PCC={}", stackCapability, frame->pcc);
-		}
-		else
-		{
-			// An unexpected error -- log it and end the simulation
-			// with error.  Note: handle CZR differently as
-			// `get_register_value` will return a nullptr which we
-			// cannot dereference.
-			DebugErrorHandler::log(
-			  "{} error at {} (return address: {}), with capability register "
-			  "{}: {}",
-			  exceptionCode,
-			  frame->pcc,
-			  frame->get_register_value<CHERI::RegisterNumber::CRA>(),
-			  registerNumber,
-			  registerNumber == CHERI::RegisterNumber::CZR
-			    ? nullptr
-			    : *frame->get_register_value(registerNumber));
-			simulation_exit(1);
-		}
+
+		DebugErrorHandler::log(
+		  "{} error at {} (return address: {}), with capability register "
+		  "{}: {}",
+		  exceptionCode,
+		  frame->pcc,
+		  frame->get_register_value<CHERI::RegisterNumber::CRA>(),
+		  registerNumber,
+		  registerNumber == CHERI::RegisterNumber::CZR
+		    ? nullptr
+		    : *frame->get_register_value(registerNumber));
 	}
 	else
 	{
 		// other error (e.g. __builtin_trap causes ReservedInstruciton)
 		// log and end simulation with error.
 		DebugErrorHandler::log("Unhandled error {} at {}", mcause, frame->pcc);
-		simulation_exit(1);
 	}
+
+	simulation_exit(1);
+	/*
+	 * simulation_exit may fail (say, we're not on a simulator or there isn't
+	 * enough stack space to invoke the function.  In that case, just fall back
+	 * to forcibly unwinding.
+	 */
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
