@@ -529,18 +529,9 @@ exception_entry_asm:
 // to run an error handler, or when we do run an error handler and it instructs
 // us to return.  This treats all register values as undefined on entry.
 .Lforce_unwind:
-	// Pop the trusted stack frame.
-	cjal               .Lpop_trusted_stack_frame
-	cmove              cra, ca2
-	// Zero all registers apart from RA, GP, SP and return args.
-	// cra, cs0, cs1, and cgp were restored from the compartment's stack
-	// csp restored from the trusted stack.
-	// ca0, used for first return value
-	// ca1, used for second return value
-	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
 	li                 a0, -ECOMPARTMENTFAIL
 	li                 a1, 0
-	cret
+	j                  .Lskip_compartment_call
 
 
 // If we have run out of trusted stack, then just restore the caller's state
