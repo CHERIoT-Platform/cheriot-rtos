@@ -643,7 +643,7 @@ exception_entry_asm:
 	// See if we can find a handler:
 	clhu               tp, TrustedStack_offset_frameoffset(csp)
 	li                 t1, TrustedStack_offset_frames
-	beq                tp, t1, .Lreset_mepcc_and_install_context
+	beq                tp, t1, .Lset_mcause_and_exit_thread
 	addi               tp, tp, -TrustedStackFrame_size
 
 	// ctp points to the current available trusted stack frame.
@@ -864,13 +864,6 @@ exception_entry_asm:
 	zeroOne            sp
 	cspecialrw         csp, mtdc, csp
 	j                  .Lthread_exit
-
-	// The continue-resume path expects the location that we will mret to to be
-	// in ct2.  If we're just resuming, then resume from the stashed link
-	// register value.
-.Lreset_mepcc_and_install_context:
-	clc                ct2, TrustedStack_offset_mepcc(csp)
-	j                  .Linstall_context
 
 	/*
 	 * Some switcher instructions' traps are handled specially, by looking at
