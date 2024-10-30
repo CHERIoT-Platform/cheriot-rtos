@@ -339,7 +339,8 @@ __Z26compartment_switcher_entryz:
 	zeroRegisters      tp, t1, t2, s0, s1
 	cjalr              cra
 
-.Lskip_compartment_call:
+	.globl switcher_skip_compartment_call
+switcher_skip_compartment_call:
 	// If we are doing a forced unwind of the trusted stack then we do almost
 	// exactly the same as a normal unwind.  We will jump here from the
 	// exception path (.Lforce_unwind)
@@ -417,7 +418,7 @@ __Z26compartment_switcher_entryz:
 .Lstack_too_small:
 	li                 a0, -ENOTENOUGHSTACK
 	li                 a1, 0
-	j                  .Lskip_compartment_call
+	j                  switcher_skip_compartment_call
 .size compartment_switcher_entry, . - compartment_switcher_entry
 
 	// the entry point of all exceptions and interrupts
@@ -586,7 +587,7 @@ exception_entry_asm:
 .Lforce_unwind:
 	li                 a0, -ECOMPARTMENTFAIL
 	li                 a1, 0
-	j                  .Lskip_compartment_call
+	j                  switcher_skip_compartment_call
 
 
 // If we have run out of trusted stack, then just restore the caller's state
