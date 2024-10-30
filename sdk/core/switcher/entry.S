@@ -414,11 +414,10 @@ switcher_after_compartment_call:
 	clc                cra, SPILL_SLOT_pcc(csp)
 	clc                cgp, SPILL_SLOT_cgp(csp)
 	cincoffset         csp, csp, SPILL_SLOT_SIZE
-	// Set the return registers
+	// Set the first return register (a0) and zero the other (a1) below
 	li                 a0, -ENOTENOUGHTRUSTEDSTACK
-	li                 a1, 0
 	// Zero everything else
-	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
+	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0
 	cret
 
 .size compartment_switcher_entry, . - compartment_switcher_entry
