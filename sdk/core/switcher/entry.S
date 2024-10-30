@@ -277,8 +277,16 @@ __Z26compartment_switcher_entryz:
 	// At this point, we have already truncated the stack and so the length of
 	// the stack is the length that the callee can use.
 	cgetlen            t2, csp
-	// Include the space we reserved for the unwind state.
-	addi               t2, t2, -STACK_ENTRY_RESERVED_SPACE
+	/*
+	 * Include the space we reserved for the unwind state.
+	 *
+	 * tp holds the number of required stack bytes, a value between 0 and 0x7F8
+	 * (the result of an unsigned byte load left shifted by 3).  Given this
+	 * extremely limited range, adding STACK_ENTRY_RESERVED_SPACE will not cause
+	 * overflow (while instead subtracting it from the available length, in t2,
+	 * might underflow).
+	 */
+	addi               tp, tp, STACK_ENTRY_RESERVED_SPACE
 	bgtu               tp, t2, .Lstack_too_small
 
 	// Reserve space for unwind state and so on.
