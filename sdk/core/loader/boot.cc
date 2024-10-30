@@ -823,6 +823,21 @@ namespace
 		// Space per thread for hazard pointers.
 		static constexpr size_t HazardPointerSpace =
 		  HazardPointersPerThread * sizeof(void *);
+
+		/*
+		 * Construct a return sentry with which to populate initial thread
+		 * register files, as if they had been entered by the switcher rather
+		 * than by fiat of initial construction.  The switcher will detect the
+		 * trusted stack underflow and will signal the scheduler that the thread
+		 * has exited and should not be brought back on core.
+		 */
+		auto threadInitialReturn =
+		  build<void, Root::Type::Execute, SwitcherPccPermissions>(
+		    image.switcher.code);
+		threadInitialReturn.address() += image.switcher.crossCallReturnEntry;
+		threadInitialReturn =
+		  seal_return<InterruptStatus::Disabled>(threadInitialReturn);
+
 		for (size_t i = 0; const auto &config : image.threads())
 		{
 			Debug::log("Creating thread {}", i);
@@ -858,6 +873,7 @@ namespace
 			        false>(config.trustedStack);
 			threadTStack->mepcc = pcc;
 			threadTStack->cgp   = cgp;
+			threadTStack->cra   = threadInitialReturn;
 			// Stacks have store-local but not global permission.
 			auto stack =
 			  build<void,
