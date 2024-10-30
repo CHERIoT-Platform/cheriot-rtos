@@ -346,9 +346,8 @@ __Z26compartment_switcher_entryz:
 
 	/*
 	 * Pop a frame from the trusted stack, leaving all registers in the state
-	 * expected by the caller of a cross-compartment call, except for the return
-	 * address which is left in ca2.  The callee is responsible for zeroing
-	 * argument and temporary registers.
+	 * expected by the caller of a cross-compartment call.  The callee is
+	 * responsible for zeroing argument and temporary registers.
 	 *
 	 * The below should not fault before returning back to the caller. If a
 	 * fault occurs there must be a serious bug elsewhere.
@@ -382,7 +381,7 @@ __Z26compartment_switcher_entryz:
 	// compartment that gave us a malicious csp.
 	clc                cs0, SPILL_SLOT_cs0(csp)
 	clc                cs1, SPILL_SLOT_cs1(csp)
-	clc                ca2, SPILL_SLOT_pcc(csp)
+	clc                cra, SPILL_SLOT_pcc(csp)
 	clc                cgp, SPILL_SLOT_cgp(csp)
 	cincoffset         csp, csp, SPILL_SLOT_SIZE
 #ifdef CONFIG_MSHWM
@@ -401,7 +400,6 @@ __Z26compartment_switcher_entryz:
 	csrw               CSR_MSHWM, sp
 #endif
 
-	cmove              cra, ca2
 	// Zero all registers apart from RA, GP, SP and return args.
 	// cra, csp and cgp needed for the compartment
 	// cs0 saved and restored on trusted stack
