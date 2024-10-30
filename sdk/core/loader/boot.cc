@@ -89,6 +89,16 @@ namespace
 		SentryEnabling,
 
 		/**
+		 * Return sentry that disables interrupts on return
+		 */
+		ReturnSentryDisabling,
+
+		/**
+		 * Return sentry that enables interrupts on return
+		 */
+		ReturnSentryEnabling,
+
+		/**
 		 * Marker for the first sealing type that's valid for data capabilities.
 		 */
 		FirstDataSealingType = 9,
@@ -149,7 +159,7 @@ namespace
 	// for code and data capabilities, giving the range 0-0xf reserved for
 	// hardware use. Assert that we're not using more than we need (two in the
 	// enum are outside of the hardware space).
-	static_assert(magic_enum::enum_count<SealingType>() <= 10,
+	static_assert(magic_enum::enum_count<SealingType>() <= 12,
 	              "Too many sealing types reserved for a 3-bit otype field");
 
 	constexpr auto StoreLPerm = Root::Permissions<Root::Type::RWStoreL>;
@@ -324,6 +334,23 @@ namespace
 		Debug::Invariant(
 		  unsigned(status) < 3, "Invalid interrupt status {}", int(status));
 		size_t otype = size_t{Sentries[int(status)]};
+		void  *key   = build<void, Root::Type::Seal>(otype, 1);
+		return ptr.seal(key);
+	}
+
+	template<InterruptStatus Status, typename T>
+	T *seal_return(Capability<T> ptr)
+	{
+		static_assert((Status == InterruptStatus::Enabled) ||
+		              (Status == InterruptStatus::Disabled));
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc99-designator"
+		constexpr SealingType Sentries[] = {
+		  [int(InterruptStatus::Enabled)]  = ReturnSentryEnabling,
+		  [int(InterruptStatus::Disabled)] = ReturnSentryDisabling};
+#pragma clang diagnostic pop
+		size_t otype = size_t{Sentries[int(Status)]};
 		void  *key   = build<void, Root::Type::Seal>(otype, 1);
 		return ptr.seal(key);
 	}
