@@ -363,6 +363,12 @@ namespace loader
 			AddressRange code;
 
 			/**
+			 * The PCC-relative location of the cross-compartment call return
+			 * path, used to build the initial return addresses for threads.
+			 */
+			uint16_t crossCallReturnEntry;
+
+			/**
 			 * The PCC-relative location of the sealing key, which the
 			 * compartment switcher will use to unseal import table entries.
 			 */
@@ -608,7 +614,7 @@ namespace loader
 			// This is a random 32-bit number and should be changed whenever
 			// the compartment header layout changes to provide some sanity
 			// checking.
-			return magic == 0x6cef3879;
+			return magic == 0xca2b63de;
 		}
 
 		/**

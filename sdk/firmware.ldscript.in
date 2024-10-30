@@ -162,6 +162,8 @@ SECTIONS
 		LONG(.compartment_switcher_start);
 		# Compartment switcher end
 		SHORT(.compartment_switcher_end - .compartment_switcher_start);
+		# Cross-compartment call return path
+		SHORT(switcher_skip_compartment_call - .compartment_switcher_start);
 		# Compartment switcher sealing key
 		SHORT(compartment_switcher_sealing_key - .compartment_switcher_start);
 		# Switcher's copy of the scheduler's PCC.
@@ -244,7 +246,7 @@ SECTIONS
 		# loader versions.
 		# New versions of this can be generated with:
 		# head /dev/random | shasum | cut -c 0-8
-		LONG(0x6cef3879);
+		LONG(0xca2b63de);
 		# Number of library headers.
 		SHORT(@library_count@);
 		# Number of compartment headers.
