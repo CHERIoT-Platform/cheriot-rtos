@@ -51,7 +51,7 @@ __asm__(".section .text.setjmp,\"awG\",@progbits,setjmp,comdat\n"
 /**
  * C `longjmp` function.  Does not return, jumps back to the `setjmp` call.
  */
-void longjmp(jmp_buf env, int val);
+__attribute__((__noreturn__)) void longjmp(jmp_buf env, int val);
 __asm__(".section .text.longjmp,\"awG\",@progbits,longjmp,comdat\n"
         ".globl longjmp\n"
         ".p2align 2\n"
