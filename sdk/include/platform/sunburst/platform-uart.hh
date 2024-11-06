@@ -4,6 +4,10 @@
 #include_next <platform-uart.hh>
 #pragma pop_macro("CHERIOT_PLATFORM_CUSTOM_UART")
 
+#ifndef DEFAULT_UART_BAUD_RATE
+#	define DEFAULT_UART_BAUD_RATE 921'600
+#endif
+
 /**
  * OpenTitan UART
  *
@@ -236,7 +240,7 @@ struct OpenTitanUart
 		interruptEnable = interruptEnable & ~interrupt;
 	}
 
-	void init(unsigned baudRate = 115'200) volatile
+	void init(unsigned baudRate = DEFAULT_UART_BAUD_RATE) volatile
 	{
 		// Nco = 2^20 * baud rate / cpu frequency
 		const uint32_t Nco =
