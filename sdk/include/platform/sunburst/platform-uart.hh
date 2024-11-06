@@ -128,6 +128,23 @@ struct OpenTitanUart
 		ControlTransmitEnable = 1 << 0,
 	};
 
+	/// Status Register Fields
+	enum : uint32_t
+	{
+		/// Receive FIFO is empty.
+		StatusReceiveEmpty = 1 << 5,
+		/// Receive logic is idle.
+		StatusReceiveIdle = 1 << 4,
+		/// Transmit FIFO is empty and all bits have been transmitted.
+		StatusTransmitIdle = 1 << 3,
+		/// Transmit FIFO is empty; transmission may still be occurring.
+		StatusTransmitEmpty = 1 << 2,
+		/// Receive FIFO is full.
+		StatusReceiveFull = 1 << 1,
+		/// Transmit FIFO is full.
+		StatusTransmitFull = 1 << 0,
+	};
+
 	/// The encoding for different transmit watermark levels.
 	enum class TransmitWatermark
 	{
@@ -181,8 +198,8 @@ struct OpenTitanUart
 	/// Clears the contents of the receive and transmit FIFOs.
 	void fifos_clear() volatile
 	{
-		fifoCtrl = (fifoCtrl & ~0b11) | FifoControlTransmitReset |
-		           FifoControlReceiveReset;
+		fifoCtrl =
+		  fifoCtrl | FifoControlTransmitReset | FifoControlReceiveReset;
 	}
 
 	/**
@@ -204,7 +221,7 @@ struct OpenTitanUart
 	 */
 	void receive_watermark(ReceiveWatermark level) volatile
 	{
-		fifoCtrl = static_cast<uint32_t>(level) << 5 | (fifoCtrl & 0b11100011);
+		fifoCtrl = static_cast<uint32_t>(level) << 2 | (fifoCtrl & 0b11100011);
 	}
 
 	/// Enable the given interrupt.
@@ -240,12 +257,12 @@ struct OpenTitanUart
 
 	bool can_write() volatile
 	{
-		return transmit_fifo_level() < 32;
+		return !(status & StatusTransmitFull);
 	}
 
 	bool can_read() volatile
 	{
-		return receive_fifo_level() > 0;
+		return !(status & StatusReceiveEmpty);
 	}
 
 	/**
