@@ -79,7 +79,7 @@ If you do not wish to use the dev container, you will need to build:
  - The LLVM-based toolchain with CHERIoT support
  - The emulator generated from the Sail formal model of the CHERIoT ISA
  - The xmake build tool
- - [Sonata only] u2futils to create images that Sonata's loader can boot
+ - [Sonata only] uf2utils to create images that Sonata's loader can boot
 
 Building LLVM is fairly simple, but requires a fast machine and several GiBs of disk space.
 Building the executable model requires a working ocaml installation.
@@ -224,7 +224,7 @@ For Ubuntu, you can do:
 # apt install xmake
 ```
 
-### Installing u2futils
+### Installing uf2utils
 
 If you are working with Sonata, you will need to convert the ELF files that the linker produces to [USB Flashing Format (UF2)](https://github.com/microsoft/uf2).
 The firmware on the RPi 2040 on the Sonata board can then load these files onto the CHERIoT Ibex and run them.
