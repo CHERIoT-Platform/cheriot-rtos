@@ -3,6 +3,7 @@
 
 #include "export-table-assembly.h"
 #include "trusted-stack-assembly.h"
+#include "misc-assembly.h"
 #include <errno.h>
 
 .include "assembly-helpers.s"

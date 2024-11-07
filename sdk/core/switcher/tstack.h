@@ -77,13 +77,3 @@ struct TrustedStackGeneric
 using TrustedStack = TrustedStackGeneric<0>;
 
 #include "trusted-stack-assembly.h"
-
-static_assert(
-  CheckSize<COMPARTMENT_STACK_PERMISSIONS,
-            CHERI::PermissionSet{CHERI::Permission::Load,
-                                 CHERI::Permission::Store,
-                                 CHERI::Permission::LoadStoreCapability,
-                                 CHERI::Permission::LoadMutable,
-                                 CHERI::Permission::StoreLocal,
-                                 CHERI::Permission::LoadGlobal}
-              .as_raw()>::value);
