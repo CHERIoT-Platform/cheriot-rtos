@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "../switcher/tstack.h"
+#include "../switcher/misc-assembly.h"
 #include "constants.h"
 #include "debug.hh"
 #include "defines.h"
