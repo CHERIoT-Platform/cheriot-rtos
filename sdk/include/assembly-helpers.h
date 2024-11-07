@@ -22,6 +22,25 @@ struct CheckSize
 };
 
 /**
+ * Export a macro into assembly named `name` with value `value`.  In C++, this
+ * macro will report an error if the provided value does not equal the constexpr
+ * evaluation of `expression`.
+ */
+#	define EXPORT_ASSEMBLY_NAME(name, val)                                    \
+		static_assert(CheckSize<name, val>::value,                             \
+		              "Value provided for assembly is incorrect");
+
+/**
+ * Export a macro into assembly named `name` with value `value`.  In C++, this
+ * macro will report an error if the provided value does not equal the constexpr
+ * evaluation of `expression`.
+ */
+#	define EXPORT_ASSEMBLY_EXPRESSION(name, expression, val)                  \
+		static constexpr size_t name = expression;                             \
+		static_assert(CheckSize<name, val>::value,                             \
+		              "Value provided for assembly is incorrect");
+
+/**
  * Export a macro into assembly of the form `{structure}_offset_{field}`.  The
  * value of this macro will be `value`.  In C++, this macro will report an error
  * if the provided value does not match the compiler's understanding of the
@@ -61,12 +80,18 @@ struct CheckSize
 		static_assert(CheckSize<sizeof(structure), val>::value,                \
 		              "Size provided for assembly is incorrect");
 #elif defined(__ASSEMBLER__)
+#	define EXPORT_ASSEMBLY_NAME(name, value)                                  \
+		.set name, value
+#	define EXPORT_ASSEMBLY_EXPRESSION(name, expression, value)                \
+		.set name, value
 #	define EXPORT_ASSEMBLY_OFFSET_NAMED(structure, field, value, name)        \
-		.set name value
+		.set name, value
 #	define EXPORT_ASSEMBLY_OFFSET(structure, field, value)                    \
 		.set structure##_offset_##field, value
 #	define EXPORT_ASSEMBLY_SIZE(structure, value) .set structure##_size, value
 #else
+#	define EXPORT_ASSEMBLY_NAME(name, value)
+#	define EXPORT_ASSEMBLY_EXPRESSION(name, expression, value)
 #	define EXPORT_ASSEMBLY_OFFSET(structure, field, name, value)
 #	define EXPORT_ASSEMBLY_SIZE(structure, name, value)
 #	define EXPORT_ASSEMBLY_OFFSET_NAMED(structure, field, value, name)
