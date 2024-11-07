@@ -49,7 +49,9 @@
 typedef void *word;
 
 #define wsize sizeof(word)
-_Static_assert(wsize != 0 && (wsize & (wsize - 1)) == 0);
+_Static_assert(wsize != 0);
+_Static_assert((wsize & (wsize - 1)) == 0);
+
 #define wmask (wsize - 1)
 
 void *__cheri_libcall memcpy(void *dst0, const void *src0, size_t length)
