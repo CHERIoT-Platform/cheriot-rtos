@@ -163,7 +163,7 @@ SECTIONS
 		# Compartment switcher end
 		SHORT(.compartment_switcher_end - .compartment_switcher_start);
 		# Cross-compartment call return path
-		SHORT(switcher_skip_compartment_call - .compartment_switcher_start);
+		SHORT(switcher_after_compartment_call - .compartment_switcher_start);
 		# Compartment switcher sealing key
 		SHORT(compartment_switcher_sealing_key - .compartment_switcher_start);
 		# Switcher's copy of the scheduler's PCC.
