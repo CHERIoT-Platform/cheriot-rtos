@@ -88,7 +88,9 @@ namespace
 			*++p = upper ? toupper(c) : c;
 		} while (num /= base);
 		if (lenp)
+		{
 			*lenp = p - nbuf;
+		}
 		return (p);
 	}
 
@@ -158,7 +160,9 @@ namespace
 			while ((ch = static_cast<unsigned char>(*fmt++)) != '%' || stop)
 			{
 				if (ch == '\0')
+				{
 					return (retval);
+				}
 				putchar(ch);
 			}
 			percent   = fmt - 1;
@@ -229,21 +233,31 @@ namespace
 						n  = n * 10 + ch - '0';
 						ch = *fmt;
 						if (ch < '0' || ch > '9')
+						{
 							break;
+						}
 					}
 					if (dot)
+					{
 						dwidth = n;
+					}
 					else
+					{
 						width = n;
+					}
 					goto reswitch; // NOLINT
 				case 'b':
 					num = static_cast<unsigned int>(va_arg(ap, int));
 					p   = va_arg(ap, char *);
 					for (q = ksprintn(nbuf, num, *p++, nullptr, 0); *q;)
+					{
 						putchar(*q--);
+					}
 
 					if (num == 0)
+					{
 						break;
+					}
 
 					for (tmp = 0; *p;)
 					{
@@ -252,15 +266,23 @@ namespace
 						{
 							putchar(tmp ? ',' : '<');
 							for (; (n = *p) > ' '; ++p)
+							{
 								putchar(n);
+							}
 							tmp = 1;
 						}
 						else
+						{
 							for (; *p > ' '; ++p)
+							{
 								continue;
+							}
+						}
 					}
 					if (tmp)
+					{
 						putchar('>');
+					}
 					break;
 				case 'c':
 					putchar(va_arg(ap, int));
@@ -269,15 +291,21 @@ namespace
 					up = va_arg(ap, unsigned char *);
 					p  = va_arg(ap, char *);
 					if (!width)
+					{
 						width = 16;
+					}
 					while (width--)
 					{
 						putchar(hex2ascii(*up >> 4));
 						putchar(hex2ascii(*up & 0x0f));
 						up++;
 						if (width)
+						{
 							for (q = p; *q; q++)
+							{
 								putchar(*q);
+							}
+						}
 					}
 					break;
 				case 'd':
@@ -292,7 +320,9 @@ namespace
 						cflag = 1;
 					}
 					else
+					{
 						hflag = 1;
+					}
 					goto reswitch; // NOLINT
 				case 'j':
 					jflag = 1;
@@ -304,23 +334,39 @@ namespace
 						qflag = 1;
 					}
 					else
+					{
 						lflag = 1;
+					}
 					goto reswitch; // NOLINT
 				case 'n':
 					if (jflag)
+					{
 						*(va_arg(ap, intmax_t *)) = retval;
+					}
 					else if (qflag)
+					{
 						*(va_arg(ap, long long *)) = retval;
+					}
 					else if (lflag)
+					{
 						*(va_arg(ap, long *)) = retval;
+					}
 					else if (zflag)
+					{
 						*(va_arg(ap, size_t *)) = retval;
+					}
 					else if (hflag)
+					{
 						*(va_arg(ap, short *)) = static_cast<short>(retval);
+					}
 					else if (cflag)
+					{
 						*(va_arg(ap, char *)) = retval;
+					}
 					else
+					{
 						*(va_arg(ap, int *)) = retval;
+					}
 					break;
 				case 'o':
 					base = 8;
@@ -338,8 +384,10 @@ namespace
 				case 'r':
 					base = radix;
 					if (sign)
+					{
 						goto handle_sign; // NOLINT
-					goto handle_nosign;   // NOLINT
+					}
+					goto handle_nosign; // NOLINT
 				case 's':
 					p = va_arg(ap, char *);
 					if (p == nullptr)
@@ -400,39 +448,71 @@ namespace
 				handle_nosign:
 					sign = 0;
 					if (jflag)
+					{
 						num = va_arg(ap, uintmax_t);
+					}
 					else if (qflag)
+					{
 						num = va_arg(ap, unsigned long long);
+					}
 					else if (tflag)
+					{
 						num = va_arg(ap, ptrdiff_t);
+					}
 					else if (lflag)
+					{
 						num = va_arg(ap, unsigned long);
+					}
 					else if (zflag)
+					{
 						num = va_arg(ap, size_t);
+					}
 					else if (hflag)
+					{
 						num = static_cast<unsigned short>(va_arg(ap, int));
+					}
 					else if (cflag)
+					{
 						num = static_cast<unsigned char>(va_arg(ap, int));
+					}
 					else
+					{
 						num = va_arg(ap, unsigned int);
+					}
 					goto number; // NOLINT
 				handle_sign:
 					if (jflag)
+					{
 						num = va_arg(ap, intmax_t);
+					}
 					else if (qflag)
+					{
 						num = va_arg(ap, long long);
+					}
 					else if (tflag)
+					{
 						num = va_arg(ap, ptrdiff_t);
+					}
 					else if (lflag)
+					{
 						num = va_arg(ap, long);
+					}
 					else if (zflag)
+					{
 						num = va_arg(ap, ssize_t);
+					}
 					else if (hflag)
+					{
 						num = static_cast<short>(va_arg(ap, int));
+					}
 					else if (cflag)
+					{
 						num = static_cast<char>(va_arg(ap, int));
+					}
 					else
+					{
 						num = va_arg(ap, int);
+					}
 				number:
 					if (sign && static_cast<intmax_t>(num) < 0)
 					{
@@ -444,22 +524,36 @@ namespace
 					if (sharpflag && num != 0)
 					{
 						if (base == 8)
+						{
 							tmp++;
+						}
 						else if (base == 16)
+						{
 							tmp += 2;
+						}
 					}
 					if (neg)
+					{
 						tmp++;
+					}
 
 					if (!ladjust && padc == '0')
+					{
 						dwidth = width - tmp;
+					}
 					width -= tmp + (dwidth > n ? dwidth : n);
 					dwidth -= n;
 					if (!ladjust)
+					{
 						while (width-- > 0)
+						{
 							putchar(' ');
+						}
+					}
 					if (neg)
+					{
 						putchar('-');
+					}
 					if (sharpflag && num != 0)
 					{
 						if (base == 8)
@@ -473,19 +567,29 @@ namespace
 						}
 					}
 					while (dwidth-- > 0)
+					{
 						putchar('0');
+					}
 
 					while (*p)
+					{
 						putchar(*p--);
+					}
 
 					if (ladjust)
+					{
 						while (width-- > 0)
+						{
 							putchar(' ');
+						}
+					}
 
 					break;
 				default:
 					while (percent < fmt)
+					{
 						putchar(*percent++);
+					}
 					/*
 					 * Since we ignore an formatting argument it is no
 					 * longer safe to obey the remaining formatting
@@ -524,7 +628,9 @@ vsnprintf(char *str, // NOLINT (clang-tidy spuriously thinks this should be
 	};
 	int retval = kvprintf(format, callback, &info, 10, ap);
 	if (info.remain >= 1)
+	{
 		*info.str++ = '\0';
+	}
 	return (retval);
 }
 

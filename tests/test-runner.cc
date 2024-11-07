@@ -54,7 +54,9 @@ namespace
 			crashDetected = true;
 		}
 		else
+		{
 			debug_log("{} finished in {} cycles", msg, cycles - startCycles);
+		}
 	}
 } // namespace
 

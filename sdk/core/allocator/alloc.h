@@ -746,7 +746,9 @@ TChunk
 	TChunk *leftmost_child()
 	{
 		if (child[0] != nullptr)
+		{
 			return child[0];
+		}
 		return child[1];
 	}
 
