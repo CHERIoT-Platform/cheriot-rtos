@@ -36,7 +36,7 @@ SECTIONS
 		# If there is a compartment error handler, make sure that it is before
 		# anything that can have linker relaxations so that its displacement
 		# from __compartment_code_start is a constant.
-		*(.compartment_error_handler_stackless));
+		*(.compartment_error_handler_stackless);
 		*(.compartment_error_handler);
 		*(.text .text.*);
 	}
