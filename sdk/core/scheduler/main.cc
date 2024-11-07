@@ -247,7 +247,9 @@ namespace sched
 		simulation_exit(1);
 
 		for (;;)
+		{
 			wfi();
+		}
 	}
 
 	[[cheri::interrupt_state(disabled)]] TrustedStack *
