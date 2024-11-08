@@ -103,7 +103,7 @@ toolchain("cheriot-clang")
 		-- C/C++ flags
 		toolchain:add("cxflags", default_flags, {force = true})
 		toolchain:add("cflags", default_flags)
-		toolchain:add("cxxflags", "-std=c++23")
+		toolchain:add("cxxflags", "-std=c++20")
 		toolchain:add("cflags", "-std=c2x", {force = true})
 		-- Assembly flags
 		toolchain:add("asflags", default_flags)
