@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/cheriot-platform/devcontainer:latest
-      options: --user 1000
+      options: --user 1001
     steps:
     - name: Checkout repository and submodules
       uses: actions/checkout@v3
@@ -20,12 +20,11 @@ jobs:
         submodules: recursive
     - name: Build latest xmake
       run: |
-        # Make sure that we don't accidentally use the installed version
-        sudo apt remove -y  xmake
         curl -fsSL https://xmake.io/shget.text | bash -s dev
     - name: Build tests
       run: |
         source ~/.xmake/profile
+        which xmake
         xmake --version
         cd tests
         xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
