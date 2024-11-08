@@ -23,7 +23,7 @@ jobs:
         curl -fsSL https://xmake.io/shget.text | bash -s dev
     - name: Build tests
       run: |
-        source ~/.xmake/profile
+        . ~/.xmake/profile
         which xmake
         xmake --version
         cd tests
@@ -31,7 +31,7 @@ jobs:
         xmake
     - name: Run tests
       run: |
-        source ~/.xmake/profile
+        . ~/.xmake/profile
         xmake --version
         cd tests
         xmake run
