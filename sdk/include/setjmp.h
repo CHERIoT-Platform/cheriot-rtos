@@ -30,6 +30,8 @@ struct __jmp_buf
  */
 typedef struct __jmp_buf jmp_buf[1];
 
+#include <setjmp-assembly.h>
+
 __BEGIN_DECLS
 /**
  * C `setjmp` function.  Returns (up to) twice.  First returns 0, returns a
