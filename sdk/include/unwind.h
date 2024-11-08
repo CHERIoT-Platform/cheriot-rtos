@@ -14,6 +14,8 @@ struct CleanupList
 	struct __jmp_buf env;
 };
 
+#include <unwind-assembly.h>
+
 /**
  * Head of the cleanup list.
  *
@@ -25,7 +27,8 @@ __always_inline static inline struct CleanupList **cleanup_list_head()
 {
 	void     *csp = __builtin_cheri_stack_get();
 	ptraddr_t top = __builtin_cheri_top_get(csp);
-	csp           = __builtin_cheri_address_set(csp, top - 8);
+	csp           = __builtin_cheri_address_set(
+	            csp, top - INVOCATION_LOCAL_UNWIND_LIST_OFFSET);
 	return (struct CleanupList **)csp;
 }
 
