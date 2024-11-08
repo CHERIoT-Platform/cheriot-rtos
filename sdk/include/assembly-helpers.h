@@ -92,7 +92,7 @@ struct CheckSize
 #else
 #	define EXPORT_ASSEMBLY_NAME(name, value)
 #	define EXPORT_ASSEMBLY_EXPRESSION(name, expression, value)
-#	define EXPORT_ASSEMBLY_OFFSET(structure, field, name, value)
+#	define EXPORT_ASSEMBLY_OFFSET(structure, field, name)
 #	define EXPORT_ASSEMBLY_SIZE(structure, name, value)
 #	define EXPORT_ASSEMBLY_OFFSET_NAMED(structure, field, value, name)
 #endif
