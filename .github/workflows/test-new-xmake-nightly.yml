@@ -1,4 +1,4 @@
-name: CHERIoT RTOS Tests
+name: Nightly xmake test
 
 on:
   schedule:
