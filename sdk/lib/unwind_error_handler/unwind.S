@@ -1,16 +1,29 @@
+#include <unwind-assembly.h>
+
+/**
+ * A direct re-implementation of unwind.h's cleanup_unwind() as a stackless
+ * error handler.
+ *
+ * If there is no registered CleanupList structure (equivalently, there's no
+ * CHERIOT_DURING block active at the time of the fault), then this requests
+ * unwnding out of the compartment.  Otherwise, we will longjmp() out to the
+ * indicated handler (that is, the CHERIOT_HANDLER block associated with the
+ * current CHERIOT_DURING block), having reset the compartment error handler
+ * invocation counter to zero.
+ */
 .section .compartment_error_handler_stackless,"aw",@progbits
 .globl compartment_error_handler_stackless
 .p2align 2
 .type compartment_error_handler_stackless,@function
 compartment_error_handler_stackless:
-// Get the head of the error list.
+// Get the head of the error list (see cleanup_list_head)
 	cgettop      t0, csp
 	csetaddr     csp, csp, t0
-	clc          cs0, -8(csp)
+	clc          cs0, -INVOCATION_LOCAL_UNWIND_LIST_OFFSET(csp)
 	beqz         s0, .Lforce_unwind
-// Pop the top error from the list. */
-	clc          ct0, 0(cs0)
-	csc          ct0, -8(csp)
+// Pop the top error from the list
+	clc          ct0, CleanupList_offset_next(cs0)
+	csc          ct0, -INVOCATION_LOCAL_UNWIND_LIST_OFFSET(csp)
 // Mark this error handler as having finished.  We may still trap again
 // and reenter this, but now that we've popped the top element from the
 // stack we will run some different cleanup code next time. */
@@ -19,11 +32,12 @@ compartment_error_handler_stackless:
 	clc             ct2, %cheriot_compartment_lo_i(.Llookup_reset)(ct2)
 	cjalr           ct2
 // longjmp to the error handler.
-	clc          cs1, 16(cs0)
-	clc          csp, 24(cs0)
-	clc          cra, 32(cs0)
-	clc          cs0, 8(cs0)
+	clc          cs1, (CleanupList_offset_env + __jmp_buf_offset___cs1)(cs0)
+	clc          csp, (CleanupList_offset_env + __jmp_buf_offset___csp)(cs0)
+	clc          cra, (CleanupList_offset_env + __jmp_buf_offset___cra)(cs0)
+	clc          cs0, (CleanupList_offset_env + __jmp_buf_offset___cs0)(cs0)
 	cjr          cra
+
 .Lforce_unwind:
 	li           a0, 1
 	cret
