@@ -21,8 +21,14 @@ jobs:
     - name: Build latest xmake
       run: |
         curl -fsSL https://xmake.io/shget.text | bash -s dev
+        ls -lah ~
+        ls ~/.local/bin
+        ls ~/.xmake
     - name: Build tests
       run: |
+        ls -lah ~
+        ls ~/.local/bin
+        ls ~/.xmake
         . ~/.xmake/profile
         which xmake
         xmake --version
