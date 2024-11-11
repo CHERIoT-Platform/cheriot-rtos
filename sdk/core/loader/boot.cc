@@ -68,12 +68,12 @@ namespace
 		/**
 		 * 0 represents unsealed.
 		 */
-		Unsealed = 0,
+		Unsealed = CheriSealTypeUnsealed,
 
 		/**
 		 * Sentry that inherits interrupt status.
 		 */
-		SentryInheriting,
+		SentryInheriting = CheriSealTypeSentryInheriting,
 
 		/// Alternative name: the default sentry type.
 		Sentry = SentryInheriting,
@@ -81,32 +81,32 @@ namespace
 		/**
 		 * Sentry that disables interrupts on calls.
 		 */
-		SentryDisabling,
+		SentryDisabling = CheriSealTypeSentryDisabling,
 
 		/**
 		 * Sentry that enables interrupts on calls.
 		 */
-		SentryEnabling,
+		SentryEnabling = CheriSealTypeSentryEnabling,
 
 		/**
 		 * Return sentry that disables interrupts on return
 		 */
-		ReturnSentryDisabling,
+		ReturnSentryDisabling = CheriSealTypeReturnSentryDisabling,
 
 		/**
 		 * Return sentry that enables interrupts on return
 		 */
-		ReturnSentryEnabling,
+		ReturnSentryEnabling = CheriSealTypeReturnSentryEnabling,
 
 		/**
 		 * Marker for the first sealing type that's valid for data capabilities.
 		 */
-		FirstDataSealingType = 9,
+		FirstDataSealingType = CheriSealTypeFirstDataSealingType,
 
 		/**
 		 * The sealing type used for sealed export table entries.
 		 */
-		SealedImportTableEntries = FirstDataSealingType,
+		SealedImportTableEntries = CheriSealTypeSealedImportTableEntries,
 
 		/**
 		 * The compartment switcher has a sealing type for the trusted stack.
@@ -114,13 +114,13 @@ namespace
 		 * This must be the second data sealing type so that we can also permit
 		 * the switcher to unseal sentries and export table entries.
 		 */
-		SealedTrustedStacks,
+		SealedTrustedStacks = CheriSealTypeSealedTrustedStacks,
 
 		/**
 		 * The allocator has a sealing type for the software sealing mechanism
 		 * with dynamically allocated objects.
 		 */
-		Allocator,
+		Allocator = CheriSealTypeAllocator,
 
 		/**
 		 * The loader reserves a sealing type for the software sealing
@@ -129,19 +129,19 @@ namespace
 		 * type was present in the original firmware image.  The token library
 		 * has the only permit-unseal capability for this type.
 		 */
-		StaticToken,
+		StaticToken = CheriSealTypeStaticToken,
 
 		/**
 		 * The first sealing key that is reserved for use by the allocator's
 		 * software sealing mechanism and used for static sealing types,
 		 */
-		FirstStaticSoftware = 16,
+		FirstStaticSoftware = CheriSealTypeFirstStaticSoftware,
 
 		/**
 		 * The first sealing key in the space that the allocator will
 		 * dynamically allocate for sealing types.
 		 */
-		FirstDynamicSoftware = 0x1000000,
+		FirstDynamicSoftware = CheriSealTypeFirstDynamicSoftware,
 	};
 
 	// The switcher assembly includes the types of import table entries and
