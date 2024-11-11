@@ -24,10 +24,7 @@ jobs:
         sudo apt remove -y xmake
     - name: Build tests
       run: |
-        ls -lah ~
-        ls ~/.local/bin
-        ls ~/.xmake
-        . ~/.xmake/profile
+        export PATH=~/.local/bin:$PATH
         which xmake
         xmake --version
         cd tests
