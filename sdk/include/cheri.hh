@@ -22,64 +22,64 @@ namespace CHERI
 		 * Capability refers to global memory (this capability may be stored
 		 * anywhere).
 		 */
-		Global = 0,
+		Global = CheriPermissionGlobal,
 		/**
 		 * Global capabilities can be loaded through this capability.  Without
 		 *  this permission, any capability loaded via this capability will
 		 *  have `Global` and `LoadGlobal` removed.
 		 */
-		LoadGlobal = 1,
+		LoadGlobal = CheriPermissionLoadGlobal,
 		/**
 		 * Capability may be used to store.  Any store via a capability without
 		 * this permission will trap.
 		 */
-		Store = 2,
+		Store = CheriPermissionStore,
 		/**
 		 * Capabilities with store permission may be loaded through this
 		 * capability.  Without this, any loaded capability will have
 		 * `LoadMutable` and `Store` removed.
 		 */
-		LoadMutable = 3,
+		LoadMutable = CheriPermissionLoadMutable,
 		/**
 		 * This capability may be used to store capabilities that do not have
 		 * `Global` permission.
 		 */
-		StoreLocal = 4,
+		StoreLocal = CheriPermissionStoreLocal,
 		/**
 		 * This capability can be used to load.
 		 */
-		Load = 5,
+		Load = CheriPermissionLoad,
 		/**
 		 * Any load and store permissions on this capability convey the right to
 		 * load or store capabilities in addition to data.
 		 */
-		LoadStoreCapability = 6,
+		LoadStoreCapability = CheriPermissionLoadStoreCapability,
 		/**
 		 * If installed as the program counter capability, running code may
 		 * access privileged system registers.
 		 */
-		AccessSystemRegisters = 7,
+		AccessSystemRegisters = CheriPermissionAccessSystemRegisters,
 		/**
 		 * This capability may be used as a jump target and used to execute
 		 * instructions.
 		 */
-		Execute = 8,
+		Execute = CheriPermissionExecute,
 		/**
 		 * This capability may be used to unseal other capabilities.  The
 		 * 'address' range is in the sealing type namespace and not in the
 		 * memory namespace.
 		 */
-		Unseal = 9,
+		Unseal = CheriPermissionUnseal,
 		/**
 		 * This capability may be used to seal other capabilities.  The
 		 * 'address' range is in the sealing type namespace and not in the
 		 * memory namespace.
 		 */
-		Seal = 10,
+		Seal = CheriPermissionSeal,
 		/**
 		 * Software defined permission bit, no architectural meaning.
 		 */
-		User0 = 11
+		User0 = CheriPermissionUser0
 	};
 
 	/**
@@ -1231,50 +1231,53 @@ namespace CHERI
 		 * No exception. This value is passed to the error handler after a
 		 * forced unwind in a called compartment.
 		 */
-		None = 0,
+		None = CheriCauseCodeNone,
 		/**
 		 * Attempted to use a capability outside its bounds.
 		 */
-		BoundsViolation = 1,
+		BoundsViolation = CheriCauseCodeBoundsViolation,
 		/**
 		 * Attempted to use an untagged capability to authorize something.
 		 */
-		TagViolation = 2,
+		TagViolation = CheriCauseCodeTagViolation,
 		/**
 		 * Attempted to use a sealed capability to authorize something.
 		 */
-		SealViolation = 3,
+		SealViolation = CheriCauseCodeSealViolation,
 		/**
 		 * Attempted to jump to a capability without `Permission::Execute`.
 		 */
-		PermitExecuteViolation = 0x11,
+		PermitExecuteViolation = CheriCauseCodePermitExecuteViolation,
 		/**
 		 * Attempted to load via a capability without `Permission::Load`.
 		 */
-		PermitLoadViolation = 0x12,
+		PermitLoadViolation = CheriCauseCodePermitLoadViolation,
 		/**
 		 * Attempted to store via a capability without `Permission::Store`.
 		 */
-		PermitStoreViolation = 0x13,
+		PermitStoreViolation = CheriCauseCodePermitStoreViolation,
 		/**
 		 * Attempted to store a tagged capability via a capability without
 		 * `Permission::LoadStoreCapability`.
 		 */
-		PermitStoreCapabilityViolation = 0x15,
+		PermitStoreCapabilityViolation =
+		  CheriCauseCodePermitStoreCapabilityViolation,
 		/**
 		 * Attempted to store a tagged capability without `Permission::Global`
 		 * via capability without `Permission::StoreLocal`.
 		 */
-		PermitStoreLocalCapabilityViolation = 0x16,
+		PermitStoreLocalCapabilityViolation =
+		  CheriCauseCodePermitStoreLocalCapabilityViolation,
 		/**
 		 * Attempted to access a restricted CSR or SCR with PCC without
 		 * `Permission::AccessSystemRegisters`.
 		 */
-		PermitAccessSystemRegistersViolation = 0x18,
+		PermitAccessSystemRegistersViolation =
+		  CheriCauseCodePermitAccessSystemRegistersViolation,
 		/**
 		 * Used to represent a value that has no valid meaning in hardware.
 		 */
-		Invalid = -1
+		Invalid = CheriCauseCodeInvalid,
 	};
 
 	/**
@@ -1288,84 +1291,84 @@ namespace CHERI
 		/**
 		 * The zero register, which always contains the `NULL` capability.
 		 */
-		CZR = 0x0,
+		CZR = CheriRegisterNumberCzr,
 		/**
 		 * `$c1` / `$cra` used by the ABI as the return address.
 		 * Not preserved across calls.
 		 */
-		CRA = 0x1,
+		CRA = CheriRegisterNumberCra,
 		/**
 		 * `$c2` / `$csp` used by the ABI as the stack pointer.
 		 * Preserved across calls.
 		 */
-		CSP = 0x2,
+		CSP = CheriRegisterNumberCsp,
 		/**
 		 * `$c3` / `$cgp` used by the ABI as the global pointer.
 		 * Not allocatable by the compiler, set by the switcher on compartment
 		 * entry.
 		 */
-		CGP = 0x3,
+		CGP = CheriRegisterNumberCgp,
 		/**
 		 * `$c4` / `$ctp` used by the ABI as the thread pointer.
 		 * Currently unused by the compiler.
 		 * Not preserved across compartment calls.
 		 */
-		CTP = 0x4,
+		CTP = CheriRegisterNumberCtp,
 		/**
 		 * `$c5` / `$ct0` used by the ABI as temporary register.
 		 * Not preserved across calls.
 		 */
-		CT0 = 0x5,
+		CT0 = CheriRegisterNumberCT0,
 		/**
 		 * `$c6` / `$ct1` used by the ABI as temporary register.
 		 * Not preserved across calls.
 		 */
-		CT1 = 0x6,
+		CT1 = CheriRegisterNumberCT1,
 		/**
 		 * `$c7` / `$ct2` used by the ABI as temporary register.
 		 * Not preserved across calls.
 		 */
-		CT2 = 0x7,
+		CT2 = CheriRegisterNumberCT2,
 		/**
 		 * `$c8` / `$cs0` used by the ABI as a callee-saved register.
 		 * Preserved across calls.
 		 */
-		CS0 = 0x8,
+		CS0 = CheriRegisterNumberCS0,
 		/**
 		 * `$c9` / `$cs1` used by the ABI as a callee-saved register.
 		 * Preserved across calls.
 		 */
-		CS1 = 0x9,
+		CS1 = CheriRegisterNumberCS1,
 		/**
 		 * `$c10` / `$ca0` used by the ABI as an argument register.
 		 * Not preserved across calls.
 		 */
-		CA0 = 0xa,
+		CA0 = CheriRegisterNumberCA0,
 		/**
 		 * `$c11` / `$ca1` used by the ABI as an argument register.
 		 * Not preserved across calls.
 		 */
-		CA1 = 0xb,
+		CA1 = CheriRegisterNumberCA1,
 		/**
 		 * `$c12` / `$ca2` used by the ABI as an argument register.
 		 * Not preserved across calls.
 		 */
-		CA2 = 0xc,
+		CA2 = CheriRegisterNumberCA2,
 		/**
 		 * `$c13` / `$ca3` used by the ABI as an argument register.
 		 * Not preserved across calls.
 		 */
-		CA3 = 0xd,
+		CA3 = CheriRegisterNumberCA3,
 		/**
 		 * `$c14` / `$ca4` used by the ABI as an argument register.
 		 * Not preserved across calls.
 		 */
-		CA4 = 0xe,
+		CA4 = CheriRegisterNumberCA4,
 		/**
 		 * `$c15` / `$ca5` used by the ABI as an argument register.
 		 * Not preserved across calls.
 		 */
-		CA5 = 0xf,
+		CA5 = CheriRegisterNumberCA5,
 		/**
 		 * The Program Counter Capability.
 		 *
@@ -1373,7 +1376,7 @@ namespace CHERI
 		 * address is that of the faulting instruction. Also used for accessing
 		 * read-only globals.
 		 */
-		PCC = 0x20,
+		PCC = CheriRegisterNumberPcc,
 		/**
 		 * Machine-mode Trap Code Capability.
 		 *
@@ -1382,7 +1385,7 @@ namespace CHERI
 		 * same semantics as the RISC-V `mtvec` CSR. Only accessible when PCC
 		 * has the AccessSystemRegisters permission.
 		 */
-		MTCC = 0x3c,
+		MTCC = CheriRegisterNumberMtcc,
 		/**
 		 * Machine-mode Tusted Data Capability.
 		 *
@@ -1391,25 +1394,25 @@ namespace CHERI
 		 * permission.  Use by the RTOS to store a capability to the trusted
 		 * stack.
 		 */
-		MTDC = 0x3d,
+		MTDC = CheriRegisterNumberMtdc,
 		/**
 		 * Machine-mode Scratch Capability. Special capabiltiy register that
 		 * contains the sealing root capability on boot. Only accessible when
 		 * PCC has the AccessSystemRegisters permission.
 		 */
-		MScratchC = 0x3e,
+		MScratchC = CheriRegisterNumberMScratchC,
 		/**
 		 * Machine-mode Exception Program Counter Capability. Special capability
 		 * register that contains the PCC of the faulting instruction on trap.
 		 * The address has the same semantics as the RISC-V `mepc` CSR. Only
 		 * accessible when PCC has the AccessSystemRegisters permission.
 		 */
-		MEPCC = 0x3f,
+		MEPCC = CheriRegisterNumberMepcc,
 		/**
 		 * Indicates a value that is not used by the hardware to refer to a
 		 * register.
 		 */
-		Invalid = -1
+		Invalid = CheriRegisterNumberInvalid,
 	};
 
 	/**
