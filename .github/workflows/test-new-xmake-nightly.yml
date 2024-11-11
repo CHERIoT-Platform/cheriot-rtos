@@ -22,9 +22,12 @@ jobs:
       run: |
         xmake update dev
         sudo apt remove -y xmake
+        echo ~/.xmake/profile
+        . ~/.xmake/profile
     - name: Build tests
       run: |
-        export PATH=~/.local/bin:$PATH
+        pwd
+        echo ~/.xmake/profile
         which xmake
         xmake --version
         cd tests
