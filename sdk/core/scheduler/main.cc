@@ -258,6 +258,15 @@ namespace sched
 	                                               size_t        mepc,
 	                                               size_t        mtval)
 	{
+		if constexpr (DebugScheduler)
+		{
+			/* Ensure that we got here from an IRQ-s deferred context */
+			Capability returnAddress{__builtin_return_address(0)};
+			Debug::Assert(
+			  returnAddress.type() == CheriSealTypeReturnSentryDisabling,
+			  "Scheduler exception_entry called from IRQ-enabled context");
+		}
+
 		// The cycle count value the last time the scheduler returned.
 		bool schedNeeded;
 		if constexpr (Accounting)
