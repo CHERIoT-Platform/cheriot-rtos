@@ -10,9 +10,18 @@
 int               crashes = 0;
 std::atomic<bool> expectFault;
 
+static void test_irqs_are_enabled()
+{
+	void *r = __builtin_return_address(0);
+	TEST(__builtin_cheri_type_get(r) == CheriSealTypeReturnSentryEnabling,
+	     "Calling context has IRQs disabled");
+}
+
 extern "C" enum ErrorRecoveryBehaviour
 compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 {
+	test_irqs_are_enabled();
+
 	crashes++;
 	if (mcause == 0x2)
 	{
