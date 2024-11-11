@@ -777,6 +777,9 @@ exception_entry_asm:
 	cmove              csp, ca0
 
 .Linvoke_error_handler:
+	// Enable interrupts before invoking the handler
+	csrsi              mstatus, 0x8
+
 	// Clear all registers except:
 	// cra is set by cjalr.  csp and cgp are needed for the called compartment.
 	// ca0, used for the register state
@@ -785,6 +788,15 @@ exception_entry_asm:
 	zeroAllRegistersExcept ra, sp, gp, a0, a1, a2
 	// Call the handler.
 	cjalr              cra
+
+	/*
+	 * Now that we're back, defer interrupts again before we do anything that
+	 * manipulates the TrustedStack.
+	 *
+	 * TODO: Eventually we'd like to move this down onto the paths where it
+	 * actually matters and let most of this code run with IRQs enabled.
+	 */
+	csrci              mstatus, 0x8
 
 	// Move the return value to a register that will be cleared in a forced
 	// unwind and zero the return registers.
