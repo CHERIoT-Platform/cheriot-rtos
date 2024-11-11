@@ -269,6 +269,99 @@ enum CHERIRegisterNumber
 };
 
 /**
+ * Sealing types.
+ */
+enum CHERISealingType
+{
+	/**
+	 * 0 represents unsealed.
+	 */
+	CheriSealTypeUnsealed = 0,
+
+	/**
+	 * Sentry that inherits interrupt status.
+	 */
+	CheriSealTypeSentryInheriting,
+
+	/**
+	 * Sentry that disables interrupts on calls.
+	 */
+	CheriSealTypeSentryDisabling,
+
+	/**
+	 * Sentry that enables interrupts on calls.
+	 */
+	CheriSealTypeSentryEnabling,
+
+	/**
+	 * Return sentry that disables interrupts on return
+	 */
+	CheriSealTypeReturnSentryDisabling,
+
+	/**
+	 * Return sentry that enables interrupts on return
+	 */
+	CheriSealTypeReturnSentryEnabling,
+
+	/**
+	 * Marker for the first sealing type that's valid for data capabilities.
+	 */
+	CheriSealTypeFirstDataSealingType = 9,
+
+	/**
+	 * The sealing type used for sealed export table entries.
+	 *
+	 * This is RTOS- and not CHERIoT-specific.
+	 */
+	CheriSealTypeSealedImportTableEntries = CheriSealTypeFirstDataSealingType,
+
+	/**
+	 * The compartment switcher has a sealing type for the trusted stack.
+	 *
+	 * This must be the second data sealing type so that we can also permit
+	 * the switcher to unseal sentries and export table entries.
+	 *
+	 * This is RTOS- and not CHERIoT-specific.
+	 */
+	CheriSealTypeSealedTrustedStacks,
+
+	/**
+	 * The allocator has a sealing type for the software sealing mechanism
+	 * with dynamically allocated objects.
+	 *
+	 * This is RTOS- and not CHERIoT-specific.
+	 */
+	CheriSealTypeAllocator,
+
+	/**
+	 * The loader reserves a sealing type for the software sealing
+	 * mechanism.  The permit-unseal capability for this is destroyed after
+	 * the loader has run, which guarantees that anything sealed with this
+	 * type was present in the original firmware image.  The token library
+	 * has the only permit-unseal capability for this type.
+	 *
+	 * This is RTOS- and not CHERIoT-specific.
+	 */
+	CheriSealTypeStaticToken,
+
+	/**
+	 * The first sealing key that is reserved for use by the allocator's
+	 * software sealing mechanism and used for static sealing types,
+	 *
+	 * Architecturally, this is the smallest non-interpreted sealing type.
+	 */
+	CheriSealTypeFirstStaticSoftware = 16,
+
+	/**
+	 * The first sealing key in the space that the allocator will
+	 * dynamically allocate for sealing types.
+	 *
+	 * This is RTOS- and not CHERIoT-specific.
+	 */
+	CheriSealTypeFirstDynamicSoftware = 0x1000000
+};
+
+/**
  * Checks that `ptr` is valid, unsealed, has at least `rawPermissions`, and has
  * at least `space` bytes after the current offset.
  *
