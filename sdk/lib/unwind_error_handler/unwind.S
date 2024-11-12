@@ -6,7 +6,7 @@
  *
  * If there is no registered CleanupList structure (equivalently, there's no
  * CHERIOT_DURING block active at the time of the fault), then this requests
- * unwnding out of the compartment.  Otherwise, we will longjmp() out to the
+ * unwinding out of the compartment.  Otherwise, we will longjmp() out to the
  * indicated handler (that is, the CHERIOT_HANDLER block associated with the
  * current CHERIOT_DURING block), having reset the compartment error handler
  * invocation counter to zero.
