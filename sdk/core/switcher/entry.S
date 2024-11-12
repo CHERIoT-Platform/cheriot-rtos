@@ -366,7 +366,7 @@ switcher_skip_compartment_call:
 	// loading is the csp on entry, which does not have a spilled area.  In
 	// this case, we would fault when loading, so would exit the thread, but we
 	// should instead gracefully exit the thread.
-	bgeu               tp, t2, .Lset_mcause_and_exit_thread
+	bgeu               tp, t2, .Lcommon_defer_irqs_and_thread_exit
 	cspecialr          ctp, mtdc
 	cincoffset         ct1, ctp, t2
 	// Restore the stack pointer.  All other spilled values are spilled there.
@@ -868,6 +868,9 @@ exception_entry_asm:
 #endif
 	j                  .Lhandle_error
 
+.Lcommon_defer_irqs_and_thread_exit:
+	csrci               mstatus, 0x8
+	// Fall-through, now that IRQs are off
 
 	// Value 24 is reserved for custom use.
 .Lset_mcause_and_exit_thread:
