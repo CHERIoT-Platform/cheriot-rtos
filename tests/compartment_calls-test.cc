@@ -22,26 +22,26 @@ void test_number_of_arguments()
 	int value = ConstantValue;
 
 	ret = compartment_call_inner(value);
-	TEST(ret == 0, "compartment_call_inner returend {}", ret);
+	TEST(ret == 0, "compartment_call_inner returned {}", ret);
 
 	ret = compartment_call_inner(value, value);
-	TEST(ret == 0, "compartment_call_inner returend {}", ret);
+	TEST(ret == 0, "compartment_call_inner returned {}", ret);
 
 	ret = compartment_call_inner(value, value, &value);
-	TEST(ret == 0, "compartment_call_inner returend {}", ret);
+	TEST(ret == 0, "compartment_call_inner returned {}", ret);
 
 	ret = compartment_call_inner(value, value, &value, value);
-	TEST(ret == 0, "compartment_call_inner returend {}", ret);
+	TEST(ret == 0, "compartment_call_inner returned {}", ret);
 
 	ret = compartment_call_inner(value, value, &value, value, &value);
-	TEST(ret == 0, "compartment_call_inner returend {}", ret);
+	TEST(ret == 0, "compartment_call_inner returned {}", ret);
 
 	ret = compartment_call_inner(value, value, &value, value, &value, value);
-	TEST(ret == 0, "compartment_call_inner returend {}", ret);
+	TEST(ret == 0, "compartment_call_inner returned {}", ret);
 
 	ret =
 	  compartment_call_inner(value, value, &value, value, &value, value, value);
-	TEST(ret == 0, "compartment_call_inner returend {}", ret);
+	TEST(ret == 0, "compartment_call_inner returned {}", ret);
 }
 
 int test_compartment_call()
