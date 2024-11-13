@@ -316,21 +316,19 @@ __Z26compartment_switcher_entryz:
 	 * and to be run with interrupts deferred, we'd like the switcher, and
 	 * especially its stack-zeroing, to be preemtable.
 	 */
-	cincoffset        ct2, csp, -SPILL_SLOT_SIZE
 .Lswitch_entry_first_spill:
 	/*
 	 * FROM: above
 	 * ITO: .Lswitch_just_return (via .Lhandle_error_in_switcher)
 	 */
-	csc               cs0, SPILL_SLOT_cs0(ct2)
-	csc               cs1, SPILL_SLOT_cs1(ct2)
-	csc               cgp, SPILL_SLOT_cgp(ct2)
-	csc               cra, SPILL_SLOT_pcc(ct2)
-	cmove             csp, ct2
+	csc               cs0, (SPILL_SLOT_cs0-SPILL_SLOT_SIZE)(csp)
+	cincoffset        csp, csp, -SPILL_SLOT_SIZE
+	csc               cs1, SPILL_SLOT_cs1(csp)
+	csc               cgp, SPILL_SLOT_cgp(csp)
+	csc               cra, SPILL_SLOT_pcc(csp)
 	/*
 	 * Atlas update:
 	 *  ra, gp, s0, s1: dead (presently, redundant caller values)
-	 *  t2: dead (presently, a copy of csp)
 	 */
 
 	/*
