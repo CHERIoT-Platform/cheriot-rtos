@@ -24,7 +24,7 @@ namespace
 		// On Sail, report the number of instructions, the cycle count is
 		// meaningless.
 		__asm__ volatile("csrr %0, minstret" : "=r"(cycles));
-#elifdef IBEX
+#elif defined(IBEX)
 		__asm__ volatile("csrr %0, mcycle" : "=r"(cycles));
 #else
 		__asm__ volatile("rdcycle %0" : "=r"(cycles));
