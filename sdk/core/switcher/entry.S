@@ -1262,6 +1262,14 @@ exception_entry_asm:
 	 * value (base is a displacement from the address).
 	 */
 	cgettag            t1, ct0
+
+	/*
+	 * A value of 0xffff indicates no error handler.  Both of our conditional
+	 * paths want this value, but we can load it once, now.
+	 */
+	li                 s1, 0xffff
+	// Atlas update: s1: 0xffff
+
 	/*
 	 * If there isn't enough space on the stack, see if there's a stackless
 	 * handler.
@@ -1287,7 +1295,6 @@ exception_entry_asm:
 	 * A value of 0xffff indicates no error handler.  If we found one, use it,
 	 * otherwise fall through and try to find a stackless handler.
 	 */
-	li                 s1, 0xffff
 	// LIVE OUT: sp, tp, t0, t1, s0, a0
 	bne                s0, s1, .Lhandle_error_found
 
@@ -1296,11 +1303,12 @@ exception_entry_asm:
 	 * FROM: above
 	 * FROM: .Lhandle_error_stack_oob
 	 * IRQ REQUIRE: deferred (TrustedStack spill frame is precious)
-	 * LIVE IN: sp, tp, t0
+	 * LIVE IN: sp, tp, s1, t0
 	 * Atlas:
 	 *  sp: pointer to TrustedStack
 	 *  tp: pointer to current TrustedStackFrame
 	 *  t0: interrupted thread's stack pointer
+	 *  s1: 0xffff
 	 */
 
 	clc                ct1, TrustedStackFrame_offset_calleeExportTable(ctp)
@@ -1317,7 +1325,6 @@ exception_entry_asm:
 	 * error handler for this compartment, having already tried any stackful
 	 * handler.
 	 */
-	li                 s1, 0xffff
 	// LIVE OUT: mtdc
 	beq                s0, s1, .Lcommon_force_unwind
 
