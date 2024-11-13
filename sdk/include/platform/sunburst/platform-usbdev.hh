@@ -3,6 +3,7 @@
 
 #pragma once
 #include <cdefs.h>
+#include <optional>
 #include <stdint.h>
 #include <utils.hh>
 
@@ -508,44 +509,66 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 		configIn[endpointId]        = configIn[endpointId] | ReadyBit;
 	}
 
+	/// The information associated with a received packet
+	struct ReceiveBufferInfo
+	{
+		uint32_t info;
+		/// The endpoint ID the received packet was received on
+		constexpr uint8_t endpoint_id()
+		{
+			return (info & uint32_t(ReceiveBufferField::EndpointId)) >> 20;
+		}
+		/// The size of the received packet
+		constexpr uint16_t size()
+		{
+			return (info & uint32_t(ReceiveBufferField::Size)) >> 8;
+		}
+		/// Whether the received packet was a setup packet
+		constexpr bool is_setup()
+		{
+			return (info & uint32_t(ReceiveBufferField::Setup)) != 0;
+		}
+		/// The buffer ID used to store the received packet
+		constexpr uint8_t buffer_id()
+		{
+			return (info & uint32_t(ReceiveBufferField::BufferId)) >> 0;
+		}
+	};
+
 	/**
-	 * Test for and collect the next received packet.
+	 * If a packet has been received, removes the packet's buffer from the
+	 * receive FIFO giving it's information and ownership to the user.
 	 *
-	 * @param bufferId An out-parameter storing the buffer ID used
-	 * @param endpointId An out-parameter storing the endpoint received on.
-	 * @param size An out-parameter storing the size of the received packet.
-	 * @param isSetup A boolean out-parameter. True means the received packet
-	 * was a SETUP packet, false means it was not.
-	 * @param destination A destination buffer to read the packet's data into.
+	 * `packet_data_get` can be used to retrieve the packet's data.
 	 *
-	 * @returns 0 if successful, or non-zero if not successful.
+	 * @returns Information about the received packet, if a packet had been
+	 * received.
 	 */
-	[[nodiscard]] int packet_receive(uint8_t  &bufferId,
-	                                 uint8_t  &endpointId,
-	                                 uint16_t &size,
-	                                 bool     &isSetup,
-	                                 uint32_t *destination) volatile
+	[[nodiscard]] std::optional<ReceiveBufferInfo> packet_take() volatile
 	{
 		if (!(usbStatus & uint32_t(UsbStatusField::ReceiveDepth)))
 		{
-			return -1; // No packets received
+			return {}; // No packets received
 		}
+		return ReceiveBufferInfo{receiveBuffer};
+	}
 
-		uint32_t received = receiveBuffer;
-
-		typedef ReceiveBufferField Reg;
-		endpointId = (received & uint32_t(Reg::EndpointId)) >> 20;
-		size       = (received & uint32_t(Reg::Size)) >> 8;
-		isSetup    = (received & uint32_t(Reg::Setup)) != 0;
-		bufferId   = (received & uint32_t(Reg::BufferId)) >> 0;
-
+	/**
+	 * Retrieves the data from a buffer containing a received packet.
+	 *
+	 * @param destination A destination buffer to read the packet's data into.
+	 */
+	void packet_data_get(ReceiveBufferInfo bufferInfo,
+	                     uint32_t         *destination) volatile
+	{
+		const auto [id, size] =
+		  std::pair{bufferInfo.buffer_id(), bufferInfo.size()};
 		// Reception of Zero Length Packets occurs in the Status Stage of IN
 		// Control Transfers.
 		if (size > 0)
 		{
-			usbdev_transfer(destination, buffer(bufferId), size, false);
+			usbdev_transfer(destination, buffer(id), size, false);
 		}
-		return 0;
 	}
 
 	private:
