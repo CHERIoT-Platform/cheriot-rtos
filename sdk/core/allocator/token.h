@@ -92,3 +92,5 @@ struct DebugFormatArgumentAdaptor<SealingKey>
 
 EXPORT_ASSEMBLY_OFFSET(TokenSObj, type, 0);
 EXPORT_ASSEMBLY_OFFSET(TokenSObj, data, 8);
+EXPORT_ASSEMBLY_NAME(CheriSealTypeAllocator, 11);
+EXPORT_ASSEMBLY_NAME(CheriSealTypeStaticToken, 12);
