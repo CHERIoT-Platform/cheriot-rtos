@@ -36,9 +36,9 @@ __sealingkey:
    *
    *  - a2 contains the expected sealing type.
    *
-   *  - t0/ct0 holds a copy of the user key
+   *  - t0 holds a copy of the user key's address field (authorized type)
    *
-   *  - t1/ct1 is used within each local computation and never holds secrets
+   *  - t1 is used within each local computation and never holds secrets
    */
 
   /* Verify key tag */
@@ -56,8 +56,8 @@ __sealingkey:
   andi     t1, t1, CHERI_PERM_UNSEAL
   beqz     t1, .Lexit_failure
 
-  /* Copy key capability to scratch register */
-  cmove ct0, ca0
+  /* Copy key type to scratch register */
+  cgetaddr t0, ca0
 
   /*
    * Load unsealing root capability, to be clobbered by return value
@@ -82,10 +82,7 @@ __sealingkey:
    */
   clw t1, TokenSObj_offset_type(ca0)
 
-  /*
-   * Verify that the loaded value matches the address of the key (via as-integer
-   * access to capability register ct0).
-   */
+  /* Verify that the loaded value matches the address of the key. */
   bne t0, t1, .Lexit_failure
 
   /* Subset bounds to ->data */
