@@ -329,6 +329,6 @@ size_t __cheri_compartment("alloc") heap_available(void);
 
 static inline void yield(void)
 {
-	__asm volatile("ecall");
+	__asm volatile("ecall" ::: "memory");
 }
 __END_DECLS
