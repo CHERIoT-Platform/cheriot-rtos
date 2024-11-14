@@ -12,18 +12,15 @@ __sealingkey:
 	.size   __sealingkey, 8
 
 
-/*
- * An in-assembler implementation of
- *
- * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
- * token_obj_unseal(struct SKeyStruct *, struct SObjStruct *);
- *
- * The name has been manually mangled as per the C++ rules.
- */
-
 .section .text,"ax",@progbits
 
 .p2align 1
+
+/**
+ * The core of unsealing:
+ *
+ *   void *token_unseal_internal(struct SKeyStruct *, struct SObjStruct *, int);
+ */
 
 .Ltoken_unseal_internal:
   /*
@@ -100,28 +97,52 @@ __sealingkey:
   /* And that's an unwrap. */
   cret
 
+.Lexit_failure:
+  /* Failure; clobber potential sensitive state in ca0 and return null */
+  cmove ca0, cnull
+  cret
+
+/**
+ * An in-assembler implementation of
+ *
+ * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
+ * token_obj_unseal(struct SKeyStruct *, struct SObjStruct *);
+ *
+ * The name has been manually mangled as per the C++ rules.
+ */
 	.hidden _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 	.globl  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
 	cgettype a2, ca1
 	j        .Ltoken_unseal_internal
 
+/**
+ * An in-assembler implementation of
+ *
+ * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
+ * token_obj_unseal_static(struct SKeyStruct *, struct SObjStruct *);
+ *
+ * The name has been manually mangled as per the C++ rules.
+ */
 	.hidden  _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
 	.globl   _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
 _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct:
-	li       a2, 12
+	li       a2, CheriSealTypeStaticToken
 	j        .Ltoken_unseal_internal
 
+/**
+ * An in-assembler implementation of
+ *
+ * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
+ * token_obj_unseal_dynamic(struct SKeyStruct *, struct SObjStruct *);
+ *
+ * The name has been manually mangled as per the C++ rules.
+ */
 	.hidden  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 	.globl   _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct:
-	li       a2, 11
+	li       a2, CheriSealTypeAllocator
 	j        .Ltoken_unseal_internal
-
-.Lexit_failure:
-  /* Failure; clobber potential sensitive state in ca0 and return null */
-  cmove ca0, cnull
-  cret
 
 /* TODO: Eventually this goes away, when the assembler can generate it for us */
 CHERIOT_EXPORT_LIBCALL \
