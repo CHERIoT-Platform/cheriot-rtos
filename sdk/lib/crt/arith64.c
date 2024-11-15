@@ -55,7 +55,7 @@ int __cheri_libcall __popcountsi2(arith64_u32 a) __asm__("__popcountsi2");
 int __cheri_libcall __popcountdi2(arith64_u64 a) __asm__("__popcountdi2");
 arith64_u64 __cheri_libcall __udivdi3(arith64_u64 a, arith64_u64 b) __asm__("__udivdi3");
 arith64_u64 __cheri_libcall __umoddi3(arith64_u64 a, arith64_u64 b) __asm__("__umoddi3");
-arith64_u64 __cheri_libcall __multi3(arith64_u64 a, arith64_u64 b) __asm__("__multi3");
+arith64_s64 __cheri_libcall __multi3(arith64_s64 a, arith64_s64 b) __asm__("__multi3");
 
 typedef union
 {
@@ -304,7 +304,7 @@ typedef union
 }
 
 // Return the product of a and b
-[[clang::no_builtin]] arith64_u64 __multi3(arith64_u64 a, arith64_u64 b)
+[[clang::no_builtin]] arith64_s64 __multi3(arith64_s64 a, arith64_s64 b)
 {
     return a * b;
 }
