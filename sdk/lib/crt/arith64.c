@@ -25,6 +25,7 @@
 // - Add asm labels so that the compiler doesn't need to know the C++ type encodings for builtins.
 // - Use standard integer types.
 // - Add SPDX tags for license from the upstream repository (commit 426b7578ecfb5ce7c841e738613cff2a261214eb)
+// - Add the implementation of __multi3() 
 //
 // This file is *not* formatted, to make it easier to track changes from upstream (if there are any).
 
@@ -54,6 +55,7 @@ int __cheri_libcall __popcountsi2(arith64_u32 a) __asm__("__popcountsi2");
 int __cheri_libcall __popcountdi2(arith64_u64 a) __asm__("__popcountdi2");
 arith64_u64 __cheri_libcall __udivdi3(arith64_u64 a, arith64_u64 b) __asm__("__udivdi3");
 arith64_u64 __cheri_libcall __umoddi3(arith64_u64 a, arith64_u64 b) __asm__("__umoddi3");
+arith64_u64 __cheri_libcall __multi3(arith64_u64 a, arith64_u64 b) __asm__("__multi3");
 
 typedef union
 {
@@ -299,4 +301,10 @@ typedef union
     arith64_u64 r;
     __divmoddi4(a, b, &r);
     return r;
+}
+
+// Return the product of a and b
+[[clang::no_builtin]] arith64_u64 __multi3(arith64_u64 a, arith64_u64 b)
+{
+    return a * b;
 }
