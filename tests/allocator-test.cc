@@ -313,6 +313,13 @@ namespace
 		     "running claims tests",
 		     MALLOC_QUOTA,
 		     quotaLeft);
+		/*
+		 * Allocate sufficiently small objects that no additional alignment or
+		 * padding requirements arise from capability encoding.  Nevertheless,
+		 * because our allocator imposes minimal chunk sizes, we cannot be sure
+		 * that the underlying object is exactly this size.  When probing,
+		 * permit some slack, up to CHERIOTHeapMinChunkSize.
+		 */
 		size_t allocSize       = 128;
 		auto   mallocQuotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
 		CHERI::Capability alloc{
@@ -322,7 +329,8 @@ namespace
 		auto claim      = [&]() {
             ssize_t claimSize = heap_claim(SECOND_HEAP, alloc);
             claimCount++;
-            TEST(claimSize == allocSize,
+            TEST((allocSize <= claimSize) &&
+			            (claimSize <= allocSize + CHERIOTHeapMinChunkSize),
 			          "{}-byte allocation claimed as {} bytes (claim number {})",
 			          allocSize,
 			          claimSize,
