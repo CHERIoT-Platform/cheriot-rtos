@@ -683,6 +683,8 @@ constexpr size_t MinChunkSize =
 // the minimum size of a chunk (excluding the header)
 constexpr size_t MinRequest = MinChunkSize - sizeof(MChunkHeader);
 
+static_assert(MinChunkSize == CHERIOTHeapMinChunkSize);
+
 // true if cap address a has acceptable alignment
 static inline bool is_aligned(CHERI::Capability<void> a)
 {
