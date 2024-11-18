@@ -76,6 +76,7 @@
         "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM=1"
     ],
     "driver_includes" : [
+        "../include/platform/sunburst/v0.2",
         "../include/platform/sunburst",
         "../include/platform/generic-riscv"
     ],
