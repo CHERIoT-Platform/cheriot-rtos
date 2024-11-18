@@ -12,6 +12,14 @@
             "start" : 0x80001030,
             "end"   : 0x80001038
         },
+        "pinmux_pins_sinks": {
+            "start" : 0x80005000,
+            "length": 0x00000055
+        },
+        "pinmux_block_sinks": {
+            "start" : 0x80005800,
+            "length": 0x00000046
+        },
         "rgbled" : {
             "start" : 0x80009000,
             "end"   : 0x80009020
