@@ -11,6 +11,13 @@
 #include <timeout.h>
 
 /**
+ * The SDK allocator implementation works in terms of "chunks" and has minimum
+ * size requirements for these.  This is occasionally visible to its clients,
+ * as documented on interface functions below.
+ */
+static const size_t CHERIOTHeapMinChunkSize = 16;
+
+/**
  * `MALLOC_QUOTA` sets the quota for the current compartment for use with
  * malloc and free.  This defaults to 4 KiB.
  */
@@ -135,9 +142,16 @@ enum [[clang::flag_enum]] AllocateWaitFlags{
 };
 
 /**
- * Non-standard allocation API.  Allocates `size` bytes.  Blocking behaviour is
- * controlled by the `flags` and the `timeout` parameters.
+ * Non-standard allocation API.  Allocates `size` bytes.
  *
+ * The `heapCapability` quota object must have remaining capacity sufficient
+ * for the requested `size` as well as any padding required by the CHERIoT
+ * capability encoding (see its ISA document for details) and any additional
+ * space required by the allocator's internal layout, which may be up to
+ * `CHERIOTHeapMinChunkSize` bytes.  Not all of these padding bytes may be
+ * available for use via the returned capability.
+ *
+ * Blocking behaviour is controlled by the `flags` and the `timeout` parameters.
  * Specifically, the `flags` parameter defines on which conditions to wait, and
  * the `timeout` parameter how long to wait.
  *
@@ -172,11 +186,11 @@ void *__cheri_compartment("alloc")
  * checking for arithmetic overflow. Similarly to `heap_allocate`, blocking
  * behaviour is controlled by the `flags` and the `timeout` parameters.
  *
- * See `heap_allocate` for more information on the blocking behavior.  One
- * difference between this and `heap_allocate` is the definition of when the
- * allocation cannot be satisfied under any circumstances, which is here if
- * `nmemb` * `size` is larger than the total heap size, or if `nmemb` * `size`
- * overflows.
+ * See `heap_allocate` for more information on the padding and blocking
+ * behavior.  One difference between this and `heap_allocate` is the definition
+ * of when the allocation cannot be satisfied under any circumstances, which is
+ * here if `nmemb` * `size` is larger than the total heap size, or if `nmemb` *
+ * `size` overflows.
  *
  * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
  * stack is insufficiently large to run the function. See `heap_allocate`.
@@ -195,9 +209,11 @@ void *__cheri_compartment("alloc")
  * provided by the first argument until a corresponding call to `heap_free`.
  * Note that this can be used with interior pointers.
  *
- * This will return the size of the allocation claimed on success, 0 on error
- * (if `heapCapability` or `pointer` is not valid, etc.), or `-ENOTENOUGHSTACK`
- * if the stack is insufficiently large to run the function.
+ * This will return the size of the allocation claimed on success (which may be
+ * larger than the size requested in the original `heap_allocate` call; see its
+ * documentation for more information), 0 on error (if `heapCapability` or
+ * `pointer` is not valid, etc.), or `-ENOTENOUGHSTACK` if the stack is
+ * insufficiently large to run the function.
  */
 ssize_t __cheri_compartment("alloc")
   heap_claim(struct SObjStruct *heapCapability, void *pointer);
