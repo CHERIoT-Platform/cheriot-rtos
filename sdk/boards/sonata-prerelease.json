@@ -4,6 +4,22 @@
             "start" : 0x30000000,
             "end"   : 0x30004000
         },
+        "pwm": {
+            "start" : 0x80001000,
+            "length": 0x00001000
+        },
+        "rgbled" : {
+            "start" : 0x80009000,
+            "end"   : 0x80009020
+        },
+        "revoker": {
+            "start" : 0x8000A000,
+            "length": 0x00001000
+        },
+        "adc": {
+            "start" : 0x8000B000,
+            "length": 0x00001000
+        },
         "clint": {
             "start" : 0x80040000,
             "end"   : 0x80050000
@@ -20,33 +36,13 @@
             "start" : 0x80102000,
             "end"   : 0x80102034
         },
-        "uart3": {
-            "start" : 0x80103000,
-            "end"   : 0x80103034
-        },
-        "uart4": {
-            "start" : 0x80104000,
-            "end"   : 0x80104034
-        },
-        "rgbled" : {
-            "start" : 0x80009000,
-            "end"   : 0x80009020
-        },
-        "revoker": {
-            "start": 0x8000A000,
-            "length": 0x1000
+        "usbdev": {
+            "start" : 0x80400000,
+            "end"   : 0x80401000
         },
         "plic": {
             "start" : 0x88000000,
             "end"   : 0x88400000
-        },
-        "pwm": {
-            "start" : 0x80001000,
-            "length": 0x00001000
-        },
-        "adc": {
-            "start" : 0x8000B000,
-            "length": 0x00001000
         }
     },
     "instruction_memory": {
@@ -70,7 +66,7 @@
         "../include/platform/ibex",
         "../include/platform/generic-riscv"
     ],
-    "timer_hz" : 30000000,
+    "timer_hz" : 40000000,
     "tickrate_hz" : 100,
     "revoker" : "hardware",
     "stack_high_water_mark" : true,
@@ -78,62 +74,69 @@
     "simulation": false,
     "interrupts": [
         {
-            "name": "Uart0TxWatermark",
+            "name": "RevokerInterrupt",
             "number": 1,
-            "priority": 3,
-            "edge_triggered": true
-        },
-        {
-            "name": "Uart0RxWatermark",
-            "number": 2,
-            "priority": 3,
-            "edge_triggered": true
-        },
-        {
-            "name": "Uart0TxEmpty",
-            "number": 3,
-            "priority": 3,
-            "edge_triggered": true
-        },
-        {
-            "name": "Uart0RxOverflow",
-            "number": 4,
-            "priority": 3,
-            "edge_triggered": true
-        },
-        {
-            "name": "Uart1TxWatermark",
-            "number": 9,
-            "priority": 3,
-            "edge_triggered": true
-        },
-        {
-            "name": "Uart1RxWatermark",
-            "number": 10,
-            "priority": 3,
-            "edge_triggered": true
-        },
-        {
-            "name": "Uart1TxEmpty",
-            "number": 11,
-            "priority": 3,
-            "edge_triggered": true
-        },
-        {
-            "name": "Uart1RxOverflow",
-            "number": 12,
-            "priority": 3,
-            "edge_triggered": true
+            "priority": 2
         },
         {
             "name": "EthernetInterrupt",
-            "number": 47,
+            "number": 2,
             "priority": 3
         },
         {
-            "name": "RevokerInterrupt",
-            "number": 72,
-            "priority": 2
+            "name": "UsbDevInterrupt",
+            "number": 3,
+            "priority": 3
+        },
+        {
+            "name": "Uart0Interrupt",
+            "number": 8,
+            "priority": 3
+        },
+        {
+            "name": "Uart1Interrupt",
+            "number": 9,
+            "priority": 3
+        },
+        {
+            "name": "Uart2Interrupt",
+            "number": 10,
+            "priority": 3
+        },
+        {
+            "name": "I2c0Interrupt",
+            "number": 16,
+            "priority": 3
+        },
+        {
+            "name": "I2c1Interrupt",
+            "number": 17,
+            "priority": 3
+        },
+        {
+            "name": "SpiLcdInterrupt",
+            "number": 24,
+            "priority": 3
+        },
+        {
+            "name": "SpiEthmacInterrupt",
+            "number": 25,
+            "priority": 3
+        },
+        {
+            "name": "Spi0Interrupt",
+            "number": 26,
+            "priority": 3
+        },
+        {
+            "name": "Spi1Interrupt",
+            "number": 27,
+            "priority": 3
+        },
+        {
+            "name": "Spi2Interrupt",
+            "number": 28,
+            "priority": 3
         }
     ]
 }
