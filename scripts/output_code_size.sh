@@ -21,10 +21,41 @@ print_compartment_size() {
 
 	if [ "$MACHINE_READABLE" -eq 0 ]; then
 		KB_SIZE=$(echo $SIZE | awk '{ print ($1 / 1024) "kB"}')
-		echo "Size of compartment '$2': ${KB_SIZE}"
+		echo "Size of $3 '$2': ${KB_SIZE}"
 	else
 		echo "${SIZE}"
 	fi
+	return $SIZE
+}
+
+print_all_compartment_sizes() {
+	totalCompSize=0;
+	dir=`dirname $1`
+	for comp in `ls $dir/*.compartment`; do
+		c1=${comp##*/}           # Strip the path
+		c2=${c1%%.compartment}   # Remove the suffix
+		c3=${c2##*.}             # Remove any prexix
+		print_compartment_size $1 $c3 'compartment'
+		totalCompSize=$((${totalCompSize}+$?))
+	done
+
+	totalLibSize=0;
+	for comp in `ls $dir/*.library`; do
+		c1=${comp##*/}      # Strip the path
+		c2=${c1%%.library}  # Remove the suffix
+		c3=${c2##*.}        # Remove any prexix
+
+		if [ ${c3} != "debug" ]; then
+			print_compartment_size $1 $c3 'library'
+			totalLibSize=$((${totalLibSize}+$?))
+		fi
+	done
+
+	echo
+	echo "Total size of compartments: $((${totalCompSize}/1024))kb"
+	echo "Total size of libraries: $((${totalLibSize}/1024))kb"
+	echo "Total size of image: $(((${totalCompSize}+${totalLibSize})/1024))kb"
+	
 }
 
 print_full_code_size() {
@@ -45,12 +76,13 @@ print_full_code_size() {
 help() {
    echo "Determine the size of a CHERIoT firmware image."
    echo
-   echo "Syntax: $(basename "$0") {-m} [-h|-c|-f]"
+   echo "Syntax: $(basename "$0") {-m} [-h|-c|-f|-a]"
    echo "  -m                                         Enable machine-readable output in B."
    echo "                                             Optional, must come before -c/-f."
    echo "  -h                                         Print this help."
    echo "  -f [firmware location]                     Print the size of the entire firmware image."
    echo "  -c [firmware location] [compartment name]  Print the size of passed compartment."
+   echo "  -a [firmware location]                     Print the size of each compartment and library."
    echo
 }
 
@@ -60,7 +92,7 @@ if [ "$#" -eq 0 ]; then
 	exit
 fi
 
-while getopts ":hcfm" opt; do
+while getopts ":hcfma" opt; do
 case $opt in
 	h)
 		help
@@ -77,7 +109,7 @@ case $opt in
 		fi
 
 		shift $((OPTIND-1))
-		print_compartment_size $@
+		print_compartment_size $@ 'compartment'
 		exit;;
 	f)
 		EXPECTED=$(( 2 + ${MACHINE_READABLE}))
@@ -89,6 +121,17 @@ case $opt in
 
 		shift $((OPTIND-1))
 		print_full_code_size $@
+		exit;;
+	a)
+		EXPECTED=$(( 2 + ${MACHINE_READABLE}))
+		if [ "$#" -ne "${EXPECTED}" ]; then
+			echo "Error: Argument number incorrect."
+			help
+			exit
+		fi
+
+		shift $((OPTIND-1))
+		print_all_compartment_sizes $@
 		exit;;
 	\?)
 		echo "Error: Invalid option."
