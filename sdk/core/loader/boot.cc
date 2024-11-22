@@ -1212,6 +1212,10 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	// it a normal import will require a small compiler change.  It is now
 	// exposed as a normal export, which enables exporting other things from
 	// the switcher later.
+	//
+	// Despite being exposed as a normal export, we still build the sentry by
+	// hand and, at the moment, ignore its IRQ disposition flags in favor of
+	// hardcoding the value here.
 	Debug::log("Setting compartment switcher");
 	auto switcherEntry =
 	  build<ExportEntry>(imgHdr.switcher.exportTable.start() + 20,

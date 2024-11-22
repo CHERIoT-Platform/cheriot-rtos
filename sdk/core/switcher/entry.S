@@ -216,8 +216,9 @@ __Z26compartment_switcher_entryz:
 	/*
 	 * FROM: cross-call
 	 * FROM: malice
-	 * IRQ ASSUME: deferred (exposed as IRQ-deferring sentry; see the 'export'
-	 *             macro at the end of this file)
+	 * IRQ ASSUME: deferred (loader/boot.cc constructs only IRQ-deferring
+	 *             sentries to this function; the export entry at the end
+	 *             of this file is somewhat fictitious)
 	 * LIVE IN: mtdc, ra, sp, gp, s0, s1, t0, t1, a0, a1, a2, a3, a4, a5
 	 *          (that is, all registers except tp and t2)
 	 *
@@ -308,8 +309,8 @@ __Z26compartment_switcher_entryz:
 	 * surviving the stores above.
 	 *
 	 * TODO for formal verification: it should be the case that after these
-	 * tests and the size checks below, no csp-authorized instruction in the
-	 * switcher can fault.
+	 * tests and the size checks below, no instruction in the switcher
+	 * authorized by the capability now in sp can fault.
 	 */
 //.Lswitch_csp_check:
 	cgetperm           t2, csp
@@ -449,7 +450,7 @@ __Z26compartment_switcher_entryz:
 	 *  s0, t2, gp: dead (again)
 	 */
 
-	// Fetch the sealing key, using gp as a scratch scalar
+	// Fetch the sealing key
 	LoadCapPCC         cs0, .Lunsealing_key_import_tables
 	// Atlas update: s0: switcher sealing key
 	/*
@@ -633,7 +634,8 @@ switcher_after_compartment_call:
 	/*
 	 * Pop a frame from the trusted stack, leaving all registers in the state
 	 * expected by the caller of a cross-compartment call.  The callee is
-	 * responsible for zeroing argument and temporary registers.
+	 * responsible for zeroing unused return registers; the switcher will zero
+	 * other non-return argument and temporary registers.
 	 *
 	 * This unwind path is common to both ordinary return (from above), benign
 	 * errors after we'd set up the trusted frame (.Lswitch_stack_too_small),
@@ -670,6 +672,7 @@ switcher_after_compartment_call:
 	 */
 
 	cspecialr          ctp, mtdc
+	// Atlas update: tp: pointer to TrustedStack
 
 	clear_hazard_slots ctp, ct2
 
@@ -694,7 +697,12 @@ switcher_after_compartment_call:
 	 */
 	bgeu               t0, t2, .Lcommon_defer_irqs_and_thread_exit
 	cincoffset         ct1, ctp, t2
-	// Atlas update: t1: pointer to the TrustedStackFrame to bring on core
+	/*
+	 * Atlas update:
+	 *  t0: dead (again)
+	 *  t1: pointer to the TrustedStackFrame to bring on core
+	 *  t2: the TrustedStack::frameoffset associated with t1
+	 */
 
 	/*
 	 * Restore the untrusted stack pointer from the trusted stack.  This points
@@ -918,6 +926,7 @@ exception_entry_asm:
 #endif
 	csrr               t1, mcause
 	csw                t1, TrustedStack_offset_mcause(csp)
+	// Atlas update: t1: copy of mcause
 
 	/*
 	 * If we hit one of the exception conditions that we should let compartments
@@ -979,7 +988,7 @@ exception_entry_asm:
 	// Call the scheduler.  This returns the new thread in ca0.
 	cjalr              cra
 
-.Lexception_scheduler_return:
+//.Lexception_scheduler_return:
 	/*
 	 * IFROM: above
 	 * IRQ ASSUME: deferred (reachable only by IRQ-deferring reverse sentry)
@@ -1007,7 +1016,7 @@ exception_entry_asm:
 	 * .Lcommon_context_install.
 	 */
 
-	// Switch onto the new thread's trusted stack, using gp as a scratch scalar
+	// Switch onto the new thread's trusted stack
 	LoadCapPCC         csp, .Lsealing_key_trusted_stacks
 	cunseal            csp, ca0, csp
 	// Atlas update: sp: unsealed target thread trusted stack pointer
@@ -1669,10 +1678,11 @@ exception_entry_asm:
 	/*
 	 * FROM: .Lhandle_error_switcher_pcc
 	 * IRQ REQUIRE: deferred (TrustedStack spill frame is precious)
-	 * LIVE IN: mtdc
+	 * LIVE IN: mtdc, t1
 	 *
 	 * Atlas:
 	 *  mtdc:  pointer to TrustedStack
+	 *  t1: A copy of mepcc, the faulting program counter
 	 */
 	auipcc             ctp, %cheriot_compartment_hi(.Lswitch_entry_first_spill)
 	cincoffset         ctp, ctp, %cheriot_compartment_lo_i(.Lhandle_error_in_switcher)
@@ -1987,7 +1997,10 @@ export_table_start:
 .endm
 
 // Switcher entry point must be first.
-// We mangle the switcher export as if it were a compartment call.
+/*
+ * We mangle the switcher export as if it were a compartment call, but see
+ * loader/boot.cc's special handling of this entry.
+ */
 export __Z26compartment_switcher_entryz, __export_switcher
 export __Z23trusted_stack_has_spacei
 export __Z22switcher_recover_stackv
