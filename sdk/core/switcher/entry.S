@@ -1722,6 +1722,15 @@ exception_entry_asm:
 	 */
 	csrw               mcause, MCAUSE_THREAD_EXIT
 	/*
+	 * mtval may have been updated by the action of other threads in the system
+	 * and holds the last value latched during an exception.  From the
+	 * scheduler's perspective, thread exits are a kind of exception, and
+	 * exceptions get to see mtval.  Write a constant value to mtval to act more
+	 * like an architectural fault and to close a small information leak to the
+	 * scheduler's event handler.
+	 */
+	csrw               mtval, MCAUSE_THREAD_EXIT
+	/*
 	 * The thread exit code expects the TrustedStack pointer to be in csp and
 	 * the thread's stack pointer to be in mtdc.  After thread exit, we don't
 	 * need the stack pointer so just put zero there.
