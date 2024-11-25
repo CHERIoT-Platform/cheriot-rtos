@@ -164,7 +164,7 @@ switcher_scheduler_entry_csp:
 .endm
 
 /// Spill a single register to a trusted stack pointed to by csp.
-.macro spillOne, reg
+.macro trustedSpillOne, reg
 	csc \reg, TrustedStack_offset_\reg(csp)
 .endm
 
@@ -172,12 +172,12 @@ switcher_scheduler_entry_csp:
  * Spill all of the registers in the list (in order) to a trusted stack pointed
  * to by csp.
  */
-.macro spillRegisters reg1, regs:vararg
-	forall spillOne, \reg1, \regs
+.macro trustedSpillRegisters reg1, regs:vararg
+	forall trustedSpillOne, \reg1, \regs
 .endm
 
 /// Reload a single register from a trusted stack pointed to by csp.
-.macro reloadOne, reg
+.macro trustedReloadOne, reg
 	clc \reg, TrustedStack_offset_\reg(csp)
 .endm
 
@@ -185,8 +185,8 @@ switcher_scheduler_entry_csp:
  * Reload all of the registers in the list (in order) to a trusted stack pointed
  * to by csp.
  */
-.macro reloadRegisters reg1, regs:vararg
-	forall reloadOne, \reg1, \regs
+.macro trustedReloadRegisters reg1, regs:vararg
+	forall trustedReloadOne, \reg1, \regs
 .endm
 
 /**
@@ -922,7 +922,7 @@ exception_entry_asm:
 	 * The guest sp/csp (x2/c2) is now in mtdc. Will be spilled later, but we
 	 * spill all the other 14 registers now.
 	 */
-	spillRegisters     cra, cgp, ctp, ct0, ct1, ct2, cs0, cs1, ca0, ca1, ca2, ca3, ca4, ca5
+	trustedSpillRegisters     cra, cgp, ctp, ct0, ct1, ct2, cs0, cs1, ca0, ca1, ca2, ca3, ca4, ca5
 
 	/*
 	 * The control flow of an exiting thread rejoins us (that is, running
@@ -1150,7 +1150,7 @@ exception_entry_asm:
 	 * sp/csp (x2/c2) will be loaded last and will overwrite the trusted stack
 	 * pointer with the thread's stack pointer.
 	 */
-	reloadRegisters cra, cgp, ctp, ct0, ct1, ct2, cs0, cs1, ca0, ca1, ca2, ca3, ca4, ca5, csp
+	trustedReloadRegisters cra, cgp, ctp, ct0, ct1, ct2, cs0, cs1, ca0, ca1, ca2, ca3, ca4, ca5, csp
 	mret
 
 /**
