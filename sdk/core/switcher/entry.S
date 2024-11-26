@@ -295,6 +295,21 @@ __Z26compartment_switcher_entryz:
 	 * populating the error return values in a0 and a1, are required.
 	 */
 	/*
+	 * __Z26compartment_switcher_entryz is exposed to callers directly as a
+	 * forward-arc interrupt-disabling sentry via the somewhat lengthy chain
+	 * of events involving...
+	 *   - the .compartment_import_table sections defined in
+	 *     compartment.ldscript,
+	 *   - the export table defined below (.section .compartment_export_table),
+	 *   - firmware.ldscript.in's use of that export table to define
+	 *     .switcher_export_table,
+	 *   - the firmware image header (loader/types.h's ImgHdr), in particular
+	 *     ImgHdr::switcher::exportTable and, again, firmware.ldscript.in's
+	 *     use of .switcher_export_table to populate that field, and
+	 *   - loader/boot.cc:/populate_imports and its caller's computation of
+	 *     switcherPCC.
+	 */
+	/*
 	 * TODO: We'd like to relax the interrupt posture of the switcher where
 	 * possible.  Specifically, unless both the caller and callee are running
 	 * and to be run with interrupts deferred, we'd like the switcher, and
