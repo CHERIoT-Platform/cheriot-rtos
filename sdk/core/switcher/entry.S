@@ -797,7 +797,18 @@ switcher_after_compartment_call:
 #endif
 
 	// Zero all registers not holding state intended for caller; see atlas below
-//.Lswitch_callee_dead_zeros:
+.Lswitch_callee_dead_zeros:
+	/*
+	 * FROM: above
+	 * FROM: .Lswitch_trusted_stack_exhausted
+	 * LIVE IN: mtdc, ra, sp, gp, s0, s1, a0, a1
+	 *
+	 * Atlas:
+	 *  mtdc: pointer to this thread's TrustedStack
+	 *  a0, a1: return value(s)
+	 *  ra, sp, gp, s0, s1: caller state
+	 *  tp, t0, t1, t2, a2, a3, a4, a5: dead (to be zeroed here)
+	 */
 	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0, a1
 .Lswitch_just_return:
 	/*
@@ -862,11 +873,10 @@ switcher_after_compartment_call:
 	clc                cra, SPILL_SLOT_pcc(csp)
 	clc                cgp, SPILL_SLOT_cgp(csp)
 	cincoffset         csp, csp, SPILL_SLOT_SIZE
-	// Set the first return register (a0) and zero the other (a1) below
+	// Set the first return register (a0) and zero the other (a1)
 	li                 a0, -ENOTENOUGHTRUSTEDSTACK
-	// Zero everything else
-	zeroAllRegistersExcept ra, sp, gp, s0, s1, a0
-	cret
+	zeroOne            a1
+	j                  .Lswitch_callee_dead_zeros
 
 .size compartment_switcher_entry, . - compartment_switcher_entry
 
