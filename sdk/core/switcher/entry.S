@@ -89,6 +89,27 @@
  * continue onto adjacent lines.
  *
  */
+/*
+ * Multiple points in the switcher are exposed to callers via sentries (either
+ * forward-arc sentries manufactured elsewhere or backwards-arc sentries
+ * manufactured by CJALRs herein.  Sentries can have their GL(obal) permission
+ * cleared by the bearer, but nothing here relies on PCC being GL(obal): we
+ * never store anything derived from our PCC to memory, much less through an
+ * authority not bearing SL permission.
+ *
+ * Similarly, the switcher communicates with the outside world by means of
+ * sealed data capabilities (to TrustedStacks and compartment export tables).
+ * These, too, can have their GL(obal) bit cleared by bearers, but again, it
+ * does not much matter for switcher correctness; see comments marked with
+ * "LOCAL SEAL" notes in the code below.
+ *
+ * We do rely on PCC having L(oad)G(lobal) permission -- which is under seal in
+ * sentries and so not mutable by the caller, even if a sentry is loaded
+ * through an authority without LG -- so that, in particular, the sealing
+ * authorities used herein are GL(obal) and so the sealed capabilities that
+ * result are also GL(obal).
+ */
+
 
 switcher_code_start:
 
@@ -468,6 +489,14 @@ __Z26compartment_switcher_entryz:
 	 *      deeply confused, the next instruction will trap, and we'll
 	 *      .Lcommon_force_unwind via exception_entry_asm and
 	 *      .Lhandle_error_in_switcher.
+	 */
+	/*
+	 * LOCAL SEAL: If it happened that the export table reference given to us
+	 * is not GL(obal), then the result of unsealing above, now in t1, will
+	 * also be not GL(obal).  This reference is stored to the TrustedStack frame
+	 * through a SL-bearing authority (because the TrustedStack also holds our
+	 * register spill area, and so must have SL) but neither it or any monotone
+	 * progeny otherwise escape the switcher's private register file.
 	 */
 	/*
 	 * Load the entry point offset.  If cunseal failed then this will fault and
@@ -1022,6 +1051,15 @@ exception_entry_asm:
 	LoadCapPCC         csp, .Lsealing_key_trusted_stacks
 	cunseal            csp, ca0, csp
 	// Atlas update: sp: unsealed target thread trusted stack pointer
+	/*
+	 * LOCAL SEAL: if the scheduler has shed GL(obal) of the reference it gave
+	 * us in a0, then sp will also lack GL(obal) after unsealing.  This
+	 * reference is not stored in memory (in the switcher, anyway), just mtdc.
+	 * However, when this reference is extracted and sealed for the next
+	 * context switch (in .Lexception_scheduler_call), the result will lack
+	 * GL(obal), which will likely prove challenging for the scheduler.  That
+	 * is, this is an elaborate way for the scheduler to crash itself.
+	 */
 
 	clw                t0, TrustedStack_offset_mcause(csp)
 	// Atlas update: t0: stored mcause for the target thread
@@ -1860,6 +1898,9 @@ __Z25switcher_interrupt_threadPv:
 	 * point offset.
 	 */
 	cunseal            ca1, ca0, ca1
+	/*
+	 * LOCAL SEAL: Nothing herein depends on a1 being GL(obal).
+	 */
 	cgettag            a0, ca1
 	// a0 (return register) now contains the tag.  We return false on failure
 	// so can just branch to the place where we zero non-return registers from
