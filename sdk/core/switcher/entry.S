@@ -77,6 +77,7 @@
  *
  *  - "LIVE IN:", a list of live (in) registers at this point of the code and/or
  *    - "*": the entire general purpose register file (no CSRs or SCRs implied)
+ *    - "callee-save": the psABI callee-save registers
  *    - "mcause"
  *    - "mtdc"
  *    - "mtval"
@@ -1824,10 +1825,14 @@ exception_entry_asm:
 	.type __Z23trusted_stack_has_spacei,@function
 __Z23trusted_stack_has_spacei:
 	/*
-	 * LIVE IN: mtdc, a0
+	 * FROM: malice
+	 * IRQ ASSUME: deferred
+	 * LIVE IN: mtdc, callee-save, ra, a0
 	 *
 	 * Atlas:
 	 *  mtdc: pointer to TrustedStack (or nullptr if from buggy scheduler)
+	 *  ra: return pointer (guaranteed because this symbol is reachable only
+	 *      through an interrupt-disabling forward-arc sentry)
 	 *  a0: requested number of trusted stack frames
 	 */
 	li                 a2, TrustedStackFrame_size
@@ -1855,15 +1860,20 @@ __Z23trusted_stack_has_spacei:
 	// LIVE OUT: mtdc, a0
 	cret
 
+// Reveal the stack pointer given to this compartment invocation
 	.section .text, "ax", @progbits
 	.p2align 2
 	.type __Z22switcher_recover_stackv,@function
 __Z22switcher_recover_stackv:
 	/*
-	 * LIVE IN: mtdc
+	 * FROM: malice
+	 * IRQ ASSUME: deferred
+	 * LIVE IN: mtdc, callee-save, ra
 	 *
 	 * Atlas:
 	 *  mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
+	 *  ra: return pointer (guaranteed because this symbol is reachable only
+	 *      through an interrupt-disabling forward-arc sentry)
 	 */
 	/*
 	 * Load the trusted stack pointer into a register that we will clobber after
@@ -1884,6 +1894,7 @@ __Z22switcher_recover_stackv:
 	 * on entry, and can be returned directly.
 	 */
 	li                 a2, TrustedStack_offset_frames
+	// Atlas update: a2: dead but exposed: TrustedStack_offset_frames
 	beq                a1, a2, 0f
 
 	/*
@@ -1897,6 +1908,11 @@ __Z22switcher_recover_stackv:
 	sub                a1, a1, a2
 	csetaddr           ca0, ca0, a2
 	csetboundsexact    ca0, ca0, a1
+	/*
+	 * Atlas update:
+	 *  a1: dead but exposed: the length of the stack
+	 *  a2: dead but exposed: base address of the stack
+	 */
 0:
 	// LIVE OUT: mtdc, a0
 	cret
@@ -1905,14 +1921,30 @@ __Z22switcher_recover_stackv:
 	.p2align 2
 	.type __Z30trusted_stack_interrupt_threadPv,@function
 __Z25switcher_interrupt_threadPv:
-	// Load the unsealing key into a register that we will clobber two
-	// instructions later.
+	/*
+	 * FROM: malice
+	 * IRQ ASSUME: deferred
+	 * LIVE IN: mtdc, callee-save, ra, a0
+	 *
+	 * Atlas:
+	 *   mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
+	 *   a0: sealed pointer to target thread TrustedStack
+	 *   ra: return pointer (guaranteed because this symbol is reachable only
+	 *       through an interrupt-disabling forward-arc sentry)
+	 */
+	/*
+	 * Because this function involves looking across two threads' states, it
+	 * needs to run with preemption prohibited, and that means IRQs deferred.
+	 */
+
+	// Load the unsealing key
 	LoadCapPCC         ca1, .Lsealing_key_trusted_stacks
 	/*
-	 * The target capability is in ca0.  Unseal, check tag and load the entry
-	 * point offset.
+	 * The target capability is in ca0.  Unseal, clobbering our authority;
+	 * check tag; and load the entry point offset.
 	 */
 	cunseal            ca1, ca0, ca1
+	// Atlas update: a1: unsealed pointer to target thread TrustedStack
 	/*
 	 * LOCAL SEAL: Nothing herein depends on a1 being GL(obal).
 	 */
@@ -1926,12 +1958,14 @@ __Z25switcher_interrupt_threadPv:
 	cspecialr          ca2, mtdc
 	li                 a0, 0
 	beq                a2, a1, .Lswitcher_interrupt_thread_return
+	// Atlas update: a2: unsealed pointer to current thread TrustedStack
 
-	// ca1 now contains the unsealed capability for the target thread.  We
-	// allow the target thread to be interrupted if (and only if) the caller is
-	// in the same compartment as the interrupted thread.  We will determine
-	// this by checking if the base of the two export table entries from the
-	// top of the trusted stack frames match.
+	/*
+	 * We allow the target thread to be interrupted if (and only if) the caller
+	 * is in the same compartment as the interrupted thread.  We will determine
+	 * this by checking if the base of the two export table entries from the
+	 * top of the trusted stack frames match.
+	 */
 
 // Helper macro that loads the export table from the register containing the
 // trusted stack.  The two arguments must be different registers.
@@ -1954,10 +1988,13 @@ __Z25switcher_interrupt_threadPv:
 
 	// If the two export table entries differ, return.
 	bne                a2, a3, .Lswitcher_interrupt_thread_return
-	// After this point, we no longer care about the values in a0, a2, and a3.
+	// Atlas update: a1, a2, a3: dead (to be zeroed)
 
-	// Mark the thread as interrupted.
-	// Store a magic value in mcause
+	/*
+	 * Mark the thread as interrupted.  Store a magic value in mcause.  This
+	 * value will not be overwritten by a trap before the scheduler sees the
+	 * target thread, since we are on core and it isn't.
+	 */
 	li                 a2, MCAUSE_THREAD_INTERRUPT
 	csw                a2, TrustedStack_offset_mcause(ca1)
 	// Return success
@@ -1966,67 +2003,130 @@ __Z25switcher_interrupt_threadPv:
 	zeroRegisters      a1, a2, a3
 	cret
 
+// Get a sealed pointer to the current thread's TrustedStack
 	.section .text, "ax", @progbits
 	.p2align 2
 	.type __Z23switcher_current_threadv,@function
 __Z23switcher_current_threadv:
+	/*
+	 * FROM: malice
+	 * IRQ ASSUME: deferred
+	 * LIVE IN: mtdc, callee-save, ra
+	 *
+	 * Atlas:
+	 *   mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
+	 *   ra: return pointer (guaranteed because this symbol is reachable only
+	 *       through an interrupt-disabling forward-arc sentry)
+	 */
+
 	LoadCapPCC         ca0, .Lsealing_key_trusted_stacks
+	// Atlas update: a0: sealing authority for trusted stacks
 	cspecialr          ca1, mtdc
+	// Atlas update: a1: copy of mtdc
 	cseal              ca0, ca1, ca0
 	li                 a1, 0
+	/*
+	 * Atlas update:
+	 *   a0: sealed copy of mtdc, this thread's TrustedStack
+	 *   a1: zero
+	 */
 	cret
 
+// Get a pointer to this thread's hazard pointers array
 	.section .text, "ax", @progbits
 	.p2align 2
 	.type __Z28switcher_thread_hazard_slotsv,@function
 __Z28switcher_thread_hazard_slotsv:
-	// Load the trusted stack pointer into a register that we will clobber in
-	// two instructions.
+	/*
+	 * FROM: malice
+	 * IRQ ASSUME: deferred
+	 * LIVE IN: mtdc, callee-save, ra
+	 *
+	 * Atlas:
+	 *   mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
+	 *   ra: return pointer (guaranteed because this symbol is reachable only
+	 *       through an interrupt-disabling forward-arc sentry)
+	 */
+
 	cspecialr          ca0, mtdc
+
+	// If this traps (from null mtdc, say), we'll forcibly unwind.
 	clc                ca0, TrustedStack_offset_hazardPointers(ca0)
+	// Atlas update: a0: pointer to hazard pointers
+
 	cret
 
+// Get the current thread's integer ID
 	.section .text, "ax", @progbits
 	.p2align 2
 	.type __Z13thread_id_getv,@function
 __Z13thread_id_getv:
-	// Load the trusted stack pointer into a register that we will clobber in
-	// the next instruction when we load the thread ID.
+	/*
+	 * FROM: malice
+	 * IRQ ASSUME: deferred
+	 * LIVE IN: mtdc, callee-save, ra
+	 *
+	 * Atlas:
+	 *   mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
+	 *   ra: return pointer (guaranteed because this symbol is reachable only
+	 *       through an interrupt-disabling forward-arc sentry)
+	 */
+
 	cspecialr          ca0, mtdc
+	/*
+	 * If this is a null pointer, don't try to dereference it and report that
+	 * we are thread 0.  This permits the debug code to work even from things
+	 * that are not real threads.
+	 */
 	cgettag            a1, ca0
-	// If this is a null pointer, don't try to dereference it and report that
-	// we are thread 0.  This permits the debug code to work even from things
-	// that are not real threads.
+	// Atlas update: a1: tag of a0/mtdc
 	beqz               a1, 0f
 	clh                a0, TrustedStack_offset_threadID(ca0)
+	// Atlas update: a0: integer ID of current thread
 0:
 	cret
 
 
+// Return the stack high-water mark
 	.section .text, "ax", @progbits
 	.p2align 2
 	.type __Z25stack_lowest_used_addressv,@function
 __Z25stack_lowest_used_addressv:
-	// Read the stack high-water mark into the return register.
 	csrr               a0, CSR_MSHWM
 	cret
 
+// Reset the count of error handler invocations in this compartment invocation
 	.section .text, "ax", @progbits
 	.p2align 2
 	.type __Z39switcher_handler_invocation_count_resetv,@function
 __Z39switcher_handler_invocation_count_resetv:
-	// Trusted stack pointer in ca1
+	/*
+	 * FROM: malice
+	 * IRQ ASSUME: deferred
+	 * LIVE IN: mtdc, callee-save, ra
+	 *
+	 * Atlas:
+	 *   mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
+	 *   ra: return pointer (guaranteed because this symbol is reachable only
+	 *       through an interrupt-disabling forward-arc sentry)
+	 */
+
 	cspecialr          ca1, mtdc
-	// Offset of the current trusted stack frame to a1
+	// Atlas update: a1: copy of mtdc
 	clhu               a0, TrustedStack_offset_frameoffset(ca1)
 	addi               a0, a0, -TrustedStackFrame_size
-	// Current trusted stack frame to ca1, a0 is dead
+	// Atlas update: a0: offset of the current trusted stack frame
 	cincoffset         ca1, ca1, a0
-	// Current invocation count (for return) in a0
+	/*
+	 * Atlas update:
+	 *  a0: dead
+	 *  a1: pointer to current TrustedStack::frame
+	 */
 	clh                a0, TrustedStackFrame_offset_errorHandlerCount(ca1)
+	// Atlas update: a0: current invocation count (for return)
 	// Reset invocation count
 	csh                zero, TrustedStackFrame_offset_errorHandlerCount(ca1)
-	// Zero trusted stack frame pointer register
+	// Atlas update: a1: dead (to be zeroed)
 	li                 a1, 0
 	cret
 
