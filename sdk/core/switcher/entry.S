@@ -97,6 +97,10 @@ switcher_code_start:
 	.globl compartment_switcher_sealing_key
 	.p2align 3
 compartment_switcher_sealing_key:
+.Lsealing_key_trusted_stacks:
+	.long 0
+	.long 0
+.Lunsealing_key_import_tables:
 	.long 0
 	.long 0
 # Global for the scheduler's PCC.  Stored in the switcher's code section.
@@ -446,11 +450,8 @@ __Z26compartment_switcher_entryz:
 	 */
 
 	// Fetch the sealing key, using gp as a scratch scalar
-	LoadCapPCC         cs0, compartment_switcher_sealing_key
+	LoadCapPCC         cs0, .Lunsealing_key_import_tables
 	// Atlas update: s0: switcher sealing key
-	li                 gp, SEAL_TYPE_SealedImportTableEntries
-	csetaddr           cs0, cs0, gp
-	// Atlas update: gp: dead (again)
 	/*
 	 * The caller's handle to the callee (the sealed capability to the export
 	 * table entry) is in t1, which has been kept live all this time.  Unseal
@@ -952,10 +953,8 @@ exception_entry_asm:
 	 * TrustedStack *exception_entry(TrustedStack *sealedTStack,
 	 *     size_t mcause, size_t mepc, size_t mtval)
 	 */
-	LoadCapPCC         ca5, compartment_switcher_sealing_key
-	li                 gp, SEAL_TYPE_SealedTrustedStacks
-	csetaddr           ca5, ca5, gp
-	cseal              ca0, csp, ca5 // sealed trusted stack
+	LoadCapPCC         ca0, .Lsealing_key_trusted_stacks
+	cseal              ca0, csp, ca0 // sealed trusted stack
 	mv                 a1, t1 // mcause
 	cgetaddr           a2, ct0 // mepcc address
 	csrr               a3, mtval
@@ -1009,9 +1008,7 @@ exception_entry_asm:
 	 */
 
 	// Switch onto the new thread's trusted stack, using gp as a scratch scalar
-	LoadCapPCC         csp, compartment_switcher_sealing_key
-	li                 gp, SEAL_TYPE_SealedTrustedStacks
-	csetaddr           csp, csp, gp
+	LoadCapPCC         csp, .Lsealing_key_trusted_stacks
 	cunseal            csp, ca0, csp
 	// Atlas update: sp: unsealed target thread trusted stack pointer
 
@@ -1845,9 +1842,7 @@ __Z22switcher_recover_stackv:
 __Z25switcher_interrupt_threadPv:
 	// Load the unsealing key into a register that we will clobber two
 	// instructions later.
-	LoadCapPCC         ca1, compartment_switcher_sealing_key
-	li                 a2, SEAL_TYPE_SealedTrustedStacks
-	csetaddr           ca1, ca1, a2
+	LoadCapPCC         ca1, .Lsealing_key_trusted_stacks
 	/*
 	 * The target capability is in ca0.  Unseal, check tag and load the entry
 	 * point offset.
@@ -1907,9 +1902,7 @@ __Z25switcher_interrupt_threadPv:
 	.p2align 2
 	.type __Z23switcher_current_threadv,@function
 __Z23switcher_current_threadv:
-	LoadCapPCC         ca0, compartment_switcher_sealing_key
-	li                 a1, SEAL_TYPE_SealedTrustedStacks
-	csetaddr           ca0, ca0, a1
+	LoadCapPCC         ca0, .Lsealing_key_trusted_stacks
 	cspecialr          ca1, mtdc
 	cseal              ca0, ca1, ca0
 	li                 a1, 0

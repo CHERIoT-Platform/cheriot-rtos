@@ -460,7 +460,7 @@ namespace
 	 * The sealing key for the switcher, used to seal all jump targets in the
 	 * import tables.
 	 */
-	Capability<void> switcherKey;
+	Capability<void> exportSealingKey;
 
 	/**
 	 * The sealing key for sealing trusted stacks.
@@ -568,7 +568,7 @@ namespace
 			                 "Functions exported from compartments must have "
 			                 "an explicit interrupt posture");
 			return build(compartment.exportTable, entry.address)
-			  .seal(switcherKey);
+			  .seal(exportSealingKey);
 		};
 
 		// If the low bit is 1, then this is either an MMIO region or direct
@@ -1252,15 +1252,21 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	  };
 
 	// Set up the sealing keys for the privileged components.
-	switcherKey =
-	  setSealingKey(imgHdr.switcher, Sentry, SealedTrustedStacks - Sentry + 1);
-	// We need only the rights to seal things with the switcher's data sealing
-	// types, so drop all others and store those two types separately.
-	trustedStackKey           = switcherKey;
-	trustedStackKey.address() = SealedTrustedStacks;
-	trustedStackKey.bounds()  = 1;
-	switcherKey.address()     = SealedImportTableEntries;
-	switcherKey.bounds()      = 1;
+	exportSealingKey = CHERI::Capability{
+	  build<void,
+	        Root::Type::Seal,
+	        PermissionSet{Permission::Global, Permission::Seal}>(
+	    SealedImportTableEntries, 1)};
+
+	// We and the switcher both seal (and the switcher unseals) trusted stacks
+	trustedStackKey = setSealingKey(imgHdr.switcher, SealedTrustedStacks, 1, 0);
+	// The switcher unseals import entries built with exportSealingKey above
+	setSealingKey(imgHdr.switcher,
+	              SealedImportTableEntries,
+	              1,
+	              sizeof(void *),
+	              PermissionSet{Permission::Global, Permission::Unseal});
+
 	setSealingKey(imgHdr.allocator(), Allocator);
 	setSealingKey(imgHdr.token_library(),
 	              Allocator,
