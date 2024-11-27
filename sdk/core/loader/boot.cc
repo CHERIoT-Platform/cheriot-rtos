@@ -1267,15 +1267,31 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	              sizeof(void *),
 	              PermissionSet{Permission::Global, Permission::Unseal});
 
-	setSealingKey(imgHdr.allocator(), Allocator);
+	/*
+	 * The token library unseals both static and dynamic objects, sometimes
+	 * either and sometimes with static knowledge of which is expected.  To
+	 * avoid `li; csetaddr; csetbounds` sequences, we give it a separate cap
+	 * for each case.
+	 */
 	setSealingKey(imgHdr.token_library(),
 	              Allocator,
 	              2, // Allocator and StaticToken
 	              0,
 	              PermissionSet{Permission::Global, Permission::Unseal});
+	setSealingKey(imgHdr.token_library(),
+	              StaticToken,
+	              1,
+	              sizeof(void *),
+	              PermissionSet{Permission::Global, Permission::Unseal});
+	setSealingKey(imgHdr.token_library(),
+	              Allocator,
+	              1,
+	              2 * sizeof(void *),
+	              PermissionSet{Permission::Global, Permission::Unseal});
+
 	constexpr size_t DynamicSealingLength =
 	  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
-
+	setSealingKey(imgHdr.allocator(), Allocator);
 	setSealingKey(imgHdr.allocator(),
 	              FirstDynamicSoftware,
 	              DynamicSealingLength,

@@ -2,15 +2,34 @@
 #include <cheri-builtins.h>
 #include "../allocator/token.h"
 
-	.hidden __sealingkey
-	.type   __sealingkey,@object
-	.section    .sealing_key1,"aw",@progbits
-	.globl  __sealingkey
-	.p2align    3
-__sealingkey:
-	.chericap   0
-	.size   __sealingkey, 8
+.include "assembly-helpers.s"
 
+	.hidden __sealingkey_either
+	.type   __sealingkey_either,@object
+	.section    .sealing_key1,"aw",@progbits
+	.globl  __sealingkey_either
+	.p2align    3
+__sealingkey_either:
+	.chericap   0
+	.size   __sealingkey_either, 8
+
+	.hidden __sealingkey_static
+	.type   __sealingkey_static,@object
+	.section    .sealing_key2,"aw",@progbits
+	.globl  __sealingkey_static
+	.p2align    3
+__sealingkey_static:
+	.chericap   0
+	.size   __sealingkey_static, 8
+
+	.hidden __sealingkey_dynamic
+	.type   __sealingkey_dynamic,@object
+	.section    .sealing_key3,"aw",@progbits
+	.globl  __sealingkey_dynamic
+	.p2align    3
+__sealingkey_dynamic:
+	.chericap   0
+	.size   __sealingkey_dynamic, 8
 
 .section .text,"ax",@progbits
 
@@ -19,21 +38,20 @@ __sealingkey:
 /**
  * The core of unsealing:
  *
- *   void *token_unseal_internal(struct SKeyStruct *, struct SObjStruct *, int);
+ *   void *token_unseal_internal(
+ *     struct SKeyStruct *, struct SObjStruct *, void *);
  */
-
 .Ltoken_unseal_internal:
   /*
    * Register allocation:
    *
-   *  - ca0 holds a sealing key, either the user's or the real deal, and is
-   *    replaced with the unsealed value or NULL
+   *  - ca0 holds the user's sealing key, and is replaced with the unsealed
+   *    value or NULL
    *
    *  - ca1 holds the user's sealed object pointer
    *
-   *  - a2 contains the expected sealing type.
-   *
-   *  - t0 holds a copy of the user key's address field (authorized type)
+   *  - ca2 holds the unsealing authority and is clobbered on failure
+   *    explicitly and on success with a scalar (the sealed payload's length)
    *
    *  - t1 is used within each local computation and never holds secrets
    */
@@ -53,53 +71,41 @@ __sealingkey:
   andi     t1, t1, CHERI_PERM_UNSEAL
   beqz     t1, .Lexit_failure
 
-  /* Copy key type to scratch register */
-  cgetaddr t0, ca0
-
-  /*
-   * Load unsealing root capability, to be clobbered by return value
-   * This faults only if something has gone very, very wrong, and exposes no
-   * secrets if so.
-   */
-.Lload_sealing_key:
-  auipcc ca0, %cheriot_compartment_hi(__sealingkey)
-  clc    ca0, %cheriot_compartment_lo_i(.Lload_sealing_key)(ca0)
-  csetaddr ca0, ca0, a2
-
   /* Unseal, clobbering authority */
-  cunseal ca0, ca1, ca0
+  cunseal ca2, ca1, ca2
 
   /* Verify tag of unsealed form */
-  cgettag t1, ca0
+  cgettag t1, ca2
   beqz    t1, .Lexit_failure
 
   /*
    * Load software type tag.  This will not trap, thanks to above tag check and
    * because IRQs are deferred (see our export entry below)
    */
-  clw t1, TokenSObj_offset_type(ca0)
+  clw t1, TokenSObj_offset_type(ca2)
 
   /* Verify that the loaded value matches the address of the key. */
-  bne t0, t1, .Lexit_failure
+  bne a0, t1, .Lexit_failure
 
   /* Subset bounds to ->data */
   // Get the top into t1
-  cgettop         t1, ca0
-  // Move the address to the start of the data
-  cincoffset      ca0, ca0, TokenSObj_offset_data
+  cgettop         t1, ca2
+  // Move the address to the start of the data, clobber the user's sealing key
+  cincoffset      ca0, ca2, TokenSObj_offset_data
   // Subtract the address of the (to-be-returned-unsealed) data from the top to
-  // give the length.
-  sub             t1, t1, a0
+  // give the length, clobbering our unsealing key.
+  sub             a2, t1, a0
   // Set the new bounds, using an exact setting so that any errors in the
   // allocator's alignment turn into an untagged capability here.
-  csetboundsexact ca0, ca0, t1
+  csetboundsexact ca0, ca0, a2
 
   /* And that's an unwrap. */
   cret
 
 .Lexit_failure:
-  /* Failure; clobber potential sensitive state in ca0 and return null */
-  cmove ca0, cnull
+  /* Failure; clobber potential sensitive state in ca2 and return null */
+  zeroOne a2
+  zeroOne a0
   cret
 
 /**
@@ -113,7 +119,16 @@ __sealingkey:
 	.hidden _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 	.globl  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
-	cgettype a2, ca1
+	LoadCapPCC ca2, __sealingkey_either
+
+	/*
+	 * Backwards compatibility with CUnseal that requires address match.
+	 * This can (and should) be removed once everyone's caught up with
+	 * https://github.com/CHERIoT-Platform/cheriot-sail/pull/87 .
+	 */
+	cgettype   t1, ca1
+	csetaddr   ca2, ca2, t1
+
 	j        .Ltoken_unseal_internal
 
 /**
@@ -127,8 +142,8 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
 	.hidden  _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
 	.globl   _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
 _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct:
-	li       a2, CheriSealTypeStaticToken
-	j        .Ltoken_unseal_internal
+	LoadCapPCC ca2, __sealingkey_static
+	j          .Ltoken_unseal_internal
 
 /**
  * An in-assembler implementation of
@@ -138,11 +153,11 @@ _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct:
  *
  * The name has been manually mangled as per the C++ rules.
  */
-	.hidden  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
-	.globl   _Z16token_obj_unsealP10SKeyStructP10SObjStruct
+	.hidden  _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct
+	.globl   _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct
 _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct:
-	li       a2, CheriSealTypeAllocator
-	j        .Ltoken_unseal_internal
+	LoadCapPCC ca2, __sealingkey_dynamic
+	j          .Ltoken_unseal_internal
 
 /* TODO: Eventually this goes away, when the assembler can generate it for us */
 CHERIOT_EXPORT_LIBCALL \
