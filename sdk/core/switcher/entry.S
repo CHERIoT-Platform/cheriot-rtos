@@ -1792,7 +1792,7 @@ exception_entry_asm:
 	 * alias for cspecialrw with a zero source, which means "don't write".  So,
 	 * put nullptr in a register with non-zero index, and then put that in mtcc.
 	 */
-	cmove              csp, cnull
+	zeroOne            sp
 	cspecialw          mtcc, csp
 	// Take a trap and wedge the machine on that null MTCC
 	clc                csp, 0(csp)
