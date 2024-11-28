@@ -53,48 +53,48 @@ __sealingkey_dynamic:
    *  - ca2 holds the unsealing authority and is clobbered on failure
    *    explicitly and on success with a scalar (the sealed payload's length)
    *
-   *  - t1 is used within each local computation and never holds secrets
+   *  - a3 is used within each local computation and never holds secrets
    */
 
   /* Verify key tag */
-  cgettag t1, ca0
-  beqz    t1, .Lexit_failure
+  cgettag a3, ca0
+  beqz    a3, .Lexit_failure
 
   /* Verify key address == base and len > 0 */
-  cgetbase t1, ca0
-  bne      a0, t1, .Lexit_failure // as-integer access to ca0 gives address
-  cgetlen  t1, ca0
-  beqz     t1, .Lexit_failure
+  cgetbase a3, ca0
+  bne      a0, a3, .Lexit_failure // as-integer access to ca0 gives address
+  cgetlen  a3, ca0
+  beqz     a3, .Lexit_failure
 
   /* Verify key has unseal permission */
-  cgetperm t1, ca0
-  andi     t1, t1, CHERI_PERM_UNSEAL
-  beqz     t1, .Lexit_failure
+  cgetperm a3, ca0
+  andi     a3, a3, CHERI_PERM_UNSEAL
+  beqz     a3, .Lexit_failure
 
   /* Unseal, clobbering authority */
   cunseal ca2, ca1, ca2
 
   /* Verify tag of unsealed form */
-  cgettag t1, ca2
-  beqz    t1, .Lexit_failure
+  cgettag a3, ca2
+  beqz    a3, .Lexit_failure
 
   /*
    * Load software type tag.  This will not trap, thanks to above tag check and
    * because IRQs are deferred (see our export entry below)
    */
-  clw t1, TokenSObj_offset_type(ca2)
+  clw a3, TokenSObj_offset_type(ca2)
 
   /* Verify that the loaded value matches the address of the key. */
-  bne a0, t1, .Lexit_failure
+  bne a0, a3, .Lexit_failure
 
   /* Subset bounds to ->data */
-  // Get the top into t1
-  cgettop         t1, ca2
+  // Get the top into a3
+  cgettop         a3, ca2
   // Move the address to the start of the data, clobber the user's sealing key
   cincoffset      ca0, ca2, TokenSObj_offset_data
   // Subtract the address of the (to-be-returned-unsealed) data from the top to
   // give the length, clobbering our unsealing key.
-  sub             a2, t1, a0
+  sub             a2, a3, a0
   // Set the new bounds, using an exact setting so that any errors in the
   // allocator's alignment turn into an untagged capability here.
   csetboundsexact ca0, ca0, a2
@@ -126,8 +126,8 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
 	 * This can (and should) be removed once everyone's caught up with
 	 * https://github.com/CHERIoT-Platform/cheriot-sail/pull/87 .
 	 */
-	cgettype   t1, ca1
-	csetaddr   ca2, ca2, t1
+	cgettype   a3, ca1
+	csetaddr   ca2, ca2, a3
 
 	j        .Ltoken_unseal_internal
 
