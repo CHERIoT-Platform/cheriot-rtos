@@ -1070,6 +1070,24 @@ namespace loader
 		static constexpr uint8_t InterruptStatusMask = uint8_t(0b11)
 		                                               << InterruptStatusShift;
 
+		static constexpr uint8_t InterruptStatusSwitcherMask =
+		  uint8_t(0b10) << InterruptStatusShift;
+
+		/*
+		 * The switcher tests the high bit of the InterruptStatus word of
+		 * compartment-crossing calls through export entries by masking the
+		 * ExportEntry::flags field with InterruptStatusSwitcherMask.  Assert
+		 * that its understanding is correct.
+		 */
+		static_assert(
+		  ((int(InterruptStatus::Enabled) << InterruptStatusShift) &
+		   InterruptStatusSwitcherMask) == 0,
+		  "Switcher interpretation of InterruptStatus no longer correct");
+		static_assert(
+		  ((int(InterruptStatus::Disabled) << InterruptStatusShift) &
+		   InterruptStatusSwitcherMask) != 0,
+		  "Switcher interpretation of InterruptStatus no longer correct");
+
 		/**
 		 * The flag indicating that this is a fake entry used to identify
 		 * sealing types.  No import table entries should refer to this
