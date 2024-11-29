@@ -575,9 +575,11 @@ __Z26compartment_switcher_entryz:
 
 	/*
 	 * Enable interrupts if the interrupt-disable bit is not set in flags.  See
-	 * loader/types.h's InterruptStatus and ExportEntry::InterruptStatusMask
+	 * loader/types.h's InterruptStatus and ExportEntry::InterruptStatusMask.
+	 * InterruptStatus::Inherited is prohibited on export entries, so we need
+	 * look only at one bit.
 	 */
-	andi               t1, tp, 0x10
+	andi               t1, tp, ExportEntryInterruptStatusSwitcherMask
 	bnez               t1, .Lswitch_skip_interrupt_enable
 	csrsi              mstatus, 0x8
 .Lswitch_skip_interrupt_enable:
