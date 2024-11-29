@@ -2,7 +2,7 @@
     "devices": {
         "shadow" : {
             "start" : 0x30000000,
-            "end"   : 0x30004000
+            "end"   : 0x30000800
         },
         "pwm": {
             "start" : 0x80001000,
@@ -51,17 +51,17 @@
     },
     "instruction_memory": {
         "start": 0x00101000,
-        "end":   0x00140000
+        "end":   0x00120000
     },
     "heap": {
-        "end": 0x00140000
+        "end": 0x00120000
     },
     "revokable_memory_start": 0x00100000,
     "defines" : [
         "IBEX",
         "SUNBURST",
         "SUNBURST_SHADOW_BASE=0x30000000",
-        "SUNBURST_SHADOW_SIZE=0x4000",
+        "SUNBURST_SHADOW_SIZE=0x800",
         "ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM=1",
         "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM=1"
     ],
