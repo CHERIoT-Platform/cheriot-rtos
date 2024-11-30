@@ -593,6 +593,23 @@ __Z26compartment_switcher_entryz:
 	 *  tp, t1, t2, s0, s1: dead
 	 */
 	/*
+	 * There is an interesting narrow race to consider here.  We're preemptable
+	 * and in the switcher.  That means someone could call
+	 * __Z25switcher_interrupt_threadPv on us, and when we came back on core,
+	 * we'd jump ahead to switcher_after_compartment_call, via...
+	 *
+	 *   - .Lexception_scheduler_return_installed
+	 *   - .Lhandle_injected_error
+	 *   - .Lhandle_error
+	 *   - .Lhandle_error_switcher_pcc
+	 *   - .Lhandle_error_in_switcher
+	 *   - .Lcommon_force_unwind
+	 *
+	 * That is, rather than invoking the callee's compartment's error handler,
+	 * and letting it service the MCAUSE_THREAD_INTERRUPT, we'll return to the
+	 * caller with -ECOMPARTMENTFAIL.
+	 */
+	/*
 	 * Up to 10 registers are carrying state for the callee or are properly
 	 * zeroed.  Clear the remaining 5 now.
 	 */
