@@ -638,6 +638,25 @@ __Z26compartment_switcher_entryz:
 	 *  tp, t1, t2, s0, s1: dead
 	 */
 	/*
+	 * There is an interesting narrow race to consider here.  We're preemptable
+	 * and in the switcher.  That means someone could call
+	 * __Z25switcher_interrupt_threadPv on us, and when we came back on core,
+	 * we'd jump ahead to switcher_after_compartment_call, via...
+	 *
+	 *   - .Lexception_scheduler_return_installed
+	 *   - .Lhandle_injected_error
+	 *   - .Lhandle_error
+	 *   - .Lhandle_error_switcher_pcc
+	 *   - .Lhandle_error_in_switcher
+	 *   - .Lcommon_force_unwind
+	 *
+	 * That is, rather than invoking the callee's compartment's error handler,
+	 * and letting it service the MCAUSE_THREAD_INTERRUPT, we'll return to the
+	 * caller with -ECOMPARTMENTFAIL.
+	 *
+	 * TODO: https://github.com/CHERIoT-Platform/cheriot-rtos/issues/372
+	 */
+	/*
 	 * Up to 10 registers are carrying state for the callee or are properly
 	 * zeroed.  Clear the remaining 5 now.
 	 */
@@ -689,6 +708,17 @@ switcher_after_compartment_call:
 	 * TODO for formal verification: the below should not fault before returning
 	 * back to the caller. If a fault occurs there must be a serious bug
 	 * elsewhere.
+	 */
+	/*
+	 * As just before the call, we are preemptive and in the switcher.  If we
+	 * are signaled via MCAUSE_THREAD_INTERRUPT at this point, we will come
+	 * back here (with a0 holding -ECOMPARTMENTFAIL and a1 holding 0).  This
+	 * block is _idempotent_ until the update of mtdc's
+	 * TrustedStack::frameoffset, so until then we will effectively just
+	 * clobber the return values.  After that, though, we'd forcibly unwind out
+	 * of the caller.
+	 *
+	 * TODO: https://github.com/CHERIoT-Platform/cheriot-rtos/issues/372
 	 */
 	/*
 	 * The return sentry given to the callee as part of that cjalr could be
