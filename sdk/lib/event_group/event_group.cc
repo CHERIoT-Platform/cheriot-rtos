@@ -8,6 +8,17 @@
 
 using Debug = ConditionalDebug<false, "Event groups library">;
 
+/**
+ * Length of a locking step for even group locks and futex words. When we
+ * attempt to grab an event group lock or wait on a futex, do so in steps of
+ * `EventGroupLockTimeoutStep`. That way, if the user of the event group
+ * crashes and we somehow do not have a pointer to the event group lock anymore
+ * (and thus cannot reset it), we have a guarantee that the blocking thread
+ * will become live again within a bounded amount of time, and crash as it is
+ * trying to re-acquire the lock if we free it through heap-free-all.
+ */
+static constexpr const Ticks EventGroupLockTimeoutStep = MS_TO_TICKS(500);
+
 struct EventWaiter
 {
 	std::atomic<uint32_t> bitsSeen;
@@ -74,7 +85,7 @@ int eventgroup_wait(Timeout    *timeout,
 	auto    &waiter = group->waiters[thread_id_get()];
 	uint32_t bitsSeen;
 	// Set up our state for the waiter with the lock held.
-	if (LockGuard g{group->lock, timeout})
+	if (LockGuard g{group->lock, timeout, EventGroupLockTimeoutStep})
 	{
 		bitsSeen = group->bits;
 		// If the condition holds, return immediately
@@ -98,15 +109,23 @@ int eventgroup_wait(Timeout    *timeout,
 	}
 	// If the condition didn't hold, wait for
 	Debug::log("Waiting on futex {} ({})", &waiter.bitsSeen, bitsSeen);
-	while (waiter.bitsSeen.wait(timeout, bitsSeen) != -ETIMEDOUT)
+	// Wait on the futex word in steps of `EventGroupLockTimeoutStep`
+	// ticks. See documentation for `EventGroupLockTimeoutStep` above.
+	do
 	{
-		bitsSeen = waiter.bitsSeen.load();
-		if (isTriggered(bitsSeen))
+		Timeout t{std::min(EventGroupLockTimeoutStep, timeout->remaining)};
+		while (waiter.bitsSeen.wait(&t, bitsSeen) != -ETIMEDOUT)
 		{
-			*outBits = bitsSeen;
-			return 0;
-		}
-	};
+			bitsSeen = waiter.bitsSeen.load();
+			if (isTriggered(bitsSeen))
+			{
+				timeout->elapse(t.elapsed);
+				*outBits = bitsSeen;
+				return 0;
+			}
+		};
+		timeout->elapse(t.elapsed);
+	} while (timeout->may_block());
 	waiter.bitsWanted = 0;
 	*outBits          = group->bits;
 	return -ETIMEDOUT;
@@ -117,7 +136,7 @@ int eventgroup_clear(Timeout    *timeout,
                      uint32_t   *outBits,
                      uint32_t    bitsToClear)
 {
-	if (LockGuard g{group->lock, timeout})
+	if (LockGuard g{group->lock, timeout, EventGroupLockTimeoutStep})
 	{
 		Debug::log(
 		  "Bits was {}, clearing with mask {}", group->bits, ~bitsToClear);
@@ -134,7 +153,7 @@ int eventgroup_set(Timeout    *timeout,
                    uint32_t   *outBits,
                    uint32_t    bitsToSet)
 {
-	if (LockGuard g{group->lock, timeout})
+	if (LockGuard g{group->lock, timeout, EventGroupLockTimeoutStep})
 	{
 		Debug::log("Bits was {}, setting {}", group->bits, bitsToSet);
 		group->bits |= bitsToSet;
@@ -197,6 +216,9 @@ int eventgroup_destroy_force(SObjStruct *heapCapability, EventGroup *group)
 
 int eventgroup_destroy(SObjStruct *heapCapability, EventGroup *group)
 {
-	group->lock.lock();
+	Timeout   unlimited{UnlimitedTimeout};
+	LockGuard g{group->lock, &unlimited, EventGroupLockTimeoutStep};
+	// The lock will be freed as part of `eventgroup_destroy_force`.
+	g.release();
 	return eventgroup_destroy_force(heapCapability, group);
 }
