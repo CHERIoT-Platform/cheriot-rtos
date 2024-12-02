@@ -813,6 +813,15 @@ namespace CHERI
 		}
 
 		/**
+		 * Drop some permissions from this capability
+		 */
+		template<std::same_as<Permission>... Permissions>
+		void drop_permissions(Permissions... drop)
+		{
+			permissions() &= PermissionSet::omnipotent().without(drop...);
+		}
+
+		/**
 		 * Pointer subtraction.
 		 */
 		Capability operator-(ptrdiff_t diff)
