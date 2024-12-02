@@ -240,6 +240,46 @@ namespace
 	}
 } // namespace
 
+void check_sealed_scoping()
+{
+	Capability<void> o{switcher_current_thread()};
+	TEST(o.is_valid() && (o.type() == CheriSealTypeSealedTrustedStacks),
+	     "Shared object cap not as expected: {}",
+	     o);
+
+	// Take the address of the o cap, requiring that it go out to memory.
+	Capability<Capability<void>> oP{&o};
+
+	/*
+	 * Load a copy of our sealed o cap through an authority that lacks
+	 * LoadGlobal permission.  The result should be identical to the original
+	 * but without global permission.
+	 */
+	Capability<Capability<void>> oPNoLoadGlobal = oP;
+	oPNoLoadGlobal.without_permissions(Permission::LoadGlobal);
+	const Capability<void> OLocal1 = *oPNoLoadGlobal;
+
+	TEST(OLocal1.is_valid(),
+	     "Loading global sealed cap through non-LoadGlobal invalid");
+	TEST_EQUAL(OLocal1.type(),
+	           o.type(),
+	           "Loading global sealed cap through non-LoadGlobal bad type");
+	TEST_EQUAL(OLocal1.permissions(),
+	           o.permissions().without(Permission::Global),
+	           "Loading global sealed cap through non-LoadGlobal bad perms");
+
+	/*
+	 * Use CAndPerm to shed Global from our o cap.
+	 * Spell this a little oddly to make sure we get CAndPerm with a mask of
+	 * all 1s but Global.  Using oLocal2.permissions().without() would do a
+	 * cgetperm and then candperm.
+	 */
+	Capability<void> oLocal2 = o;
+	oLocal2.without_permissions(Permission::Global);
+
+	TEST_EQUAL(oLocal2, OLocal1, "CAndPerm ~GL gone wrong");
+}
+
 int test_misc()
 {
 	check_timeouts();
@@ -247,6 +287,8 @@ int test_misc()
 	check_memrchr();
 	check_pointer_utilities();
 	check_capability_set_inexact_at_most();
+	check_sealed_scoping();
+
 	debug_log("Testing shared objects.");
 	check_shared_object("exampleK",
 	                    SHARED_OBJECT(void, exampleK),
