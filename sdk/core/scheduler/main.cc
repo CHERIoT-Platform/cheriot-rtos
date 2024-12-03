@@ -26,30 +26,15 @@
 using namespace CHERI;
 
 #ifdef SIMULATION
-/**
- * This is a special MMIO register. Writing an LSB of 1 terminates
- * simulation. The upper 31 bits can pass extra metadata. We use all 0s
- * to indicates success.
- *
- * This symbol doesn't need to be exported. The simulator is clever
- * enough to find it even if it's local.
- */
-volatile uint32_t tohost[2];
+#	include <platform-simulation_exit.hh>
 
 /**
  * Exit simulation, reporting the error code given as the argument.
  */
 void simulation_exit(uint32_t code)
 {
-	// If this is using the standard RISC-V to-host mechanism, this will exit.
-	tohost[0] = 0x1 | (code << 1);
-	tohost[1] = 0;
-	// If we didn't exit with to-host, try writing a non-ASCII character to the
-	// UART.  This is how we exit the CHERIoT Ibex simulator for the SAFE
-	// platform.
-	MMIO_CAPABILITY(Uart, uart)->blocking_write(0x80 + code);
+	platform_simulation_exit(code);
 }
-
 #endif
 
 /**

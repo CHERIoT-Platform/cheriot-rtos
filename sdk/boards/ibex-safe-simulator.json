@@ -40,8 +40,8 @@
         "IBEX_SAFE"
     ],
     "driver_includes" : [
-        "../include/platform/generic-riscv",
-        "../include/platform/ibex"
+        "../include/platform/ibex",
+        "../include/platform/generic-riscv"
     ],
     "timer_hz" : 100000,
     "tickrate_hz" : 10,

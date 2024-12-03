@@ -27,7 +27,10 @@
             "priority": 2
         }
     ],
-    "defines" : "SAIL",
+    "defines" : [
+        "SAIL",
+        "RISCV_HTIF"
+    ],
     "driver_includes" : [
         "../include/platform/generic-riscv"
     ],
