@@ -11,7 +11,7 @@ on:
 jobs:
   run-tests:
     strategy:
-      matrix: 
+      matrix:
         build-type: [ debug, release ]
         board: [ sail, ibex-safe-simulator ]
         include:
@@ -47,7 +47,7 @@ jobs:
           xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
           xmake
         done
-    - name: Run examples 
+    - name: Run examples
       run: |
         set -e
         for example_dir in $PWD/examples/*/; do
