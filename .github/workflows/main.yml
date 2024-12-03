@@ -15,10 +15,14 @@ jobs:
         build-type: [ debug, release ]
         board: [ sail, ibex-safe-simulator ]
         include:
+          - sonata: false
           - build-type: debug
             build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=y -m debug
           - build-type: release
             build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=n -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y
+          - board: sonata-prerelease
+            build-type: release
+            sonata: true
       fail-fast: false
     runs-on: ubuntu-latest
     container:
@@ -35,6 +39,8 @@ jobs:
         xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
         xmake
     - name: Run tests
+      # Test suite needs HyperRAM support to be added to RTOS because SRAM is not big enough.
+      if: ${{ !matrix.sonata }}
       run: |
         cd tests
         xmake run
@@ -48,12 +54,24 @@ jobs:
           xmake
         done
     - name: Run examples
+      # Currently xmake run tries to run Sonata on FPGA.
+      if: ${{ !matrix.sonata }}
       run: |
         set -e
         for example_dir in $PWD/examples/*/; do
           cd $example_dir
           echo Running $example_dir
           xmake run
+        done
+    - name: Sonata simulator examples
+      if: ${{ matrix.sonata }}
+      run: |
+        set -e
+        for example_dir in $PWD/examples/*/; do
+          directory=$(basename $example_dir)
+          elf_name=${directory##*.}
+          echo Running $elf_name
+          scripts/run-sonata-sim.sh $example_dir/build/cheriot/cheriot/${{ matrix.build-type }}/$elf_name scripts/model_output/sonata-simulator/examples/$elf_name.txt
         done
     - name: Build benchmarks
       run: |
