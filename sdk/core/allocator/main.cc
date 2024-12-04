@@ -893,11 +893,6 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(Timeout *timeout,
 	{
 		return nullptr;
 	}
-	if (!check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
-	      timeout))
-	{
-		return nullptr;
-	}
 	// Use the default memory space.
 	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags);
 }
