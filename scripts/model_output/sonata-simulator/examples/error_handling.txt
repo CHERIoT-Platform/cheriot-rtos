@@ -1,0 +1,5 @@
+[35mUART compartment[0m: Message provided by caller: hello
+[35mUART compartment[0m: Detected BoundsViolation(0x1) trying to write to UART.  Register CS0(0x8) contained invalid value: 0x101b10 (v:1 0x101b0b-0x101b10 l:0x5 o:0x0 p: - RWcgml -- ---)
+[35mUART compartment[0m: Message provided by caller: 
+[35mUART compartment[0m: Detected PermitLoadViolation(0x12) trying to write to UART.  Register CS0(0x8) contained invalid value: 0x101b0b (v:1 0x101b0b-0x101b10 l:0x5 o:0x0 p: - -W---- -- ---)
+[35mUART compartment[0m: Message provided by caller: Non-malicious string
