@@ -1,0 +1,17 @@
+[35mMemory safety compartment[0m: Demonstrate memory safety
+[35mMemory safety compartment[0m: Trigger stack linear overflow
+[35mMemory safety compartment[0m: Detected error in instruction 0x107cac (v:0 0x107820-0x108820 l:0x1000 o:0x0 p: G R-cgm- X- ---)
+[35mMemory safety compartment[0m: Detected BoundsViolation(0x1): Register CA1(0xb) contained invalid value: 0x101ad0 (v:1 0x101ad0-0x101b10 l:0x40 o:0x0 p: - RWcgml -- ---)
+[35mMemory safety compartment[0m: Trigger heap linear overflow
+[35mMemory safety compartment[0m: Detected error in instruction 0x107ab2 (v:0 0x107820-0x108820 l:0x1000 o:0x0 p: G R-cgm- X- ---)
+[35mMemory safety compartment[0m: Detected BoundsViolation(0x1): Register CA0(0xa) contained invalid value: 0x109910 (v:1 0x109910-0x109a10 l:0x100 o:0x0 p: G RWcgm- -- ---)
+[35mMemory safety compartment[0m: Trigger heap nonlinear overflow
+[35mMemory safety compartment[0m: Detected error in instruction 0x107b0c (v:0 0x107820-0x108820 l:0x1000 o:0x0 p: G R-cgm- X- ---)
+[35mMemory safety compartment[0m: Detected BoundsViolation(0x1): Register CA0(0xa) contained invalid value: 0x109a18 (v:1 0x109a18-0x109b18 l:0x100 o:0x0 p: G RWcgm- -- ---)
+[35mMemory safety compartment[0m: Trigger heap use after free
+[35mMemory safety compartment[0m: Detected error in instruction 0x107a58 (v:0 0x107820-0x108820 l:0x1000 o:0x0 p: G R-cgm- X- ---)
+[35mMemory safety compartment[0m: Detected TagViolation(0x2): Register CA0(0xa) contained invalid value: 0x109b20 (v:0 0x109b20-0x109c20 l:0x100 o:0x0 p: G RWcgm- -- ---)
+[35mMemory safety compartment[0m: Trigger storing a stack pointer 0x101ad0 (v:1 0x101ad0-0x101ae0 l:0x10 o:0x0 p: - RWcgml -- ---) into global
+[35mMemory safety compartment[0m: tmp: 0x101ad0 (v:0 0x101ad0-0x101ae0 l:0x10 o:0x0 p: - RWcgml -- ---)
+[35mMemory safety compartment[0m: Detected error in instruction 0x107a28 (v:0 0x107820-0x108820 l:0x1000 o:0x0 p: G R-cgm- X- ---)
+[35mMemory safety compartment[0m: Detected TagViolation(0x2): Register CS0(0x8) contained invalid value: 0x101ad0 (v:0 0x101ad0-0x101ae0 l:0x10 o:0x0 p: - RWcgml -- ---)

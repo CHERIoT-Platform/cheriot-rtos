@@ -1,0 +1,5 @@
+[35mIdentifier service[0m: Allocated identifier, sealed capability: 0x109410 (v:1 0x109410-0x109420 l:0x10 o:0xb p: G RWcgm- -- ---)
+unsealed capability: 0x109418 (v:1 0x109418-0x109420 l:0x8 o:0x0 p: G RWcgm- -- ---)
+[35mCaller compartment[0m: Allocated identifier to hold the value 42: 0x109410 (v:1 0x109410-0x109420 l:0x10 o:0xb p: G RWcgm- -- ---)
+[35mCaller compartment[0m: Value is 42
+[35mCaller compartment[0m: Dangling pointer: 0x109410 (v:0 0x109410-0x109420 l:0x10 o:0xb p: G RWcgm- -- ---)
