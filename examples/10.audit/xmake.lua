@@ -23,7 +23,7 @@ compartment("consumer")
     add_files("consumer.cc")
 
 -- Firmware image for the example.
-firmware("caesar_example")
+firmware("audit")
     -- Both compartments require memcpy
     add_deps("freestanding", "debug", "string")
     add_deps("entry", "caesar")
