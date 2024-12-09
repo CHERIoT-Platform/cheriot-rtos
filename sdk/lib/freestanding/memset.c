@@ -34,11 +34,12 @@
 
 #include <cdefs.h>
 #include <stddef.h>
+#include <string.h>
 
 #define wsize sizeof(unsigned int)
 #define wmask (wsize - 1)
 
-void *__cheri_libcall memset(void *dst0, int c0, size_t length)
+void *memset(void *dst0, int c0, size_t length)
 {
 	size_t         t;
 	unsigned int   c;

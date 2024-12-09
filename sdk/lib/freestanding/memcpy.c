@@ -45,6 +45,7 @@
 
 #include <cdefs.h>
 #include <stddef.h>
+#include <string.h>
 
 typedef void *word;
 
@@ -54,7 +55,7 @@ _Static_assert((wsize & (wsize - 1)) == 0);
 
 #define wmask (wsize - 1)
 
-void *__cheri_libcall memcpy(void *dst0, const void *src0, size_t length)
+void *memcpy(void *dst0, const void *src0, size_t length)
 {
 	char *      dst = dst0;
 	const char *src = src0;
@@ -119,7 +120,7 @@ done:
 	return (dst0);
 }
 
-void *__cheri_libcall memmove(void *dst0, const void *src0, size_t length)
+void *memmove(void *dst0, const void *src0, size_t length)
 {
 	return memcpy(dst0, src0, length);
 }

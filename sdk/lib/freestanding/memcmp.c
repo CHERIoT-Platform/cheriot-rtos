@@ -34,11 +34,12 @@
 
 #include <cdefs.h>
 #include <stddef.h>
+#include <string.h>
 
 /*
  * Compare memory regions.
  */
-int __cheri_libcall
+int
 memcmp(const void *s1, const void *s2, size_t n)
 {
 	if (n != 0) {
