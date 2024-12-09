@@ -51,6 +51,17 @@ end
 stackCheckOption("allocator")
 stackCheckOption("scheduler")
 
+function testCheckOption(name)
+	option("testing-" .. name)
+		set_default(false)
+		set_description("Enable testing feature " .. name .. ". Do not enable this in builds that don't produce a UART log!")
+		set_showmenu(true)
+		set_category("Debugging")
+	option_end()
+end
+
+testCheckOption("model-output")
+
 -- Force -Oz irrespective of build config.  At -O0, we blow out our stack and
 -- require much stronger alignment.
 set_optimize("Oz")
@@ -284,7 +295,18 @@ rule("firmware")
 		local directory = path.directory(firmware)
 		firmware = path.filename(firmware)
 		local run = function(simulator)
-			os.execv(simulator, { firmware }, { curdir = directory })
+			local simargs = { firmware }
+			if get_config("testing-model-output") then
+				modeldir = path.join(scriptdir,
+				                     "..",
+				                     "scripts",
+				                     "model_output",
+				                     path.basename(target:values("board")),
+				                     "examples")
+				local modelout = path.join(modeldir, firmware .. ".txt")
+				simargs[#simargs+1] = modelout
+			end
+			os.execv(simulator, simargs, { curdir = directory })
 		end
 		-- Try executing the simulator from the sdk directory, if it's there.
 		local tools_directory = config.get("sdk")
