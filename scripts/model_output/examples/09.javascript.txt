@@ -1,0 +1,10 @@
+Hello, World!
+array[0] = 2
+array[1] = 4
+array[2] = 6
+array[3] = 8
+array[4] = 10
+[35mJavaScript hello compartment[0m: Microvium is using 0x1a6 bytes of memory, including 0x60 bytes of heap
+[35mJavaScript hello compartment[0m: Running GC
+[35mJavaScript hello compartment[0m: Microvium is using 0x86 bytes of memory, including 0x14 bytes of heap
+[35mJavaScript hello compartment[0m: Peak heap used: 0x60 bytes, peak stack used: 0x32 bytes

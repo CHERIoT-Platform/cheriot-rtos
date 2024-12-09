@@ -1,0 +1,52 @@
+[35mAllocating compartment[0m: ----- Simple Case -----
+[35mAllocating compartment[0m: Allocated: 0x109910 (v:1 0x109910-0x109940 l:0x30 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Use after free: 0x109910 (v:0 0x109910-0x109940 l:0x30 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: ----- Sub object -----
+[35mAllocating compartment[0m: Allocated : 0x109948 (v:1 0x109948-0x1099b0 l:0x68 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Sub Object: 0x109961 (v:1 0x109961-0x109993 l:0x32 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 3984
+[35mAllocating compartment[0m: After free of sub object
+[35mAllocating compartment[0m: Allocated : 0x109948 (v:1 0x109948-0x1099b0 l:0x68 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Sub Object: 0x109961 (v:1 0x109961-0x109993 l:0x32 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 3984
+[35mAllocating compartment[0m: After free of allocation
+[35mAllocating compartment[0m: Allocated : 0x109948 (v:0 0x109948-0x1099b0 l:0x68 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Sub Object: 0x109961 (v:0 0x109961-0x109993 l:0x32 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 4096
+[35mAllocating compartment[0m: ----- Sub object with a claim -----
+[35mAllocating compartment[0m: Allocated : 0x1099b8 (v:1 0x1099b8-0x109a20 l:0x68 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Sub Object: 0x1099d1 (v:1 0x1099d1-0x109a03 l:0x32 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 3984
+[35mAllocating compartment[0m: heap quota after claim: 3968
+[35mAllocating compartment[0m: After free of allocation
+[35mAllocating compartment[0m: Allocated : 0x1099b8 (v:1 0x1099b8-0x109a20 l:0x68 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Sub Object: 0x1099d1 (v:1 0x1099d1-0x109a03 l:0x32 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 3968
+[35mAllocating compartment[0m: After free of sub object
+[35mAllocating compartment[0m: Allocated : 0x1099b8 (v:0 0x1099b8-0x109a20 l:0x68 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Sub Object: 0x1099d1 (v:0 0x1099d1-0x109a03 l:0x32 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 4096
+[35mAllocating compartment[0m: ----- Sub object with a fast claim -----
+[35mAllocating compartment[0m: Allocated : 0x109a38 (v:1 0x109a38-0x109aa0 l:0x68 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Sub Object: 0x109a51 (v:1 0x109a51-0x109a83 l:0x32 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 3984
+[35mAllocating compartment[0m: After free
+[35mAllocating compartment[0m: Allocated : 0x109a38 (v:0 0x109a38-0x109aa0 l:0x68 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: Sub Object: 0x109a51 (v:0 0x109a51-0x109a83 l:0x32 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 4096
+[35mAllocating compartment[0m: ----- Claim in another compartment -----
+[35mAllocating compartment[0m: Allocated : 0x109aa8 (v:1 0x109aa8-0x109ab8 l:0x10 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 4072
+[35mClaimant compartment[0m: Initial quota: 4096
+[35mClaimant compartment[0m: Make Claim : 0x109aa8 (v:1 0x109aa8-0x109ab8 l:0x10 o:0x0 p: G RWcgm- -- ---)
+[35mClaimant compartment[0m: heap quota: 4056
+[35mAllocating compartment[0m: After free: 0x109aa8 (v:1 0x109aa8-0x109ab8 l:0x10 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: heap quota: 4096
+[35mClaimant compartment[0m: Show Claim : 0x109aa8 (v:1 0x109aa8-0x109ab8 l:0x10 o:0x0 p: G RWcgm- -- ---)
+[35mClaimant compartment[0m: Initial quota: 4056
+[35mClaimant compartment[0m: Make Claim : 0x109ad0 (v:1 0x109ad0-0x109ae0 l:0x10 o:0x0 p: G RWcgm- -- ---)
+[35mClaimant compartment[0m: heap quota: 4056
+[35mAllocating compartment[0m: After make claim
+[35mAllocating compartment[0m: x: 0x109aa8 (v:0 0x109aa8-0x109ab8 l:0x10 o:0x0 p: G RWcgm- -- ---)
+[35mAllocating compartment[0m: y: 0x109ad0 (v:1 0x109ad0-0x109ae0 l:0x10 o:0x0 p: G RWcgm- -- ---)
+[35mClaimant compartment[0m: Show Claim : 0x109ad0 (v:1 0x109ad0-0x109ae0 l:0x10 o:0x0 p: G RWcgm- -- ---)

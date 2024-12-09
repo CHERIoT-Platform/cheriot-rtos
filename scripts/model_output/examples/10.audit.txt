@@ -1,0 +1,3 @@
+[35mProducer[0m: Encrypting message 'Hello, World!'
+[35mEntry compartment[0m: Received encrypted message: 'Ifmmp-!Xpsme"' (13 bytes)
+[35mConsumer[0m: Decrypted message: 'Hello, World!'
