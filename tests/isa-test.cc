@@ -245,18 +245,30 @@ namespace
 		}
 	}
 
-	[[cheri::interrupt_state(disabled)]] void *get_interrupts_disabled_sentry()
-	{
-		void *returnCap;
-		asm volatile("cjal %0, 4" : "=C"(returnCap));
-		return returnCap;
+	/**
+	 * Returns the return capability passed to this function by the caller. To
+	 * ensure this works we need to disable inlining and tail call optimisation.
+	 */
+	__noinline __attribute__((not_tail_called)) void *get_return_address() {
+		return __builtin_return_address(0);
 	}
 
-	[[cheri::interrupt_state(enabled)]] void *get_interrupts_enabled_sentry()
+	/**
+	 * Returns an interrupt disabling return sentry by calling the above helper
+	 * from an interrupts disabled context.
+	 */
+	[[cheri::interrupt_state(disabled)]] void *get_interrupts_disabled_return_sentry()
 	{
-		void *returnCap;
-		asm volatile("cjal %0, 4" : "=C"(returnCap));
-		return returnCap;
+		return get_return_address();
+	}
+
+	/**
+	 * Returns an interrupt enabling return sentry by calling the above helper
+	 * from an interrupts enabled context.
+	 */
+	[[cheri::interrupt_state(enabled)]] void *get_interrupts_enabled_return_sentry()
+	{
+		return get_return_address();
 	}
 
 	void test_sentries()
@@ -266,7 +278,7 @@ namespace
 		// '__library_export_isa_test__ZN12_GLOBAL__N_129get_interrupts_enabled_sentryEv'
 		// as cross-compartment call possible compiler / linker bug?
 
-		// Capability interruptsEnabledSentry = {get_interrupts_enabled_sentry};
+		// Capability interruptsEnabledSentry = {get_interrupts_enabled_return_sentry};
 		// debug_log("interrupts enabled sentry {}",
 		// reinterpret_cast<void*>(interruptsEnabledSentry.get()));
 		// TEST(interruptsEnabledSentry.type() == 3,
@@ -280,21 +292,21 @@ namespace
 		//      "Expected type 2 but got {}",
 		//      interruptsDisabledSentry.type());
 
-		Capability interruptsEnabledReturnSentry = {
-		  get_interrupts_enabled_sentry()};
-		debug_log("interrupts enabled sentry {}",
-		          interruptsEnabledReturnSentry);
-		TEST(interruptsEnabledReturnSentry.type() == 5,
-		     "Expected type 5 but got {}",
-		     interruptsEnabledReturnSentry.type());
+		Capability interruptsEnabledReturnSentry = get_interrupts_enabled_return_sentry();
+		debug_log("interrupts enabled return sentry {}", interruptsEnabledReturnSentry);
+		TEST_EQUAL(
+			interruptsEnabledReturnSentry.type(),
+			CheriSealTypeReturnSentryEnabling,
+			"Wrong type for enabling return sentry."
+		);
 
-		Capability interruptsDisabledReturnSentry = {
-		  get_interrupts_disabled_sentry()};
-		debug_log("interrupts disabled sentry {}",
-		          interruptsDisabledReturnSentry);
-		TEST(interruptsDisabledReturnSentry.type() == 4,
-		     "Expected type 4 but got {}",
-		     interruptsDisabledReturnSentry.type());
+		Capability interruptsDisabledReturnSentry = get_interrupts_disabled_return_sentry();
+		debug_log("interrupts disabled return sentry {}", interruptsDisabledReturnSentry);
+		TEST_EQUAL(
+			interruptsDisabledReturnSentry.type(),
+			CheriSealTypeReturnSentryDisabling,
+			"Wrong type for disabling return sentry."
+		);
 	}
 
 	/**
@@ -359,7 +371,7 @@ namespace
 	template<class T>
 	Capability<T> get_sealed_capability_filter(Capability<T> inputCapability)
 	{
-		return reinterpret_cast<T *>(get_interrupts_disabled_sentry());
+		return reinterpret_cast<T *>(get_interrupts_disabled_return_sentry());
 	}
 
 	/**
