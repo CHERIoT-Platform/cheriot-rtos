@@ -684,6 +684,10 @@ namespace CHERI
 			 */
 			__always_inline BoundsProxy &set_inexact_at_most(size_t bounds)
 			{
+#if __has_builtin(__builtin_cheri_bounds_set_round_down)
+				set(__builtin_cheri_bounds_set_round_down(ptr(), bounds));
+				return *this;
+#else
 				// Just try to set the requested bounds, first.  If that works,
 				// there's no need for bit-twiddling at all.
 				Capability p = ptr();
@@ -695,6 +699,7 @@ namespace CHERI
 				}
 
 				return set_inexact_at_most_slow(bounds);
+#endif
 			}
 		};
 

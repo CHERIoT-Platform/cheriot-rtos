@@ -115,21 +115,27 @@ namespace
 		const ptraddr_t RequestedLength;
 		const ptraddr_t ExpectedBase;
 		const ptraddr_t ExpectedTop;
+		const ptraddr_t ExpectedTopRoundDown;
 
 		public:
 		SetBoundsTestCase(ptraddr_t aRequestedBase,
 		                  ptraddr_t aRequestedLength,
 		                  ptraddr_t anExpectedBase,
-		                  ptraddr_t anExpectedTop)
+		                  ptraddr_t anExpectedTop,
+		                  ptraddr_t anExpectedTopRoundDown)
 		  : RequestedBase(aRequestedBase),
 		    RequestedLength(aRequestedLength),
 		    ExpectedBase(anExpectedBase),
-		    ExpectedTop(anExpectedTop)
+		    ExpectedTop(anExpectedTop),
+		    ExpectedTopRoundDown(anExpectedTopRoundDown)
 		{
 		}
 
 		void run_test()
 		{
+			debug_log("Set bounds test reqBase={} reqLen={}",
+				RequestedBase,
+				RequestedLength);
 			// Sanity checks on the test case TODO check statically?
 			TEST(ExpectedBase <= ExpectedTop,
 			     "Invalid test case: exp_base > exp_top");
@@ -137,6 +143,8 @@ namespace
 			     "Invalid test case: exp_base > req_base");
 			TEST(ExpectedTop >= RequestedBase + RequestedLength,
 			     "Invalid test case:  exp_top < req_top");
+			TEST(ExpectedTopRoundDown <= (RequestedBase + RequestedLength),
+				"Invalid test case: exp_top_rndwn > req_base+req_len");
 
 			/*
 			 * Attempt set bounds with requested bounds. By starting with NULL
@@ -148,41 +156,48 @@ namespace
 			c += RequestedBase; // Technically UB, but seems to work.
 			c.bounds().set_inexact(RequestedLength);
 			debug_log("Validating set bounds result: {}", c);
-			TEST(c.base() == ExpectedBase,
-			     "Unexpected base: expected {} but got {}",
-			     ExpectedBase,
-			     c.base());
-			TEST(c.top() == ExpectedTop,
-			     "Unexpected top: expected {} but got {}",
-			     ExpectedTop,
-			     c.top());
+			TEST_EQUAL(c.base(), ExpectedBase, "Unexpected base");
+			TEST_EQUAL(c.top(), ExpectedTop, "Unexpected top");
+			Capability<uint8_t> c2{NULL};
+			c2 += RequestedBase;
+			c2.bounds().set_inexact_at_most(RequestedLength);
+			debug_log("Validating set bounds rnddwn: {}", c2);
+			TEST_EQUAL(c2.base(), RequestedBase, "Unexpected base2");
+			TEST_EQUAL(c2.top(), ExpectedTopRoundDown, "Unexpected top2");
 		}
 	};
 
 	SetBoundsTestCase setBoundsCases[] = {
-	  SetBoundsTestCase(0x100, 0x1a, 0x100, 0x11a),  // easy case
-	  SetBoundsTestCase(0x700, 0x1aa, 0x700, 0x8aa), // easy case
+	  SetBoundsTestCase(0x100, 0x1a, 0x100, 0x11a, 0x11a),  // easy case
+	  SetBoundsTestCase(0x700, 0x1aa, 0x700, 0x8aa, 0x8aa), // easy case
 	  SetBoundsTestCase(0xd01,
 	                    0x3ff,
 	                    0xd00,
-	                    0x1100), // exact top, inexact base, e bump
-	  SetBoundsTestCase(0x9f3, 0x7ff, 0x000009F0, 0x000011F8), // T-B = 0x201
+	                    0x1100, // exact top, inexact base, e bump
+						0xd01 + 0x1ff),
+	  SetBoundsTestCase(0x9f3, 0x7ff,
+	  					0x000009F0, 0x000011F8,
+	  					0x9F3 + 0x1ff), // T-B = 0x201
 	  SetBoundsTestCase(0xbeef9793,
 	                    0x3fb,
 	                    0xBEEF9792,
-	                    0xBEEF9B8E), // monotonicity failure regression part i
+	                    0xBEEF9B8E,
+	                    0xbeef9793 + 0x1ff), // monotonicity failure regression part i
 	  SetBoundsTestCase(0xbeef9792,
 	                    0x3fc,
 	                    0xBEEF9792,
+	                    0xBEEF9B8E,
 	                    0xBEEF9B8E), // monotonicity failure regression part ii
 	  SetBoundsTestCase(0x4fffe1ff,
 	                    0x3fe,
 	                    0x4FFFE1FC,
-	                    0x4FFFE600), // requires T increment
+	                    0x4FFFE600,
+	                    0x4fffe1ff + 0x1ff), // requires T increment
 	  SetBoundsTestCase(0xe7e96c2f,
 	                    0x3ff,
 	                    0xE7E96C2C,
-	                    0xE7E97030), // requires e bump and T increment
+	                    0xE7E97030,
+	                    0xE7E96C2f + 0x1ff), // requires e bump and T increment
 	};
 
 	void test_set_bounds()
