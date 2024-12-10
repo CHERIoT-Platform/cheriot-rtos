@@ -306,7 +306,7 @@ namespace
 	 * prelude so we can use the address of the function as the address of the
 	 * store. Obviously we can't allow it to be inlined.
 	 */
-	__noinline void faulting_store(int *value, int **location)
+	__noinline void perform_store(int *value, int **location)
 	{
 		*location = value;
 	}
@@ -318,7 +318,7 @@ namespace
 	 * probably have no prelude so we can use the address of the function as the
 	 * address of the load. Obviously we can't allow it to be inlined.
 	 */
-	__noinline int *faulting_load(int *volatile *location)
+	__noinline int *perform_load(int *volatile *location)
 	{
 		return *location;
 	}
@@ -411,12 +411,12 @@ namespace
 		Capability capToIntPointer = baseFilter(myGlobalIntPointer);
 		expectedMCause             = anExpectedMCause;
 		expectedCauseCode          = expectedFault;
-		expectedErrorPC            = Capability{faulting_load}.address();
+		expectedErrorPC            = Capability{perform_load}.address();
 		int previousCrashes        = crashes;
 		// on_error with no handler will just skip the rest of the lambda
 		// after an unwind, which is what we want.
 		on_error([&]() {
-			faulting_load(capToIntPointer);
+			perform_load(capToIntPointer);
 		});
 		TEST(crashes == previousCrashes + 1,
 		     "Expected load via {} to crash",
@@ -465,11 +465,11 @@ namespace
 		{
 			expectedMCause    = anExpectedMCause;
 			expectedCauseCode = expectedFault;
-			expectedErrorPC   = Capability{faulting_store}.address();
+			expectedErrorPC   = Capability{perform_store}.address();
 		}
 		int previousCrashes = crashes;
 		on_error([&]() {
-			faulting_store(storeData, capToIntPointer);
+			perform_store(storeData, capToIntPointer);
 		});
 		TEST(crashes == previousCrashes + (expectCrash ? 1 : 0),
 		     "{} store of {} via {} to crash",
