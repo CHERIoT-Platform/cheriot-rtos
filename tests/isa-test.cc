@@ -8,6 +8,7 @@
 #include <priv/riscv.h>
 #include <token.h>
 #include <timeout.hh>
+#include <unwind.h>
 
 using namespace CHERI;
 
@@ -60,19 +61,9 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 
 	crashes = crashes + 1;
 
-	/* Skip the faulting instruction and resume */
-	Capability pcc{__builtin_cheri_program_counter_get()};
-	pcc.address() = Capability{frame->pcc}.address();
-	uint32_t faultingInstruction;
-	// pcc may be unaligned, so we need a memcpy to load from it.
-	memcpy(&faultingInstruction, pcc, 4);
-	debug_log("Faulting instruction: {}", faultingInstruction);
-	// If the low bits are 11 then this is a 32-bit instruction, otherwise
-	// it's a 16-bit one.
-	ptrdiff_t skipSize = ((faultingInstruction & 3) == 3) ? 4 : 2;
-	frame->pcc         = static_cast<char *>(frame->pcc) + skipSize;
-	debug_log("Resuming at next instruction.");
-	return ErrorRecoveryBehaviour::InstallContext;
+	cleanup_unwind();
+	TEST(false, "should be unreachable");
+	return ForceUnwind;
 }
 
 namespace
@@ -422,7 +413,11 @@ namespace
 		expectedCauseCode          = expectedFault;
 		expectedErrorPC            = Capability{faulting_load}.address();
 		int previousCrashes        = crashes;
-		faulting_load(capToIntPointer);
+		// on_error with no handler will just skip the rest of the lambda
+		// after an unwind, which is what we want.
+		on_error([&]() {
+			faulting_load(capToIntPointer);
+		});
 		TEST(crashes == previousCrashes + 1,
 		     "Expected load via {} to crash",
 		     capToIntPointer);
@@ -473,7 +468,9 @@ namespace
 			expectedErrorPC   = Capability{faulting_store}.address();
 		}
 		int previousCrashes = crashes;
-		faulting_store(storeData, capToIntPointer);
+		on_error([&]() {
+			faulting_store(storeData, capToIntPointer);
+		});
 		TEST(crashes == previousCrashes + (expectCrash ? 1 : 0),
 		     "{} store of {} via {} to crash",
 		     expectCrash ? "Expected" : "Did not expect",
@@ -620,7 +617,9 @@ namespace
 		expectedMCause               = MCauseCheri;
 		expectedCauseCode            = exception;
 		int previousCrashes          = crashes;
-		capToFunction.get()();
+		on_error([&]() {
+			capToFunction.get()();
+		});
 		TEST(crashes == previousCrashes + 1,
 		     "Expected jalr to {} to crash",
 		     capToFunction);
@@ -635,10 +634,8 @@ namespace
 		do_jalr_test(CauseCode::PermitExecuteViolation,
 		             permission_filter<PermissionSet(Permission::Load)>);
 
-		// TODO we can no longer recover from this crash as the failure occurs
-		// at dest, not caller debug_log("Attempting to jump to capability with
-		// too small bounds"); do_jalr_test(CauseCode::BoundsViolation,
-		// restrict_bounds_filter);
+		debug_log("Attempting to jump to capability with too small bounds");
+		do_jalr_test(CauseCode::BoundsViolation, restrict_bounds_filter);
 	}
 
 	/*
@@ -694,7 +691,9 @@ namespace
 		expectedRegisterNumber = RegisterNumber::PCC;
 		debug_log("Calling function with too small PCC bounds {}", capToTarget);
 		int previousCrashes = crashes;
-		(*capToTarget)();
+		on_error([&]() {
+			(*capToTarget)();
+		});
 		TEST(crashes == previousCrashes + 1,
 		     "Call with too small PCC bounds did not crash.");
 	}
