@@ -6,8 +6,8 @@
 #include <debug.hh>
 #include <optional>
 #include <priv/riscv.h>
-#include <token.h>
 #include <timeout.hh>
+#include <token.h>
 #include <unwind.h>
 
 using namespace CHERI;
@@ -44,7 +44,8 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 		 * chosen by compiler. The exception is PCC. */
 		if (expectedRegisterNumber.has_value())
 		{
-			TEST_EQUAL(registerNumber, *expectedRegisterNumber, "wrong register num");
+			TEST_EQUAL(
+			  registerNumber, *expectedRegisterNumber, "wrong register num");
 			expectedRegisterNumber = std::nullopt;
 		}
 	}
@@ -126,8 +127,8 @@ namespace
 		void run_test()
 		{
 			debug_log("Set bounds test reqBase={} reqLen={}",
-				RequestedBase,
-				RequestedLength);
+			          RequestedBase,
+			          RequestedLength);
 			// Sanity checks on the test case TODO check statically?
 			TEST(ExpectedBase <= ExpectedTop,
 			     "Invalid test case: exp_base > exp_top");
@@ -136,7 +137,7 @@ namespace
 			TEST(ExpectedTop >= RequestedBase + RequestedLength,
 			     "Invalid test case:  exp_top < req_top");
 			TEST(ExpectedTopRoundDown <= (RequestedBase + RequestedLength),
-				"Invalid test case: exp_top_rndwn > req_base+req_len");
+			     "Invalid test case: exp_top_rndwn > req_base+req_len");
 
 			/*
 			 * Attempt set bounds with requested bounds. By starting with NULL
@@ -166,15 +167,18 @@ namespace
 	                    0x3ff,
 	                    0xd00,
 	                    0x1100, // exact top, inexact base, e bump
-						0xd01 + 0x1ff),
-	  SetBoundsTestCase(0x9f3, 0x7ff,
-	  					0x000009F0, 0x000011F8,
-	  					0x9F3 + 0x1ff), // T-B = 0x201
+	                    0xd01 + 0x1ff),
+	  SetBoundsTestCase(0x9f3,
+	                    0x7ff,
+	                    0x000009F0,
+	                    0x000011F8,
+	                    0x9F3 + 0x1ff), // T-B = 0x201
 	  SetBoundsTestCase(0xbeef9793,
 	                    0x3fb,
 	                    0xBEEF9792,
 	                    0xBEEF9B8E,
-	                    0xbeef9793 + 0x1ff), // monotonicity failure regression part i
+	                    0xbeef9793 +
+	                      0x1ff), // monotonicity failure regression part i
 	  SetBoundsTestCase(0xbeef9792,
 	                    0x3fc,
 	                    0xBEEF9792,
@@ -210,7 +214,8 @@ namespace
 		  requestedPermissions.to_representable();
 		capability.permissions() &= mask;
 		TEST_EQUAL(PermissionSet(capability.permissions()),
-			expectedPermissions, "permissions did not match expected");
+		           expectedPermissions,
+		           "permissions did not match expected");
 	}
 
 	void test_and_perms()
@@ -239,7 +244,8 @@ namespace
 	 * Returns the return capability passed to this function by the caller. To
 	 * ensure this works we need to disable inlining and tail call optimisation.
 	 */
-	__noinline __attribute__((not_tail_called)) void *get_return_address() {
+	__noinline __attribute__((not_tail_called)) void *get_return_address()
+	{
 		return __builtin_return_address(0);
 	}
 
@@ -247,7 +253,8 @@ namespace
 	 * Returns an interrupt disabling return sentry by calling the above helper
 	 * from an interrupts disabled context.
 	 */
-	[[cheri::interrupt_state(disabled)]] void *get_interrupts_disabled_return_sentry()
+	[[cheri::interrupt_state(disabled)]] void *
+	get_interrupts_disabled_return_sentry()
 	{
 		return get_return_address();
 	}
@@ -256,7 +263,8 @@ namespace
 	 * Returns an interrupt enabling return sentry by calling the above helper
 	 * from an interrupts enabled context.
 	 */
-	[[cheri::interrupt_state(enabled)]] void *get_interrupts_enabled_return_sentry()
+	[[cheri::interrupt_state(enabled)]] void *
+	get_interrupts_enabled_return_sentry()
 	{
 		return get_return_address();
 	}
@@ -268,9 +276,9 @@ namespace
 		// '__library_export_isa_test__ZN12_GLOBAL__N_129get_interrupts_enabled_sentryEv'
 		// as cross-compartment call possible compiler / linker bug?
 
-		// Capability interruptsEnabledSentry = {get_interrupts_enabled_return_sentry};
-		// debug_log("interrupts enabled sentry {}",
-		// reinterpret_cast<void*>(interruptsEnabledSentry.get()));
+		// Capability interruptsEnabledSentry =
+		// {get_interrupts_enabled_return_sentry}; debug_log("interrupts enabled
+		// sentry {}", reinterpret_cast<void*>(interruptsEnabledSentry.get()));
 		// TEST(interruptsEnabledSentry.type() == 3,
 		//      "Expected type 3 but got {}",
 		//      interruptsEnabledSentry.type());
@@ -282,21 +290,21 @@ namespace
 		//      "Expected type 2 but got {}",
 		//      interruptsDisabledSentry.type());
 
-		Capability interruptsEnabledReturnSentry = get_interrupts_enabled_return_sentry();
-		debug_log("interrupts enabled return sentry {}", interruptsEnabledReturnSentry);
-		TEST_EQUAL(
-			interruptsEnabledReturnSentry.type(),
-			CheriSealTypeReturnSentryEnabling,
-			"Wrong type for enabling return sentry."
-		);
+		Capability interruptsEnabledReturnSentry =
+		  get_interrupts_enabled_return_sentry();
+		debug_log("interrupts enabled return sentry {}",
+		          interruptsEnabledReturnSentry);
+		TEST_EQUAL(interruptsEnabledReturnSentry.type(),
+		           CheriSealTypeReturnSentryEnabling,
+		           "Wrong type for enabling return sentry.");
 
-		Capability interruptsDisabledReturnSentry = get_interrupts_disabled_return_sentry();
-		debug_log("interrupts disabled return sentry {}", interruptsDisabledReturnSentry);
-		TEST_EQUAL(
-			interruptsDisabledReturnSentry.type(),
-			CheriSealTypeReturnSentryDisabling,
-			"Wrong type for disabling return sentry."
-		);
+		Capability interruptsDisabledReturnSentry =
+		  get_interrupts_disabled_return_sentry();
+		debug_log("interrupts disabled return sentry {}",
+		          interruptsDisabledReturnSentry);
+		TEST_EQUAL(interruptsDisabledReturnSentry.type(),
+		           CheriSealTypeReturnSentryDisabling,
+		           "Wrong type for disabling return sentry.");
 	}
 
 	/**
@@ -415,9 +423,7 @@ namespace
 		int previousCrashes        = crashes;
 		// on_error with no handler will just skip the rest of the lambda
 		// after an unwind, which is what we want.
-		on_error([&]() {
-			perform_load(capToIntPointer);
-		});
+		on_error([&]() { perform_load(capToIntPointer); });
 		TEST(crashes == previousCrashes + 1,
 		     "Expected load via {} to crash",
 		     capToIntPointer);
@@ -468,9 +474,7 @@ namespace
 			expectedErrorPC   = Capability{perform_store}.address();
 		}
 		int previousCrashes = crashes;
-		on_error([&]() {
-			perform_store(storeData, capToIntPointer);
-		});
+		on_error([&]() { perform_store(storeData, capToIntPointer); });
 		TEST(crashes == previousCrashes + (expectCrash ? 1 : 0),
 		     "{} store of {} via {} to crash",
 		     expectCrash ? "Expected" : "Did not expect",
@@ -617,9 +621,7 @@ namespace
 		expectedMCause               = MCauseCheri;
 		expectedCauseCode            = exception;
 		int previousCrashes          = crashes;
-		on_error([&]() {
-			capToFunction.get()();
-		});
+		on_error([&]() { capToFunction.get()(); });
 		TEST(crashes == previousCrashes + 1,
 		     "Expected jalr to {} to crash",
 		     capToFunction);
@@ -691,9 +693,7 @@ namespace
 		expectedRegisterNumber = RegisterNumber::PCC;
 		debug_log("Calling function with too small PCC bounds {}", capToTarget);
 		int previousCrashes = crashes;
-		on_error([&]() {
-			(*capToTarget)();
-		});
+		on_error([&]() { (*capToTarget)(); });
 		TEST(crashes == previousCrashes + 1,
 		     "Call with too small PCC bounds did not crash.");
 	}
@@ -728,12 +728,14 @@ namespace
 int test_isa()
 {
 	// get some sealing and sealed capabilities for use in tests
-	sealingCapability = token_key_new();
+	sealingCapability    = token_key_new();
 	sealedDataCapability = blocking_forever<token_sealed_alloc>(
-		MALLOC_CAPABILITY, sealingCapability, sizeof(void*));
+	  MALLOC_CAPABILITY, sealingCapability, sizeof(void *));
 	// Do some sanity checks on above
-	TEST(Capability{sealingCapability}.permissions().contains(Permission::Seal), "sealing key dosen't have seal permission");
-	TEST(Capability{sealedDataCapability}.is_sealed(), "sealedDataCap is not sealed");
+	TEST(Capability{sealingCapability}.permissions().contains(Permission::Seal),
+	     "sealing key dosen't have seal permission");
+	TEST(Capability{sealedDataCapability}.is_sealed(),
+	     "sealedDataCap is not sealed");
 	test_set_bounds();
 	test_and_perms();
 	test_sentries();
@@ -742,6 +744,7 @@ int test_isa()
 	test_restricted_loads();
 	test_store_faults();
 	test_jalr_faults();
-	token_obj_destroy(MALLOC_CAPABILITY, sealingCapability, sealedDataCapability);
+	token_obj_destroy(
+	  MALLOC_CAPABILITY, sealingCapability, sealedDataCapability);
 	return 0;
 }
