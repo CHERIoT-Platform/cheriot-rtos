@@ -102,11 +102,11 @@ int __cheri_libcall queue_create(Timeout              *timeout,
  * and makes them fail to acquire the lock, before deallocating the underlying
  * allocation.
  *
- * This must be called on an unrestricted queue handle (*not* one returned by
- * `queue_make_receive_handle` or `queue_make_send_handle`).
+ * Returns 0 on success. This can fail only if deallocation would fail and will,
+ * in these cases, return the same error codes as `heap_free`.
  *
- * Returns 0 on success. On failure, returns `-EPERM` if the queue handle is
- * restricted (see comment above).
+ * This function will check the heap capability first and so will avoid
+ * upgrading the locks if freeing the queue would fail.
  */
 int __cheri_libcall queue_destroy(struct SObjStruct   *heapCapability,
                                   struct MessageQueue *handle);
