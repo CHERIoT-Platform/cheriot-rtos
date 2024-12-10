@@ -27,20 +27,14 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 	          mcause,
 	          mtval);
 	TEST(expectedMCause.has_value(), "Unexpected Crash!");
-	TEST(mcause == *expectedMCause,
-	     "mcause should be {} but got {}",
-	     *expectedMCause,
-	     mcause);
+	TEST_EQUAL(mcause, *expectedMCause, "wrong mcause");
 	if (mcause == MCauseCheri)
 	{
 		auto [cheriCause, registerNumber] = extract_cheri_mtval(mtval);
 		debug_log("CHERI cause: {} {}", cheriCause, registerNumber);
 		TEST(expectedCauseCode.has_value(),
 		     "CHERI mcause without expectedCauseCode (test error)");
-		TEST(cheriCause == *expectedCauseCode,
-		     "cheriCause should be {} but is {}",
-		     *expectedCauseCode,
-		     cheriCause);
+		TEST_EQUAL(cheriCause, *expectedCauseCode, "wrong cheri cause");
 		/* Reset expectedCauseCode */
 		expectedCauseCode = std::nullopt;
 
@@ -48,9 +42,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 		 * chosen by compiler. The exception is PCC. */
 		if (expectedRegisterNumber.has_value())
 		{
-			TEST(registerNumber == *expectedRegisterNumber,
-			     "Register number was not expected {}",
-			     *expectedRegisterNumber);
+			TEST_EQUAL(registerNumber, *expectedRegisterNumber, "wrong register num");
 			expectedRegisterNumber = std::nullopt;
 		}
 	}
@@ -61,9 +53,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 	if (expectedErrorPC.has_value())
 	{
 		Capability framePCCCap = {frame->pcc};
-		TEST(framePCCCap.address() == *expectedErrorPC,
-		     "Error PC was not expected {}",
-		     *expectedErrorPC);
+		TEST_EQUAL(framePCCCap.address(), *expectedErrorPC, "wrong ErrorPC");
 		expectedErrorPC = std::nullopt;
 	}
 
@@ -217,10 +207,8 @@ namespace
 		PermissionSet expectedPermissions =
 		  requestedPermissions.to_representable();
 		capability.permissions() &= mask;
-		TEST(capability.permissions() == expectedPermissions,
-		     "permissions {} did not match expected {}",
-		     static_cast<PermissionSet>(capability.permissions()),
-		     expectedPermissions);
+		TEST_EQUAL(PermissionSet(capability.permissions()),
+			expectedPermissions, "permissions did not match expected");
 	}
 
 	void test_and_perms()
