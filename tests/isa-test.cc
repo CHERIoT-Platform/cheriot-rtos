@@ -16,8 +16,8 @@ std::optional<volatile ptraddr_t>      expectedErrorPC;
 std::optional<volatile RegisterNumber> expectedRegisterNumber;
 volatile int                           crashes = 0;
 
-/* Value of mcause on CHERI exception XXX should be in riscv.h? */
-constexpr size_t MCauseCheri = 0x1c;
+/* Value of mcause on CHERI exception */
+constexpr size_t MCauseCheri = priv::MCAUSE_CHERI;
 
 extern "C" enum ErrorRecoveryBehaviour
 compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
