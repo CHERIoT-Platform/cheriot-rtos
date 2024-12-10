@@ -923,10 +923,14 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 	return 0;
 }
 
-__cheriot_minimum_stack(0xf0) int heap_can_free(SObj  heapCapability,
-                                                void *rawPointer)
+__cheriot_minimum_stack(0x260) int heap_can_free(SObj  heapCapability,
+                                                 void *rawPointer)
 {
-	STACK_CHECK(0xf0);
+	// This function requires much less space, but we claim that we require as
+	// much as `heap_free` so that a call to `heap_free` will not fail due to
+	// insufficient stack immediately after `heap_can_Free` has said that it's
+	// fine.
+	STACK_CHECK(0x260);
 	LockGuard g{lock};
 	return heap_free_internal(heapCapability, rawPointer, false);
 }
@@ -934,6 +938,7 @@ __cheriot_minimum_stack(0xf0) int heap_can_free(SObj  heapCapability,
 __cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
                                              void *rawPointer)
 {
+	// If this value changes, update `heap_can_free` as well.
 	STACK_CHECK(0x260);
 	LockGuard g{lock};
 	int       ret = heap_free_internal(heapCapability, rawPointer, true);
