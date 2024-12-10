@@ -1,12 +1,13 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
-#include "token.h"
 #define TEST_NAME "ISA"
 #include "tests.hh"
 #include <debug.hh>
 #include <optional>
 #include <priv/riscv.h>
+#include <token.h>
+#include <timeout.hh>
 
 using namespace CHERI;
 
@@ -87,6 +88,16 @@ namespace
 	 * for misaligned tests and remain in bounds.
 	 */
 	int *myGlobalIntPointer[2] = {NULL, NULL};
+	/**
+	 * We will set this to a value returned by `token_key_new` so that we have
+	 * a sealing capability for use in tests.
+	 */
+	SKey sealingCapability = NULL;
+	/**
+	 * We will set this to a value returned by `token_sealed_alloc` so that we
+	 * have a sealed data capability for use in tests.
+	 */
+	SObj sealedDataCapability = NULL;
 
 	/*
 	 * The usual set of permissions associated with globals.
@@ -218,7 +229,7 @@ namespace
 		const Capability CapabilityToGlobal{myGlobalIntPointer};
 		const Capability CapabilityToFunction{
 		  reinterpret_cast<const void *>(&test_and_perms)};
-		const Capability SealingCapability{token_key_new()};
+		const Capability SealingCapability{sealingCapability};
 		debug_log("Checking and perms results...");
 		// Test all possible masks on our 'root' capabilities. Our sealing
 		// capability doesn't include the user perm so we exclude that for now
@@ -353,13 +364,13 @@ namespace
 	/**
 	 * A CapabilityFilter that returns a sealed capability. Since we don't have
 	 * access to a sealing capability it can't actually seal its input so just
-	 * returns a sentry capability cast to the correct type. This is fine for
+	 * returns one we made earlier using token_sealed_alloc. This is fine for
 	 * our purposes as we only want it to trigger SealViolations.
 	 */
 	template<class T>
 	Capability<T> get_sealed_capability_filter(Capability<T> inputCapability)
 	{
-		return reinterpret_cast<T *>(get_interrupts_disabled_return_sentry());
+		return reinterpret_cast<T *>(sealedDataCapability);
 	}
 
 	/**
@@ -717,18 +728,20 @@ namespace
 
 void test_isa()
 {
-#if !defined(FLUTE)
-	// Flute it is not compatible with our set bounds test because it throws an
-	// exception on untagged setbounds
+	// get some sealing and sealed capabilities for use in tests
+	sealingCapability = token_key_new();
+	sealedDataCapability = blocking_forever<token_sealed_alloc>(
+		MALLOC_CAPABILITY, sealingCapability, sizeof(void*));
+	// Do some sanity checks on above
+	TEST(Capability{sealingCapability}.permissions().contains(Permission::Seal), "sealing key dosen't have seal permission");
+	TEST(Capability{sealedDataCapability}.is_sealed(), "sealedDataCap is not sealed");
 	test_set_bounds();
 	test_and_perms();
-#endif
 	test_sentries();
 	test_pcc_bounds();
 	test_load_faults();
-#if !defined(FLUTE)
 	test_restricted_loads();
-#endif
 	test_store_faults();
 	test_jalr_faults();
+	token_obj_destroy(MALLOC_CAPABILITY, sealingCapability, sealedDataCapability);
 }
