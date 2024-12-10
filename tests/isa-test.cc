@@ -726,7 +726,7 @@ namespace
 	}
 } // anonymous namespace
 
-void test_isa()
+int test_isa()
 {
 	// get some sealing and sealed capabilities for use in tests
 	sealingCapability = token_key_new();
@@ -744,4 +744,5 @@ void test_isa()
 	test_store_faults();
 	test_jalr_faults();
 	token_obj_destroy(MALLOC_CAPABILITY, sealingCapability, sealedDataCapability);
+	return 0;
 }
