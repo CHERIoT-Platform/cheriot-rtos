@@ -467,6 +467,8 @@ namespace
 		Capability capToIntPointer = baseFilter(myGlobalIntPointer);
 		Capability storeData       = dataFilter(&myLocalInt);
 		bool       expectCrash     = anExpectedMCause.has_value();
+		// set target memory to NULL so we can detect if a store took place
+		myGlobalIntPointer[0] = NULL;
 		if (expectCrash)
 		{
 			expectedMCause    = anExpectedMCause;
@@ -480,10 +482,21 @@ namespace
 		     expectCrash ? "Expected" : "Did not expect",
 		     storeData,
 		     capToIntPointer);
+		// Check whether the store happened and, if it did, what it stored.
+		Capability targetAfterStore {myGlobalIntPointer[0]};
+		if (expectCrash) {
+			TEST_EQUAL(targetAfterStore, NULL, "target memory modified after faulting store");
+		} else {
+			// all tests expect the tag to be cleared even if the store doesn't
+			// fault, so invalidate storeData before comparing with the result.
+			storeData.invalidate();
+			TEST_EQUAL(targetAfterStore, storeData, "target memory did not match expected after non-faulting store");
+		}
 	}
 
 	void test_store_faults()
 	{
+		// Faulting cases
 		debug_log("Attempting to store via untagged capability");
 		do_store_test(CauseCode::TagViolation, clear_tag_filter);
 
@@ -499,8 +512,20 @@ namespace
 		              permission_filter<PermissionSet{Permission::Load,
 		                                              Permission::Store}>);
 
-		// TODO this is no longer expected to trap -- but would be good to check
-		// tag is cleared
+		debug_log("Attempt to store capability via too small bounds");
+		do_store_test(CauseCode::BoundsViolation, restrict_bounds_filter,
+		              clear_tag_filter);
+
+		debug_log("Attempt to store capability via misaligned pointer");
+		do_store_test(std::nullopt,
+		              misalign_filter,
+		              clear_tag_filter,
+		              priv::MCAUSE_STORE_MISALIGNED);
+
+		// Non-faulting but special cases
+
+		// Storing a local capability via a cap without store-local is
+		// expected to succeed, but will clear the tag of the stored data
 		debug_log("Attempting to store local capability in global");
 		do_store_test(
 		  std::nullopt,
@@ -510,32 +535,13 @@ namespace
 		  identity_filter,
 		  std::nullopt);
 
-		debug_log("Attempt to store capability via too small bounds");
-		do_store_test(
-		  CauseCode::BoundsViolation, restrict_bounds_filter, clear_tag_filter);
-
-		debug_log("Attempt to store capability via misaligned pointer");
-		do_store_test(std::nullopt,
-		              misalign_filter,
-		              clear_tag_filter,
-		              priv::MCAUSE_STORE_MISALIGNED);
-
 		debug_log(
 		  "Attempting to store untagged capability via data only pointer");
 		// Storing untagged cap via data-only cap is allowed.
+		// Contrast with PermitStoreCapabilityViolation case above.
 		do_store_test(
 		  std::nullopt,
 		  permission_filter<PermissionSet{Permission::Load, Permission::Store}>,
-		  clear_tag_filter,
-		  std::nullopt);
-
-		debug_log("Attempting to store untagged local capability in global");
-		// Storing untagged local cap via not-store-local cap is allowed.
-		do_store_test(
-		  std::nullopt,
-		  permission_filter<PermissionSet{Permission::Load,
-		                                  Permission::Store,
-		                                  Permission::LoadStoreCapability}>,
 		  clear_tag_filter,
 		  std::nullopt);
 	}
