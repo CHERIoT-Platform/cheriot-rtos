@@ -813,6 +813,20 @@ namespace CHERI
 		}
 
 		/**
+		 * Remove some permissions from this capability.
+		 *
+		 * Because this function computes the permission mask by clearing bits
+		 * in the PermissionSet::omnipotent() all-ones mask, rather than from
+		 * the set of permissions currently held by this Capability, it is safe
+		 * to use to clear Global permission on a sealed capability.
+		 */
+		template<std::same_as<Permission>... Permissions>
+		void without_permissions(Permissions... drop)
+		{
+			permissions() &= PermissionSet::omnipotent().without(drop...);
+		}
+
+		/**
 		 * Pointer subtraction.
 		 */
 		Capability operator-(ptrdiff_t diff)
