@@ -6,11 +6,7 @@
         },
         "pwm": {
             "start" : 0x80001000,
-            "end"   : 0x80001030
-        },
-        "pwm_lcd": {
-            "start" : 0x80001030,
-            "end"   : 0x80001038
+            "length": 0x00001000
         },
         "rgbled" : {
             "start" : 0x80009000,
@@ -74,8 +70,8 @@
     "tickrate_hz" : 100,
     "revoker" : "hardware",
     "stack_high_water_mark" : true,
-    "simulator" : "${sdk}/../scripts/run-sonata.sh",
-    "simulation": false,
+    "simulator" : "${sdk}/../scripts/run-sonata-sim.sh",
+    "simulation": true,
     "interrupts": [
         {
             "name": "RevokerInterrupt",
