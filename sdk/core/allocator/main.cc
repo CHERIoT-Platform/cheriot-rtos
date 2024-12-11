@@ -928,7 +928,7 @@ __cheriot_minimum_stack(0x260) int heap_can_free(SObj  heapCapability,
 {
 	// This function requires much less space, but we claim that we require as
 	// much as `heap_free` so that a call to `heap_free` will not fail due to
-	// insufficient stack immediately after `heap_can_Free` has said that it's
+	// insufficient stack immediately after `heap_can_free` has said that it's
 	// fine.
 	STACK_CHECK(0x260);
 	LockGuard g{lock};
