@@ -39,11 +39,6 @@ namespace
 
 	Timeout noWait{0};
 
-	/**
-	 * Size of an allocation that is big enough that we'll exhaust memory before
-	 * we allocate `MaxAllocCount` of them.
-	 */
-	constexpr size_t BigAllocSize  = 1024 * 32;
 	constexpr size_t AllocSize     = 0xff0;
 	constexpr size_t MaxAllocCount = 16;
 	constexpr size_t TestIterations =
@@ -112,8 +107,18 @@ namespace
 	 * Test that we can do a long-running blocking allocation in one thread and
 	 * a free in another thread and make forward progress.
 	 */
-	void test_blocking_allocator()
+	void test_blocking_allocator(const size_t HeapSize)
 	{
+		/**
+		 * Size of an allocation that is big enough that we'll exhaust memory
+		 * before we allocate `MaxAllocCount` of them.
+		 */
+		const size_t BigAllocSize = HeapSize / (MaxAllocCount - 1);
+		TEST(BigAllocSize > 0,
+		     "Cannot guestimate big allocation size for our heap of {} bytes",
+		     HeapSize);
+		debug_log("BigAllocSize {} bytes", BigAllocSize);
+
 		allocations.resize(MaxAllocCount);
 		// Create the background worker before we try to exhaust memory.
 		async([]() {
@@ -631,10 +636,6 @@ int test_allocator()
 	const ptraddr_t HeapEnd   = LA_ABS(__export_mem_heap_end);
 
 	const size_t HeapSize = HeapEnd - HeapStart;
-	TEST(BigAllocSize < HeapSize,
-	     "Big allocation size is too large for our heap ({} >= {})",
-	     BigAllocSize,
-	     BigAllocSize);
 	debug_log("Heap size is {} bytes", HeapSize);
 
 	test_token();
@@ -682,7 +683,7 @@ int test_allocator()
 	ret = heap_free(MALLOC_CAPABILITY, array);
 	TEST(ret == 0, "Freeing array failed: {}", ret);
 
-	test_blocking_allocator();
+	test_blocking_allocator(HeapSize);
 	heap_quarantine_empty();
 	test_revoke();
 	test_fuzz();
