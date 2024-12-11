@@ -42,9 +42,9 @@ These are:
 
 This is the expected set for heap memory.
 Any of these can be cleared from a copy of the pointer before passing it to other code if you wish to restrict what can be done to an object with that pointer.
-For example, if you remove `W` and `M` permissions from a pointer that you pass as a parameter then you have a guarantee that nothing reachable from the pointer will be mutated.
-Similarly, if you remove `G` and `L` then you have the guarantee that nothing reachable from the pointer will be captured.
-If you remove `G` but not `L` then you have the weaker guarantee that the pointer that you passed will not be captured but pointers reachable from it might be.
+For example, if you remove `W` and `m` permissions from a pointer that you pass as a parameter then you have a guarantee that nothing reachable from the pointer will be mutated.
+Similarly, if you remove `G` and `g` then you have the guarantee that nothing reachable from the pointer will be captured.
+If you remove `G` but not `g` then you have the weaker guarantee that the pointer that you passed will not be captured but pointers reachable from it might be.
 
 The next three use cases show the handling of a sub-object, a capability that references a sub-range of the allocation.
 
