@@ -1207,6 +1207,7 @@ class MState
 			           "quota is {})",
 			           header->size_get(),
 			           quota);
+			heapFreeSize += header->size_get();
 			mspace_free_internal(header);
 			return AllocationFailureQuotaExceeded{};
 		}
@@ -2385,16 +2386,16 @@ class MState
 	 * Move a chunk back onto free lists.
 	 *
 	 * Note that this chunk does not have to come from quarantine, because it
-	 * can come from initialisation or splitting a free chunk.  Assumes that the
-	 * revocation shadow bits are clear in either case.
+	 * can come from initialisation or splitting a free chunk.  Thus, it is
+	 * the caller's responsibility to appropriately account heapFreeSize.
+	 *
+	 * Assumes that the revocation shadow bits are clear in either case.
 	 *
 	 * Initializes the linkages of p.
 	 */
 	void mspace_free_internal(MChunkHeader *p)
 	{
 		ok_in_use_chunk(p);
-
-		heapFreeSize += p->size_get();
 
 		if (!p->is_prev_in_use())
 		{
@@ -2581,6 +2582,7 @@ class MState
 			fore->metadata_clear();
 
 			heapQuarantineSize -= foreHeader->size_get();
+			heapFreeSize += foreHeader->size_get();
 
 			/* Clear the shadow bits that marked this region as quarantined */
 			revoker.shadow_paint_range<false>(foreHeader->body().address(),
@@ -2774,6 +2776,7 @@ class MState
 			 *   mspace_malloc does not displace into the chunk it finds from
 			 *   the free pool, but, in principle, it could.
 			 */
+			// This chunk is already free; do not adjust heapFreeSpace
 			mspace_free_internal(p);
 			p = r;
 		}
@@ -2796,6 +2799,7 @@ class MState
 			 *   to trim our tail, so it may well have trimmed the chunk
 			 *   it used to satisfy our request.
 			 */
+			// This chunk is already free; do not adjust heapFreeSpace
 			mspace_free_internal(r);
 		}
 
