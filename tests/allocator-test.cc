@@ -39,7 +39,6 @@ namespace
 
 	Timeout noWait{0};
 
-	constexpr size_t AllocSize     = 0xff0;
 	constexpr size_t MaxAllocCount = 16;
 	constexpr size_t TestIterations =
 #ifdef NDEBUG
@@ -62,8 +61,11 @@ namespace
 	 * allocations in one iteration exceed the total heap size, or the revoker
 	 * is buggy or too slow.
 	 */
-	void test_revoke()
+	void test_revoke(const size_t HeapSize)
 	{
+		const size_t AllocSize = HeapSize / (MaxAllocCount + 2);
+		debug_log("test_revoke using {}-byte objects", AllocSize);
+
 		allocations.resize(MaxAllocCount);
 		for (size_t i = 0; i < TestIterations; ++i)
 		{
@@ -685,7 +687,7 @@ int test_allocator()
 
 	test_blocking_allocator(HeapSize);
 	heap_quarantine_empty();
-	test_revoke();
+	test_revoke(HeapSize);
 	test_fuzz();
 	allocations.clear();
 	allocations.shrink_to_fit();
