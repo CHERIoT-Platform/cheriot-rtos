@@ -39,7 +39,6 @@ namespace
 
 	Timeout noWait{0};
 
-	constexpr size_t AllocSize     = 0xff0;
 	constexpr size_t MaxAllocCount = 16;
 	constexpr size_t TestIterations =
 #ifdef NDEBUG
@@ -88,8 +87,11 @@ namespace
 	 * to the end of the function and, if this is inlined, ends up with some
 	 * branches that are more than 2 KiB away from their targets.
 	 */
-	__noinline void test_revoke()
+	__noinline void test_revoke(const size_t HeapSize)
 	{
+		const size_t AllocSize = HeapSize / (MaxAllocCount + 2);
+		debug_log("test_revoke using {}-byte objects", AllocSize);
+
 		allocations.resize(MaxAllocCount);
 		for (size_t i = 0; i < TestIterations; ++i)
 		{
@@ -745,7 +747,7 @@ int test_allocator()
 
 	test_blocking_allocator(HeapSize);
 	TEST_EQUAL(heap_quarantine_empty(), 0, "Could not flush quarantine");
-	test_revoke();
+	test_revoke(HeapSize);
 	test_fuzz();
 	allocations.clear();
 	allocations.shrink_to_fit();
