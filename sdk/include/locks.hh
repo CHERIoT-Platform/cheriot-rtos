@@ -282,6 +282,39 @@ class LockGuard
 		try_lock(timeout);
 	}
 
+	/// Constructor, attempts to acquire the lock with a timeout, in steps
+	/// of a given duration, checking the `condition` function at every
+	/// iteration. If `condition` returns `true`, stop trying to acquire
+	/// the lock.
+	[[nodiscard]] explicit LockGuard(Lock    &lock,
+	                                 Timeout *timeout,
+	                                 Ticks    step,
+	                                 auto condition) requires(TryLockable<Lock>)
+	  : wrappedLock(&lock), isOwned(false)
+	{
+		do
+		{
+			Timeout t{std::min(step, timeout->remaining)};
+			try_lock(&t);
+			if (!t.elapsed)
+			{
+				// We failed to lock, likely because the lock
+				// is set for destruction.
+				break;
+			}
+			timeout->elapse(t.elapsed);
+		} while (!isOwned && timeout->may_block() && !condition());
+	}
+
+	/// Constructor, attempts to acquire the lock with a timeout, in steps
+	/// of a given duration.
+	[[nodiscard]] explicit LockGuard(Lock    &lock,
+	                                 Timeout *timeout,
+	                                 Ticks    step) requires(TryLockable<Lock>)
+	  : LockGuard(lock, timeout, step, []() { return false; })
+	{
+	}
+
 	/// Move constructor, transfers ownership of the lock.
 	[[nodiscard]] explicit LockGuard(LockGuard &&guard)
 	  : wrappedLock(guard.wrappedLock), isOwned(guard.isOwned)

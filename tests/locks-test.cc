@@ -66,6 +66,34 @@ namespace
 	}
 
 	/**
+	 * Test that lock guard conditions work as expected.
+	 */
+	template<typename Lock>
+	void test_lockguard_condition(Lock &lock)
+	{
+		// Duration of a step, in ticks.
+		static constexpr const Ticks Step = 10;
+
+		// Lock the lock
+		LockGuard g1{lock};
+
+		Timeout t{Step * 5};
+		// This will only ever return before the timeout if the
+		// condition becomes false, which should happen after two
+		// `Steps` (when `counter` is 2).
+		LockGuard g2{lock, &t, Step, [&]() { return (counter++ == 1); }};
+
+		TEST(t.elapsed != 0,
+		     "The lock guard returned before locking (0 tick elapsed)");
+		TEST(t.may_block(),
+		     "The lock guard ignored the condition and waited until timeout");
+		TEST(t.elapsed < 3 * Step,
+		     "The lock guard checked the condition too late ({} > {} ticks)",
+		     static_cast<int>(t.elapsed),
+		     static_cast<int>(3 * Step));
+	}
+
+	/**
 	 * Test that destructing a lock automatically wakes up all waiters,
 	 * failing them to acquire the lock.
 	 */
@@ -405,6 +433,7 @@ int test_locks()
 	test_flaglock_unlock();
 	test_trylock(flagLock);
 	test_trylock(flagLockPriorityInherited);
+	test_lockguard_condition(flagLock);
 	test_destruct_lock_wake_up(flagLock);
 	test_destruct_lock_wake_up(flagLockPriorityInherited);
 	test_destruct_flag_lock_acquire();
