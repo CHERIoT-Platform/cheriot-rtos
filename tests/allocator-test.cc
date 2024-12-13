@@ -499,8 +499,9 @@ namespace
 	{
 		void      *unsealedCapability;
 		auto       sealingCapability = STATIC_SEALING_TYPE(sealingTest);
+		Timeout    t{AllocTimeout};
 		Capability sealedPointer =
-		  token_sealed_unsealed_alloc(&noWait,
+		  token_sealed_unsealed_alloc(&t,
 		                              MALLOC_CAPABILITY,
 		                              sealingCapability,
 		                              tokenSize,
