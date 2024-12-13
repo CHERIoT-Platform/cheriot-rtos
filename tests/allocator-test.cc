@@ -146,6 +146,13 @@ namespace
 			freeStart.notify_one();
 		});
 
+		/*
+		 * Empty the allocator's quarantine so that we're sure that the nullptr
+		 * failure we see below isn't because we aren't allowing the revocation
+		 * state machine to advance.
+		 */
+		heap_quarantine_empty();
+
 		bool memoryExhausted = false;
 		for (auto &allocation : allocations)
 		{
