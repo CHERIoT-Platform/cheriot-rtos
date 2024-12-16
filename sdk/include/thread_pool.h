@@ -94,7 +94,14 @@ namespace thread_pool
 				return;
 			}
 			(*fn)();
-			token_obj_destroy(MALLOC_CAPABILITY, key, static_cast<SObj>(rawFn));
+			/*
+			 * This fails only if the thread pool runner compartment can't make
+			 * cross-compartment calls to the allocator at all, since we're
+			 * in its initial trusted activation frame and near the beginning
+			 * (highest address) of its stack.
+			 */
+			(void)token_obj_destroy(
+			  MALLOC_CAPABILITY, key, static_cast<SObj>(rawFn));
 		}
 
 		/**
