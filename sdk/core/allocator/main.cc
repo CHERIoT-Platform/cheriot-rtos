@@ -1192,7 +1192,7 @@ __cheriot_minimum_stack(0x280) SObj
 			return sealed;
 		}
 	}
-	heap_free(heapCapability, obj);
+	(void)heap_free(heapCapability, obj);
 	return INVALID_SOBJ;
 }
 
