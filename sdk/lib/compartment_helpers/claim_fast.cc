@@ -43,10 +43,11 @@ int heap_claim_fast(Timeout *timeout, const void *ptr, const void *ptr2)
 			if (timeout->may_block())
 			{
 				Timeout t{1};
-				futex_timed_wait(&t,
-				                 reinterpret_cast<uint32_t *>(epochCounter),
-				                 epoch,
-				                 FutexPriorityInheritance);
+				(void)futex_timed_wait(
+				  &t,
+				  reinterpret_cast<uint32_t *>(epochCounter),
+				  epoch,
+				  FutexPriorityInheritance);
 				timeout->elapse(t.elapsed);
 			}
 			else
