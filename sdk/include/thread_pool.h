@@ -131,15 +131,18 @@ namespace thread_pool
 	 * Asynchronously invoke a lambda.  This moves the lambda to the heap and
 	 * passes it to the thread pool's queue.  If the lambda copies any stack
 	 * objects by reference then the copy will fail.
+	 *
+	 * Returns 0 on success, or compartment-call failures (ENOTENOUGHSTACK,
+	 * ENOTENOUGHTRUSTEDSTACK) if the thread pool cannot be invoked.
 	 */
 	template<typename T>
-	void async(T &&lambda)
+	int async(T &&lambda)
 	{
 		// If this is a stateless function, just send a callback function
 		// pointer, don't copy zero bytes of state to the heap.
 		if constexpr (std::is_convertible_v<T, void (*)(void)>)
 		{
-			thread_pool_async(
+			return thread_pool_async(
 			  &detail::wrap_callback_function<std::remove_cvref_t<T>>, nullptr);
 		}
 		else
@@ -172,7 +175,7 @@ namespace thread_pool
 			ThreadPoolCallback invoke =
 			  &detail::wrap_callback_lambda<LambdaType>;
 			// Dispatch it.
-			thread_pool_async(invoke, sealed);
+			return thread_pool_async(invoke, sealed);
 		}
 	}
 } // namespace thread_pool
