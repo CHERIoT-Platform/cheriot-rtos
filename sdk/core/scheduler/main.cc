@@ -375,20 +375,24 @@ namespace sched
 
 	/// Helper to safely deallocate an instance of `T`.
 	template<typename T>
-	int deallocate(SObjStruct *heapCapability, void *object)
+	int deallocate(SObjStruct *heapCapability, void *objectPtr)
 	{
+		static_assert(T::IsDynamic);
+
 		// Acquire the lock and hold it. We need to be careful of two attempts
 		// to free the same object racing, so we cause others to back up behind
 		// this one.  They will then fail in the unseal operation.
 		LockGuard g{deallocLock};
-		return typed_op<T>(object, [&](T &unsealed) {
-			if (int ret = heap_can_free(heapCapability, &unsealed); ret != 0)
+		return typed_op<T>(objectPtr, [&](T &unsealed) {
+			SObj object = static_cast<SObj>(objectPtr);
+			if (int ret = token_obj_can_destroy(
+			      heapCapability, T::sealing_type(), object);
+			    ret != 0)
 			{
 				return ret;
 			}
 			unsealed.~T();
-			heap_free(heapCapability, &unsealed);
-			return 0;
+			return token_obj_destroy(heapCapability, T::sealing_type(), object);
 		});
 	}
 
