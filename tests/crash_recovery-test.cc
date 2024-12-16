@@ -49,7 +49,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 int test_crash_recovery()
 {
 	debug_log("Calling crashy compartment indirectly");
-	test_crash_recovery_outer(0);
+	TEST_EQUAL(test_crash_recovery_outer(0), 0, "Indirect crash failed");
 	check_stack();
 	TEST(crashes == 0, "Ran crash handler for outer compartment");
 	debug_log("Compartment with no error handler returned normally after "

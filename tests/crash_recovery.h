@@ -6,7 +6,7 @@
 
 __cheri_compartment("crash_recovery_inner") void *test_crash_recovery_inner(
   int);
-__cheri_compartment("crash_recovery_outer") void test_crash_recovery_outer(int);
+__cheri_compartment("crash_recovery_outer") int test_crash_recovery_outer(int);
 
 /**
  * Checks that the stack is entirely full of zeroes below the current stack

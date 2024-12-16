@@ -101,8 +101,7 @@ namespace
 			  "Checked that all allocations have been deallocated ({} of {})",
 			  static_cast<int>(i),
 			  static_cast<int>(TestIterations));
-			Timeout t{1};
-			thread_sleep(&t);
+			TEST(sleep(1) >= 0, "Failed to sleep");
 		}
 		allocations.clear();
 	}
@@ -122,8 +121,7 @@ namespace
 			freeStart.wait(0);
 			// One extra sleep to make sure that we're really in the blocking
 			// sleep.
-			Timeout t{2};
-			thread_sleep(&t);
+			TEST(sleep(2) >= 0, "Failed to sleep");
 			debug_log(
 			  "Deallocation thread resuming, freeing pool of allocations");
 			// Free all of the allocations to make space.
@@ -131,7 +129,9 @@ namespace
 			{
 				if (allocation != nullptr)
 				{
-					heap_free(MALLOC_CAPABILITY, allocation);
+					TEST_EQUAL(heap_free(MALLOC_CAPABILITY, allocation),
+					           0,
+					           "Could not free allocation");
 				}
 			}
 			// Notify the parent thread that we're done.
@@ -426,6 +426,7 @@ namespace
 
 	void test_hazards()
 	{
+		int sleeps;
 		debug_log("Before allocating, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
 		Timeout longTimeout{1000};
@@ -446,21 +447,22 @@ namespace
 			// Exiting this task will cause this closure to be freed, which
 			// will collect dangling hazard pointers.  Wait for long enough for
 			// the heap check to work.
-			t = 1;
-			thread_sleep(&t);
+			TEST(sleep(1) >= 0, "Failed to sleep");
 		});
 		// Allow the async function to run and establish hazards
+		sleeps = 0;
 		while (state.load() != 1)
 		{
-			Timeout t{1};
-			thread_sleep(&t);
+			TEST(sleep(1) >= 0, "Failed to sleep");
+			TEST(sleeps++ < 100,
+			     "Background thread failed to establish hazards");
 		}
 		debug_log("Before freeing, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
-		heap_free(SECOND_HEAP, ptr);
+		TEST_EQUAL(heap_free(SECOND_HEAP, ptr), 0, "First free failed");
 		debug_log("After free 1, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
-		heap_free(SECOND_HEAP, ptr2);
+		TEST_EQUAL(heap_free(SECOND_HEAP, ptr2), 0, "Second free failed");
 		debug_log("After free 2, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
 		TEST(Capability{ptr}.is_valid(),
@@ -471,21 +473,21 @@ namespace
 		     ptr2);
 		state = 2;
 		// Yield to allow the hazards to be dropped.
-		Timeout t{1};
-		thread_sleep(&t);
+		TEST(sleep(1) >= 0, "Failed to yield to drop hazards");
 		// Try a double free.  This may logically succeed, but should not affect
 		// our quota.
-		heap_free(SECOND_HEAP, ptr);
+		TEST_EQUAL(heap_free(SECOND_HEAP, ptr),
+		           -EPERM,
+		           "Attempt to free freed but hazarded pointer not EPERM");
 		// Sleep again to make sure that the lambda from our async is gone.
 		// The logs may make it take more than one quantum in debug builds.
 		// The next test requires all memory allocated from the malloc
 		// capability to be freed before it starts.
-		int sleeps = 0;
+		sleeps = 0;
 		while (heap_quota_remaining(MALLOC_CAPABILITY) < MALLOC_QUOTA &&
 		       heap_quota_remaining(MALLOC_CAPABILITY) > 0)
 		{
-			Timeout t{1};
-			thread_sleep(&t);
+			TEST(sleep(1) >= 0, "Failed to sleep");
 			TEST(sleeps++ < 100,
 			     "Sleeping for too long waiting for async lambda to be freed");
 		}
@@ -712,7 +714,7 @@ int test_allocator()
 	TEST(ret == 0, "Freeing array failed: {}", ret);
 
 	test_blocking_allocator();
-	heap_quarantine_empty();
+	TEST_EQUAL(heap_quarantine_empty(), 0, "Could not flush quarantine");
 	test_revoke();
 	test_fuzz();
 	allocations.clear();

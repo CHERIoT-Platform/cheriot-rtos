@@ -68,7 +68,10 @@ int test_compartment_call()
 
 	test_number_of_arguments();
 
-	test_incorrect_export_table(nullptr, &outTestFailed);
+	TEST_EQUAL(
+	  test_incorrect_export_table(nullptr, &outTestFailed),
+	  0,
+	  "Test incorrect entry point without error handler bad return value");
 	TEST(outTestFailed == false,
 	     "Test incorrect entry point without error handler failed");
 	return 0;
