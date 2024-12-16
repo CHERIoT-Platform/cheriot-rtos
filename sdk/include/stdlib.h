@@ -281,8 +281,12 @@ ssize_t __cheri_compartment("alloc")
  * This should be used only in testing, to place the system in a quiesced
  * state.  It can block indefinitely if another thread is allocating and
  * freeing memory while this runs.
+ *
+ * Returns 0 on success, a compartment invocation failure indication
+ * (-ENOTENOUGHSTACK, -ENOTENOUGHTRUSTEDSTACK) if it cannot be invoked, or
+ * possibly -ECOMPARTMENTFAIL if the allocator compartment is damaged.
  */
-void __cheri_compartment("alloc") heap_quarantine_empty(void);
+int __cheri_compartment("alloc") heap_quarantine_empty(void);
 
 /**
  * Returns true if `object` points to a valid heap address, false otherwise.

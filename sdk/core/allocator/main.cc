@@ -852,7 +852,7 @@ __cheriot_minimum_stack(0x90) ssize_t
 	return cap->quota;
 }
 
-__cheriot_minimum_stack(0xc0) void heap_quarantine_empty()
+__cheriot_minimum_stack(0xc0) int heap_quarantine_empty()
 {
 	STACK_CHECK(0xc0);
 	LockGuard g{lock};
@@ -866,6 +866,8 @@ __cheriot_minimum_stack(0xc0) void heap_quarantine_empty()
 		yield();
 		g.lock();
 	}
+
+	return 0;
 }
 
 __cheriot_minimum_stack(0x210) void *heap_allocate(Timeout *timeout,
