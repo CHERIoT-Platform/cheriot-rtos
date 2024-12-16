@@ -6,10 +6,14 @@
 
 /**
  * Prod the software revoker to do some work.  This does not do a complete
- * revocation pass, it will scan a region of memory and then return.
+ * revocation pass; it will scan a region of memory and then return.
+ *
+ * Returns 0 on success, a compartment invocation failure indication
+ * (-ENOTENOUGHSTACK, -ENOTENOUGHTRUSTEDSTACK) if it cannot be invoked, or
+ * possibly -ECOMPARTMENTFAIL if the software revoker compartment is damaged.
  */
 [[cheri::interrupt_state(disabled)]] __cheri_compartment(
-  "software_revoker") void revoker_tick();
+  "software_revoker") int revoker_tick();
 
 /**
  * Returns a read-only capability to the current revocation epoch.  If the low
