@@ -159,7 +159,7 @@ namespace
 
 } // namespace
 
-void revoker_tick()
+int revoker_tick()
 {
 	// If we've been asked to run, make sure that we're running.
 	if (state == State::NotRunning)
@@ -167,7 +167,9 @@ void revoker_tick()
 		advance();
 	}
 	// Do some work.
-	return scan_range();
+	scan_range();
+
+	return 0;
 }
 
 const uint32_t *revoker_epoch_get()

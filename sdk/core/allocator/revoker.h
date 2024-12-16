@@ -389,7 +389,7 @@ namespace Revocation
 			// time that it's queried.
 			if ((current & 1) == 1)
 			{
-				revoker_tick();
+				(void)revoker_tick();
 				current = *epoch;
 			}
 			// We want to know if current is greater than epoch, but current
@@ -415,7 +415,7 @@ namespace Revocation
 		/// Start revocation running.
 		void system_bg_revoker_kick()
 		{
-			revoker_tick();
+			(void)revoker_tick();
 		}
 	};
 
