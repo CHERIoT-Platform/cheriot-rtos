@@ -47,7 +47,7 @@ int test_multiwaiter()
 			sleep(1);
 			debug_log("Waking futex from background thread");
 			*futexWord = value;
-			futex_wake(futexWord, 1);
+			TEST(futex_wake(futexWord, 1) >= 0, "futex_wait failed");
 		});
 	};
 
