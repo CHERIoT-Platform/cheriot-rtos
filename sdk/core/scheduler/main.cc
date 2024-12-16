@@ -193,7 +193,7 @@ namespace sched
 		return &(reinterpret_cast<Thread *>(threadSpaces))[threadId - 1];
 	}
 
-	[[cheri::interrupt_state(disabled)]] void __cheri_compartment("sched")
+	[[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
 	  scheduler_entry(const ThreadLoaderInfo *info)
 	{
 		Debug::Invariant(Capability{info}.length() ==
@@ -215,6 +215,8 @@ namespace sched
 
 		InterruptController::master_init();
 		Timer::interrupt_setup();
+
+		return 0;
 	}
 
 	static void __dead2 sched_panic(size_t mcause, size_t mepc, size_t mtval)
