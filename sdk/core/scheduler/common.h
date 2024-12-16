@@ -51,9 +51,16 @@ namespace
 	 * Subclasses must implement a static `sealing_type` method that returns
 	 * the sealing key.
 	 */
-	template<bool IsDynamic>
+	template<bool IsDynamicArg>
 	struct Handle
 	{
+		/**
+		 * Some Handle types must reside in static memory, and some may be built
+		 * on the fly, and in particular in the shared heap, at runtime.  Is
+		 * this type among the latter?
+		 */
+		static constexpr bool IsDynamic = IsDynamicArg;
+
 		/**
 		 * Unseal `unsafePointer` as a pointer to an object of the specified
 		 * type.  Returns nullptr if `unsafePointer` is not a valid sealed
