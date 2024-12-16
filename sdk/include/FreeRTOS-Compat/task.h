@@ -55,7 +55,11 @@ static inline BaseType_t xTaskCheckForTimeOut(TimeOut_t  *pxTimeOut,
 static inline void vTaskDelay(const TickType_t xTicksToDelay)
 {
 	struct Timeout timeout = {0, xTicksToDelay};
-	thread_sleep(&timeout, ThreadSleepNoEarlyWake);
+	/*
+	 * The FreeRTOS API does not have a way to signal failure of sleep, so we
+	 * override the nodiscard annotation on thread_sleep.
+	 */
+	(void)thread_sleep(&timeout, ThreadSleepNoEarlyWake);
 }
 
 /**
