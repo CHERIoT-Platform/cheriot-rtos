@@ -79,7 +79,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 /**
  * Test suite entry point.  Runs all of the tests that we have defined.
  */
-void __cheri_compartment("test_runner") run_tests()
+int __cheri_compartment("test_runner") run_tests()
 {
 	// magic_enum is a pretty powerful stress-test of various bits of linkage.
 	// In generating `enum_values`, it generates constant strings and pointers

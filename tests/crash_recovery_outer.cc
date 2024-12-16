@@ -6,7 +6,7 @@
 #include <cheri.hh>
 #include <errno.h>
 
-void test_crash_recovery_outer(int)
+int test_crash_recovery_outer(int)
 {
 	debug_log(
 	  "Calling crashy compartment from compartment with no error handler");
@@ -19,4 +19,5 @@ void test_crash_recovery_outer(int)
 	debug_log("Calling crashy compartment returned to compartment with no "
 	          "error handler.  Return value: {}",
 	          ret);
+	return 0;
 }
