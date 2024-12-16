@@ -126,6 +126,7 @@ int test_multiwaiter()
 	     "Queue reports ready to receive but should be empty.");
 	TEST(events[1].value == 1, "Futex reports no wake");
 
-	multiwaiter_delete(MALLOC_CAPABILITY, mw);
+	TEST_EQUAL(
+	  multiwaiter_delete(MALLOC_CAPABILITY, mw), 0, "Failed to clean up");
 	return 0;
 }
