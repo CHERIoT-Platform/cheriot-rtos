@@ -224,7 +224,10 @@ namespace
 			// Release the lock before sleeping
 			g.unlock();
 			Timeout smallSleep{1};
-			thread_sleep(&smallSleep);
+			if (thread_sleep(&smallSleep) < 0)
+			{
+				return false;
+			}
 			if (!reacquire_lock(timeout, g, smallSleep.elapsed))
 			{
 				return false;
@@ -313,7 +316,11 @@ namespace
 						// Sleep for a single tick.
 						g.unlock();
 						Timeout smallSleep{1};
-						thread_sleep(&smallSleep);
+						if (thread_sleep(&smallSleep) < 0)
+						{
+							/* Unable to sleep; bail out */
+							return nullptr;
+						}
 						if (!reacquire_lock(timeout, g, smallSleep.elapsed))
 						{
 							return nullptr;
