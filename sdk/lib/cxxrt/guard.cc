@@ -76,8 +76,11 @@ namespace
 		void unlock()
 		{
 			Debug::Assert(high == LockBit, "Corrupt guard word at {}", this);
-			high = 0;
-			futex_wake(&high, std::numeric_limits<uint32_t>::max());
+			high    = 0;
+			int res = futex_wake(&high, std::numeric_limits<uint32_t>::max());
+			Debug::Assert(res >= 0,
+			              "futex_wake failed for guard {}; possible deadlock",
+			              this);
 		}
 
 		/**
