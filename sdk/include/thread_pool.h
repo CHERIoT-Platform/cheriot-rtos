@@ -45,10 +45,10 @@ int __cheri_compartment("thread_pool")
   thread_pool_async(ThreadPoolCallback fn, void *data);
 
 /**
- * Run a thread pool.  This does not return and can be used as a thread entry
- * point.
+ * Run a thread pool.  This does not return, despite the claimed type, and can
+ * be used as a thread entry point.
  */
-void __cheri_compartment("thread_pool") thread_pool_run(void);
+int __cheri_compartment("thread_pool") thread_pool_run(void);
 __END_DECLS
 
 #ifdef __cplusplus
