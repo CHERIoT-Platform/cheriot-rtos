@@ -142,9 +142,9 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 {
 #ifdef SIMULATION
 	// In simulation builds, just yield once but don't bother trying to do
-	// anything sensible with time.
+	// anything sensible with time.  Ignore failures of attempts to sleep.
 	Timeout t = {0, 1};
-	thread_sleep(&t, 0);
+	(void)thread_sleep(&t, 0);
 	return milliseconds;
 #else
 	static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
