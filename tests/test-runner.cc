@@ -66,10 +66,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 	if (mcause == 0x2)
 	{
 		debug_log("Test failure in test runner");
-#ifdef SIMULATION
 		simulation_exit(1);
-#endif
-		return ErrorRecoveryBehaviour::ForceUnwind;
 	}
 	debug_log("mcause: {}, pcc: {}", mcause, frame->pcc);
 	auto [reg, cause] = CHERI::extract_cheri_mtval(mtval);
@@ -162,13 +159,5 @@ void __cheri_compartment("test_runner") run_tests()
 
 	TEST(crashDetected == false, "One or more tests failed");
 
-	// Exit the simulator if we are running in simulation.
-#ifdef SIMULATION
 	simulation_exit();
-#endif
-	// Infinite loop if we're not in simulation.
-	while (true)
-	{
-		yield();
-	}
 }
