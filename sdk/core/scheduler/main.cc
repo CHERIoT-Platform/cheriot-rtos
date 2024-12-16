@@ -31,9 +31,10 @@ using namespace CHERI;
 /**
  * Exit simulation, reporting the error code given as the argument.
  */
-void simulation_exit(uint32_t code)
+int scheduler_simulation_exit(uint32_t code)
 {
 	platform_simulation_exit(code);
+	return -EPROTO;
 }
 #endif
 
@@ -228,8 +229,10 @@ namespace sched
 		           static_cast<uint32_t>(capcause),
 		           badcap);
 
+#ifdef SIMULATION
 		// If we're in simulation, exit here
-		simulation_exit(1);
+		platform_simulation_exit(1);
+#endif
 
 		for (;;)
 		{
@@ -300,9 +303,11 @@ namespace sched
 				// Make the current thread non-runnable.
 				if (Thread::exit())
 				{
+#ifdef SIMULATION
 					// If we have no threads left (not counting the idle
 					// thread), exit.
-					simulation_exit(0);
+					platform_simulation_exit(0);
+#endif
 				}
 				// We cannot continue exiting this thread, make sure we will
 				// pick a new one.
