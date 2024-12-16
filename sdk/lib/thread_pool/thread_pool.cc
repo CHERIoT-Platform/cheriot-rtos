@@ -47,7 +47,7 @@ int thread_pool_async(ThreadPoolCallback fn, void *data)
 	return 0;
 }
 
-void __cheri_compartment("thread_pool") thread_pool_run()
+int __cheri_compartment("thread_pool") thread_pool_run()
 {
 	while (true)
 	{
