@@ -191,8 +191,7 @@ int eventgroup_destroy_force(SObjStruct *heapCapability, EventGroup *group)
 		waiter.bitsSeen   = bits;
 		waiter.bitsSeen.notify_one();
 	}
-	heap_free(heapCapability, group);
-	return 0;
+	return heap_free(heapCapability, group);
 }
 
 int eventgroup_destroy(SObjStruct *heapCapability, EventGroup *group)
