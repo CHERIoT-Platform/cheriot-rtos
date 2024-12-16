@@ -90,18 +90,15 @@ int queue_destroy_sealed(Timeout           *timeout,
 {
 	if (token_obj_unseal(handle_key(), queueHandle) != nullptr)
 	{
-		token_obj_destroy(heapCapability, handle_key(), queueHandle);
-		return 0;
+		return token_obj_destroy(heapCapability, handle_key(), queueHandle);
 	}
 	if (token_obj_unseal(send_key(), queueHandle) != nullptr)
 	{
-		token_obj_destroy(heapCapability, send_key(), queueHandle);
-		return 0;
+		return token_obj_destroy(heapCapability, send_key(), queueHandle);
 	}
 	if (token_obj_unseal(receive_key(), queueHandle) != nullptr)
 	{
-		token_obj_destroy(heapCapability, receive_key(), queueHandle);
-		return 0;
+		return token_obj_destroy(heapCapability, receive_key(), queueHandle);
 	}
 	return -EINVAL;
 }
