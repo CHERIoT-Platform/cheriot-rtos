@@ -155,7 +155,7 @@ namespace
 		}
 		TEST(memoryExhausted, "Failed to exhaust memory");
 		debug_log("Calling heap_render");
-		heap_render();
+		TEST_EQUAL(heap_render(), 0, "heap_render returned non-zero");
 		debug_log("Trying a non-blocking allocation");
 		// nullptr check because we explicitly want to check for OOM
 		TEST(heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize) == nullptr,
