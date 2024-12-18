@@ -363,6 +363,7 @@ namespace
 		{
 			Debug::log("Thread exited, {} threads remaining", threadCount - 1);
 			current->list_remove(&priorityList[current->priority]);
+			current->priority_map_remove();
 			current->state = ThreadState::Exited;
 			return (--threadCount) == 0;
 		}
