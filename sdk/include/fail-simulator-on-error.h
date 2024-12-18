@@ -3,6 +3,8 @@
 #include <debug.hh>
 #include <priv/riscv.h>
 #include <simulator.h>
+#include <unwind.h>
+#include <switcher.h>
 
 using DebugErrorHandler = ConditionalDebug<
 #ifdef NDEBUG
@@ -40,32 +42,35 @@ using DebugErrorHandler = ConditionalDebug<
 extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 {
-	if (mcause == priv::MCAUSE_CHERI)
-	{
-		// An unexpected error -- log it and end the simulation with error.
-		// Note: handle CZR differently as `get_register_value` will return a
-		// nullptr which we cannot dereference.
+	switcher_handler_invocation_count_reset();
+	on_error([&] {
+		if (mcause == priv::MCAUSE_CHERI)
+		{
+			// An unexpected error -- log it and end the simulation with error.
+			// Note: handle CZR differently as `get_register_value` will return a
+			// nullptr which we cannot dereference.
 
-		auto [exceptionCode, registerNumber] =
-		  CHERI::extract_cheri_mtval(mtval);
+			auto [exceptionCode, registerNumber] =
+			CHERI::extract_cheri_mtval(mtval);
 
-		DebugErrorHandler::log(
-		  "{} error at {} (return address: {}), with capability register "
-		  "{}: {}",
-		  exceptionCode,
-		  frame->pcc,
-		  frame->get_register_value<CHERI::RegisterNumber::CRA>(),
-		  registerNumber,
-		  registerNumber == CHERI::RegisterNumber::CZR
-		    ? nullptr
-		    : *frame->get_register_value(registerNumber));
-	}
-	else
-	{
-		// other error (e.g. __builtin_trap causes ReservedInstruciton)
-		// log and end simulation with error.
-		DebugErrorHandler::log("Unhandled error {} at {}", mcause, frame->pcc);
-	}
+			DebugErrorHandler::log(
+			"{} error at {} (return address: {}), with capability register "
+			"{}: {}",
+			exceptionCode,
+			frame->pcc,
+			frame->get_register_value<CHERI::RegisterNumber::CRA>(),
+			registerNumber,
+			registerNumber == CHERI::RegisterNumber::CZR
+				? nullptr
+				: *frame->get_register_value(registerNumber));
+		}
+		else
+		{
+			// other error (e.g. __builtin_trap causes ReservedInstruciton)
+			// log and end simulation with error.
+			DebugErrorHandler::log("Unhandled error {} at {}", mcause, frame->pcc);
+		}
+	});
 
 	simulation_exit(1);
 	/*
