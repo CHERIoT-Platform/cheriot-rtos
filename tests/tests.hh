@@ -56,6 +56,6 @@ void debug_log(const char *fmt, Args... args)
 inline Ticks sleep(Ticks ticks)
 {
 	Timeout t{ticks};
-	thread_sleep(&t);
+	TEST(thread_sleep(&t) >= 0, "Failed to sleep");
 	return t.elapsed;
 };

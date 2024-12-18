@@ -75,8 +75,7 @@ int test_thread_pool()
 	int sleeps = 0;
 	while (counter < 2)
 	{
-		Timeout t{1};
-		thread_sleep(&t);
+		TEST(sleep(1) >= 0, "Failed to sleep");
 		TEST(sleeps < 100, "Gave up after too many sleeps");
 	}
 	debug_log("Yielded {} times for the thread pool to run our jobs", sleeps);
@@ -125,8 +124,7 @@ int test_thread_pool()
 	{
 		if (!asyncThread)
 		{
-			Timeout t{1};
-			thread_sleep(&t);
+			TEST(sleep(1) >= 0, "Failed to sleep");
 		}
 	}
 	TEST(asyncThread, "Worker thread did not provide thread pointer");
@@ -134,8 +132,7 @@ int test_thread_pool()
 	bool ret         = switcher_interrupt_thread(asyncThread);
 	interruptStarted = true;
 	TEST(ret, "Interrupting worker thread failed: {}", ret);
-	Timeout t{3};
-	thread_sleep(&t);
+	TEST(sleep(3) >= 0, "Failed to sleep");
 	TEST(interrupted, "Worker thread was not interrupted");
 	return 0;
 	static cheriot::atomic<uint32_t> barrier{3};

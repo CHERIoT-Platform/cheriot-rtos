@@ -9,8 +9,8 @@
 /**
  * Exit simulation, reporting the error code given as the argument.
  */
-[[cheri::interrupt_state(disabled)]] void __cheri_compartment("sched")
+[[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
   simulation_exit(uint32_t code = 0);
 #else
-static inline void simulation_exit(uint32_t code){};
+static inline int simulation_exit(uint32_t code){return -ENOTSUP};
 #endif

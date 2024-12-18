@@ -67,7 +67,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 	{
 		debug_log("Test failure in test runner");
 #ifdef SIMULATION
-		simulation_exit(1);
+		(void)simulation_exit(1);
 #endif
 		return ErrorRecoveryBehaviour::ForceUnwind;
 	}
@@ -82,7 +82,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 /**
  * Test suite entry point.  Runs all of the tests that we have defined.
  */
-void __cheri_compartment("test_runner") run_tests()
+int __cheri_compartment("test_runner") run_tests()
 {
 	// magic_enum is a pretty powerful stress-test of various bits of linkage.
 	// In generating `enum_values`, it generates constant strings and pointers
@@ -164,11 +164,13 @@ void __cheri_compartment("test_runner") run_tests()
 
 	// Exit the simulator if we are running in simulation.
 #ifdef SIMULATION
-	simulation_exit();
+	(void)simulation_exit();
 #endif
 	// Infinite loop if we're not in simulation.
 	while (true)
 	{
 		yield();
 	}
+
+	return 0;
 }
