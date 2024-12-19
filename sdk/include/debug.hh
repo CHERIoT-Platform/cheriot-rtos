@@ -715,6 +715,27 @@ namespace
 		Invariant(T, const char *, Ts &&...) -> Invariant<Ts...>;
 
 		/**
+		 * Overt wrapper function around Invariant.  Sometimes template
+		 * deduction guides just don't cut it.  At the cost of a
+		 * std::make_tuple at the call site, we can still take advantage
+		 * of much of the machinery here.
+		 */
+		template<typename T, typename... Args>
+		__always_inline static void
+		invariant(T                   condition,
+		          const char         *fmt,
+		          std::tuple<Args...> args = std::make_tuple(),
+		          SourceLocation      loc  = SourceLocation::current())
+		{
+			std::apply(
+			  [&](Args... iargs) {
+				  Invariant<Args...>(
+				    condition, fmt, std::forward<Args>(iargs)..., loc);
+			  },
+			  args);
+		}
+
+		/**
 		 * Deduction guide, allows `Assert` to be used as if it were a
 		 * function.
 		 */
@@ -727,6 +748,27 @@ namespace
 		 */
 		template<typename... Ts>
 		Assert(auto, const char *, Ts &&...) -> Assert<Ts...>;
+
+		/**
+		 * Overt wrapper function around Assert.  Sometimes template
+		 * deduction guides just don't cut it.  At the cost of a
+		 * std::make_tuple at the call site, we can still take advantage
+		 * of much of the machinery here.
+		 */
+		template<typename T, typename... Args>
+		__always_inline static void
+		assertion(T                   condition,
+		          const char         *fmt,
+		          std::tuple<Args...> args = std::make_tuple(),
+		          SourceLocation      loc  = SourceLocation::current())
+		{
+			std::apply(
+			  [&](Args... iargs) {
+				  Assert<Args...>(
+				    condition, fmt, std::forward<Args>(iargs)..., loc);
+			  },
+			  args);
+		}
 	};
 
 	enum class StackCheckMode
