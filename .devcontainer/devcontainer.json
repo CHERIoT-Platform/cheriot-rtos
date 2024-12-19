@@ -2,7 +2,7 @@
   "image": "ghcr.io/cheriot-platform/devcontainer:latest",
   "remoteUser": "cheriot",
   "containerUser": "cheriot",
-  "onCreateCommand": "git config --global --add safe.directory /workspaces/cheriot-rtos && git submodule init && git submodule update && cd tests && xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands .. && cd .. && for I in ex*/[[:digit:]]* ; do echo $I ; cd $I ; xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands . && cd ../.. ; done",
+  "onCreateCommand": "git config --global --add safe.directory /workspaces/cheriot-rtos && git submodule update --init --recursive && for dir in tests tests.extra/*/ ex*/[[:digit:]]* ; do (echo Generating compile_commands.json for $dir; cd $dir && xmake f --sdk=/cheriot-tools/ && xmake project -k compile_commands); done",
   "customizations": {
     "vscode": {
       "extensions": [
