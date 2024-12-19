@@ -26,7 +26,7 @@ if which nproc ; then
 else
 	PARALLEL_JOBS=$(sysctl -n kern.smp.cpus)
 fi
-DIRECTORIES="sdk tests examples"
+DIRECTORIES="sdk tests examples tests.extra"
 # Standard headers should be included once we move to a clang-tidy that
 # supports NOLINTBEGIN to disable specific checks over a whole file.
 # In particular, modernize-redundant-void-arg should be disabled in any header
