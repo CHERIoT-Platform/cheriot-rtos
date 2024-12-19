@@ -3,7 +3,11 @@
 
 using Debug = ConditionalDebug<true, "top">;
 
+#if __has_include(<platform-hardware_revoker.hh>)
 #include <platform-hardware_revoker.hh>
+#else
+#error No platform-hardware_revoker.hh found, are you building for the right platform?
+#endif
 
 using Revoker = HardwareRevoker<uint32_t, REVOKABLE_MEMORY_START>;
 static_assert(Revoker::IsAsynchronous, "This test is for async revokers");
