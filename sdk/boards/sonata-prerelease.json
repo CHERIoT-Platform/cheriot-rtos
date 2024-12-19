@@ -80,7 +80,8 @@
         {
             "name": "RevokerInterrupt",
             "number": 1,
-            "priority": 2
+            "priority": 2,
+            "edge_triggered": true
         },
         {
             "name": "EthernetInterrupt",
