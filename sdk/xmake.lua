@@ -25,6 +25,11 @@ option("scheduler-accounting")
 	set_description("Track per-thread cycle counts in the scheduler");
 	set_showmenu(true)
 
+option("allocator-rendering")
+	set_default(false)
+	set_description("Include heap_render() functionality in the allocator")
+	set_showmenu(true)
+
 function debugOption(name)
 	option("debug-" .. name)
 		set_default(false)
@@ -229,6 +234,7 @@ target("cheriot.allocator")
 	on_load(function (target)
 		target:set("cheriot.compartment", "alloc")
 		target:set('cheriot.debug-name', "allocator")
+		target:add('defines', "HEAP_RENDER=" .. tostring(get_config("allocator-rendering")))
 	end)
 
 target("cheriot.token_library")
