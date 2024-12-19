@@ -653,6 +653,19 @@ int test_allocator()
 	     BigAllocSize);
 	debug_log("Heap size is {} bytes", HeapSize);
 
+	// Quick check of basic functionality before we get too carried away
+	{
+		Timeout t{5};
+		void *volatile p = heap_allocate(&t, MALLOC_CAPABILITY, 16);
+		TEST(Capability{p}.is_valid(), "Unable to make first allocation");
+
+		int res = heap_free(MALLOC_CAPABILITY, p);
+		TEST_EQUAL(res, 0, "heap_free returned nonzero");
+		TEST(
+		  !Capability{p}.is_valid(),
+		  "Freed pointer still live; load barrier or revoker out of service?");
+	}
+
 	test_token();
 	test_hazards();
 
