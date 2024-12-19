@@ -307,6 +307,15 @@ __if_c(static) inline _Bool heap_address_is_valid(const void *object)
 	return (address >= heap_start) && (address < heap_end);
 }
 
+/**
+ * Dump a textual rendering of the heap's structure to the debug console.
+ *
+ * If the RTOS is not built with --allocator-rendering=y, this is a no-op.
+ *
+ * Returns zero on success, non-zero on error (e.g. compartment call failure).
+ */
+int __cheri_compartment("alloc") heap_render();
+
 static inline void __dead2 abort()
 {
 	panic();
