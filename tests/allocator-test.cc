@@ -239,8 +239,13 @@ namespace
 		  16, 64, 72, 96, 128, 256, 384, 1024};
 		static constexpr size_t NAllocSizes = std::size(AllocSizes);
 
+		static constexpr size_t NCachedFrees = 4 * MaxAllocCount;
+
 		ds::xoroshiro::P32R16 rand = {};
 		auto                  t    = Timeout(0); /* don't sleep */
+
+		std::vector<void *> cachedFrees;
+		cachedFrees.resize(NCachedFrees);
 
 		auto doAlloc = [&](size_t sz) {
 			CHERI::Capability p{heap_allocate(&t, MALLOC_CAPABILITY, sz)};
@@ -262,6 +267,8 @@ namespace
 			allocations.pop_back();
 
 			TEST(CHERI::Capability{p}.is_valid(), "Double free {}", p);
+
+			cachedFrees[rand.next() % NCachedFrees] = p;
 
 			free(p);
 		};
@@ -297,7 +304,14 @@ namespace
 					doFree();
 				}
 			}
+
+			for (void *p : cachedFrees)
+			{
+				TEST(!Capability{p}.is_valid(), "Detected necromancy: {}", p);
+			}
 		}
+
+		cachedFrees.clear();
 
 		for (auto allocation : allocations)
 		{
