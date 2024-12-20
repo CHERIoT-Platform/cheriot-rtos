@@ -40,8 +40,14 @@ SOURCES=$(find ${DIRECTORIES} -name '*.cc' | grep -v /build/ | grep -v third_par
 
 echo Headers: ${HEADERS}
 echo Sources: ${SOURCES}
-rm -f tidy-*.fail
 
+${CLANG_FORMAT} -i ${HEADERS} ${SOURCES}
+if ! git diff --exit-code ${HEADERS} ${SOURCES} ; then
+	echo clang-format applied changes
+	exit 1
+fi
+
+rm -f tidy-*.fail
 # sh syntax is -c "string" [name [args ...]], so "tidy" here is the name and not included in "$@"
 echo ${HEADERS} ${SOURCES} | xargs -P${PARALLEL_JOBS} -n1 sh -c "${CLANG_TIDY} --extra-arg=-DCLANG_TIDY -export-fixes=\$(mktemp -p. tidy.fail-XXXX) \$@" tidy
 if [ $(find . -maxdepth 1 -name 'tidy.fail-*' -size +0 | wc -l) -gt 0 ] ; then
@@ -49,10 +55,3 @@ if [ $(find . -maxdepth 1 -name 'tidy.fail-*' -size +0 | wc -l) -gt 0 ] ; then
 	cat tidy.fail-*
 	exit 1
 fi
-
-${CLANG_FORMAT} -i ${HEADERS} ${SOURCES}
-if git diff --exit-code ${HEADERS} ${SOURCES} ; then
-	exit 0
-fi
-echo clang-format applied changes
-exit 1
