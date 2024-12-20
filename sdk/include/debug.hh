@@ -352,8 +352,7 @@ struct DebugFormatArgumentAdaptor<T>
 {
 	__always_inline static DebugFormatArgument construct(T value)
 	{
-		return {reinterpret_cast<uintptr_t>(
-		          static_cast<const volatile void *>(value)),
+		return {reinterpret_cast<uintptr_t>(value),
 		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };
@@ -368,8 +367,7 @@ struct DebugFormatArgumentAdaptor<CHERI::Capability<T>>
 	__always_inline static DebugFormatArgument
 	construct(CHERI::Capability<T> value)
 	{
-		return {reinterpret_cast<uintptr_t>(
-		          static_cast<const volatile void *>(value)),
+		return {reinterpret_cast<uintptr_t>(value.get()),
 		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };
