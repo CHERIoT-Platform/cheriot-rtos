@@ -72,8 +72,9 @@ namespace
 		void unlock()
 		{
 			assert(high == LockBit);
-			high = 0;
-			futex_wake(&high, std::numeric_limits<uint32_t>::max());
+			high    = 0;
+			int res = futex_wake(&high, std::numeric_limits<uint32_t>::max());
+			assert(res >= 0);
 		}
 
 		/**

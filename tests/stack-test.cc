@@ -27,16 +27,17 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
 
-__cheri_callback void test_trusted_stack_exhaustion()
+__cheri_callback int test_trusted_stack_exhaustion()
 {
-	exhaust_trusted_stack(&test_trusted_stack_exhaustion,
-	                      &threadStackTestFailed);
+	return exhaust_trusted_stack(&test_trusted_stack_exhaustion,
+	                             &threadStackTestFailed);
 }
 
-__cheri_callback void cross_compartment_call()
+__cheri_callback int cross_compartment_call()
 {
 	TEST(false,
 	     "Cross compartment call with invalid CSP shouldn't be reachable");
+	return -EINVAL;
 }
 
 namespace
@@ -70,7 +71,10 @@ namespace
 	void expect_handler(bool handlerExpected)
 	{
 		debug_log("Expected to invoke the handler? {}", handlerExpected);
-		set_expected_behaviour(&threadStackTestFailed, handlerExpected);
+		TEST_EQUAL(
+		  set_expected_behaviour(&threadStackTestFailed, handlerExpected),
+		  0,
+		  "Failed to set expectations");
 	}
 
 	__attribute__((used)) extern "C" int test_small_stack()
@@ -114,7 +118,7 @@ asm(".section .text\n"
 // Defeat the compiler optimisation that may turn our first call to this into a
 // call. If the compiler does this then we will fail on an even number of
 // cross-compartment calls not an odd number.
-__cheri_callback void (*volatile crossCompartmentCall)();
+__cheri_callback int (*volatile crossCompartmentCall)();
 
 /*
  * The stack tests should cover the edge-cases scenarios for both
@@ -139,7 +143,7 @@ int test_stack()
 	TEST(ret == -ENOTENOUGHSTACK,
 	     "test_with_small_stack failed, returned {} with 128-byte stack",
 	     ret);
-	__cheri_callback void (*callback)() = cross_compartment_call;
+	__cheri_callback int (*callback)() = cross_compartment_call;
 
 	crossCompartmentCall = test_trusted_stack_exhaustion;
 	debug_log("exhaust trusted stack, do self recursion with a cheri_callback");
@@ -148,12 +152,15 @@ int test_stack()
 
 	debug_log("exhausting the compartment stack");
 	expect_handler(false);
-	exhaust_thread_stack();
+	TEST_EQUAL(
+	  exhaust_thread_stack(), -ECOMPARTMENTFAIL, "exhaust_thread_stack failed");
 
 	debug_log("exhausting the compartment stack during a switcher call");
 	expect_handler(false);
 	threadStackTestFailed = true;
-	exhaust_thread_stack_spill(callback);
+	TEST_EQUAL(exhaust_thread_stack_spill(callback),
+	           0,
+	           "exhaust_thread_stack_spill failed");
 	TEST(threadStackTestFailed == false, "switcher did not return error");
 
 	debug_log("modifying stack permissions on fault");
@@ -164,7 +171,9 @@ int test_stack()
 		  compartmentStackPermissions.without(permissionToRemove);
 		debug_log("Permissions: {}", permissions);
 		expect_handler(stack_is_mostly_valid(permissions));
-		set_csp_permissions_on_fault(permissions);
+		TEST_EQUAL(set_csp_permissions_on_fault(permissions),
+		           -ECOMPARTMENTFAIL,
+		           "Unexpected success with restricted permissions");
 	}
 
 	debug_log("modifying stack permissions on cross compartment call");
@@ -173,16 +182,22 @@ int test_stack()
 		auto permissions =
 		  compartmentStackPermissions.without(permissionToRemove);
 		debug_log("Permissions: {}", permissions);
-		set_csp_permissions_on_call(permissions, callback);
+		TEST_EQUAL(set_csp_permissions_on_call(permissions, callback),
+		           -ECOMPARTMENTFAIL,
+		           "Unexpected success with restricted permissions");
 	}
 
 	debug_log("invalid stack on fault");
 	expect_handler(false);
-	test_stack_invalid_on_fault();
+	TEST_EQUAL(test_stack_invalid_on_fault(),
+	           -ECOMPARTMENTFAIL,
+	           "stack_invalid_on_fault failed");
 
 	debug_log("invalid stack on cross compartment call");
 	expect_handler(false);
+	TEST_EQUAL(test_stack_invalid_on_call(callback),
+	           -ECOMPARTMENTFAIL,
+	           "stack_invalid_on_call failed");
 
-	test_stack_invalid_on_call(callback);
 	return 0;
 }
