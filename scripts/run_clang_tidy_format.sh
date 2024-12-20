@@ -47,7 +47,7 @@ if ! git diff --exit-code ${HEADERS} ${SOURCES} ; then
 	exit 1
 fi
 
-rm -f tidy-*.fail
+rm -f tidy.fail-*
 # sh syntax is -c "string" [name [args ...]], so "tidy" here is the name and not included in "$@"
 echo ${HEADERS} ${SOURCES} | xargs -P${PARALLEL_JOBS} -n1 sh -c "${CLANG_TIDY} --extra-arg=-DCLANG_TIDY -export-fixes=\$(mktemp -p. tidy.fail-XXXX) \$@" tidy
 if [ $(find . -maxdepth 1 -name 'tidy.fail-*' -size +0 | wc -l) -gt 0 ] ; then
