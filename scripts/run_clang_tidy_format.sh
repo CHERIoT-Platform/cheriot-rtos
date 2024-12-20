@@ -43,7 +43,7 @@ echo Sources: ${SOURCES}
 rm -f tidy-*.fail
 
 # sh syntax is -c "string" [name [args ...]], so "tidy" here is the name and not included in "$@"
-echo ${HEADERS} ${SOURCES} | xargs -P${PARALLEL_JOBS} -n1 sh -c "${CLANG_TIDY} -export-fixes=\$(mktemp -p. tidy.fail-XXXX) \$@" tidy
+echo ${HEADERS} ${SOURCES} | xargs -P${PARALLEL_JOBS} -n1 sh -c "${CLANG_TIDY} --extra-arg=-DCLANG_TIDY -export-fixes=\$(mktemp -p. tidy.fail-XXXX) \$@" tidy
 if [ $(find . -maxdepth 1 -name 'tidy.fail-*' -size +0 | wc -l) -gt 0 ] ; then
 	# clang-tidy put non-empty output in one of the tidy-*.fail files
 	cat tidy.fail-*
