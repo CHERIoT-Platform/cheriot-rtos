@@ -83,6 +83,8 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: recursive
+    - name: Generate compiler_commands.json files
+      run: ./scripts/generate_compiler_commands.sh
     - name: Run clang-format and clang-tidy
       run: ./scripts/run_clang_tidy_format.sh /cheriot-tools/bin
 
