@@ -84,7 +84,7 @@ jobs:
       with:
         submodules: recursive
     - name: Generate compiler_commands.json files
-      run: ./scripts/generate_compiler_commands.sh
+      run: ./scripts/generate_compile_commands.sh
     - name: Run clang-format and clang-tidy
       run: ./scripts/run_clang_tidy_format.sh /cheriot-tools/bin
 
