@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 
 # Generate compile commands files for all known projects in this repo
 
@@ -11,7 +11,11 @@ find_sdk $1
 
 echo "Using SDK=$SDK"
 
-for dir in tests tests.extra/*/ ex*/[[:digit:]]* ; do 
+# Generate compile_commands.json for all of the extra tests and examples.
+for dir in tests.extra/*/ ex*/[[:digit:]]* ; do
     echo Generating compile_commands.json for $dir
     (cd $dir && xmake f --sdk="${SDK}" && xmake project -k compile_commands)
 done
+
+# Generate the top-level compile-commands.json
+cd tests && xmake f --sdk="${SDK}" && xmake project -k compile_commands ..
