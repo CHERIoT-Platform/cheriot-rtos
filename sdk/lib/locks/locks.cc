@@ -215,6 +215,38 @@ namespace
 		}
 
 		/**
+		 * Try to acquire the lock.
+		 */
+		int try_lock(Timeout *t)
+		{
+			int      ret = 0;
+			uint32_t currentSnapshot;
+			do
+			{
+				// Get the current values of the two counters.
+				uint32_t ticket = next;
+				currentSnapshot = current;
+				// If the snapshot that we tried to acquire is equal to the
+				// value of the lock then we can acquire the lock immediately
+				// if and only if we can do an atomic exchange to increment the
+				// locks.  The atomic compare and exchange will fail if another
+				// thread has acquired the lock after us, even if it has
+				// acquired and released the lock.
+				if ((ticket + 1 == currentSnapshot) &&
+				    (next.compare_exchange_strong(ticket, ticket + 1)))
+				{
+					Debug::log("Ticket {} issued", ticket);
+					return ret;
+				}
+				Debug::log(
+				  "Ticket {} waiting for {}", ticket + 1, currentSnapshot);
+				// Wait for current to advance and retry if it does.  If it has
+				// already changed, we will retry immediately.
+			} while ((ret = current.wait(t, currentSnapshot)) == 0);
+			return ret;
+		}
+
+		/**
 		 * Release the lock.
 		 *
 		 * Note: This does not check that the lock is owned by the calling
@@ -278,6 +310,12 @@ void __cheri_libcall ticketlock_lock(TicketLockState *lock)
 void __cheri_libcall ticketlock_unlock(TicketLockState *lock)
 {
 	static_cast<InternalTicketLock *>(lock)->unlock();
+}
+
+int __cheri_libcall ticketlock_trylock(Timeout                *timeout,
+                                       struct TicketLockState *lock)
+{
+	return static_cast<InternalTicketLock *>(lock)->try_lock(timeout);
 }
 
 int recursivemutex_trylock(Timeout *timeout, RecursiveMutexState *mutex)
