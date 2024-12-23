@@ -219,7 +219,7 @@ namespace
 	    requires(!Revocation::SupportsInterruptNotification<T>)
 	{
 		// Yield while until a revocation pass has finished.
-		while (!revoker.has_revocation_finished_for_epoch<true>(epoch))
+		while (!revoker.has_revocation_finished_for_epoch(epoch))
 		{
 			// Release the lock before sleeping
 			g.unlock();
