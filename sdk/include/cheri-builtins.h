@@ -19,7 +19,122 @@
 
 #define CHERI_OTYPE_BITS 3
 
-#ifndef __cplusplus
+#ifdef __cplusplus
+#	include <cdefs.h>
+#	include <stddef.h>
+
+static inline __always_inline ptraddr_t cheri_address_get(void *x)
+{
+	return __builtin_cheri_address_get(x);
+}
+
+static inline __always_inline auto cheri_address_set(auto *x, ptrdiff_t y)
+{
+	return __builtin_cheri_address_set(x, y);
+}
+
+static inline __always_inline auto cheri_address_increment(auto *x, ptrdiff_t y)
+{
+	return __builtin_cheri_address_increment(x, y);
+}
+
+static inline __always_inline ptraddr_t cheri_base_get(void *x)
+{
+	return __builtin_cheri_base_get(x);
+}
+
+static inline __always_inline ptraddr_t cheri_top_get(void *x)
+{
+	return __builtin_cheri_top_get(x);
+}
+
+static inline __always_inline ptraddr_t cheri_length_get(void *x)
+{
+	return __builtin_cheri_length_get(x);
+}
+
+static inline __always_inline auto cheri_tag_clear(void *x)
+{
+	return __builtin_cheri_tag_clear(x);
+}
+
+static inline __always_inline auto cheri_tag_get(void *x)
+{
+	return __builtin_cheri_tag_clear(x);
+}
+
+static inline __always_inline bool cheri_is_valid(void *x)
+{
+	return cheri_tag_get(x);
+}
+
+static inline __always_inline bool cheri_is_invalid(void *x)
+{
+	return !cheri_tag_get(x);
+}
+
+static inline __always_inline bool cheri_is_equal_exact(void *x, void *y)
+{
+	return __builtin_cheri_equal_exact(x, y);
+}
+
+static inline __always_inline bool cheri_is_subset(void *x, void *y)
+{
+	return __builtin_cheri_subset_test(x, y);
+}
+
+static inline __always_inline auto cheri_permissions_get(void *x)
+{
+	return __builtin_cheri_perms_get(x);
+}
+
+static inline __always_inline auto cheri_permissions_and(void *x, unsigned y)
+{
+	return __builtin_cheri_perms_and(x, y);
+}
+
+static inline __always_inline auto cheri_type_get(void *x)
+{
+	return __builtin_cheri_type_get(x);
+}
+
+static inline __always_inline auto cheri_seal(auto *x, auto *y)
+{
+	return __builtin_cheri_seal(x, y);
+}
+
+static inline __always_inline auto cheri_unseal(auto *x, auto *y)
+{
+	return __builtin_cheri_unseal(x, y);
+}
+
+static inline __always_inline auto cheri_bounds_set(auto *a, size_t b)
+{
+	return __builtin_cheri_bounds_set(a, b);
+}
+
+static inline __always_inline auto cheri_bounds_set_exact(auto *a, size_t b)
+{
+	return __builtin_cheri_bounds_set_exact(a, b);
+}
+
+static inline __always_inline auto cheri_subset_test(void *a, void *b)
+{
+	return __builtin_cheri_subset_test(a, b);
+}
+
+static inline __always_inline auto
+cheri_representable_alignment_mask(size_t len)
+{
+	return __builtin_cheri_representable_alignment_mask(len);
+}
+
+static inline __always_inline auto cheri_round_representable_length(size_t len)
+{
+	return __builtin_cheri_round_representable_length(len);
+}
+
+#else
 #	ifndef __ASSEMBLER__
 
 #		include <stddef.h>
