@@ -521,9 +521,14 @@ namespace CHERI
 			 */
 			operator ptrdiff_t() const
 			{
+#if __has_builtin(__builtin_cheri_top_get)
+				return __builtin_cheri_top_get(ptr()) -
+				       __builtin_cheri_address_get(ptr());
+#else
 				return __builtin_cheri_length_get(ptr()) -
 				       (__builtin_cheri_address_get(ptr()) -
 				        __builtin_cheri_base_get(ptr()));
+#endif
 			}
 
 			/**
@@ -789,11 +794,9 @@ namespace CHERI
 		/**
 		 * Return the bounds as an integer.
 		 */
-		[[nodiscard]] ptrdiff_t bounds() const
+		[[nodiscard]] __always_inline ptrdiff_t bounds() const
 		{
-			return __builtin_cheri_length_get(ptr) -
-			       (__builtin_cheri_address_get(ptr()) -
-			        __builtin_cheri_base_get(ptr()));
+			return top() - address();
 		}
 
 		/**
@@ -915,7 +918,11 @@ namespace CHERI
 		 */
 		[[nodiscard]] ptraddr_t top() const
 		{
+#if __has_builtin(__builtin_cheri_top_get)
+			return __builtin_cheri_top_get(ptr);
+#else
 			return base() + length();
+#endif
 		}
 
 		/**
