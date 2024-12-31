@@ -38,7 +38,7 @@ namespace
 
 	/*
 	 * FIXME: Sail doesn't have an interrupt controller at all, but we pretend
-	 * it does just like FLUTE build to let things compile. We need tons of
+	 * it does just like other builds to let things compile. We need tons of
 	 * #ifdefs or a big rewrite to make the entire external interrupt path
 	 * optional.
 	 *

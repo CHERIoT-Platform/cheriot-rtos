@@ -194,11 +194,11 @@ Driver code does not *have* to follow any specific structure but there are some 
 ### Platform includes
 
 Each board description contains a set of include paths.
-For example, our Flute prototype platform has this:
+For example, our Ibex prototype platform has this:
 
 ```json
     "driver_includes" : [
-        "../include/platform/flute",
+        "../include/platform/ibex",
         "../include/platform/generic-riscv"
     ],
 ```
