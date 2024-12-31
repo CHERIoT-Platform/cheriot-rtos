@@ -65,7 +65,7 @@ start:
 	la_abs			s0, loader_entry_point
 	csetaddr		cra, cra, s0
 	// Base and size of the GP of loader
-	// Flute doesn't support unaligned loads, so we have to load the base as
+	// Old sails don't support unaligned loads, so we have to load the base as
 	// bytes
 	clbu			s0, IMAGE_HEADER_LOADER_DATA_START_OFFSET+3(ca1)
 	sll				s0, s0, 8
@@ -157,14 +157,7 @@ start:
 	ecall
 	// The idle thread sleeps and only waits for interrupts.
 .Lidle_loop:
-	// There is a bug in the Flute hardware revoker that means it stops during
-	// wfi, but we want it to run here.  Flute is simulation only at the
-	// moment, so we don't care that the nop is power-inefficient.
-#if defined(TEMPORAL_SAFETY) && defined(FLUTE) && !defined(SOFTWARE_REVOKER)
-	nop
-#else
 	wfi
-#endif
 	j				.Lidle_loop
 
 .Lfill_block:

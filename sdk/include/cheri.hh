@@ -1065,20 +1065,7 @@ namespace CHERI
 		 */
 		Capability<T> &unseal(void *key)
 		{
-#ifdef FLUTE
-			// Flute still throws exceptions on invalid use.  As a temporary
-			// work-around, add a quick check that this thing has the sealing
-			// type and don't unseal if it hasn't.  This isn't a complete test,
-			// it's just sufficient to get the tests passing on Flute.
-			if (type() != __builtin_cheri_address_get(key))
-			{
-				ptr = nullptr;
-			}
-			else
-#endif
-			{
-				ptr = static_cast<T *>(__builtin_cheri_unseal(ptr, key));
-			}
+			ptr = static_cast<T *>(__builtin_cheri_unseal(ptr, key));
 			return *this;
 		}
 
