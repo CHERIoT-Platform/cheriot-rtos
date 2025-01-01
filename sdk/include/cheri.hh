@@ -521,9 +521,14 @@ namespace CHERI
 			 */
 			operator ptrdiff_t() const
 			{
+#if __has_builtin(__builtin_cheri_top_get)
+				return __builtin_cheri_top_get(ptr()) -
+				       __builtin_cheri_address_get(ptr());
+#else
 				return __builtin_cheri_length_get(ptr()) -
 				       (__builtin_cheri_address_get(ptr()) -
 				        __builtin_cheri_base_get(ptr()));
+#endif
 			}
 
 			/**
@@ -789,11 +794,9 @@ namespace CHERI
 		/**
 		 * Return the bounds as an integer.
 		 */
-		[[nodiscard]] ptrdiff_t bounds() const
+		[[nodiscard]] __always_inline ptrdiff_t bounds() const
 		{
-			return __builtin_cheri_length_get(ptr) -
-			       (__builtin_cheri_address_get(ptr()) -
-			        __builtin_cheri_base_get(ptr()));
+			return top() - address();
 		}
 
 		/**
@@ -915,7 +918,11 @@ namespace CHERI
 		 */
 		[[nodiscard]] ptraddr_t top() const
 		{
+#if __has_builtin(__builtin_cheri_top_get)
+			return __builtin_cheri_top_get(ptr);
+#else
 			return base() + length();
+#endif
 		}
 
 		/**
@@ -993,7 +1000,8 @@ namespace CHERI
 		 * Implicit cast to the raw pointer type.
 		 */
 		template<typename U = T>
-		requires(!std::same_as<U, void>) operator U *()
+		    requires(!std::same_as<U, void>)
+		operator U *()
 		{
 			return ptr;
 		}
@@ -1026,7 +1034,8 @@ namespace CHERI
 		 * Dereference operator.
 		 */
 		template<typename U = T>
-		requires(!std::same_as<U, void>) U &operator*()
+		    requires(!std::same_as<U, void>)
+		U &operator*()
 		{
 			return *ptr;
 		}
@@ -1073,7 +1082,8 @@ namespace CHERI
 		 * Subscript operator.
 		 */
 		template<typename U = T>
-		requires(!std::same_as<U, void>) U &operator[](size_t index)
+		    requires(!std::same_as<U, void>)
+		U &operator[](size_t index)
 		{
 			return ptr[index];
 		}
@@ -1119,16 +1129,11 @@ namespace CHERI
 	 * library smart pointers, etc.
 	 */
 	template<typename T>
-	concept IsSmartPointerLike = requires(T b)
-	{
+	concept IsSmartPointerLike = requires(T b) {
 		{
 			b.get()
-			} -> IsPointer;
-	}
-	&&requires(T b)
-	{
-		b = b.get();
-	};
+		} -> IsPointer;
+	} && requires(T b) { b = b.get(); };
 
 	/**
 	 * Checks that `ptr` is valid, unsealed, has at least `Permissions`,
@@ -1156,15 +1161,11 @@ namespace CHERI
 	template<PermissionSet Permissions = PermissionSet{Permission::Load},
 	         bool          CheckStack  = true,
 	         bool          EnforceStrictPermissions = false>
-	__always_inline inline bool check_pointer(
-	  auto  &ptr,
-	  size_t space = sizeof(
-	    std::remove_pointer<
-	      decltype(ptr)>)) requires(std::
-	                                  is_pointer_v<
-	                                    std::remove_cvref_t<decltype(ptr)>> ||
-	                                IsSmartPointerLike<
-	                                  std::remove_cvref_t<decltype(ptr)>>)
+	__always_inline inline bool
+	check_pointer(auto  &ptr,
+	              size_t space = sizeof(std::remove_pointer<decltype(ptr)>))
+	    requires(std::is_pointer_v<std::remove_cvref_t<decltype(ptr)>> ||
+	             IsSmartPointerLike<std::remove_cvref_t<decltype(ptr)>>)
 	{
 		// We can skip a stack check if we've asked for Global because the
 		// stack does not have this permission.
