@@ -877,12 +877,12 @@ __cheriot_minimum_stack(0xc0) int heap_quarantine_empty()
 	return 0;
 }
 
-__cheriot_minimum_stack(0x210) void *heap_allocate(Timeout *timeout,
+__cheriot_minimum_stack(0x220) void *heap_allocate(Timeout *timeout,
                                                    SObj     heapCapability,
                                                    size_t   bytes,
                                                    uint32_t flags)
 {
-	STACK_CHECK(0x210);
+	STACK_CHECK(0x220);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
@@ -967,9 +967,9 @@ __cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
 	return 0;
 }
 
-__cheriot_minimum_stack(0x190) ssize_t heap_free_all(SObj heapCapability)
+__cheriot_minimum_stack(0x1a0) ssize_t heap_free_all(SObj heapCapability)
 {
-	STACK_CHECK(0x190);
+	STACK_CHECK(0x1a0);
 	LockGuard g{lock};
 	auto     *capability = malloc_capability_unseal(heapCapability);
 	if (capability == nullptr)
@@ -1006,13 +1006,13 @@ __cheriot_minimum_stack(0x190) ssize_t heap_free_all(SObj heapCapability)
 	return freed;
 }
 
-__cheriot_minimum_stack(0x210) void *heap_allocate_array(Timeout *timeout,
+__cheriot_minimum_stack(0x220) void *heap_allocate_array(Timeout *timeout,
                                                          SObj   heapCapability,
                                                          size_t nElements,
                                                          size_t elemSize,
                                                          uint32_t flags)
 {
-	STACK_CHECK(0x210);
+	STACK_CHECK(0x220);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
