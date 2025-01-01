@@ -5,6 +5,15 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
+defaults:
+  run:
+    # The `sh` used by default does not understand `source` which `xmake` uses
+    # in its profile script.  (And POSIX requires only dot, `.`, leaving
+    # `source` unspecified.  See
+    # https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html
+    # for far too much detai.)
+    shell: bash
+
 jobs:
   run-tests:
     strategy:
@@ -18,24 +27,40 @@ jobs:
       uses: actions/checkout@v3
       with:
         submodules: recursive
-    - name: Build latest xmake
+    # `xmake update` spawns `xmake` in the background, which is challenging.
+    # Work around this by using daemontools' fghack "anti-backgrounding tool";
+    # see https://cr.yp.to/daemontools/fghack.html and
+    # https://github.com/xmake-io/xmake/issues/6030 for discussion.
+    - name: "Install daemontools"
       run: |
-        xmake update dev
+        sudo apt install -y daemontools
+    - name: "Build latest xmake and prune upstream's"
+      run: |
+        mkdir -p ~/.local
+        fghack xmake update dev
         sudo apt remove -y xmake
-        echo ~/.xmake/profile
-        . ~/.xmake/profile
+    - name: "Reasonableness check: have a look around ~/.local"
+      run: |
+        find ~/.local
+        ls -la ~/.local/bin/xmake
+    - name: "Integrate xmake, generating profile script"
+      run: |
+        ~/.local/bin/xmake update --integrate
+    - name: "Reasonableness check: dump the resulting profile script"
+      run: |
+        ls -l ~/.xmake/profile
+        cat ~/.xmake/profile
     - name: Build tests
       run: |
         pwd
-        echo ~/.xmake/profile
+        . ~/.xmake/profile
         which xmake
         xmake --version
         cd tests
-        xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
+        xmake f --board=sail --sdk=/cheriot-tools/ --mode=release
         xmake
     - name: Run tests
       run: |
         . ~/.xmake/profile
-        xmake --version
         cd tests
         xmake run
