@@ -224,7 +224,10 @@ namespace
 			// Release the lock before sleeping
 			g.unlock();
 			Timeout smallSleep{1};
-			thread_sleep(&smallSleep);
+			if (thread_sleep(&smallSleep) < 0)
+			{
+				return false;
+			}
 			if (!reacquire_lock(timeout, g, smallSleep.elapsed))
 			{
 				return false;
@@ -313,7 +316,11 @@ namespace
 						// Sleep for a single tick.
 						g.unlock();
 						Timeout smallSleep{1};
-						thread_sleep(&smallSleep);
+						if (thread_sleep(&smallSleep) < 0)
+						{
+							/* Unable to sleep; bail out */
+							return nullptr;
+						}
 						if (!reacquire_lock(timeout, g, smallSleep.elapsed))
 						{
 							return nullptr;
@@ -852,7 +859,7 @@ __cheriot_minimum_stack(0x90) ssize_t
 	return cap->quota;
 }
 
-__cheriot_minimum_stack(0xc0) void heap_quarantine_empty()
+__cheriot_minimum_stack(0xc0) int heap_quarantine_empty()
 {
 	STACK_CHECK(0xc0);
 	LockGuard g{lock};
@@ -866,14 +873,16 @@ __cheriot_minimum_stack(0xc0) void heap_quarantine_empty()
 		yield();
 		g.lock();
 	}
+
+	return 0;
 }
 
-__cheriot_minimum_stack(0x210) void *heap_allocate(Timeout *timeout,
+__cheriot_minimum_stack(0x220) void *heap_allocate(Timeout *timeout,
                                                    SObj     heapCapability,
                                                    size_t   bytes,
                                                    uint32_t flags)
 {
-	STACK_CHECK(0x210);
+	STACK_CHECK(0x220);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
@@ -958,9 +967,9 @@ __cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
 	return 0;
 }
 
-__cheriot_minimum_stack(0x190) ssize_t heap_free_all(SObj heapCapability)
+__cheriot_minimum_stack(0x1a0) ssize_t heap_free_all(SObj heapCapability)
 {
-	STACK_CHECK(0x190);
+	STACK_CHECK(0x1a0);
 	LockGuard g{lock};
 	auto     *capability = malloc_capability_unseal(heapCapability);
 	if (capability == nullptr)
@@ -997,13 +1006,13 @@ __cheriot_minimum_stack(0x190) ssize_t heap_free_all(SObj heapCapability)
 	return freed;
 }
 
-__cheriot_minimum_stack(0x210) void *heap_allocate_array(Timeout *timeout,
+__cheriot_minimum_stack(0x220) void *heap_allocate_array(Timeout *timeout,
                                                          SObj   heapCapability,
                                                          size_t nElements,
                                                          size_t elemSize,
                                                          uint32_t flags)
 {
-	STACK_CHECK(0x210);
+	STACK_CHECK(0x220);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
@@ -1183,7 +1192,7 @@ __cheriot_minimum_stack(0x280) SObj
 			return sealed;
 		}
 	}
-	heap_free(heapCapability, obj);
+	(void)heap_free(heapCapability, obj);
 	return INVALID_SOBJ;
 }
 

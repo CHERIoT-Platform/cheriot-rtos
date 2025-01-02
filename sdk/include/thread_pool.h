@@ -45,10 +45,10 @@ int __cheri_compartment("thread_pool")
   thread_pool_async(ThreadPoolCallback fn, void *data);
 
 /**
- * Run a thread pool.  This does not return and can be used as a thread entry
- * point.
+ * Run a thread pool.  This does not return, despite the claimed type, and can
+ * be used as a thread entry point.
  */
-void __cheri_compartment("thread_pool") thread_pool_run(void);
+int __cheri_compartment("thread_pool") thread_pool_run(void);
 __END_DECLS
 
 #ifdef __cplusplus
@@ -94,7 +94,14 @@ namespace thread_pool
 				return;
 			}
 			(*fn)();
-			token_obj_destroy(MALLOC_CAPABILITY, key, static_cast<SObj>(rawFn));
+			/*
+			 * This fails only if the thread pool runner compartment can't make
+			 * cross-compartment calls to the allocator at all, since we're
+			 * in its initial trusted activation frame and near the beginning
+			 * (highest address) of its stack.
+			 */
+			(void)token_obj_destroy(
+			  MALLOC_CAPABILITY, key, static_cast<SObj>(rawFn));
 		}
 
 		/**
@@ -131,15 +138,18 @@ namespace thread_pool
 	 * Asynchronously invoke a lambda.  This moves the lambda to the heap and
 	 * passes it to the thread pool's queue.  If the lambda copies any stack
 	 * objects by reference then the copy will fail.
+	 *
+	 * Returns 0 on success, or compartment-call failures (ENOTENOUGHSTACK,
+	 * ENOTENOUGHTRUSTEDSTACK) if the thread pool cannot be invoked.
 	 */
 	template<typename T>
-	void async(T &&lambda)
+	int async(T &&lambda)
 	{
 		// If this is a stateless function, just send a callback function
 		// pointer, don't copy zero bytes of state to the heap.
 		if constexpr (std::is_convertible_v<T, void (*)(void)>)
 		{
-			thread_pool_async(
+			return thread_pool_async(
 			  &detail::wrap_callback_function<std::remove_cvref_t<T>>, nullptr);
 		}
 		else
@@ -167,7 +177,7 @@ namespace thread_pool
 			ThreadPoolCallback invoke =
 			  &detail::wrap_callback_lambda<LambdaType>;
 			// Dispatch it.
-			thread_pool_async(invoke, sealed);
+			return thread_pool_async(invoke, sealed);
 		}
 	}
 } // namespace thread_pool

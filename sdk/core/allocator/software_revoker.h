@@ -9,7 +9,7 @@
  * revocation pass, it will scan a region of memory and then return.
  */
 [[cheri::interrupt_state(disabled)]] __cheri_compartment(
-  "software_revoker") void revoker_tick();
+  "software_revoker") int revoker_tick();
 
 /**
  * Returns a read-only capability to the current revocation epoch.  If the low

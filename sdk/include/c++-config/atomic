@@ -287,7 +287,7 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 			__always_inline void notify_one() noexcept
 			  requires(sizeof(T) == sizeof(uint32_t))
 			{
-				futex_wake(reinterpret_cast<uint32_t *>(&value), 1);
+				(void)futex_wake(reinterpret_cast<uint32_t *>(&value), 1);
 			}
 			__always_inline void notify_one() volatile noexcept
 			  requires(sizeof(T) == sizeof(uint32_t))
@@ -298,8 +298,8 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 			__always_inline void notify_all() noexcept
 			  requires(sizeof(T) == sizeof(uint32_t))
 			{
-				futex_wake(reinterpret_cast<uint32_t *>(&value),
-				           std::numeric_limits<uint32_t>::max());
+				(void)futex_wake(reinterpret_cast<uint32_t *>(&value),
+				                 std::numeric_limits<uint32_t>::max());
 			}
 			__always_inline void notify_all() volatile noexcept
 			  requires(sizeof(T) == sizeof(uint32_t))

@@ -31,9 +31,10 @@ using namespace CHERI;
 /**
  * Exit simulation, reporting the error code given as the argument.
  */
-void simulation_exit(uint32_t code)
+int simulation_exit(uint32_t code)
 {
 	platform_simulation_exit(code);
+	return -EPROTO;
 }
 #endif
 
@@ -192,7 +193,7 @@ namespace sched
 		return &(reinterpret_cast<Thread *>(threadSpaces))[threadId - 1];
 	}
 
-	[[cheri::interrupt_state(disabled)]] void __cheri_compartment("sched")
+	[[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
 	  scheduler_entry(const ThreadLoaderInfo *info)
 	{
 		Debug::Invariant(Capability{info}.length() ==
@@ -214,6 +215,8 @@ namespace sched
 
 		InterruptController::master_init();
 		Timer::interrupt_setup();
+
+		return 0;
 	}
 
 	static void __dead2 sched_panic(size_t mcause, size_t mepc, size_t mtval)
@@ -229,7 +232,7 @@ namespace sched
 		           badcap);
 
 		// If we're in simulation, exit here
-		simulation_exit(1);
+		(void)simulation_exit(1);
 
 		for (;;)
 		{
@@ -302,7 +305,7 @@ namespace sched
 				{
 					// If we have no threads left (not counting the idle
 					// thread), exit.
-					simulation_exit(0);
+					(void)simulation_exit(0);
 				}
 				// We cannot continue exiting this thread, make sure we will
 				// pick a new one.
