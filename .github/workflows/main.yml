@@ -7,6 +7,11 @@ on:
     branches: [ main ]
   merge_group:
   workflow_dispatch:
+    inputs:
+      devcontainer:
+        description: 'Set to override default build container'
+        type: string
+        required: false
 
 jobs:
   run-tests:
@@ -27,7 +32,7 @@ jobs:
       fail-fast: false
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cheriot-platform/devcontainer:latest
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
       options: --user 1001
     steps:
     - name: Checkout repository and submodules
