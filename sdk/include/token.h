@@ -175,6 +175,13 @@ class Sealed
 	{
 		return reinterpret_cast<T *>(sealedPointer);
 	}
+	/**
+	 * Return the tag of the underlying pointer
+	 */
+	bool is_valid()
+	{
+		return __builtin_cheri_tag_get(get());
+	}
 };
 
 /**
