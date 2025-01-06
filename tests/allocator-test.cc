@@ -39,12 +39,6 @@ namespace
 
 	Timeout noWait{0};
 
-	/**
-	 * Size of an allocation that is big enough that we'll exhaust memory before
-	 * we allocate `MaxAllocCount` of them.
-	 */
-	constexpr size_t BigAllocSize  = 1024 * 32;
-	constexpr size_t AllocSize     = 0xff0;
 	constexpr size_t MaxAllocCount = 16;
 	constexpr size_t TestIterations =
 #ifdef NDEBUG
@@ -67,8 +61,11 @@ namespace
 	 * allocations in one iteration exceed the total heap size, or the revoker
 	 * is buggy or too slow.
 	 */
-	void test_revoke()
+	void test_revoke(const size_t HeapSize)
 	{
+		const size_t AllocSize = HeapSize / (MaxAllocCount + 2);
+		debug_log("test_revoke using {}-byte objects", AllocSize);
+
 		allocations.resize(MaxAllocCount);
 		for (size_t i = 0; i < TestIterations; ++i)
 		{
@@ -112,8 +109,18 @@ namespace
 	 * Test that we can do a long-running blocking allocation in one thread and
 	 * a free in another thread and make forward progress.
 	 */
-	void test_blocking_allocator()
+	void test_blocking_allocator(const size_t HeapSize)
 	{
+		/**
+		 * Size of an allocation that is big enough that we'll exhaust memory
+		 * before we allocate `MaxAllocCount` of them.
+		 */
+		const size_t BigAllocSize = HeapSize / (MaxAllocCount - 1);
+		TEST(BigAllocSize > 0,
+		     "Cannot guestimate big allocation size for our heap of {} bytes",
+		     HeapSize);
+		debug_log("BigAllocSize {} bytes", BigAllocSize);
+
 		allocations.resize(MaxAllocCount);
 		// Create the background worker before we try to exhaust memory.
 		async([]() {
@@ -138,6 +145,13 @@ namespace
 			freeStart = 2;
 			freeStart.notify_one();
 		});
+
+		/*
+		 * Empty the allocator's quarantine so that we're sure that the nullptr
+		 * failure we see below isn't because we aren't allowing the revocation
+		 * state machine to advance.
+		 */
+		heap_quarantine_empty();
 
 		bool memoryExhausted = false;
 		for (auto &allocation : allocations)
@@ -501,8 +515,9 @@ namespace
 	{
 		void      *unsealedCapability;
 		auto       sealingCapability = STATIC_SEALING_TYPE(sealingTest);
+		Timeout    t{AllocTimeout};
 		Capability sealedPointer =
-		  token_sealed_unsealed_alloc(&noWait,
+		  token_sealed_unsealed_alloc(&t,
 		                              MALLOC_CAPABILITY,
 		                              sealingCapability,
 		                              tokenSize,
@@ -647,10 +662,6 @@ int test_allocator()
 	const ptraddr_t HeapEnd   = LA_ABS(__export_mem_heap_end);
 
 	const size_t HeapSize = HeapEnd - HeapStart;
-	TEST(BigAllocSize < HeapSize,
-	     "Big allocation size is too large for our heap ({} >= {})",
-	     BigAllocSize,
-	     BigAllocSize);
 	debug_log("Heap size is {} bytes", HeapSize);
 
 	// Quick check of basic functionality before we get too carried away
@@ -711,9 +722,9 @@ int test_allocator()
 	ret = heap_free(MALLOC_CAPABILITY, array);
 	TEST(ret == 0, "Freeing array failed: {}", ret);
 
-	test_blocking_allocator();
+	test_blocking_allocator(HeapSize);
 	heap_quarantine_empty();
-	test_revoke();
+	test_revoke(HeapSize);
 	test_fuzz();
 	allocations.clear();
 	allocations.shrink_to_fit();
