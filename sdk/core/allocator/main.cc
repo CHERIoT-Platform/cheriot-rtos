@@ -1175,16 +1175,24 @@ __cheriot_minimum_stack(0x280) SObj
 	auto [sealed, obj] = allocate_sealed_unsealed(
 	  timeout, heapCapability, key, sz, {Permission::Seal, Permission::Unseal});
 	{
+		/*
+		 * Write the unsealed capability through the out parameter, while
+		 * holding the allocator lock.  That's a little heavy-handed, but it
+		 * suffices to ensure that it won't be freed out from under us, so
+		 * if it passes `check_pointer`, then the store won't trap.
+		 */
 		LockGuard g{lock};
 		if (check_pointer<PermissionSet{
 		      Permission::Store, Permission::LoadStoreCapability}>(unsealed))
 		{
 			*unsealed = obj;
-			return sealed;
 		}
 	}
-	heap_free(heapCapability, obj);
-	return INVALID_SOBJ;
+	/*
+	 * Regardless of whether we were able to store the unsealed pointer, return
+	 * the sealed object.
+	 */
+	return sealed;
 }
 
 __cheriot_minimum_stack(0x260) SObj token_sealed_alloc(Timeout *timeout,

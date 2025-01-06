@@ -158,9 +158,14 @@ namespace thread_pool
 			    detail::sealing_key_for_type<LambdaType>(),
 			    sizeof(lambda),
 			    &buffer);
-			// Copy the lambda into the new allocation.
-			// Note: We silence a warning here because we *do* want to
-			// explicitly move, not forward.
+			/*
+			 * Copy the lambda into the new allocation.
+			 *
+			 * If the above allocation has failed, this will trap.
+			 *
+			 * Note: We silence a warning here because we *do* want to
+			 * explicitly move, not forward.
+			 */
 			T *copy = new (buffer) T(
 			  std::move(lambda)); // NOLINT(bugprone-move-forwarding-reference)
 			// Create the wrapper that will unseal and invoke the lambda.
