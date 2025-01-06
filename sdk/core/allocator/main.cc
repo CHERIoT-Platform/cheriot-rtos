@@ -944,11 +944,8 @@ __cheriot_minimum_stack(0x260) int heap_can_free(SObj  heapCapability,
 	return heap_free_internal(heapCapability, rawPointer, false);
 }
 
-__cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
-                                             void *rawPointer)
+int heap_free_nostackcheck(SObj heapCapability, void *rawPointer)
 {
-	// If this value changes, update `heap_can_free` as well.
-	STACK_CHECK(0x260);
 	LockGuard g{lock};
 	int       ret = heap_free_internal(heapCapability, rawPointer, true);
 	if (ret != 0)
@@ -965,6 +962,14 @@ __cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
 	}
 
 	return 0;
+}
+
+__cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
+                                             void *rawPointer)
+{
+	// If this value changes, update `heap_can_free` as well.
+	STACK_CHECK(0x260);
+	return heap_free_nostackcheck(heapCapability, rawPointer);
 }
 
 __cheriot_minimum_stack(0x1a0) ssize_t heap_free_all(SObj heapCapability)
@@ -1256,7 +1261,7 @@ __cheriot_minimum_stack(0x260) int token_obj_destroy(SObj heapCapability,
 		// The key can't be revoked and so there is no race with the key going
 		// away after the check.
 	}
-	return heap_free(heapCapability, unsealed);
+	return heap_free_nostackcheck(heapCapability, unsealed);
 }
 
 __cheriot_minimum_stack(0xf0) int token_obj_can_destroy(SObj heapCapability,
