@@ -660,6 +660,21 @@ namespace
 		     "{}, expected {}",
 		     heap_quota_remaining(SECOND_HEAP),
 		     SECOND_HEAP_QUOTA);
+
+		/*
+		 * Test the bad-outparam failure path of token_sealed_unsealled_alloc.
+		 * This is expected to still return the allocated object.
+		 */
+		sealedPointer = token_sealed_unsealed_alloc(
+		  &noWait, SECOND_HEAP, sealingCapability, 16, nullptr);
+		TEST(sealedPointer.is_valid(), "Invalid outparam case failed alloc");
+		TEST_EQUAL(
+		  token_obj_destroy(SECOND_HEAP, sealingCapability, sealedPointer),
+		  0,
+		  "Failed to free invalid-outparam sealed object");
+		TEST_EQUAL(heap_quota_remaining(SECOND_HEAP),
+		           SECOND_HEAP_QUOTA,
+		           "Invalid outparam path failed to restore quota");
 	}
 
 } // namespace
