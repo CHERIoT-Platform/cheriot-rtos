@@ -57,6 +57,27 @@ namespace
 	std::vector<void *> allocations;
 
 	/**
+	 * Quick check of basic functionality before we get too carried away
+	 *
+	 * This is marked as noinline because otherwise the predict-false on the
+	 * test failures causes all of the log-message-and-fail blocks to be moved
+	 * to the end of the function and, if this is inlined, ends up with some
+	 * branches that are more than 2 KiB away from their targets.
+	 */
+	__noinline void test_preflight()
+	{
+		Timeout t{5};
+		void *volatile p = heap_allocate(&t, MALLOC_CAPABILITY, 16);
+		TEST(Capability{p}.is_valid(), "Unable to make first allocation");
+
+		int res = heap_free(MALLOC_CAPABILITY, p);
+		TEST_EQUAL(res, 0, "heap_free returned nonzero");
+		TEST(
+		  !Capability{p}.is_valid(),
+		  "Freed pointer still live; load barrier or revoker out of service?");
+	}
+
+	/**
 	 * Test the revoker by constantly allocating and freeing batches of
 	 * allocations. The total amount of allocations must greatly exceed the heap
 	 * size to force a constant stream of allocation failures and revocations.
@@ -66,8 +87,13 @@ namespace
 	 * This performance test should not fail. If it fails it's either the
 	 * allocations in one iteration exceed the total heap size, or the revoker
 	 * is buggy or too slow.
+	 *
+	 * This is marked as noinline because otherwise the predict-false on the
+	 * test failures causes all of the log-message-and-fail blocks to be moved
+	 * to the end of the function and, if this is inlined, ends up with some
+	 * branches that are more than 2 KiB away from their targets.
 	 */
-	void test_revoke()
+	__noinline void test_revoke()
 	{
 		allocations.resize(MaxAllocCount);
 		for (size_t i = 0; i < TestIterations; ++i)
@@ -655,19 +681,7 @@ int test_allocator()
 	     BigAllocSize);
 	debug_log("Heap size is {} bytes", HeapSize);
 
-	// Quick check of basic functionality before we get too carried away
-	{
-		Timeout t{5};
-		void *volatile p = heap_allocate(&t, MALLOC_CAPABILITY, 16);
-		TEST(Capability{p}.is_valid(), "Unable to make first allocation");
-
-		int res = heap_free(MALLOC_CAPABILITY, p);
-		TEST_EQUAL(res, 0, "heap_free returned nonzero");
-		TEST(
-		  !Capability{p}.is_valid(),
-		  "Freed pointer still live; load barrier or revoker out of service?");
-	}
-
+	test_preflight();
 	test_token();
 	test_hazards();
 
