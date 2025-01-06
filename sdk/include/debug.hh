@@ -819,20 +819,20 @@ namespace
 	 * StackUsageCheck<DebugFlag, 128, __PRETTY_FUNCTION__> stackCheck;
 	 * ```
 	 */
-	template<StackCheckMode Mode, size_t Expected, DebugContext Fn>
+	template<StackCheckMode Mode, DebugContext Fn>
 	class StackUsageCheck
 	{
 		/**
 		 * The expected maximum.  This class is templated on the function name
 		 * and so there is one copy of this per function.
 		 */
-		static inline size_t stackUsage = Expected;
+		static inline size_t stackUsage;
 
 		public:
 		/**
 		 * Default constructor, does nothing.
 		 */
-		StackUsageCheck() = default;
+		constexpr inline explicit StackUsageCheck(size_t Expected) { stackUsage = Expected; }
 
 		/**
 		 * Destructor, runs at the end of the function to print the message.

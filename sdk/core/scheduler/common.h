@@ -42,8 +42,14 @@ namespace
 #endif
 	  ;
 
-#define STACK_CHECK(expected)                                                  \
-	StackUsageCheck<StackMode, expected, __PRETTY_FUNCTION__> stackCheck
+#if __CHERIOT__ >= 20250102
+  #define STACK_CHECK(expected)                                                  \
+    assert(__builtin_cheriot_get_specified_minimum_stack() == expected); \
+	StackUsageCheck<StackMode, __PRETTY_FUNCTION__> stackCheck(__builtin_cheriot_get_specified_minimum_stack())
+#else
+  #define STACK_CHECK(expected)                                                  \
+    StackUsageCheck<StackMode, __PRETTY_FUNCTION__> stackCheck(expected)
+#endif 
 
 	/**
 	 * Base class for sealed objects that are exported from the scheduler.
