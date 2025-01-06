@@ -43,6 +43,9 @@ SKey __cheri_compartment("alloc") token_key_new(void);
  *
  * An unsealed pointer to the newly allocated object is returned in
  * `*unsealed`, the sealed pointer is returned as the return value.
+ * An invalid `unsealed` pointer does not constitute an error; the caller will
+ * still be given the sealed return value, assuming allocation was otherwise
+ * successful.
  *
  * The `key` parameter must have both the permit-seal and permit-unseal
  * permissions.
