@@ -190,14 +190,20 @@ class Sealed
 /**
  * Type-safe helper to allocate a sealed `T*`.  Returns the sealed and unsealed
  * pointers.
+ *
+ * Callers should check the sealed capability's tag to determine success.
  */
 template<typename T>
 __always_inline std::pair<T *, Sealed<T>>
 token_allocate(Timeout *timeout, struct SObjStruct *heapCapability, SKey key)
 {
-	void *unsealed;
-	SObj  sealed = token_sealed_unsealed_alloc(
-	   timeout, heapCapability, key, sizeof(T), &unsealed);
+	/*
+	 * Explicitly initialize unsealed, since callers like to check it, and not
+	 * the sealed result, for validity.
+	 */
+	void *unsealed = nullptr;
+	SObj  sealed   = token_sealed_unsealed_alloc(
+	     timeout, heapCapability, key, sizeof(T), &unsealed);
 	return {static_cast<T *>(unsealed), Sealed<T>{sealed}};
 }
 
