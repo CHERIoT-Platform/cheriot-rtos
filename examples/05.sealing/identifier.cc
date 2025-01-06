@@ -36,7 +36,7 @@ Identifier *identifier_create(int value)
 	// capabilities.
 	auto [unsealed, sealed] =
 	  blocking_forever<token_allocate<Identifier>>(MALLOC_CAPABILITY, key());
-	if (sealed == nullptr)
+	if (!sealed.is_valid())
 	{
 		return nullptr;
 	}

@@ -186,7 +186,7 @@ int queue_receive_handle_create_sealed(struct Timeout     *timeout,
 	}
 	auto [unsealed, sealed] = token_allocate<RestrictedEndpoint>(
 	  timeout, heapCapability, receive_key());
-	if (!unsealed)
+	if (!sealed.is_valid())
 	{
 		return -ENOMEM;
 	}
@@ -208,7 +208,7 @@ int queue_send_handle_create_sealed(struct Timeout     *timeout,
 	}
 	auto [unsealed, sealed] =
 	  token_allocate<RestrictedEndpoint>(timeout, heapCapability, send_key());
-	if (!unsealed)
+	if (!sealed.is_valid())
 	{
 		return -ENOMEM;
 	}
