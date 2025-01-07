@@ -1,11 +1,13 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
-#include <cassert>
 #include <cdefs.h>
+#include <debug.hh>
 #include <futex.h>
 #include <limits>
 #include <stdint.h>
+
+using Debug = ConditionalDebug<DEBUG_CXXRT, "cxxrt">;
 
 /**
  * The helper functions need to expose an unmangled name because the compiler
@@ -54,6 +56,8 @@ namespace
 
 		/**
 		 * Acquire the lock.
+		 *
+		 * This is safe only in IRQ-deferred context.
 		 */
 		void lock()
 		{
@@ -62,7 +66,7 @@ namespace
 			{
 				futex_wait(&high, LockBit);
 			}
-			assert(high == 0);
+			Debug::Assert(high == 0, "Corrupt guard word at {}", this);
 			high = LockBit;
 		}
 
@@ -71,7 +75,7 @@ namespace
 		 */
 		void unlock()
 		{
-			assert(high == LockBit);
+			Debug::Assert(high == LockBit, "Corrupt guard word at {}", this);
 			high = 0;
 			futex_wake(&high, std::numeric_limits<uint32_t>::max());
 		}
@@ -109,8 +113,8 @@ int __cxa_guard_acquire(uint64_t *guard)
 void __cxa_guard_release(uint64_t *guard)
 {
 	auto *g = reinterpret_cast<GuardWord *>(guard);
-	assert(!g->is_initialised());
-	assert(g->is_locked());
+	Debug::Assert(!g->is_initialised(), "Releasing uninitialized guard {}", g);
+	Debug::Assert(g->is_locked(), "Releasing unlocked guard {}", g);
 	g->set_initialised();
 	g->unlock();
 }
