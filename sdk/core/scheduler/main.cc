@@ -193,7 +193,7 @@ namespace sched
 		return &(reinterpret_cast<Thread *>(threadSpaces))[threadId - 1];
 	}
 
-	[[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
+	[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
 	  scheduler_entry(const ThreadLoaderInfo *info)
 	{
 		Debug::Invariant(Capability{info}.length() ==
@@ -243,7 +243,7 @@ namespace sched
 	}
 
 	[[cheri::interrupt_state(disabled)]] TrustedStack *
-	  __cheri_compartment("sched") exception_entry(TrustedStack *sealedTStack,
+	  __cheri_compartment("scheduler") exception_entry(TrustedStack *sealedTStack,
 	                                               size_t        mcause,
 	                                               size_t        mepc,
 	                                               size_t        mtval)
@@ -408,7 +408,7 @@ namespace sched
 using namespace sched;
 
 // thread APIs
-SystickReturn __cheri_compartment("sched") thread_systemtick_get()
+SystickReturn __cheri_compartment("scheduler") thread_systemtick_get()
 {
 	uint64_t      ticks = Thread::ticksSinceBoot;
 	uint32_t      hi    = ticks >> 32;
@@ -418,7 +418,7 @@ SystickReturn __cheri_compartment("sched") thread_systemtick_get()
 	return ret;
 }
 
-__cheriot_minimum_stack(0x90) int __cheri_compartment("sched")
+__cheriot_minimum_stack(0x90) int __cheri_compartment("scheduler")
   thread_sleep(Timeout *timeout, uint32_t flags)
 {
 	STACK_CHECK(0x90);

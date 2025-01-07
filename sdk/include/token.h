@@ -36,7 +36,7 @@ __BEGIN_DECLS
  * If the sealing keys have been exhausted then this will return
  * `INVALID_SKEY`.  This API is guaranteed never to block.
  */
-SKey __cheri_compartment("alloc") token_key_new(void);
+SKey __cheri_compartment("allocator") token_key_new(void);
 
 /**
  * Allocate a new object with size `sz`.
@@ -52,7 +52,7 @@ SKey __cheri_compartment("alloc") token_key_new(void);
  *
  * On error, this returns `INVALID_SOBJ`.
  */
-SObj __cheri_compartment("alloc")
+SObj __cheri_compartment("allocator")
   token_sealed_unsealed_alloc(Timeout           *timeout,
                               struct SObjStruct *heapCapability,
                               SKey               key,
@@ -65,7 +65,7 @@ SObj __cheri_compartment("alloc")
  *
  * The key must have the permit-seal permission.
  */
-SObj __cheri_compartment("alloc")
+SObj __cheri_compartment("allocator")
   token_sealed_alloc(Timeout           *timeout,
                      struct SObjStruct *heapCapability,
                      SKey,
@@ -124,7 +124,7 @@ SObj __cheri_compartment("alloc")
  * @return 0 if no errors. -EINVAL if key or obj not valid, or they don't
  * match, or double destroy.
  */
-int __cheri_compartment("alloc")
+int __cheri_compartment("allocator")
   token_obj_destroy(struct SObjStruct *heapCapability, SKey, SObj);
 
 /**
@@ -134,7 +134,7 @@ int __cheri_compartment("alloc")
  * Returns 0 on success, `-EINVAL` if the key or object is not valid, or one of
  * the errors from `heap_can_free` if the free would fail for other reasons.
  */
-int __cheri_compartment("alloc")
+int __cheri_compartment("allocator")
   token_obj_can_destroy(SObj heapCapability, SKey key, SObj object);
 
 __END_DECLS
