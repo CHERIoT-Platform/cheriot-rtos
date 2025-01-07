@@ -1460,7 +1460,8 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	// invoke the exception entry point.
 	auto exportEntry = build<ExportEntry>(
 	  imgHdr.scheduler().exportTable,
-	  LA_ABS(__export_scheduler__ZN5sched15scheduler_entryEPK16ThreadLoaderInfo));
+	  LA_ABS(
+	    __export_scheduler__ZN5sched15scheduler_entryEPK16ThreadLoaderInfo));
 	schedPCC.address() += exportEntry->functionStart;
 
 	Debug::log("Will return to scheduler entry point: {}", schedPCC);

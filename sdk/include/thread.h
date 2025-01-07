@@ -20,8 +20,8 @@ typedef struct
 	/// hi 32 bits
 	uint32_t hi;
 } SystickReturn;
-[[cheri::interrupt_state(disabled)]] SystickReturn __cheri_compartment("scheduler")
-  thread_systemtick_get(void);
+[[cheri::interrupt_state(disabled)]] SystickReturn
+  __cheri_compartment("scheduler") thread_systemtick_get(void);
 
 enum ThreadSleepFlags : uint32_t
 {

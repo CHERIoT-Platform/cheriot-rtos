@@ -243,10 +243,11 @@ namespace sched
 	}
 
 	[[cheri::interrupt_state(disabled)]] TrustedStack *
-	  __cheri_compartment("scheduler") exception_entry(TrustedStack *sealedTStack,
-	                                               size_t        mcause,
-	                                               size_t        mepc,
-	                                               size_t        mtval)
+	  __cheri_compartment("scheduler")
+	    exception_entry(TrustedStack *sealedTStack,
+	                    size_t        mcause,
+	                    size_t        mepc,
+	                    size_t        mtval)
 	{
 		if constexpr (DebugScheduler)
 		{

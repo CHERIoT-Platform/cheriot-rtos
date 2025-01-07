@@ -82,7 +82,7 @@ struct InterruptCapabilityState
  */
 #define DEFINE_INTERRUPT_CAPABILITY(name, number, mayWait, mayComplete)        \
 	DEFINE_STATIC_SEALED_VALUE(struct InterruptCapabilityState,                \
-	                           scheduler,                                          \
+	                           scheduler,                                      \
 	                           InterruptKey,                                   \
 	                           name,                                           \
 	                           number,                                         \
