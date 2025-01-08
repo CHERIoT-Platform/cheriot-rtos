@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <switcher.h>
 
-int heap_claim_fast(Timeout *timeout, const void *ptr, const void *ptr2)
+int heap_claim_ephemeral(Timeout *timeout, const void *ptr, const void *ptr2)
 {
 	void   **hazards = switcher_thread_hazard_slots();
 	auto    *epochCounter{const_cast<

@@ -734,7 +734,7 @@ class Ksz8851Ethernet
 		// does not check the pointer which is coming from external
 		// untrusted components.
 		Timeout t{10};
-		if ((heap_claim_fast(&t, buffer) < 0) ||
+		if ((heap_claim_ephemeral(&t, buffer) < 0) ||
 		    (!CHERI::check_pointer<CHERI::PermissionSet{
 		       CHERI::Permission::Load}>(buffer, length)))
 		{
