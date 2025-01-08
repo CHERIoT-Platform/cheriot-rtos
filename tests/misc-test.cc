@@ -268,6 +268,7 @@ void check_sealed_scoping()
 	           o.permissions().without(Permission::Global),
 	           "Loading global sealed cap through non-LoadGlobal bad perms");
 
+#ifndef CHERIOT_NO_SAIL_83
 	/*
 	 * Use CAndPerm to shed Global from our o cap.
 	 * Spell this a little oddly to make sure we get CAndPerm with a mask of
@@ -278,6 +279,10 @@ void check_sealed_scoping()
 	oLocal2.without_permissions(Permission::Global);
 
 	TEST_EQUAL(oLocal2, OLocal1, "CAndPerm ~GL gone wrong");
+#else
+	debug_log(
+	  "Skipping test for cheriot-sail#83 because the ISA version is too old.");
+#endif
 }
 
 int test_misc()
