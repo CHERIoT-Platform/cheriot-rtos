@@ -184,9 +184,9 @@ namespace
 		  : threadId(threadid),
 		    priority(priority),
 		    OriginalPriority(priority),
-		    expiryTime(-1),
+
 		    state(ThreadState::Suspended),
-		    isYielding(false),
+
 		    sleepQueue(nullptr),
 		    tStackPtr(tstack)
 		{
@@ -566,7 +566,7 @@ namespace
 		ThreadImpl **sleepQueue;
 		/// If suspended, when will this thread expire. The maximum value is
 		/// special-cased to mean blocked indefinitely.
-		uint64_t expiryTime;
+		uint64_t expiryTime{static_cast<uint64_t>(-1)};
 
 		/// The number of cycles that this thread has been scheduled for.
 		uint64_t cycles;
@@ -654,7 +654,7 @@ namespace
 		 * expires, as long as no other threads are runnable or sleeping with
 		 * shorter timeouts.
 		 */
-		bool isYielding : 1;
+		bool isYielding : 1 {false};
 	};
 
 	using Thread = ThreadImpl<ThreadPrioNum>;
