@@ -24,16 +24,25 @@ namespace
 	using SourceID = uint32_t;
 
 	template<typename T, size_t MaxIntrID, typename SourceID, typename Priority>
-	concept IsPlic = requires(T v, SourceID id, Priority p)
-	{
-		{v.interrupt_enable(id)};
-		{v.interrupt_disable(id)};
-		{v.interrupt_disable(id)};
-		{v.priority_set(id, p)};
+	concept IsPlic = requires(T v, SourceID id, Priority p) {
+		{
+			v.interrupt_enable(id)
+		};
+		{
+			v.interrupt_disable(id)
+		};
+		{
+			v.interrupt_disable(id)
+		};
+		{
+			v.priority_set(id, p)
+		};
 		{
 			v.interrupt_claim()
-			} -> std::same_as<std::optional<SourceID>>;
-		{v.interrupt_complete(id)};
+		} -> std::same_as<std::optional<SourceID>>;
+		{
+			v.interrupt_complete(id)
+		};
 	};
 
 	/*

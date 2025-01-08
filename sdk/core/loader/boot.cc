@@ -248,7 +248,8 @@ namespace
 	         Root::Type    Type        = Root::Type::RWGlobal,
 	         PermissionSet Permissions = Root::Permissions<Type>,
 	         bool          Precise     = true>
-	Capability<T> build(auto &&range) requires(RawAddressRange<decltype(range)>)
+	Capability<T> build(auto &&range)
+	    requires(RawAddressRange<decltype(range)>)
 	{
 		return build<T, Type, Permissions, Precise>(range.start(),
 		                                            range.size());
@@ -261,9 +262,8 @@ namespace
 	template<typename T                = void,
 	         Root::Type    Type        = Root::Type::RWGlobal,
 	         PermissionSet Permissions = Root::Permissions<Type>>
-	Capability<T>
-	build(auto    &&range,
-	      ptraddr_t address) requires(RawAddressRange<decltype(range)>)
+	Capability<T> build(auto &&range, ptraddr_t address)
+	    requires(RawAddressRange<decltype(range)>)
 	{
 		return build<T, Type, Permissions>(
 		  range.start(), range.size(), address);
@@ -379,9 +379,8 @@ namespace
 	 * Helper to determine whether an object, given by a start address and size,
 	 * is completely contained within a specified range.
 	 */
-	bool contains(const auto &range,
-	              ptraddr_t   addr,
-	              size_t      size) requires(RawAddressRange<decltype(range)>)
+	bool contains(const auto &range, ptraddr_t addr, size_t size)
+	    requires(RawAddressRange<decltype(range)>)
 	{
 		return (range.start() <= addr) &&
 		       (range.start() + range.size() >= addr + size);
@@ -393,8 +392,8 @@ namespace
 	 * object must be completely contained within the range.
 	 */
 	template<typename T = char>
-	bool contains(const auto &range,
-	              ptraddr_t   addr) requires(RawAddressRange<decltype(range)>)
+	bool contains(const auto &range, ptraddr_t addr)
+	    requires(RawAddressRange<decltype(range)>)
 	{
 		return contains(range, addr, sizeof(T));
 	}
@@ -444,8 +443,8 @@ namespace
 	 * of type `T` from a virtual address range.
 	 */
 	template<typename T, bool Precise = true>
-	ContiguousPtrRange<T>
-	build_range(const auto &range) requires(RawAddressRange<decltype(range)>)
+	ContiguousPtrRange<T> build_range(const auto &range)
+	    requires(RawAddressRange<decltype(range)>)
 	{
 		Capability<T> start = build<T,
 		                            Root::Type::RWGlobal,
@@ -668,8 +667,8 @@ namespace
                             auto exportEntry = build<ExportEntry>(
                               compartment.exportTable, typeAddress);
                             Debug::Invariant(
-							   exportEntry->is_sealing_type(),
-							   "Sealed object points to invalid sealing type");
+                              exportEntry->is_sealing_type(),
+                              "Sealed object points to invalid sealing type");
                             *sealingType = exportEntry->functionStart;
                             return true;
                         }
@@ -863,8 +862,7 @@ namespace
 		for (size_t i = 0; const auto &config : image.threads())
 		{
 			Debug::log("Creating thread {}", i);
-			auto findCompartment = [&]() -> auto &
-			{
+			auto findCompartment = [&]() -> auto & {
 				for (auto &compartment : image.compartments())
 				{
 					Debug::log("Looking in export table {}+{}",
@@ -1000,8 +998,7 @@ namespace
 
 		// Find the library compartment that contains an address in its code or
 		// data section.
-		auto findCompartment = [&](ptraddr_t address) -> auto &
-		{
+		auto findCompartment = [&](ptraddr_t address) -> auto & {
 			Debug::log("Capreloc address is {}", address);
 			for (auto &compartment : image.libraries_and_compartments())
 			{

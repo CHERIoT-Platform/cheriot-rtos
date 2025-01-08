@@ -44,11 +44,13 @@ enum EventWaiterKind
 	EventWaiterFutex
 };
 
-enum [[clang::flag_enum]] EventWaiterEventChannelFlags{
-  /// Automatically clear the bits we waited on.
-  EventWaiterEventChannelClearOnExit = (1 << 24),
-  /// Notify when all bits were set.
-  EventWaiterEventChannelWaitAll = (1 << 26)};
+enum [[clang::flag_enum]] EventWaiterEventChannelFlags
+{
+	/// Automatically clear the bits we waited on.
+	EventWaiterEventChannelClearOnExit = (1 << 24),
+	/// Notify when all bits were set.
+	EventWaiterEventChannelWaitAll = (1 << 26)
+};
 
 /**
  * Structure describing a change to the set of managed event sources for an

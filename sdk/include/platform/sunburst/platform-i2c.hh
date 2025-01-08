@@ -182,105 +182,113 @@ struct OpenTitanI2c
 	};
 
 	/// Control Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
-	  /// Enable Host I2C functionality
-	  ControlEnableHost = 1 << 0,
-	  /// Enable Target I2C functionality
-	  ControlEnableTarget = 1 << 1,
-	  /// Enable I2C line loopback test If line loopback is enabled, the
-	  /// internal design sees ACQ and RX data as "1"
-	  ControlLineLoopback = 1 << 2,
-	  /// Enable NACKing the address on a stretch timeout. This is a target
-	  /// mode feature. If enabled, a stretch timeout will cause the device to
-	  /// NACK the address byte. If disabled, it will ACK instead.
-	  ControlNackAddressAfterTimeout = 1 << 3,
-	  /// Enable ACK Control Mode, which works with the `targetAckControl`
-	  /// register to allow software to control upper-layer (N)ACKing.
-	  ControlAckControlEnable = 1 << 4,
-	  /// Enable the bus monitor in multi-controller mode.
-	  ControlMultiControllerMonitorEnable = 1 << 5,
-	  /// If set, causes a read transfer addressed to the this target to set
-	  /// the corresponding bit in the `targetEvents` register. While the
-	  /// `transmitPending` field is 1, subsequent read transactions will
-	  /// stretch the clock, even if there is data in the Transmit FIFO.
-	  ControlTransmitStretchEnable = 1 << 6,
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Enable Host I2C functionality
+		ControlEnableHost = 1 << 0,
+		/// Enable Target I2C functionality
+		ControlEnableTarget = 1 << 1,
+		/// Enable I2C line loopback test If line loopback is enabled, the
+		/// internal design sees ACQ and RX data as "1"
+		ControlLineLoopback = 1 << 2,
+		/// Enable NACKing the address on a stretch timeout. This is a target
+		/// mode feature. If enabled, a stretch timeout will cause the device to
+		/// NACK the address byte. If disabled, it will ACK instead.
+		ControlNackAddressAfterTimeout = 1 << 3,
+		/// Enable ACK Control Mode, which works with the `targetAckControl`
+		/// register to allow software to control upper-layer (N)ACKing.
+		ControlAckControlEnable = 1 << 4,
+		/// Enable the bus monitor in multi-controller mode.
+		ControlMultiControllerMonitorEnable = 1 << 5,
+		/// If set, causes a read transfer addressed to the this target to set
+		/// the corresponding bit in the `targetEvents` register. While the
+		/// `transmitPending` field is 1, subsequent read transactions will
+		/// stretch the clock, even if there is data in the Transmit FIFO.
+		ControlTransmitStretchEnable = 1 << 6,
 	};
 
 	/// Status Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
-	  /// Host mode Format FIFO is full
-	  StatusFormatFull = 1 << 0,
-	  /// Host mode Receive FIFO is full
-	  StatusReceiveFull = 1 << 1,
-	  /// Host mode Format FIFO is empty
-	  StatusFormatEmpty = 1 << 2,
-	  /// Host functionality is idle. No Host transaction is in progress
-	  StatusHostIdle = 1 << 3,
-	  /// Target functionality is idle. No Target transaction is in progress
-	  StatusTargetIdle = 1 << 4,
-	  /// Host mode Receive FIFO is empty
-	  SmatusReceiveEmpty = 1 << 5,
-	  /// Target mode Transmit FIFO is full
-	  StatusTransmitFull = 1 << 6,
-	  /// Target mode Acquired FIFO is full
-	  StatusAcquiredFull = 1 << 7,
-	  /// Target mode Transmit FIFO is empty
-	  StatusTransmitEmpty = 1 << 8,
-	  /// Target mode Acquired FIFO is empty
-	  StatusAcquiredEmpty = 1 << 9,
-	  /// Target mode stretching at (N)ACK phase due to zero count
-	  /// in the `targetAckControl` register.
-	  StatusAckControlStretch = 1 << 10,
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Host mode Format FIFO is full
+		StatusFormatFull = 1 << 0,
+		/// Host mode Receive FIFO is full
+		StatusReceiveFull = 1 << 1,
+		/// Host mode Format FIFO is empty
+		StatusFormatEmpty = 1 << 2,
+		/// Host functionality is idle. No Host transaction is in progress
+		StatusHostIdle = 1 << 3,
+		/// Target functionality is idle. No Target transaction is in progress
+		StatusTargetIdle = 1 << 4,
+		/// Host mode Receive FIFO is empty
+		SmatusReceiveEmpty = 1 << 5,
+		/// Target mode Transmit FIFO is full
+		StatusTransmitFull = 1 << 6,
+		/// Target mode Acquired FIFO is full
+		StatusAcquiredFull = 1 << 7,
+		/// Target mode Transmit FIFO is empty
+		StatusTransmitEmpty = 1 << 8,
+		/// Target mode Acquired FIFO is empty
+		StatusAcquiredEmpty = 1 << 9,
+		/// Target mode stretching at (N)ACK phase due to zero count
+		/// in the `targetAckControl` register.
+		StatusAckControlStretch = 1 << 10,
 	};
 
 	/// FormatData Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
-	  /// Issue a START condition before transmitting BYTE.
-	  FormatDataStart = 1 << 8,
-	  /// Issue a STOP condition after this operation
-	  FormatDataStop = 1 << 9,
-	  /// Read BYTE bytes from I2C. (256 if BYTE==0)
-	  FormatDataReadBytes = 1 << 10,
-	  /**
-	   * Do not NACK the last byte read, let the read
-	   * operation continue
-	   */
-	  FormatDataReadCount = 1 << 11,
-	  /// Do not signal an exception if the current byte is not ACK’d
-	  FormatDataNakOk = 1 << 12,
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Issue a START condition before transmitting BYTE.
+		FormatDataStart = 1 << 8,
+		/// Issue a STOP condition after this operation
+		FormatDataStop = 1 << 9,
+		/// Read BYTE bytes from I2C. (256 if BYTE==0)
+		FormatDataReadBytes = 1 << 10,
+		/**
+		 * Do not NACK the last byte read, let the read
+		 * operation continue
+		 */
+		FormatDataReadCount = 1 << 11,
+		/// Do not signal an exception if the current byte is not ACK’d
+		FormatDataNakOk = 1 << 12,
 	};
 
 	/// FifoControl Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
-	  /// Receive fifo reset. Write 1 to the register resets it. Read returns 0
-	  FifoControlReceiveReset = 1 << 0,
-	  /// Format fifo reset. Write 1 to the register resets it. Read returns 0
-	  FifoControlFormatReset = 1 << 1,
-	  /// Acquired FIFO reset. Write 1 to the register resets it. Read returns 0
-	  FifoControlAcquiredReset = 1 << 7,
-	  /// Transmit FIFO reset. Write 1 to the register resets it. Read returns 0
-	  FifoControlTransmitReset = 1 << 8,
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Receive fifo reset. Write 1 to the register resets it. Read returns
+		/// 0
+		FifoControlReceiveReset = 1 << 0,
+		/// Format fifo reset. Write 1 to the register resets it. Read returns 0
+		FifoControlFormatReset = 1 << 1,
+		/// Acquired FIFO reset. Write 1 to the register resets it. Read returns
+		/// 0
+		FifoControlAcquiredReset = 1 << 7,
+		/// Transmit FIFO reset. Write 1 to the register resets it. Read returns
+		/// 0
+		FifoControlTransmitReset = 1 << 8,
 	};
 
 	/// ControllerEvents Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
-	  /// Controller FSM is halted due to receiving an unexpected NACK.
-	  ControllerEventsNack = 1 << 0,
-	  /**
-	   * Controller FSM is halted due to a Host-Mode active transaction being
-	   * ended by the `hostNackHandlerTimeout` mechanism.
-	   */
-	  ControllerEventsUnhandledNackTimeout = 1 << 1,
-	  /**
-	   * Controller FSM is halted due to a Host-Mode active transaction being
-	   * terminated because of a bus timeout activated by `timeoutControl`.
-	   */
-	  ControllerEventsBusTimeout = 1 << 2,
-	  /**
-	   * Controller FSM is halted due to a Host-Mode active transaction being
-	   * terminated because of lost arbitration.
-	   */
-	  ControllerEventsArbitrationLost = 1 << 3,
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Controller FSM is halted due to receiving an unexpected NACK.
+		ControllerEventsNack = 1 << 0,
+		/**
+		 * Controller FSM is halted due to a Host-Mode active transaction being
+		 * ended by the `hostNackHandlerTimeout` mechanism.
+		 */
+		ControllerEventsUnhandledNackTimeout = 1 << 1,
+		/**
+		 * Controller FSM is halted due to a Host-Mode active transaction being
+		 * terminated because of a bus timeout activated by `timeoutControl`.
+		 */
+		ControllerEventsBusTimeout = 1 << 2,
+		/**
+		 * Controller FSM is halted due to a Host-Mode active transaction being
+		 * terminated because of lost arbitration.
+		 */
+		ControllerEventsArbitrationLost = 1 << 3,
 	};
 
 	// Referred to as 'RX FIFO' in the documentation

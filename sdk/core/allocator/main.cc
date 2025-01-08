@@ -187,11 +187,11 @@ namespace
 	 *
 	 */
 	template<typename T = Revocation::Revoker>
-	bool wait_for_background_revoker(
-	  Timeout                   *timeout,
-	  uint32_t                   epoch,
-	  LockGuard<decltype(lock)> &g,
-	  T &r = revoker) requires(Revocation::SupportsInterruptNotification<T>)
+	bool wait_for_background_revoker(Timeout                   *timeout,
+	                                 uint32_t                   epoch,
+	                                 LockGuard<decltype(lock)> &g,
+	                                 T                         &r = revoker)
+	    requires(Revocation::SupportsInterruptNotification<T>)
 	{
 		// Release the lock before sleeping
 		g.unlock();
@@ -212,11 +212,11 @@ namespace
 	 *
 	 */
 	template<typename T = Revocation::Revoker>
-	bool wait_for_background_revoker(
-	  Timeout                   *timeout,
-	  uint32_t                   epoch,
-	  LockGuard<decltype(lock)> &g,
-	  T &r = revoker) requires(!Revocation::SupportsInterruptNotification<T>)
+	bool wait_for_background_revoker(Timeout                   *timeout,
+	                                 uint32_t                   epoch,
+	                                 LockGuard<decltype(lock)> &g,
+	                                 T                         &r = revoker)
+	    requires(!Revocation::SupportsInterruptNotification<T>)
 	{
 		// Yield while until a revocation pass has finished.
 		while (!revoker.has_revocation_finished_for_epoch<true>(epoch))

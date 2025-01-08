@@ -12,7 +12,7 @@ int heap_claim_fast(Timeout *timeout, const void *ptr, const void *ptr2)
 	void   **hazards = switcher_thread_hazard_slots();
 	auto    *epochCounter{const_cast<
       cheriot::atomic<uint32_t> *>(SHARED_OBJECT_WITH_PERMISSIONS(
-	     cheriot::atomic<uint32_t>, allocator_epoch, true, false, false, false))};
+      cheriot::atomic<uint32_t>, allocator_epoch, true, false, false, false))};
 	uint32_t epoch  = epochCounter->load();
 	int      values = 2;
 	// Skip processing pointers that don't refer to heap memory.

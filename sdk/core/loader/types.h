@@ -273,21 +273,21 @@ namespace loader
 	 * Helper concept for determining if something is an address.
 	 */
 	template<typename T>
-	concept IsAddress = std::same_as<T, ptraddr_t> ||
-	  std::same_as<T, ptraddr_t &> || std::same_as<T, const ptraddr_t &>;
+	concept IsAddress =
+	  std::same_as<T, ptraddr_t> || std::same_as<T, ptraddr_t &> ||
+	  std::same_as<T, const ptraddr_t &>;
 
 	/**
 	 * Concept for a raw address range.  This exposes a range of addresses.
 	 */
 	template<typename T>
-	concept RawAddressRange = requires(T range)
-	{
+	concept RawAddressRange = requires(T range) {
 		{
 			range.size()
-			} -> IsAddress;
+		} -> IsAddress;
 		{
 			range.start()
-			} -> IsAddress;
+		} -> IsAddress;
 	};
 
 	/**

@@ -157,19 +157,17 @@ namespace displacement_proxy
 {
 
 	template<auto F, typename D>
-	concept Decoder = requires(D d)
-	{
+	concept Decoder = requires(D d) {
 		{
 			F(d)
-			} -> std::same_as<size_t>;
+		} -> std::same_as<size_t>;
 	};
 
 	template<auto F, typename D>
-	concept Encoder = requires(size_t s)
-	{
+	concept Encoder = requires(size_t s) {
 		{
 			F(s)
-			} -> std::same_as<D>;
+		} -> std::same_as<D>;
 	};
 
 	/**
@@ -177,7 +175,7 @@ namespace displacement_proxy
 	 * a proxy for a pointer.
 	 */
 	template<typename T, typename D, bool Positive, auto Decode, auto Encode>
-	requires Decoder<Decode, D> && Encoder<Encode, D>
+	    requires Decoder<Decode, D> && Encoder<Encode, D>
 	class Proxy
 	{
 		CHERI::Capability<void> ctx;
@@ -286,8 +284,7 @@ namespace displacement_proxy
  *       - Collected in a treebin ring, using either/both the TChunk linkages
  *         or/and the MChunk::ring links present in body().
  */
-struct __packed __aligned(MallocAlignment)
-MChunkHeader
+struct __packed __aligned(MallocAlignment) MChunkHeader
 {
 	/**
 	 * Each chunk has a 16-bit metadata field that is used to store a small
@@ -589,8 +586,7 @@ using ChunkFreeLink = ds::linked_list::cell::PtrAddr;
  * feed an unsafe_remove'd MChunk to such a function or to simply build a new
  * MChunk header in the heap.
  */
-class __packed __aligned(MallocAlignment)
-MChunk
+class __packed __aligned(MallocAlignment) MChunk
 {
 	friend class MChunkAssertions;
 	friend class TChunk;
@@ -710,8 +706,7 @@ static inline size_t align_offset(CHERI::Capability<void> a)
  * Since we have enough room (large/tree chunks are at least 65 bytes), we just
  * put full capabilities here, and the format probably won't change, ever.
  */
-class __packed __aligned(MallocAlignment)
-TChunk
+class __packed __aligned(MallocAlignment) TChunk
 {
 	friend class TChunkAssertions;
 	friend class MState;
@@ -1505,7 +1500,7 @@ class MState
 	 */
 	static bool __always_inline capaligned_range_do(void  *start,
 	                                                size_t size,
-	                                                bool (*fn)(void **))
+	                                                bool   (*fn)(void **))
 	{
 		Debug::Assert((size & (sizeof(void *) - 1)) == 0,
 		              "Cap range is not aligned");

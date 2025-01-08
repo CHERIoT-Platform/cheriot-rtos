@@ -4,7 +4,7 @@
 #include "hello.h"
 // This header adds an error handler that writes to the UART on error.
 // Uncomment it and see that the compartmentalisation policy no longer passes.
-//#include <fail-simulator-on-error.h>
+// #include <fail-simulator-on-error.h>
 
 /// Thread entry point.
 void __cheri_compartment("hello") entry()

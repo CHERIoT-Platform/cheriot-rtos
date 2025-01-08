@@ -27,11 +27,10 @@ namespace
 
 		/// Concept for something that can be lazily called to produce a bool.
 		template<typename T>
-		concept LazyAssertion = requires(T v)
-		{
+		concept LazyAssertion = requires(T v) {
 			{
 				v()
-				} -> IsBool;
+			} -> IsBool;
 		};
 	} // namespace DebugConcepts
 
@@ -248,7 +247,7 @@ namespace
 		 * Append an enumerated type value.
 		 */
 		template<typename T>
-		requires DebugConcepts::IsEnum<T>
+		    requires DebugConcepts::IsEnum<T>
 		void append(T e)
 		{
 			// `magic_enum::enum_name` requires cap relocs, so don't use it in
@@ -482,7 +481,8 @@ namespace
 			 * Constructor, performs the assertion check.
 			 */
 			template<typename T>
-			requires DebugConcepts::IsBool<T> __always_inline
+			    requires DebugConcepts::IsBool<T>
+			__always_inline
 			Assert(T           condition,
 			       const char *fmt,
 			       Args... args,
@@ -513,7 +513,8 @@ namespace
 			 * where the assertion condition has side effects.
 			 */
 			template<typename T>
-			requires DebugConcepts::LazyAssertion<T> __always_inline
+			    requires DebugConcepts::LazyAssertion<T>
+			__always_inline
 			Assert(T         &&condition,
 			       const char *fmt,
 			       Args... args,

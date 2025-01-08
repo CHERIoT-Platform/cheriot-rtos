@@ -16,10 +16,13 @@ namespace
 	 * Concept for the interface to setting the system timer.
 	 */
 	template<typename T>
-	concept IsTimer = requires(uint32_t cycles)
-	{
-		{T::init()};
-		{T::setnext(cycles)};
+	concept IsTimer = requires(uint32_t cycles) {
+		{
+			T::init()
+		};
+		{
+			T::setnext(cycles)
+		};
 	};
 
 	static_assert(

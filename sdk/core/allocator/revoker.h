@@ -23,21 +23,22 @@ namespace Revocation
 	 * provided by the board search.
 	 */
 	template<typename T>
-	concept IsHardwareRevokerDevice = requires(T v, uint32_t epoch)
-	{
-		{v.init()};
+	concept IsHardwareRevokerDevice = requires(T v, uint32_t epoch) {
+		{
+			v.init()
+		};
 		{
 			v.system_epoch_get()
-			} -> std::same_as<uint32_t>;
+		} -> std::same_as<uint32_t>;
 		{
 			v.template has_revocation_finished_for_epoch<true>(epoch)
-			} -> std::same_as<uint32_t>;
+		} -> std::same_as<uint32_t>;
 		{
 			v.template has_revocation_finished_for_epoch<false>(epoch)
-			} -> std::same_as<uint32_t>;
+		} -> std::same_as<uint32_t>;
 		{
 			v.system_bg_revoker_kick()
-			} -> std::same_as<void>;
+		} -> std::same_as<void>;
 	};
 
 	/**
@@ -47,14 +48,12 @@ namespace Revocation
 	 * timeout expired.
 	 */
 	template<typename T>
-	concept SupportsInterruptNotification = requires(T        v,
-	                                                 Timeout *timeout,
-	                                                 uint32_t epoch)
-	{
-		{
-			v.wait_for_completion(timeout, epoch)
-			} -> std::same_as<bool>;
-	};
+	concept SupportsInterruptNotification =
+	  requires(T v, Timeout *timeout, uint32_t epoch) {
+		  {
+			  v.wait_for_completion(timeout, epoch)
+		  } -> std::same_as<bool>;
+	  };
 
 	/**
 	 * Class for interacting with the shadow bitmap.  This bitmap controls the
@@ -275,7 +274,7 @@ namespace Revocation
 	         size_t TCMBaseAddr,
 	         template<typename, size_t>
 	         typename Revoker>
-	requires IsHardwareRevokerDevice<Revoker<WordT, TCMBaseAddr>>
+	    requires IsHardwareRevokerDevice<Revoker<WordT, TCMBaseAddr>>
 	class HardwareAccelerator : public Bitmap<WordT, TCMBaseAddr>,
 	                            public Revoker<WordT, TCMBaseAddr>
 	{

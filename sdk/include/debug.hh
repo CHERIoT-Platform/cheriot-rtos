@@ -27,11 +27,10 @@ namespace DebugConcepts
 
 	/// Concept for something that can be lazily called to produce a bool.
 	template<typename T>
-	concept LazyAssertion = requires(T v)
-	{
+	concept LazyAssertion = requires(T v) {
 		{
 			v()
-			} -> IsBool;
+		} -> IsBool;
 	};
 
 	template<typename T>
@@ -87,8 +86,8 @@ struct DebugWriter
  * magic_enum to provide a string and then a numeric value.
  */
 template<typename T>
-void debug_enum_helper(uintptr_t    value,
-                       DebugWriter &writer) requires DebugConcepts::IsEnum<T>
+void debug_enum_helper(uintptr_t value, DebugWriter &writer)
+    requires DebugConcepts::IsEnum<T>
 {
 	writer.write(magic_enum::enum_name<T>(static_cast<T>(value)));
 	writer.write('(');
@@ -654,7 +653,8 @@ namespace
 			 * Constructor, performs the assertion check.
 			 */
 			template<typename T>
-			requires DebugConcepts::IsBool<T> __always_inline
+			    requires DebugConcepts::IsBool<T>
+			__always_inline
 			Assert(T           condition,
 			       const char *fmt,
 			       Args... args,
@@ -685,7 +685,8 @@ namespace
 			 * where the assertion condition has side effects.
 			 */
 			template<typename T>
-			requires DebugConcepts::LazyAssertion<T> __always_inline
+			    requires DebugConcepts::LazyAssertion<T>
+			__always_inline
 			Assert(T         &&condition,
 			       const char *fmt,
 			       Args... args,

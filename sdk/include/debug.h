@@ -10,19 +10,20 @@
  *
  * Should not be used directly.
  */
-#	define CHERIOT_DEBUG_MAP_ARGUMENT(x)                                                \
-		{                                                                                \
-			(uintptr_t)(x), _Generic((x),                                              \
-                    _Bool: DebugFormatArgumentBool,                                               \
-                    char: DebugFormatArgumentCharacter,                                           \
-                    short: DebugFormatArgumentSignedNumber32,                                \
-                    unsigned short: DebugFormatArgumentUnsignedNumber32,                            \
-                    int: DebugFormatArgumentSignedNumber32,                                \
-                    unsigned int: DebugFormatArgumentUnsignedNumber32,                            \
-                    signed long long: DebugFormatArgumentSignedNumber64,                          \
-                    unsigned long long: DebugFormatArgumentUnsignedNumber64,                      \
-                    char *: DebugFormatArgumentCString, \
-					default: DebugFormatArgumentPointer) \
+#	define CHERIOT_DEBUG_MAP_ARGUMENT(x)                                      \
+		{                                                                      \
+			(uintptr_t)(x),                                                    \
+			  _Generic((x),                                                    \
+			  _Bool: DebugFormatArgumentBool,                                  \
+			  char: DebugFormatArgumentCharacter,                              \
+			  short: DebugFormatArgumentSignedNumber32,                        \
+			  unsigned short: DebugFormatArgumentUnsignedNumber32,             \
+			  int: DebugFormatArgumentSignedNumber32,                          \
+			  unsigned int: DebugFormatArgumentUnsignedNumber32,               \
+			  signed long long: DebugFormatArgumentSignedNumber64,             \
+			  unsigned long long: DebugFormatArgumentUnsignedNumber64,         \
+			  char *: DebugFormatArgumentCString,                              \
+			  default: DebugFormatArgumentPointer)                             \
 		}
 
 /**

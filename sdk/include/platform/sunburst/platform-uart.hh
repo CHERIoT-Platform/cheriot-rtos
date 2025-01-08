@@ -75,36 +75,37 @@ struct OpenTitanUart
 	uint32_t timeoutControl;
 
 	/// OpenTitan UART Interrupts
-	typedef enum [[clang::flag_enum]]
-	: uint32_t{
-	    /// Raised if the transmit FIFO is empty.
-	    InterruptTransmitEmpty = 1 << 8,
-	    /// Raised if the receiver has detected a parity error.
-	    InterruptReceiveParityErr = 1 << 7,
-	    /// Raised if the receive FIFO has characters remaining in the FIFO
-	    /// without being
-	    /// retreived for the programmed time period.
-	    InterruptReceiveTimeout = 1 << 6,
-	    /// Raised if break condition has been detected on receive.
-	    InterruptReceiveBreakErr = 1 << 5,
-	    /// Raised if a framing error has been detected on receive.
-	    InterruptReceiveFrameErr = 1 << 4,
-	    /// Raised if the receive FIFO has overflowed.
-	    InterruptReceiveOverflow = 1 << 3,
-	    /// Raised if the transmit FIFO has emptied and no transmit is ongoing.
-	    InterruptTransmitDone = 1 << 2,
-	    /// Raised if the receive FIFO is past the high-water mark.
-	    InterruptReceiveWatermark = 1 << 1,
-	    /// Raised if the transmit FIFO is past the high-water mark.
-	    InterruptTransmitWatermark = 1 << 0,
-	  } OpenTitanUartInterrupt;
+	typedef enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Raised if the transmit FIFO is empty.
+		InterruptTransmitEmpty = 1 << 8,
+		/// Raised if the receiver has detected a parity error.
+		InterruptReceiveParityErr = 1 << 7,
+		/// Raised if the receive FIFO has characters remaining in the FIFO
+		/// without being
+		/// retreived for the programmed time period.
+		InterruptReceiveTimeout = 1 << 6,
+		/// Raised if break condition has been detected on receive.
+		InterruptReceiveBreakErr = 1 << 5,
+		/// Raised if a framing error has been detected on receive.
+		InterruptReceiveFrameErr = 1 << 4,
+		/// Raised if the receive FIFO has overflowed.
+		InterruptReceiveOverflow = 1 << 3,
+		/// Raised if the transmit FIFO has emptied and no transmit is ongoing.
+		InterruptTransmitDone = 1 << 2,
+		/// Raised if the receive FIFO is past the high-water mark.
+		InterruptReceiveWatermark = 1 << 1,
+		/// Raised if the transmit FIFO is past the high-water mark.
+		InterruptTransmitWatermark = 1 << 0,
+	} OpenTitanUartInterrupt;
 
 	/// FIFO Control Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
-	  /// Reset the transmit FIFO.
-	  FifoControlTransmitReset = 1 << 1,
-	  /// Reset the receive FIFO.
-	  FifoControlReceiveReset = 1 << 0,
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Reset the transmit FIFO.
+		FifoControlTransmitReset = 1 << 1,
+		/// Reset the receive FIFO.
+		FifoControlReceiveReset = 1 << 0,
 	};
 
 	/// Control Register Fields
