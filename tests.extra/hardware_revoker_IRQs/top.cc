@@ -5,11 +5,31 @@ using Debug = ConditionalDebug<true, "top">;
 
 #if __has_include(<platform-hardware_revoker.hh>)
 #	include <platform-hardware_revoker.hh>
+
+using Revoker = HardwareRevoker<uint32_t, REVOKABLE_MEMORY_START>;
+
+#elif defined(CLANG_TIDY)
+
+struct Revoker
+{
+	static constexpr bool IsAsynchronous = true;
+
+	uint32_t system_epoch_get()
+	{
+		return 0;
+	}
+	int wait_for_completion(Timeout *, uint32_t)
+	{
+		return 0;
+	}
+	void system_bg_revoker_kick() {}
+	void init() {}
+};
+
 #else
 #	error No platform-hardware_revoker.hh found, are you building for the right platform?
 #endif
 
-using Revoker = HardwareRevoker<uint32_t, REVOKABLE_MEMORY_START>;
 static_assert(Revoker::IsAsynchronous, "This test is for async revokers");
 
 void __cheri_compartment("top") entry()
