@@ -151,7 +151,8 @@ namespace
 		{
 			for (size_t i = 0; i < NumberOfInterrupts; i++)
 			{
-				if (ConfiguredInterrupts[i].number == uint32_t(source))
+				if (ConfiguredInterrupts[i].number ==
+				    static_cast<uint32_t>(source))
 				{
 					if constexpr (CompleteInterruptIfEdgeTriggered)
 					{

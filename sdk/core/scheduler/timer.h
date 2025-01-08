@@ -159,7 +159,8 @@ namespace
 					{
 						Debug::log("Woke thread {} {} cycles early",
 						           head->id_get(),
-						           int64_t(head->expiryTime) - now);
+						           static_cast<int64_t>(head->expiryTime) -
+						             now);
 						head->ready(Thread::WakeReason::Timer);
 					}
 				}

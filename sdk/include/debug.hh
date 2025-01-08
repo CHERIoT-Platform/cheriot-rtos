@@ -91,7 +91,7 @@ void debug_enum_helper(uintptr_t value, DebugWriter &writer)
 {
 	writer.write(magic_enum::enum_name<T>(static_cast<T>(value)));
 	writer.write('(');
-	writer.write(uint32_t(value));
+	writer.write(static_cast<uint32_t>(value));
 	writer.write(')');
 }
 

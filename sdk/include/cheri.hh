@@ -157,7 +157,7 @@ namespace CHERI
 			 */
 			constexpr Permission operator*()
 			{
-				return Permission(__builtin_ffs(permissions) - 1);
+				return static_cast<Permission>(__builtin_ffs(permissions) - 1);
 			}
 
 			/**

@@ -111,8 +111,9 @@ int __cheri_compartment("test_runner") run_tests()
 		           "Iterator of PermissionSet failed");
 	}
 	// These need to be checked visually
-	debug_log("Trying to print 8-bit integer: {}", uint8_t(0x12));
-	debug_log("Trying to print unsigned 8-bit integer: {}", int8_t(34));
+	debug_log("Trying to print 8-bit integer: {}", static_cast<uint8_t>(0x12));
+	debug_log("Trying to print unsigned 8-bit integer: {}",
+	          static_cast<int8_t>(34));
 	debug_log("Trying to print char: {}", 'c');
 	debug_log("Trying to print 32-bit integer: {}", 12345);
 	debug_log("Trying to print 64-bit integer: {}", 123456789012345LL);

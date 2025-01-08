@@ -52,7 +52,7 @@ class StandardClint : private utils::NoCopyNoMove
 			timeHigh = *timerHigh;
 			timeLow  = *pmtimer;
 		} while (timeHigh != *timerHigh);
-		return (uint64_t(timeHigh) << 32) | timeLow;
+		return (static_cast<uint64_t>(timeHigh) << 32) | timeLow;
 	}
 
 	/**

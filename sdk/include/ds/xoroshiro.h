@@ -66,7 +66,7 @@ namespace ds::xoroshiro
 				{
 					for (int b = 0; b < 64; b++)
 					{
-						if (Jump[i] & uint64_t(1) << b)
+						if (Jump[i] & static_cast<uint64_t>(1) << b)
 						{
 							s0 ^= x;
 							s1 ^= y;

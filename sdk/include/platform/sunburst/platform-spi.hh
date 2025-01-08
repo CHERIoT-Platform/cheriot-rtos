@@ -313,7 +313,7 @@ namespace SonataSpi
 				{
 					// Wait for at least one byte to be available in the RX FIFO
 					while ((status & StatusRxFifoLevel) == 0) {}
-					data[i] = uint8_t(receiveFifo);
+					data[i] = static_cast<uint8_t>(receiveFifo);
 				}
 			}
 		}

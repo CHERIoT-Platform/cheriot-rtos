@@ -147,20 +147,21 @@ namespace
 	// The switcher assembly includes the types of import table entries and
 	// trusted stacks.  This enumeration and the assembly must be kept in sync.
 	// This will fail if the enumeration value changes.
-	static_assert(int(SealedImportTableEntries) == 9,
+	static_assert(static_cast<int>(SealedImportTableEntries) == 9,
 	              "If this fails, update switcher/entry.S to the new value");
-	static_assert(int(SealedTrustedStacks) == 10,
+	static_assert(static_cast<int>(SealedTrustedStacks) == 10,
 	              "If this fails, update switcher/entry.S to the new value");
 
 	// The allocator and static sealing types must be contiguous so that the
 	// token library can hold a permit-unseal capability for both.
-	static_assert(int(Allocator) + 1 == int(StaticToken),
+	static_assert(static_cast<int>(Allocator) + 1 ==
+	                static_cast<int>(StaticToken),
 	              "Allocator and StaticToken must be consecutive");
 
 	// The token library includes the types for allocator and statically sealed
 	// objects.  This enumeration and the assembly must be kept in sync.  This
 	// will fail if the enumeration value changes.
-	static_assert(int(Allocator) == 11,
+	static_assert(static_cast<int>(Allocator) == 11,
 	              "If this fails, update token_unseal.S to the new value");
 
 	// We currently have a 3-bit hardware otype, with different sealing spaces
@@ -347,13 +348,14 @@ namespace
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc99-designator"
 		constexpr SealingType Sentries[] = {
-		  [int(InterruptStatus::Enabled)]   = SentryEnabling,
-		  [int(InterruptStatus::Disabled)]  = SentryDisabling,
-		  [int(InterruptStatus::Inherited)] = SentryInheriting};
+		  [static_cast<int>(InterruptStatus::Enabled)]   = SentryEnabling,
+		  [static_cast<int>(InterruptStatus::Disabled)]  = SentryDisabling,
+		  [static_cast<int>(InterruptStatus::Inherited)] = SentryInheriting};
 #pragma clang diagnostic pop
-		Debug::Invariant(
-		  unsigned(status) < 3, "Invalid interrupt status {}", int(status));
-		size_t otype = size_t{Sentries[int(status)]};
+		Debug::Invariant(static_cast<unsigned>(status) < 3,
+		                 "Invalid interrupt status {}",
+		                 static_cast<int>(status));
+		size_t otype = size_t{Sentries[static_cast<int>(status)]};
 		void  *key   = build<void, Root::Type::Seal>(otype, 1);
 		return ptr.seal(key);
 	}
@@ -367,10 +369,11 @@ namespace
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc99-designator"
 		constexpr SealingType Sentries[] = {
-		  [int(InterruptStatus::Enabled)]  = ReturnSentryEnabling,
-		  [int(InterruptStatus::Disabled)] = ReturnSentryDisabling};
+		  [static_cast<int>(InterruptStatus::Enabled)] = ReturnSentryEnabling,
+		  [static_cast<int>(InterruptStatus::Disabled)] =
+		    ReturnSentryDisabling};
 #pragma clang diagnostic pop
-		size_t otype = size_t{Sentries[int(Status)]};
+		size_t otype = size_t{Sentries[static_cast<int>(Status)]};
 		void  *key   = build<void, Root::Type::Seal>(otype, 1);
 		return ptr.seal(key);
 	}

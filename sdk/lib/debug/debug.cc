@@ -113,7 +113,7 @@ namespace
 			}
 			std::array<char, 10> buf;
 			const char           Digits[] = "0123456789";
-			for (int i = int(buf.size() - 1); i >= 0; i--)
+			for (int i = static_cast<int>(buf.size() - 1); i >= 0; i--)
 			{
 				buf[static_cast<size_t>(i)] = Digits[s % 10];
 				s /= 10;
@@ -146,7 +146,7 @@ namespace
 			}
 			std::array<char, 20> buf;
 			const char           Digits[] = "0123456789";
-			for (int i = int(buf.size() - 1); i >= 0; i--)
+			for (int i = static_cast<int>(buf.size() - 1); i >= 0; i--)
 			{
 				buf[static_cast<size_t>(i)] = Digits[s % 10];
 				s /= 10;
@@ -176,7 +176,7 @@ namespace
 			const char          Hexdigits[] = "0123456789abcdef";
 			// Length of string including null terminator
 			static_assert(sizeof(Hexdigits) == 0x11);
-			for (long i = long(buf.size() - 1); i >= 0; i--)
+			for (long i = static_cast<long>(buf.size() - 1); i >= 0; i--)
 			{
 				buf.at(static_cast<size_t>(i)) = Hexdigits[s & 0xf];
 				s >>= 4;
