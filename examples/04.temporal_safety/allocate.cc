@@ -84,9 +84,9 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 	}
 
-	// Sub object with a fast claim
+	// Sub object with an ephemeral claim
 	{
-		Debug::log("----- Sub object with a fast claim -----");
+		Debug::log("----- Sub object with an ephemeral claim -----");
 		void *x = malloc(100);
 
 		CHERI::Capability y{x};
@@ -96,12 +96,12 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("Sub Object: {}", y);
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
-		// Add a fast claim for y
+		// Add an ephemeral claim for y
 		Timeout t{10};
-		heap_claim_fast(&t, y);
+		heap_claim_ephemeral(&t, y);
 
 		// In this freeing x will invalidate both x & y because free
-		// is a cross compartment call, which releases any fast claims.
+		// is a cross compartment call, which releases any ephemeral claims.
 		free(x);
 		Debug::log("After free");
 		Debug::log("Allocated : {}", x);
@@ -119,7 +119,7 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("Allocated : {}", x);
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
-		// Get the claimant compartment to make a fast claim
+		// Get the claimant compartment to make a ephemeral claim
 		make_claim(x);
 
 		// free x.  We get out quota back but x remains valid as

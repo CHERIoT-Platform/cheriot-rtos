@@ -465,7 +465,7 @@ namespace
 		static cheriot::atomic<int> state = 0;
 		async([=]() {
 			Timeout t{1};
-			int     claimed = heap_claim_fast(&t, ptr, ptr2);
+			int     claimed = heap_claim_ephemeral(&t, ptr, ptr2);
 			TEST(claimed == 0, "Heap claim failed: {}", claimed);
 			state = 1;
 			while (state.load() == 1) {}

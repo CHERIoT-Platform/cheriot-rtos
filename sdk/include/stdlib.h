@@ -113,32 +113,33 @@ static inline void __dead2 panic()
 	}
 }
 
-enum [[clang::flag_enum]] AllocateWaitFlags{
-  /**
-   * Non-blocking mode. This is equivalent to passing a timeout with no time
-   * remaining.
-   */
-  AllocateWaitNone = 0,
-  /**
-   * If there is enough memory in the quarantine to fulfil the allocation, wait
-   * for the revoker to free objects from the quarantine.
-   */
-  AllocateWaitRevocationNeeded = (1 << 0),
-  /**
-   * If the quota of the passed heap capability is exceeded, wait for other
-   * threads to free allocations.
-   */
-  AllocateWaitQuotaExceeded = (1 << 1),
-  /**
-   * If the heap memory is exhausted, wait for any other thread of the system
-   * to free allocations.
-   */
-  AllocateWaitHeapFull = (1 << 2),
-  /**
-   * Block on any of the above reasons. This is the default behavior.
-   */
-  AllocateWaitAny = (AllocateWaitRevocationNeeded | AllocateWaitQuotaExceeded |
-                     AllocateWaitHeapFull),
+enum [[clang::flag_enum]] AllocateWaitFlags
+{
+	/**
+	 * Non-blocking mode. This is equivalent to passing a timeout with no time
+	 * remaining.
+	 */
+	AllocateWaitNone = 0,
+	/**
+	 * If there is enough memory in the quarantine to fulfil the allocation,
+	 * wait for the revoker to free objects from the quarantine.
+	 */
+	AllocateWaitRevocationNeeded = (1 << 0),
+	/**
+	 * If the quota of the passed heap capability is exceeded, wait for other
+	 * threads to free allocations.
+	 */
+	AllocateWaitQuotaExceeded = (1 << 1),
+	/**
+	 * If the heap memory is exhausted, wait for any other thread of the system
+	 * to free allocations.
+	 */
+	AllocateWaitHeapFull = (1 << 2),
+	/**
+	 * Block on any of the above reasons. This is the default behavior.
+	 */
+	AllocateWaitAny = (AllocateWaitRevocationNeeded |
+	                   AllocateWaitQuotaExceeded | AllocateWaitHeapFull),
 };
 
 /**
@@ -236,9 +237,19 @@ ssize_t __cheri_compartment("allocator")
  * This function is provided by the compartment_helpers library, which must be
  * linked for it to be available.
  */
-int __cheri_libcall heap_claim_fast(Timeout         *timeout,
-                                    const void      *ptr,
-                                    const void *ptr2 __if_cxx(= nullptr));
+int __cheri_libcall heap_claim_ephemeral(Timeout         *timeout,
+                                         const void      *ptr,
+                                         const void *ptr2 __if_cxx(= nullptr));
+
+__attribute__((deprecated("heap_claim_fast was a bad name.  This function has "
+                          "been renamed heap_claim_ephemeral")))
+__always_inline static int
+heap_claim_fast(Timeout         *timeout,
+                const void      *ptr,
+                const void *ptr2 __if_cxx(= nullptr))
+{
+	return heap_claim_ephemeral(timeout, ptr, ptr2);
+}
 
 /**
  * Free a heap allocation.
@@ -341,7 +352,7 @@ static inline void *calloc(size_t nmemb, size_t size)
 {
 	Timeout t   = {0, MALLOC_WAIT_TICKS};
 	void   *ptr = heap_allocate_array(
-	    &t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitRevocationNeeded);
+      &t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitRevocationNeeded);
 	if (!__builtin_cheri_tag_get(ptr))
 	{
 		ptr = NULL;
