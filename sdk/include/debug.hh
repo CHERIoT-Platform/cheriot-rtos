@@ -412,7 +412,7 @@ __always_inline inline void map_debug_argument(DebugFormatArgument *arguments,
  */
 template<typename... Args>
 __always_inline inline void
-make_debug_arguments_list(DebugFormatArgument *arguments, Args... args)
+make_debug_arguments_list(DebugFormatArgument *arguments, Args &...args)
 {
 	if constexpr (sizeof...(Args) > 0)
 	{
