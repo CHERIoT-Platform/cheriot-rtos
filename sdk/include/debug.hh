@@ -27,11 +27,10 @@ namespace DebugConcepts
 
 	/// Concept for something that can be lazily called to produce a bool.
 	template<typename T>
-	concept LazyAssertion = requires(T v)
-	{
+	concept LazyAssertion = requires(T v) {
 		{
 			v()
-			} -> IsBool;
+		} -> IsBool;
 	};
 
 	template<typename T>
@@ -80,6 +79,42 @@ struct DebugWriter
 	 * Write a 64-bit signed integer.
 	 */
 	virtual void write(int64_t) = 0;
+	/**
+	 * Write a single byte as hex with no leading 0x.
+	 */
+	virtual void write_hex_byte(uint8_t) = 0;
+	/**
+	 * Write an integer as hex.
+	 */
+	template<typename T>
+	__always_inline void write_hex(T x)
+	    requires(std::integral<T>)
+	{
+		if constexpr (sizeof(T) <= 4)
+		{
+			write(static_cast<uint32_t>(x));
+		}
+		else
+		{
+			write(static_cast<uint64_t>(x));
+		}
+	}
+	/**
+	 * Write an integer as decimal.
+	 */
+	template<typename T>
+	__always_inline void write_decimal(T x)
+	    requires(std::integral<T>)
+	{
+		if constexpr (sizeof(T) <= 4)
+		{
+			write(static_cast<int32_t>(x));
+		}
+		else
+		{
+			write(static_cast<int64_t>(x));
+		}
+	}
 };
 
 /**
@@ -87,8 +122,8 @@ struct DebugWriter
  * magic_enum to provide a string and then a numeric value.
  */
 template<typename T>
-void debug_enum_helper(uintptr_t    value,
-                       DebugWriter &writer) requires DebugConcepts::IsEnum<T>
+void debug_enum_helper(uintptr_t value, DebugWriter &writer)
+    requires DebugConcepts::IsEnum<T>
 {
 	writer.write(magic_enum::enum_name<T>(static_cast<T>(value)));
 	writer.write('(');
@@ -654,7 +689,8 @@ namespace
 			 * Constructor, performs the assertion check.
 			 */
 			template<typename T>
-			requires DebugConcepts::IsBool<T> __always_inline
+			    requires DebugConcepts::IsBool<T>
+			__always_inline
 			Assert(T           condition,
 			       const char *fmt,
 			       Args... args,
@@ -685,7 +721,8 @@ namespace
 			 * where the assertion condition has side effects.
 			 */
 			template<typename T>
-			requires DebugConcepts::LazyAssertion<T> __always_inline
+			    requires DebugConcepts::LazyAssertion<T>
+			__always_inline
 			Assert(T         &&condition,
 			       const char *fmt,
 			       Args... args,
