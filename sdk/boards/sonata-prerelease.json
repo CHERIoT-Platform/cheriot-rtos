@@ -93,7 +93,7 @@
         "ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM=1",
         "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM=1"
     ],
-    "cxflags": "-enable-machine-outliner=never",
+    "cxflags": "-mllvm -enable-machine-outliner=never",
     "driver_includes" : [
         "../include/platform/sunburst",
         "../include/platform/ibex",
