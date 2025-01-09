@@ -7,25 +7,25 @@
 namespace SonataSpi
 {
 	/// Sonata SPI Interrupts
-	typedef enum [[clang::flag_enum]]
-	: uint32_t{
-	    /// Raised when a SPI operation completes and the block has become idle.
-	    InterruptComplete = 1 << 4,
-	    /*
-	     * Asserted whilst the transmit FIFO level is at or below the
-	     * transmit watermark.
-	     */
-	    InterruptTransmitWatermark = 1 << 3,
-	    /// Asserted whilst the transmit FIFO is empty.
-	    InterruptTransmitEmpty = 1 << 2,
-	    /*
-	     * Asserted whilst the receive FIFO level is at or above the receive
-	     * watermark.
-	     */
-	    InterruptReceiveWatermark = 1 << 1,
-	    /// Asserted whilst the receive FIFO is full.
-	    InterruptReceiveFull = 1 << 0,
-	  } Interrupt;
+	typedef enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Raised when a SPI operation completes and the block has become idle.
+		InterruptComplete = 1 << 4,
+		/*
+		 * Asserted whilst the transmit FIFO level is at or below the
+		 * transmit watermark.
+		 */
+		InterruptTransmitWatermark = 1 << 3,
+		/// Asserted whilst the transmit FIFO is empty.
+		InterruptTransmitEmpty = 1 << 2,
+		/*
+		 * Asserted whilst the receive FIFO level is at or above the receive
+		 * watermark.
+		 */
+		InterruptReceiveWatermark = 1 << 1,
+		/// Asserted whilst the receive FIFO is full.
+		InterruptReceiveFull = 1 << 0,
+	} Interrupt;
 
 	/// Configuration Register Fields
 	enum : uint32_t
@@ -313,7 +313,7 @@ namespace SonataSpi
 				{
 					// Wait for at least one byte to be available in the RX FIFO
 					while ((status & StatusRxFifoLevel) == 0) {}
-					data[i] = uint8_t(receiveFifo);
+					data[i] = static_cast<uint8_t>(receiveFifo);
 				}
 			}
 		}

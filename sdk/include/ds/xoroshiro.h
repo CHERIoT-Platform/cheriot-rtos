@@ -66,7 +66,7 @@ namespace ds::xoroshiro
 				{
 					for (int b = 0; b < 64; b++)
 					{
-						if (Jump[i] & uint64_t(1) << b)
+						if (Jump[i] & static_cast<uint64_t>(1) << b)
 						{
 							s0 ^= x;
 							s1 ^= y;
@@ -124,7 +124,8 @@ namespace ds::xoroshiro
 			/**
 			 * Jump.  If supported, this is equivalent to 2^64 calls to next().
 			 */
-			void jump() requires(Jump0 != 0) && (Jump1 != 0)
+			void jump()
+			    requires(Jump0 != 0) && (Jump1 != 0)
 			{
 				jump(Jump0, Jump1);
 			}
@@ -133,7 +134,8 @@ namespace ds::xoroshiro
 			 * Jump a *really* long way.  If supported, this is equivalent to
 			 * 2^96 calls to next().
 			 */
-			void long_jump() requires(LongJump0 != 0) && (LongJump1 != 0)
+			void long_jump()
+			    requires(LongJump0 != 0) && (LongJump1 != 0)
 			{
 				jump(LongJump0, LongJump1);
 			}

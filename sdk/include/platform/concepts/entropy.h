@@ -7,15 +7,14 @@
  * Concept for an Ethernet adaptor.
  */
 template<typename T>
-concept IsEntropySource = requires(T source)
-{
+concept IsEntropySource = requires(T source) {
 	/**
 	 * Must export a flag indicating whether this is a cryptographically
 	 * secure random number.
 	 */
 	{
 		T::IsSecure
-		} -> std::convertible_to<const bool>;
+	} -> std::convertible_to<const bool>;
 
 	/**
 	 * Must return a random number.  All bits of the value type are assumed to
@@ -24,7 +23,7 @@ concept IsEntropySource = requires(T source)
 	 */
 	{
 		source()
-		} -> std::same_as<typename T::ValueType>;
+	} -> std::same_as<typename T::ValueType>;
 
 	/**
 	 * Must provide a method that reseeds the entropy source.  If this is a
@@ -32,5 +31,7 @@ concept IsEntropySource = requires(T source)
 	 * may be an empty function.  There are no constraints on the return type
 	 * of this.
 	 */
-	{source.reseed()};
+	{
+		source.reseed()
+	};
 };

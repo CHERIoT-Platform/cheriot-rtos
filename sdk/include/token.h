@@ -203,7 +203,7 @@ token_allocate(Timeout *timeout, struct SObjStruct *heapCapability, SKey key)
 	 */
 	void *unsealed = nullptr;
 	SObj  sealed   = token_sealed_unsealed_alloc(
-	     timeout, heapCapability, key, sizeof(T), &unsealed);
+      timeout, heapCapability, key, sizeof(T), &unsealed);
 	return {static_cast<T *>(unsealed), Sealed<T>{sealed}};
 }
 

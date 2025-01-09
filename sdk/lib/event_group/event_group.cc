@@ -38,7 +38,7 @@ int eventgroup_create(Timeout     *timeout,
                       EventGroup **outGroup)
 {
 	auto threads = thread_count();
-	if (threads == uint16_t(-1))
+	if (threads == static_cast<uint16_t>(-1))
 	{
 		return -ERANGE;
 	}

@@ -250,9 +250,9 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	[[nodiscard]] uint64_t supply_buffers(uint64_t bufferBitmap) volatile
 	{
 		constexpr uint32_t SetupFullBit =
-		  uint32_t(UsbStatusField::AvailableSetupFull);
+		  static_cast<uint32_t>(UsbStatusField::AvailableSetupFull);
 		constexpr uint32_t OutFullBit =
-		  uint32_t(UsbStatusField::AvailableOutFull);
+		  static_cast<uint32_t>(UsbStatusField::AvailableOutFull);
 
 		for (uint8_t index = 0; index < BufferCount; index++)
 		{
@@ -286,7 +286,7 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	 */
 	void interrupt_enable(UsbdevInterrupt interrupt) volatile
 	{
-		interruptEnable = interruptEnable | uint32_t(interrupt);
+		interruptEnable = interruptEnable | static_cast<uint32_t>(interrupt);
 	}
 
 	/**
@@ -294,7 +294,7 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	 */
 	void interrupt_disable(UsbdevInterrupt interrupt) volatile
 	{
-		interruptEnable = interruptEnable & ~uint32_t(interrupt);
+		interruptEnable = interruptEnable & ~static_cast<uint32_t>(interrupt);
 	}
 
 	/**
@@ -310,8 +310,10 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	 */
 	[[nodiscard]] int init(uint64_t &bufferBitmap) volatile
 	{
-		bufferBitmap = supply_buffers((uint64_t(1u) << BufferCount) - 1u);
-		phyConfig    = uint32_t(PhyConfigField::UseDifferentialReceiver);
+		bufferBitmap =
+		  supply_buffers((static_cast<uint64_t>(1u) << BufferCount) - 1u);
+		phyConfig =
+		  static_cast<uint32_t>(PhyConfigField::UseDifferentialReceiver);
 		return 0;
 	}
 
@@ -404,7 +406,8 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 		{
 			return -1;
 		}
-		usbControl = usbControl | uint32_t(UsbControlField::Enable);
+		usbControl =
+		  usbControl | static_cast<uint32_t>(UsbControlField::Enable);
 		return 0;
 	}
 
@@ -415,7 +418,8 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	 */
 	void disconnect() volatile
 	{
-		usbControl = usbControl & ~uint32_t(UsbControlField::Enable);
+		usbControl =
+		  usbControl & ~static_cast<uint32_t>(UsbControlField::Enable);
 	}
 
 	/**
@@ -425,7 +429,7 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	 */
 	[[nodiscard]] bool connected() volatile
 	{
-		return (usbControl & uint32_t(UsbControlField::Enable));
+		return (usbControl & static_cast<uint32_t>(UsbControlField::Enable));
 	}
 
 	/**
@@ -443,8 +447,9 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 		{
 			return -1; // Device addresses are only 7 bits long.
 		}
-		constexpr uint32_t Mask = uint32_t(UsbControlField::DeviceAddress);
-		usbControl              = (usbControl & ~Mask) | (address << 16);
+		constexpr uint32_t Mask =
+		  static_cast<uint32_t>(UsbControlField::DeviceAddress);
+		usbControl = (usbControl & ~Mask) | (address << 16);
 		return 0;
 	}
 
@@ -463,8 +468,9 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	[[nodiscard]] int retrieve_collected_packet(uint8_t &endpointId,
 	                                            uint8_t &bufferId) volatile
 	{
-		constexpr uint32_t BufferIdMask = uint32_t(ConfigInField::BufferId);
-		uint32_t           sent         = inSent;
+		constexpr uint32_t BufferIdMask =
+		  static_cast<uint32_t>(ConfigInField::BufferId);
+		uint32_t sent = inSent;
 
 		// Clear the first encountered packet sent indication.
 		for (endpointId = 0; endpointId < MaxEndpoints; endpointId++)
@@ -504,9 +510,10 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 			usbdev_transfer(buffer(bufferId), data, size, true);
 		}
 
-		constexpr uint32_t ReadyBit = uint32_t(ConfigInField::Ready);
-		configIn[endpointId]        = bufferId | (size << 8);
-		configIn[endpointId]        = configIn[endpointId] | ReadyBit;
+		constexpr uint32_t ReadyBit =
+		  static_cast<uint32_t>(ConfigInField::Ready);
+		configIn[endpointId] = bufferId | (size << 8);
+		configIn[endpointId] = configIn[endpointId] | ReadyBit;
 	}
 
 	/// The information associated with a received packet
@@ -516,22 +523,28 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 		/// The endpoint ID the received packet was received on
 		constexpr uint8_t endpoint_id()
 		{
-			return (info & uint32_t(ReceiveBufferField::EndpointId)) >> 20;
+			return (info &
+			        static_cast<uint32_t>(ReceiveBufferField::EndpointId)) >>
+			       20;
 		}
 		/// The size of the received packet
 		constexpr uint16_t size()
 		{
-			return (info & uint32_t(ReceiveBufferField::Size)) >> 8;
+			return (info & static_cast<uint32_t>(ReceiveBufferField::Size)) >>
+			       8;
 		}
 		/// Whether the received packet was a setup packet
 		constexpr bool is_setup()
 		{
-			return (info & uint32_t(ReceiveBufferField::Setup)) != 0;
+			return (info & static_cast<uint32_t>(ReceiveBufferField::Setup)) !=
+			       0;
 		}
 		/// The buffer ID used to store the received packet
 		constexpr uint8_t buffer_id()
 		{
-			return (info & uint32_t(ReceiveBufferField::BufferId)) >> 0;
+			return (info &
+			        static_cast<uint32_t>(ReceiveBufferField::BufferId)) >>
+			       0;
 		}
 	};
 
@@ -546,7 +559,7 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	 */
 	[[nodiscard]] std::optional<ReceiveBufferInfo> packet_take() volatile
 	{
-		if (!(usbStatus & uint32_t(UsbStatusField::ReceiveDepth)))
+		if (!(usbStatus & static_cast<uint32_t>(UsbStatusField::ReceiveDepth)))
 		{
 			return {}; // No packets received
 		}

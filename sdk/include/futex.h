@@ -6,15 +6,17 @@
 #include <stdint.h>
 #include <timeout.h>
 
-enum [[clang::flag_enum]] FutexWaitFlags{
-  /// No flags
-  FutexNone = 0,
-  /**
-   * This futex uses priority inheritance.  The low 16 bits of the futex word
-   * are assumed to hold the thread ID of the thread that currently holds the
-   * lock.
-   */
-  FutexPriorityInheritance = (1 << 0)};
+enum [[clang::flag_enum]] FutexWaitFlags
+{
+	/// No flags
+	FutexNone = 0,
+	/**
+	 * This futex uses priority inheritance.  The low 16 bits of the futex word
+	 * are assumed to hold the thread ID of the thread that currently holds the
+	 * lock.
+	 */
+	FutexPriorityInheritance = (1 << 0)
+};
 
 /**
  * Compare the value at `address` to `expected` and, if they match, sleep the

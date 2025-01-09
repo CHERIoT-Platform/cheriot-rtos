@@ -16,10 +16,13 @@ namespace
 	 * Concept for the interface to setting the system timer.
 	 */
 	template<typename T>
-	concept IsTimer = requires(uint32_t cycles)
-	{
-		{T::init()};
-		{T::setnext(cycles)};
+	concept IsTimer = requires(uint32_t cycles) {
+		{
+			T::init()
+		};
+		{
+			T::setnext(cycles)
+		};
 	};
 
 	static_assert(
@@ -156,7 +159,8 @@ namespace
 					{
 						Debug::log("Woke thread {} {} cycles early",
 						           head->id_get(),
-						           int64_t(head->expiryTime) - now);
+						           static_cast<int64_t>(head->expiryTime) -
+						             now);
 						head->ready(Thread::WakeReason::Timer);
 					}
 				}

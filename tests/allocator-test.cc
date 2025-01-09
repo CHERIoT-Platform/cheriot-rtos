@@ -372,11 +372,11 @@ namespace
             ssize_t claimSize = heap_claim(SECOND_HEAP, alloc);
             claimCount++;
             TEST((allocSize <= claimSize) &&
-			            (claimSize <= allocSize + CHERIOTHeapMinChunkSize),
-			          "{}-byte allocation claimed as {} bytes (claim number {})",
-			          allocSize,
-			          claimSize,
-			          claimCount);
+                   (claimSize <= allocSize + CHERIOTHeapMinChunkSize),
+                 "{}-byte allocation claimed as {} bytes (claim number {})",
+                 allocSize,
+                 claimSize,
+                 claimCount);
 		};
 		claim();
 		int ret = heap_free(SECOND_HEAP, alloc);

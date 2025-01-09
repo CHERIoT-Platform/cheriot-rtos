@@ -196,11 +196,11 @@ namespace
 			}
 			void *memory = nullptr;
 			SObj  sealed = token_sealed_unsealed_alloc(
-			   timeout,
-			   heapCapability,
-			   sealing_type(),
-			   sizeof(MultiWaiterInternal) + (length * sizeof(EventWaiter)),
-			   &memory);
+              timeout,
+              heapCapability,
+              sealing_type(),
+              sizeof(MultiWaiterInternal) + (length * sizeof(EventWaiter)),
+              &memory);
 			if (!memory)
 			{
 				error = -ENOMEM;

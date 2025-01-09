@@ -273,21 +273,21 @@ namespace loader
 	 * Helper concept for determining if something is an address.
 	 */
 	template<typename T>
-	concept IsAddress = std::same_as<T, ptraddr_t> ||
-	  std::same_as<T, ptraddr_t &> || std::same_as<T, const ptraddr_t &>;
+	concept IsAddress =
+	  std::same_as<T, ptraddr_t> || std::same_as<T, ptraddr_t &> ||
+	  std::same_as<T, const ptraddr_t &>;
 
 	/**
 	 * Concept for a raw address range.  This exposes a range of addresses.
 	 */
 	template<typename T>
-	concept RawAddressRange = requires(T range)
-	{
+	concept RawAddressRange = requires(T range) {
 		{
 			range.size()
-			} -> IsAddress;
+		} -> IsAddress;
 		{
 			range.start()
-			} -> IsAddress;
+		} -> IsAddress;
 	};
 
 	/**
@@ -1067,11 +1067,11 @@ namespace loader
 		/**
 		 * The mask to isolate the bits that describe interrupt status.
 		 */
-		static constexpr uint8_t InterruptStatusMask = uint8_t(0b11)
-		                                               << InterruptStatusShift;
+		static constexpr uint8_t InterruptStatusMask =
+		  static_cast<uint8_t>(0b11) << InterruptStatusShift;
 
 		static constexpr uint8_t InterruptStatusSwitcherMask =
-		  uint8_t(0b10) << InterruptStatusShift;
+		  static_cast<uint8_t>(0b10) << InterruptStatusShift;
 
 		/*
 		 * The switcher tests the high bit of the InterruptStatus word of
@@ -1080,11 +1080,13 @@ namespace loader
 		 * that its understanding is correct.
 		 */
 		static_assert(
-		  ((int(InterruptStatus::Enabled) << InterruptStatusShift) &
+		  ((static_cast<int>(InterruptStatus::Enabled)
+		    << InterruptStatusShift) &
 		   InterruptStatusSwitcherMask) == 0,
 		  "Switcher interpretation of InterruptStatus no longer correct");
 		static_assert(
-		  ((int(InterruptStatus::Disabled) << InterruptStatusShift) &
+		  ((static_cast<int>(InterruptStatus::Disabled)
+		    << InterruptStatusShift) &
 		   InterruptStatusSwitcherMask) != 0,
 		  "Switcher interpretation of InterruptStatus no longer correct");
 
@@ -1096,7 +1098,8 @@ namespace loader
 		 * their first word initialised to point to this, the loader will
 		 * set them up to instead hold the value of the sealing key.
 		 */
-		static constexpr uint8_t SealingTypeEntry = uint8_t(0b100000);
+		static constexpr uint8_t SealingTypeEntry =
+		  static_cast<uint8_t>(0b100000);
 
 		static_assert((InterruptStatusMask & SealingTypeEntry) == 0);
 
@@ -1129,7 +1132,7 @@ namespace loader
 		{
 			uint8_t status =
 			  (flags & InterruptStatusMask) >> InterruptStatusShift;
-			return InterruptStatus(status);
+			return static_cast<InterruptStatus>(status);
 		}
 
 		/**

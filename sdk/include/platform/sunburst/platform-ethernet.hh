@@ -133,161 +133,171 @@ class Ksz8851Ethernet
 	/**
 	 * Flag bits of the TransmitControl register.
 	 */
-	enum [[clang::flag_enum]] TransmitControl : uint16_t{
-	  TransmitEnable                 = 1 << 0,
-	  TransmitCrcEnable              = 1 << 1,
-	  TransmitPaddingEnable          = 1 << 2,
-	  TransmitFlowControlEnable      = 1 << 3,
-	  FlushTransmitQueue             = 1 << 4,
-	  TransmitChecksumGenerationIp   = 1 << 5,
-	  TransmitChecksumGenerationTcp  = 1 << 6,
-	  TransmitChecksumGenerationIcmp = 1 << 9,
+	enum [[clang::flag_enum]] TransmitControl : uint16_t
+	{
+		TransmitEnable                 = 1 << 0,
+		TransmitCrcEnable              = 1 << 1,
+		TransmitPaddingEnable          = 1 << 2,
+		TransmitFlowControlEnable      = 1 << 3,
+		FlushTransmitQueue             = 1 << 4,
+		TransmitChecksumGenerationIp   = 1 << 5,
+		TransmitChecksumGenerationTcp  = 1 << 6,
+		TransmitChecksumGenerationIcmp = 1 << 9,
 	};
 
 	/**
 	 * Flag bits of the ReceiveControl1 register.
 	 */
-	enum [[clang::flag_enum]] ReceiveControl1 : uint16_t{
-	  ReceiveEnable                                        = 1 << 0,
-	  ReceiveInverseFilter                                 = 1 << 1,
-	  ReceiveAllEnable                                     = 1 << 4,
-	  ReceiveUnicastEnable                                 = 1 << 5,
-	  ReceiveMulticastEnable                               = 1 << 6,
-	  ReceiveBroadcastEnable                               = 1 << 7,
-	  ReceiveMulticastAddressFilteringWithMacAddressEnable = 1 << 8,
-	  ReceiveErrorFrameEnable                              = 1 << 9,
-	  ReceiveFlowControlEnable                             = 1 << 10,
-	  ReceivePhysicalAddressFilteringWithMacAddressEnable  = 1 << 11,
-	  ReceiveIpFrameChecksumCheckEnable                    = 1 << 12,
-	  ReceiveTcpFrameChecksumCheckEnable                   = 1 << 13,
-	  ReceiveUdpFrameChecksumCheckEnable                   = 1 << 14,
-	  FlushReceiveQueue                                    = 1 << 15,
+	enum [[clang::flag_enum]] ReceiveControl1 : uint16_t
+	{
+		ReceiveEnable                                        = 1 << 0,
+		ReceiveInverseFilter                                 = 1 << 1,
+		ReceiveAllEnable                                     = 1 << 4,
+		ReceiveUnicastEnable                                 = 1 << 5,
+		ReceiveMulticastEnable                               = 1 << 6,
+		ReceiveBroadcastEnable                               = 1 << 7,
+		ReceiveMulticastAddressFilteringWithMacAddressEnable = 1 << 8,
+		ReceiveErrorFrameEnable                              = 1 << 9,
+		ReceiveFlowControlEnable                             = 1 << 10,
+		ReceivePhysicalAddressFilteringWithMacAddressEnable  = 1 << 11,
+		ReceiveIpFrameChecksumCheckEnable                    = 1 << 12,
+		ReceiveTcpFrameChecksumCheckEnable                   = 1 << 13,
+		ReceiveUdpFrameChecksumCheckEnable                   = 1 << 14,
+		FlushReceiveQueue                                    = 1 << 15,
 	};
 
 	/**
 	 * Flag bits of the ReceiveControl2 register.
 	 */
-	enum [[clang::flag_enum]] ReceiveControl2 : uint16_t{
-	  ReceiveSourceAddressFiltering            = 1 << 0,
-	  ReceiveIcmpFrameChecksumEnable           = 1 << 1,
-	  UdpLiteFrameEnable                       = 1 << 2,
-	  ReceiveIpv4Ipv6UdpFrameChecksumEqualZero = 1 << 3,
-	  ReceiveIpv4Ipv6FragmentFramePass         = 1 << 4,
-	  DataBurst4Bytes                          = 0b000 << 5,
-	  DataBurst8Bytes                          = 0b001 << 5,
-	  DataBurst16Bytes                         = 0b010 << 5,
-	  DataBurst32Bytes                         = 0b011 << 5,
-	  DataBurstSingleFrame                     = 0b100 << 5,
+	enum [[clang::flag_enum]] ReceiveControl2 : uint16_t
+	{
+		ReceiveSourceAddressFiltering            = 1 << 0,
+		ReceiveIcmpFrameChecksumEnable           = 1 << 1,
+		UdpLiteFrameEnable                       = 1 << 2,
+		ReceiveIpv4Ipv6UdpFrameChecksumEqualZero = 1 << 3,
+		ReceiveIpv4Ipv6FragmentFramePass         = 1 << 4,
+		DataBurst4Bytes                          = 0b000 << 5,
+		DataBurst8Bytes                          = 0b001 << 5,
+		DataBurst16Bytes                         = 0b010 << 5,
+		DataBurst32Bytes                         = 0b011 << 5,
+		DataBurstSingleFrame                     = 0b100 << 5,
 	};
 
 	/**
 	 * Flag bits of the ReceiveFrameHeaderStatus register.
 	 */
-	enum [[clang::flag_enum]] ReceiveFrameHeaderStatus : uint16_t{
-	  ReceiveCrcError                = 1 << 0,
-	  ReceiveRuntFrame               = 1 << 1,
-	  ReceiveFrameTooLong            = 1 << 2,
-	  ReceiveFrameType               = 1 << 3,
-	  ReceiveMiiError                = 1 << 4,
-	  ReceiveUnicastFrame            = 1 << 5,
-	  ReceiveMulticastFrame          = 1 << 6,
-	  ReceiveBroadcastFrame          = 1 << 7,
-	  ReceiveUdpFrameChecksumStatus  = 1 << 10,
-	  ReceiveTcpFrameChecksumStatus  = 1 << 11,
-	  ReceiveIpFrameChecksumStatus   = 1 << 12,
-	  ReceiveIcmpFrameChecksumStatus = 1 << 13,
-	  ReceiveFrameValid              = 1 << 15,
+	enum [[clang::flag_enum]] ReceiveFrameHeaderStatus : uint16_t
+	{
+		ReceiveCrcError                = 1 << 0,
+		ReceiveRuntFrame               = 1 << 1,
+		ReceiveFrameTooLong            = 1 << 2,
+		ReceiveFrameType               = 1 << 3,
+		ReceiveMiiError                = 1 << 4,
+		ReceiveUnicastFrame            = 1 << 5,
+		ReceiveMulticastFrame          = 1 << 6,
+		ReceiveBroadcastFrame          = 1 << 7,
+		ReceiveUdpFrameChecksumStatus  = 1 << 10,
+		ReceiveTcpFrameChecksumStatus  = 1 << 11,
+		ReceiveIpFrameChecksumStatus   = 1 << 12,
+		ReceiveIcmpFrameChecksumStatus = 1 << 13,
+		ReceiveFrameValid              = 1 << 15,
 	};
 
 	/**
 	 * Flag bits of the ReceiveQueueCommand register.
 	 */
-	enum [[clang::flag_enum]] ReceiveQueueCommand : uint16_t{
-	  ReleaseReceiveErrorFrame            = 1 << 0,
-	  StartDmaAccess                      = 1 << 3,
-	  AutoDequeueReceiveQueueFrameEnable  = 1 << 4,
-	  ReceiveFrameCountThresholdEnable    = 1 << 5,
-	  ReceiveDataByteCountThresholdEnable = 1 << 6,
-	  ReceiveDurationTimerThresholdEnable = 1 << 7,
-	  ReceiveIpHeaderTwoByteOffsetEnable  = 1 << 9,
-	  ReceiveFrameCountThresholdStatus    = 1 << 10,
-	  ReceiveDataByteCountThresholdstatus = 1 << 11,
-	  ReceiveDurationTimerThresholdStatus = 1 << 12,
+	enum [[clang::flag_enum]] ReceiveQueueCommand : uint16_t
+	{
+		ReleaseReceiveErrorFrame            = 1 << 0,
+		StartDmaAccess                      = 1 << 3,
+		AutoDequeueReceiveQueueFrameEnable  = 1 << 4,
+		ReceiveFrameCountThresholdEnable    = 1 << 5,
+		ReceiveDataByteCountThresholdEnable = 1 << 6,
+		ReceiveDurationTimerThresholdEnable = 1 << 7,
+		ReceiveIpHeaderTwoByteOffsetEnable  = 1 << 9,
+		ReceiveFrameCountThresholdStatus    = 1 << 10,
+		ReceiveDataByteCountThresholdstatus = 1 << 11,
+		ReceiveDurationTimerThresholdStatus = 1 << 12,
 	};
 
 	/**
 	 * Flag bits of the TransmitQueueCommand register.
 	 */
-	enum [[clang::flag_enum]] TransmitQueueCommand : uint16_t{
-	  ManualEnqueueTransmitQueueFrameEnable = 1 << 0,
-	  TransmitQueueMemoryAvailableMonitor   = 1 << 1,
-	  AutoEnqueueTransmitQueueFrameEnable   = 1 << 2,
+	enum [[clang::flag_enum]] TransmitQueueCommand : uint16_t
+	{
+		ManualEnqueueTransmitQueueFrameEnable = 1 << 0,
+		TransmitQueueMemoryAvailableMonitor   = 1 << 1,
+		AutoEnqueueTransmitQueueFrameEnable   = 1 << 2,
 	};
 
 	/**
 	 * Flag bits of the TransmitFrameDataPointer and ReceiveFrameDataPointer
 	 * register.
 	 */
-	enum [[clang::flag_enum]] FrameDataPointer : uint16_t{
-	  /**
-	   * When this bit is set, the frame data pointer register increments
-	   * automatically on accesses to the data register.
-	   */
-	  FrameDataPointerAutoIncrement = 1 << 14,
+	enum [[clang::flag_enum]] FrameDataPointer : uint16_t
+	{
+		/**
+		 * When this bit is set, the frame data pointer register increments
+		 * automatically on accesses to the data register.
+		 */
+		FrameDataPointerAutoIncrement = 1 << 14,
 	};
 
 	/**
 	 * Flags bits of the InterruptStatus and InterruptEnable registers.
 	 */
-	enum [[clang::flag_enum]] Interrupt : uint16_t{
-	  EnergyDetectInterrupt             = 1 << 2,
-	  LinkupDetectInterrupt             = 1 << 3,
-	  ReceiveMagicPacketDetectInterrupt = 1 << 4,
-	  ReceiveWakeupFrameDetectInterrupt = 1 << 5,
-	  TransmitSpaceAvailableInterrupt   = 1 << 6,
-	  ReceiveProcessStoppedInterrupt    = 1 << 7,
-	  TransmitProcessStoppedInterrupt   = 1 << 8,
-	  ReceiveOverrunInterrupt           = 1 << 11,
-	  ReceiveInterrupt                  = 1 << 13,
-	  TransmitInterrupt                 = 1 << 14,
-	  LinkChangeInterruptStatus         = 1 << 15,
+	enum [[clang::flag_enum]] Interrupt : uint16_t
+	{
+		EnergyDetectInterrupt             = 1 << 2,
+		LinkupDetectInterrupt             = 1 << 3,
+		ReceiveMagicPacketDetectInterrupt = 1 << 4,
+		ReceiveWakeupFrameDetectInterrupt = 1 << 5,
+		TransmitSpaceAvailableInterrupt   = 1 << 6,
+		ReceiveProcessStoppedInterrupt    = 1 << 7,
+		TransmitProcessStoppedInterrupt   = 1 << 8,
+		ReceiveOverrunInterrupt           = 1 << 11,
+		ReceiveInterrupt                  = 1 << 13,
+		TransmitInterrupt                 = 1 << 14,
+		LinkChangeInterruptStatus         = 1 << 15,
 	};
 
 	/**
 	 * Flags bits of the Port1Control register.
 	 */
-	enum [[clang::flag_enum]] Port1Control : uint16_t{
-	  Advertised10BTHalfDuplexCapability  = 1 << 0,
-	  Advertised10BTFullDuplexCapability  = 1 << 1,
-	  Advertised100BTHalfDuplexCapability = 1 << 2,
-	  Advertised100BTFullDuplexCapability = 1 << 3,
-	  AdvertisedFlowControlCapability     = 1 << 4,
-	  ForceDuplex                         = 1 << 5,
-	  ForceSpeed                          = 1 << 6,
-	  AutoNegotiationEnable               = 1 << 7,
-	  ForceMDIX                           = 1 << 9,
-	  DisableAutoMDIMDIX                  = 1 << 10,
-	  RestartAutoNegotiation              = 1 << 13,
-	  TransmitterDisable                  = 1 << 14,
-	  LedOff                              = 1 << 15,
+	enum [[clang::flag_enum]] Port1Control : uint16_t
+	{
+		Advertised10BTHalfDuplexCapability  = 1 << 0,
+		Advertised10BTFullDuplexCapability  = 1 << 1,
+		Advertised100BTHalfDuplexCapability = 1 << 2,
+		Advertised100BTFullDuplexCapability = 1 << 3,
+		AdvertisedFlowControlCapability     = 1 << 4,
+		ForceDuplex                         = 1 << 5,
+		ForceSpeed                          = 1 << 6,
+		AutoNegotiationEnable               = 1 << 7,
+		ForceMDIX                           = 1 << 9,
+		DisableAutoMDIMDIX                  = 1 << 10,
+		RestartAutoNegotiation              = 1 << 13,
+		TransmitterDisable                  = 1 << 14,
+		LedOff                              = 1 << 15,
 	};
 
 	/**
 	 * Flags bits of the Port1Status register.
 	 */
-	enum [[clang::flag_enum]] Port1Status : uint16_t{
-	  Partner10BTHalfDuplexCapability  = 1 << 0,
-	  Partner10BTFullDuplexCapability  = 1 << 1,
-	  Partner100BTHalfDuplexCapability = 1 << 2,
-	  Partner100BTFullDuplexCapability = 1 << 3,
-	  PartnerFlowControlCapability     = 1 << 4,
-	  LinkGood                         = 1 << 5,
-	  AutoNegotiationDone              = 1 << 6,
-	  MDIXStatus                       = 1 << 7,
-	  OperationDuplex                  = 1 << 9,
-	  OperationSpeed                   = 1 << 10,
-	  PolarityReverse                  = 1 << 13,
-	  HPMDIX                           = 1 << 15,
+	enum [[clang::flag_enum]] Port1Status : uint16_t
+	{
+		Partner10BTHalfDuplexCapability  = 1 << 0,
+		Partner10BTFullDuplexCapability  = 1 << 1,
+		Partner100BTHalfDuplexCapability = 1 << 2,
+		Partner100BTFullDuplexCapability = 1 << 3,
+		PartnerFlowControlCapability     = 1 << 4,
+		LinkGood                         = 1 << 5,
+		AutoNegotiationDone              = 1 << 6,
+		MDIXStatus                       = 1 << 7,
+		OperationDuplex                  = 1 << 9,
+		OperationSpeed                   = 1 << 10,
+		PolarityReverse                  = 1 << 13,
+		HPMDIX                           = 1 << 15,
 	};
 
 	/**

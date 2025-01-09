@@ -33,7 +33,7 @@ namespace
 		/// The high half (second on a little-endian system).
 		uint32_t high;
 		/// The bit used for the lock (the high bit on a little-endian system)
-		static constexpr uint32_t LockBit = uint32_t(1) << 31;
+		static constexpr uint32_t LockBit = static_cast<uint32_t>(1) << 31;
 
 		public:
 		/**

@@ -6,14 +6,14 @@ using namespace CHERI;
 
 __cheri_compartment("stack_integrity_thread") int exhaust_trusted_stack(
   __cheri_callback int (*fn)(),
-  bool *outLeakedSwitcherCapability);
+  bool                *outLeakedSwitcherCapability);
 __cheri_compartment("stack_integrity_thread") int exhaust_thread_stack();
 __cheri_compartment("stack_integrity_thread") int exhaust_thread_stack_spill(
   __cheri_callback int (*fn)());
 __cheri_compartment("stack_integrity_thread") int set_csp_permissions_on_fault(
   PermissionSet newPermissions);
 __cheri_compartment("stack_integrity_thread") int set_csp_permissions_on_call(
-  PermissionSet newPermissions,
+  PermissionSet        newPermissions,
   __cheri_callback int (*fn)());
 __cheri_compartment("stack_integrity_thread") int test_stack_invalid_on_fault();
 __cheri_compartment("stack_integrity_thread") int test_stack_invalid_on_call(

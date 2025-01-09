@@ -420,10 +420,10 @@ class KunyanEthernet
 	mdio_write(uint8_t phyAddress, PHYRegister registerAddress, uint16_t data)
 	{
 		mdio_wait_for_ready();
-		auto    &mdioAddress = mmio_register<RegisterOffset::MDIOAddress>();
-		auto    &mdioWrite   = mmio_register<RegisterOffset::MDIODataWrite>();
-		uint32_t writeCommand =
-		  (0 << 10) | (phyAddress << 5) | uint32_t(registerAddress);
+		auto    &mdioAddress  = mmio_register<RegisterOffset::MDIOAddress>();
+		auto    &mdioWrite    = mmio_register<RegisterOffset::MDIODataWrite>();
+		uint32_t writeCommand = (0 << 10) | (phyAddress << 5) |
+		                        static_cast<uint32_t>(registerAddress);
 		mdioAddress = writeCommand;
 		mdioWrite   = data;
 		mdio_start_transaction();
@@ -437,7 +437,7 @@ class KunyanEthernet
 		mdio_wait_for_ready();
 		auto    &mdioAddress = mmio_register<RegisterOffset::MDIOAddress>();
 		uint32_t readCommand =
-		  (1 << 10) | (phyAddress << 5) | uint8_t(registerAddress);
+		  (1 << 10) | (phyAddress << 5) | static_cast<uint8_t>(registerAddress);
 		mdioAddress = readCommand;
 		mdio_start_transaction();
 		mdio_wait_for_ready();
