@@ -118,10 +118,10 @@ For example, the above macro expands to this in the final report:
           "contents": "10000101",
           "kind": "SealedObject",
           "sealing_type": {
-            "compartment": "sched",
+            "compartment": "scheduler",
             "key": "InterruptKey",
             "provided_by": "build/cheriot/cheriot/release/example-firmware.scheduler.compartment",
-            "symbol": "__export.sealing_type.sched.InterruptKey"
+            "symbol": "__export.sealing_type.scheduler.InterruptKey"
           }
 ```
 

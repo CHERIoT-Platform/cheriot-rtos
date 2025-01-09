@@ -55,7 +55,7 @@ struct SObjStruct;
  */
 #define DEFINE_ALLOCATOR_CAPABILITY(name, quota)                               \
 	DEFINE_STATIC_SEALED_VALUE(struct AllocatorCapabilityState,                \
-	                           alloc,                                          \
+	                           allocator,                                          \
 	                           MallocKey,                                      \
 	                           name,                                           \
 	                           (quota),                                        \
@@ -175,7 +175,7 @@ enum [[clang::flag_enum]] AllocateWaitFlags{
  *
  * Memory returned from this interface is guaranteed to be zeroed.
  */
-void *__cheri_compartment("alloc")
+void *__cheri_compartment("allocator")
   heap_allocate(Timeout           *timeout,
                 struct SObjStruct *heapCapability,
                 size_t             size,
@@ -197,7 +197,7 @@ void *__cheri_compartment("alloc")
  *
  * Memory returned from this interface is guaranteed to be zeroed.
  */
-void *__cheri_compartment("alloc")
+void *__cheri_compartment("allocator")
   heap_allocate_array(Timeout           *timeout,
                       struct SObjStruct *heapCapability,
                       size_t             nmemb,
@@ -215,7 +215,7 @@ void *__cheri_compartment("alloc")
  * `pointer` is not valid, etc.), or `-ENOTENOUGHSTACK` if the stack is
  * insufficiently large to run the function.
  */
-ssize_t __cheri_compartment("alloc")
+ssize_t __cheri_compartment("allocator")
   heap_claim(struct SObjStruct *heapCapability, void *pointer);
 
 /**
@@ -247,7 +247,7 @@ int __cheri_libcall heap_claim_fast(Timeout         *timeout,
  * of a live heap allocation, or `-ENOTENOUGHSTACK` if the stack size is
  * insufficiently large to safely run the function.
  */
-int __cheri_compartment("alloc")
+int __cheri_compartment("allocator")
   heap_free(struct SObjStruct *heapCapability, void *ptr);
 
 /**
@@ -257,14 +257,14 @@ int __cheri_compartment("alloc")
  * capability, or `-ENOTENOUGHSTACK` if the stack size is insufficiently large
  * to safely run the function.
  */
-ssize_t __cheri_compartment("alloc")
+ssize_t __cheri_compartment("allocator")
   heap_free_all(struct SObjStruct *heapCapability);
 
 /**
  * Returns 0 if the allocation can be freed with the given capability, a
  * negated errno value otherwise.
  */
-int __cheri_compartment("alloc")
+int __cheri_compartment("allocator")
   heap_can_free(struct SObjStruct *heapCapability, void *ptr);
 
 /**
@@ -272,7 +272,7 @@ int __cheri_compartment("alloc")
  * `heapCapability` is not valid or if the stack is insufficient to run the
  * function.
  */
-ssize_t __cheri_compartment("alloc")
+ssize_t __cheri_compartment("allocator")
   heap_quota_remaining(struct SObjStruct *heapCapability);
 
 /**
@@ -286,7 +286,7 @@ ssize_t __cheri_compartment("alloc")
  * (-ENOTENOUGHSTACK, -ENOTENOUGHTRUSTEDSTACK) if it cannot be invoked, or
  * possibly -ECOMPARTMENTFAIL if the allocator compartment is damaged.
  */
-int __cheri_compartment("alloc") heap_quarantine_empty(void);
+int __cheri_compartment("allocator") heap_quarantine_empty(void);
 
 /**
  * Returns true if `object` points to a valid heap address, false otherwise.
@@ -318,7 +318,7 @@ __if_c(static) inline _Bool heap_address_is_valid(const void *object)
  *
  * Returns zero on success, non-zero on error (e.g. compartment call failure).
  */
-int __cheri_compartment("alloc") heap_render();
+int __cheri_compartment("allocator") heap_render();
 
 static inline void __dead2 abort()
 {
@@ -354,7 +354,7 @@ static inline int free(void *ptr)
 }
 #endif
 
-size_t __cheri_compartment("alloc") heap_available(void);
+size_t __cheri_compartment("allocator") heap_available(void);
 
 static inline void yield(void)
 {

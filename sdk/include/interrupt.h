@@ -82,7 +82,7 @@ struct InterruptCapabilityState
  */
 #define DEFINE_INTERRUPT_CAPABILITY(name, number, mayWait, mayComplete)        \
 	DEFINE_STATIC_SEALED_VALUE(struct InterruptCapabilityState,                \
-	                           sched,                                          \
+	                           scheduler,                                      \
 	                           InterruptKey,                                   \
 	                           name,                                           \
 	                           number,                                         \
@@ -108,7 +108,7 @@ struct SObjStruct;
  *
  * Returns `nullptr` on failure.
  */
-__cheri_compartment("sched") const uint32_t *interrupt_futex_get(
+__cheri_compartment("scheduler") const uint32_t *interrupt_futex_get(
   struct SObjStruct *);
 
 /**
@@ -120,4 +120,4 @@ __cheri_compartment("sched") const uint32_t *interrupt_futex_get(
  * Returns 0 on success or `-EPERM` if the argument does not authorise this
  * operation.
  */
-__cheri_compartment("sched") int interrupt_complete(struct SObjStruct *);
+__cheri_compartment("scheduler") int interrupt_complete(struct SObjStruct *);

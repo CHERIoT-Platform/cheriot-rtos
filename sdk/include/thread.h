@@ -20,8 +20,8 @@ typedef struct
 	/// hi 32 bits
 	uint32_t hi;
 } SystickReturn;
-[[cheri::interrupt_state(disabled)]] SystickReturn __cheri_compartment("sched")
-  thread_systemtick_get(void);
+[[cheri::interrupt_state(disabled)]] SystickReturn
+  __cheri_compartment("scheduler") thread_systemtick_get(void);
 
 enum ThreadSleepFlags : uint32_t
 {
@@ -60,7 +60,7 @@ enum ThreadSleepFlags : uint32_t
  * If you are using `thread_sleep` to elapse real time, pass
  * `ThreadSleepNoEarlyWake` as the flags argument to prevent early wakeups.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("sched")
+[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   thread_sleep(struct Timeout *timeout, uint32_t flags __if_cxx(= 0));
 
 /**
@@ -78,7 +78,7 @@ uint16_t __cheri_libcall thread_id_get(void);
  * This API is available only if the scheduler is built with accounting support
  * enabled.
  */
-__cheri_compartment("sched") uint64_t thread_elapsed_cycles_idle(void);
+__cheri_compartment("scheduler") uint64_t thread_elapsed_cycles_idle(void);
 
 /**
  * Returns the number of cycles accounted to the current thread.
@@ -86,7 +86,7 @@ __cheri_compartment("sched") uint64_t thread_elapsed_cycles_idle(void);
  * This API is available only if the scheduler is built with accounting
  * support enabled.
  */
-__cheri_compartment("sched") uint64_t thread_elapsed_cycles_current(void);
+__cheri_compartment("scheduler") uint64_t thread_elapsed_cycles_current(void);
 
 /**
  * Returns the number of threads, including threads that have exited.
@@ -97,7 +97,7 @@ __cheri_compartment("sched") uint64_t thread_elapsed_cycles_current(void);
  *
  * The result of this is safe to cache: it will never change over time.
  */
-__cheri_compartment("sched") uint16_t thread_count();
+__cheri_compartment("scheduler") uint16_t thread_count();
 
 /**
  * Wait for the specified number of microseconds.  This is a busy-wait loop,

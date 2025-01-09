@@ -1364,7 +1364,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	  build<ExportEntry>(
 	    imgHdr.scheduler().exportTable,
 	    LA_ABS(
-	      __export_sched__ZN5sched15exception_entryEP19TrustedStackGenericILj0EEjjj))
+	      __export_scheduler__ZN5sched15exception_entryEP19TrustedStackGenericILj0EEjjj))
 	    ->functionStart;
 	auto schedExceptionEntry = build_pcc(imgHdr.scheduler());
 	schedExceptionEntry.address() += exceptionEntryOffset;
@@ -1460,7 +1460,8 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	// invoke the exception entry point.
 	auto exportEntry = build<ExportEntry>(
 	  imgHdr.scheduler().exportTable,
-	  LA_ABS(__export_sched__ZN5sched15scheduler_entryEPK16ThreadLoaderInfo));
+	  LA_ABS(
+	    __export_scheduler__ZN5sched15scheduler_entryEPK16ThreadLoaderInfo));
 	schedPCC.address() += exportEntry->functionStart;
 
 	Debug::log("Will return to scheduler entry point: {}", schedPCC);

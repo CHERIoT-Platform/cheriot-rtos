@@ -29,10 +29,10 @@ When inspecting the linker audit report for a firmware image, you will see an en
           "contents": "00001000 00000000 00000000 00000000 00000000 00000000",
           "kind": "SealedObject",
           "sealing_type": {
-            "compartment": "alloc",
+            "compartment": "allocator",
             "key": "MallocKey",
             "provided_by": "build/cheriot/cheriot/release/cherimcu.allocator.compartment",
-            "symbol": "__export.sealing_type.alloc.MallocKey"
+            "symbol": "__export.sealing_type.allocator.MallocKey"
           }
         },
 ```
