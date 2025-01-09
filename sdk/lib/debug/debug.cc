@@ -375,5 +375,5 @@ debug_report_failure(const char          *kind,
 	printer.write(function);
 	printer.write("\x1b[36m\n");
 	printer.format(format, arguments, argumentCount);
-	printer.write("\n");
+	printer.write("\033[0m\n");
 }
