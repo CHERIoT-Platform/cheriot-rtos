@@ -79,6 +79,44 @@ struct DebugWriter
 	 * Write a 64-bit signed integer.
 	 */
 	virtual void write(int64_t) = 0;
+	/**
+	 * Write a single byte as hex with no leading 0x.
+	 */
+	virtual void write_hex_byte(uint8_t) = 0;
+	/**
+	 * Write an integer as hex.
+	 */
+	template<typename T>
+	__always_inline void write_hex(T x)
+	    requires(std::integral<T>)
+	{
+		if constexpr (sizeof(T) <= 4)
+		{
+			write(static_cast<uint32_t>(x));
+		}
+		else
+		{
+			write(static_cast<uint64_t>(x));
+		}
+	}
+	/**
+	 * Write an integer as decimal.
+	 */
+	template<typename T>
+	__always_inline void write_decimal(T x)
+	    requires(std::integral<T>)
+	{
+		if constexpr (sizeof(T) <= 4)
+		{
+			write(
+			  static_cast<int32_t>(static_cast<std::make_unsigned_t<T>>(x)));
+		}
+		else
+		{
+			write(
+			  static_cast<int64_t>(static_cast<std::make_unsigned_t<T>>(x)));
+		}
+	}
 };
 
 /**
