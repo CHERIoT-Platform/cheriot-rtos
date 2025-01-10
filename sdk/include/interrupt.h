@@ -72,7 +72,7 @@ struct InterruptCapabilityState
  */
 #define DECLARE_INTERRUPT_CAPABILITY(name)                                     \
 	DECLARE_STATIC_SEALED_VALUE(                                               \
-	  struct InterruptCapabilityState, sched, InterruptKey, name);
+	  struct InterruptCapabilityState, scheduler, InterruptKey, name);
 
 /**
  * Helper macro to define an interrupt capability.  The three arguments after
