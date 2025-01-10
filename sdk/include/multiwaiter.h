@@ -34,54 +34,24 @@
 #include <timeout.h>
 
 /**
- * The kind of event source to wait for in a multiwaiter.
- */
-enum EventWaiterKind
-{
-	/// Event source is an event channel.
-	EventWaiterEventChannel,
-	/// Event source is a futex.
-	EventWaiterFutex
-};
-
-enum [[clang::flag_enum]] EventWaiterEventChannelFlags
-{
-	/// Automatically clear the bits we waited on.
-	EventWaiterEventChannelClearOnExit = (1 << 24),
-	/// Notify when all bits were set.
-	EventWaiterEventChannelWaitAll = (1 << 26)
-};
-
-/**
  * Structure describing a change to the set of managed event sources for an
  * event waiter.
  */
 struct EventWaiterSource
 {
 	/**
-	 * A pointer to the event source.  For a futex, this should be the memory
-	 * address.  For other sources, it should be a pointer to an object of the
-	 * corresponding type.
+	 * A pointer to the event source.  This is the futex that is monitored for
+	 * the multiwaiter.
 	 */
 	void *eventSource;
 	/**
-	 * The kind of the event source.  This must match the pointer type.
-	 */
-	enum EventWaiterKind kind;
-	/**
-	 * Event-specific configuration.  This field is modified during the wait
-	 * call.  The interpretation of this depends on `kind`:
+	 * Event value.  This field is modified during the wait
+	 * call.
 	 *
-	 * - `EventWaiterEventChannel`: The low 24 bits contain the bits to
-	 *   monitor, the top bit indicates whether this event is triggered if all
-	 *   of the bits are set (true) or some of them (false).  On return, this
-	 *   contains the bits that have been set during the call.
-	 * - `EventWaiterFutex`: This indicates the value to compare the futex word
-	 *   against.  If they mismatch, the event fires immediately.
+	 * This indicates the value to compare the futex word against.  If they
+	 * mismatch, the event fires immediately.
 	 *
-	 * If waiting for a futex, signal the event immediately if the value
-	 * does not match.  On return, this is set to 1 if the futex is
-	 * signaled, 0 otherwise.
+	 * On return, this is set to 1 if the futex is signaled, 0 otherwise.
 	 */
 	uint32_t value;
 };
