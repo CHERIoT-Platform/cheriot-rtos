@@ -14,7 +14,6 @@
 #include <futex.h>
 #include <interrupt.h>
 #include <locks.hh>
-#include <new>
 #include <priv/riscv.h>
 #include <riscvreg.h>
 #include <simulator.h>
@@ -122,6 +121,26 @@ namespace
 	 */
 	static constexpr auto UnboundedSleep = std::numeric_limits<uint32_t>::max();
 
+	enum FutexWakeKind
+	{
+		/**
+		 * The futex wake did not make any threads runnable that would be
+		 * scheduled preemptively.
+		 */
+		NoYield,
+		/**
+		 * The futex wake made a thread at the current priority level runnable,
+		 * the caller should ensure that there is a timer interrupt scheduled
+		 * to make the current thread yield later.
+		 */
+		YieldLater,
+		/**
+		 * The futex wake made a thread at a higher priority level runnable,
+		 * the caller should yield to allow the other thread to run immediately.
+		 */
+		YieldNow,
+	};
+
 	/**
 	 * Helper that wakes a set of up to `count` threads waiting on the futex
 	 * whose address is given by the `key` parameter.
@@ -134,11 +153,10 @@ namespace
 	 *    dropped back to the previous priority.
 	 *  - The number of sleeper that were awoken.
 	 */
-	std::tuple<bool, bool, int>
+	std::tuple<bool, int>
 	futex_wake(ptraddr_t key,
 	           uint32_t  count = std::numeric_limits<uint32_t>::max())
 	{
-		bool shouldYield                    = false;
 		bool shouldRecalculatePriorityBoost = false;
 		// The number of threads that we've woken, this is the return value on
 		// success.
@@ -150,7 +168,8 @@ namespace
 			  {
 				  shouldRecalculatePriorityBoost |=
 				    thread->futexPriorityInheriting;
-				  shouldYield = thread->ready(Thread::WakeReason::Futex);
+				  thread->ready(Thread::WakeReason::Futex);
+				  Debug::log("futex_wake woke thread {}", thread->id_get());
 				  count--;
 				  woke++;
 			  }
@@ -163,9 +182,10 @@ namespace
 			  MultiWaiterInternal::wake_waiters(key, count);
 			count -= multiwaitersWoken;
 			woke += multiwaitersWoken;
-			shouldYield |= (multiwaitersWoken > 0);
 		}
-		return {shouldYield, shouldRecalculatePriorityBoost, woke};
+		Debug::log("futex_wake on {} woke {} waiters", key, woke);
+
+		return {shouldRecalculatePriorityBoost, woke};
 	}
 
 } // namespace
@@ -297,8 +317,11 @@ namespace sched
 					  word++;
 					  // Wake anyone sleeping on this futex.  Interrupt futexes
 					  // are not priority inheriting.
-					  std::tie(schedNeeded, std::ignore, std::ignore) =
+					  int woke;
+					  Debug::log("Waking waiters on interrupt futex {}", &word);
+					  std::tie(std::ignore, woke) =
 					    futex_wake(Capability{&word}.address());
+					  schedNeeded |= (woke > 0);
 				  });
 				tick = schedNeeded;
 				break;
@@ -530,7 +553,24 @@ __cheriot_minimum_stack(0xa0) int futex_wake(uint32_t *address, uint32_t count)
 	}
 	ptraddr_t key = Capability{address}.address();
 
-	auto [shouldYield, shouldResetPrioirity, woke] = futex_wake(key, count);
+	auto [shouldResetPrioirity, woke] = futex_wake(key, count);
+
+	FutexWakeKind shouldYield = NoYield;
+
+	if (woke > 0)
+	{
+		auto *thread = Thread::current_get();
+		if (!thread->is_highest_priority())
+		{
+			shouldYield = YieldNow;
+		}
+		else if (thread->has_priority_peers())
+		{
+			shouldYield =
+			  thread->has_run_for_full_tick() ? YieldNow : YieldLater;
+		}
+		Debug::log("futex_wake yielding? {}", shouldYield);
+	}
 
 	// If this futex wake is dropping a priority boost, reset the boost.
 	if (shouldResetPrioirity)
@@ -551,12 +591,18 @@ __cheriot_minimum_stack(0xa0) int futex_wake(uint32_t *address, uint32_t count)
 		  priority_boost_for_thread(currentThread->id_get()));
 		// If we have dropped priority below that of another runnable thread, we
 		// should yield now.
-		shouldYield |= !currentThread->is_highest_priority();
 	}
 
-	if (shouldYield)
+	switch (shouldYield)
 	{
-		yield();
+		case YieldLater:
+			Timer::ensure_tick();
+			break;
+		case YieldNow:
+			yield();
+			break;
+		case NoYield:
+			break;
 	}
 
 	return woke;

@@ -80,6 +80,18 @@ class StandardClint : private utils::NoCopyNoMove
 		*pmtimercmphigh = nextTime >> 32;
 	}
 
+	/**
+	 * Returns the time at which the next timer is scheduled.
+	 */
+	static uint64_t next()
+	{
+		volatile uint32_t *pmtimercmphigh = pmtimercmp + 1;
+		uint64_t           nextTimer      = *pmtimercmphigh;
+		nextTimer <<= 32;
+		nextTimer |= *pmtimercmp;
+		return nextTimer;
+	}
+
 	static void clear()
 	{
 		volatile uint32_t *pmtimercmphigh = pmtimercmp + 1;

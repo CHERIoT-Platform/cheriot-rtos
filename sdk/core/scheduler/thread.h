@@ -5,8 +5,10 @@
 
 #include "common.h"
 #include <cdefs.h>
+#include <platform-timer.hh>
 #include <priv/riscv.h>
 #include <strings.h>
+#include <tick_macros.h>
 #include <utils.hh>
 
 namespace
@@ -111,6 +113,15 @@ namespace
 					  current->priority,
 					  current->OriginalPriority);
 				}
+				if (current != th)
+				{
+					current->expiryTime = TimerCore::time();
+				}
+#ifdef CLANG_TIDY
+				// The static analyser thinks that `debug_log_message_write` may
+				// assign `nullptr` to `current`.
+				__builtin_assume(current != nullptr);
+#endif
 				return current->tStackPtr;
 			}
 			return schedTStack;
@@ -203,10 +214,9 @@ namespace
 		 * the resource disappearing, do some clean-ups.
 		 * @param the reason why this thread is now able to be scheduled
 		 */
-		bool ready(WakeReason reason)
+		void ready(WakeReason reason)
 		{
 			int64_t ticksLeft;
-			bool    schedule = false;
 
 			// We must be suspended.
 			Debug::Assert(state == ThreadState::Suspended,
@@ -229,14 +239,7 @@ namespace
 				if (priority > highestPriority)
 				{
 					highestPriority = priority;
-					schedule        = true;
 				}
-			}
-			// If this is the same priority as the current thread, we may need
-			// to update the timer.
-			if (priority >= highestPriority)
-			{
-				schedule = true;
 			}
 			if (reason == WakeReason::Timer || reason == WakeReason::Delete)
 			{
@@ -244,8 +247,6 @@ namespace
 			}
 			list_insert(&priorityList[priority]);
 			isYielding = false;
-
-			return schedule;
 		}
 
 		/**
@@ -543,6 +544,17 @@ namespace
 			return next != this;
 		}
 
+		/**
+		 * Returns true if the thread has run for a complete tick.  This must
+		 * be called only on the currently running thread.
+		 */
+		bool has_run_for_full_tick()
+		{
+			Debug::Assert(this == current,
+			              "Only the current thread is running");
+			return TimerCore::time() >= expiryTime + TIMERCYCLES_PER_TICK;
+		}
+
 		~ThreadImpl()
 		{
 			// We have static definition of threads. We only create threads in
@@ -564,8 +576,12 @@ namespace
 		///@}
 		/// Pointer to the list of the resource this thread is blocked on.
 		ThreadImpl **sleepQueue;
-		/// If suspended, when will this thread expire. The maximum value is
-		/// special-cased to mean blocked indefinitely.
+		/**
+		 * If suspended, when will this thread expire. The maximum value is
+		 * special-cased to mean blocked indefinitely.
+		 *
+		 * When a thread is running, this the time at which it was scheduled.
+		 */
 		uint64_t expiryTime{static_cast<uint64_t>(-1)};
 
 		/// The number of cycles that this thread has been scheduled for.
