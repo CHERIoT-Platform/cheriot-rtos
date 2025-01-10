@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "common.h"
 #include "plic.h"
 #include "thread.h"
 #include <platform-timer.hh>
@@ -23,6 +24,9 @@ namespace
 		{
 			T::setnext(cycles)
 		};
+		{
+			T::next()
+		} -> std::same_as<uint64_t>;
 	};
 
 	static_assert(
@@ -102,6 +106,21 @@ namespace
 				                       ? DistantFuture
 				                       : Thread::waitingList->expiryTime;
 				setnext(std::min(nextTick, nextTimer));
+			}
+		}
+
+		/**
+		 * Ensure that a timer tick is scheduled for the current thread.
+		 */
+		static void ensure_tick()
+		{
+			auto *thread = Thread::current_get();
+			Debug::Assert(thread != nullptr,
+			              "Ensure tick called with no running thread");
+			auto tickTime = thread->expiryTime + TIMERCYCLES_PER_TICK;
+			if (tickTime < TimerCore::next())
+			{
+				setnext(tickTime);
 			}
 		}
 
