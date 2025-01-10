@@ -168,6 +168,14 @@ namespace
 		}
 
 		/**
+		 * Write a single byte with no prefix.
+		 */
+		void write_hex_byte(uint8_t byte) override
+		{
+			append_hex_word(byte);
+		}
+
+		/**
 		 * Write a 32-bit unsigned integer to the buffer as hex with no prefix.
 		 */
 		void append_hex_word(uint32_t s)
@@ -367,5 +375,5 @@ debug_report_failure(const char          *kind,
 	printer.write(function);
 	printer.write("\x1b[36m\n");
 	printer.format(format, arguments, argumentCount);
-	printer.write("\n");
+	printer.write("\033[0m\n");
 }
