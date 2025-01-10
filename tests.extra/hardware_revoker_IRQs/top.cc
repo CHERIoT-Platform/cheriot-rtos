@@ -40,8 +40,6 @@ void __cheri_compartment("top") entry()
 	uint32_t epoch = r.system_epoch_get();
 	Debug::log("At startup, revocation epoch is {}; waiting...", epoch);
 
-	// Just in case a revocation is somehow active...
-	epoch &= ~1;
 	r.system_bg_revoker_kick();
 
 	for (int i = 0; i < 10; i++)
@@ -50,7 +48,7 @@ void __cheri_compartment("top") entry()
 		uint32_t newepoch;
 		Timeout  t{50};
 
-		res      = r.wait_for_completion(&t, (epoch & ~1) + 2);
+		res      = r.wait_for_completion(&t, epoch & ~1);
 		newepoch = r.system_epoch_get();
 
 		Debug::log("After wait: for {}, result {}, epoch now is {}, "
