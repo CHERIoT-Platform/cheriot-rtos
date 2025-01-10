@@ -1,7 +1,6 @@
 #pragma once
 #include <array>
 #include <cheri.hh>
-#include <cstddef>
 #include <cstdint>
 #include <debug.hh>
 #include <futex.h>
@@ -10,9 +9,8 @@
 #include <optional>
 #include <platform/concepts/ethernet.hh>
 #include <platform/sunburst/platform-gpio.hh>
-#include <platform/sunburst/platform-spi.hh>
+#include <platform/sunburst/v0.2/platform-spi.hh>
 #include <thread.h>
-#include <type_traits>
 
 DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(EthernetInterruptCapability,
                                         InterruptName::EthernetInterrupt,
