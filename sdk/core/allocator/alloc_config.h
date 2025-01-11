@@ -34,5 +34,15 @@ constexpr StackCheckMode StackMode =
 #endif
   ;
 
-#define STACK_CHECK(expected)                                                  \
-	StackUsageCheck<StackMode, expected, __PRETTY_FUNCTION__> stackCheck
+#if defined(__CHERIOT__) && (__CHERIOT__ >= 20250108)
+#	define STACK_CHECK(expected)                                              \
+		static_assert((expected) == __cheriot_minimum_stack__,                 \
+		              "Explicit stack check does not match annotation!");      \
+		StackUsageCheck<StackMode,                                             \
+		                __cheriot_minimum_stack__,                             \
+		                __PRETTY_FUNCTION__>                                   \
+		  stackCheck
+#else
+#	define STACK_CHECK(expected)                                              \
+		StackUsageCheck<StackMode, expected, __PRETTY_FUNCTION__> stackCheck
+#endif
