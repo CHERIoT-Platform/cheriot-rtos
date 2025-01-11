@@ -197,10 +197,18 @@ int __cheri_libcall recursivemutex_trylock(Timeout                    *timeout,
 int __cheri_libcall recursivemutex_unlock(struct RecursiveMutexState *mutex);
 
 /**
- * Acquire a ticket lock.  Ticket locks, by design, cannot support a try-lock
- * operation and so will block forever until the lock is acquired.
+ * Acquire a ticket lock.  This is more efficient than the trylock version with
+ * an unlimited timeout and should be preferred for cases where unlimited
+ * blocking is acceptable.
  */
 void __cheri_libcall ticketlock_lock(struct TicketLockState *lock);
+
+/**
+ * Attempt to acquire a ticket lock.  Returns 0 on success, `-ETIMEDOUT` if the
+ * timeout expired.
+ */
+int __cheri_libcall ticketlock_trylock(Timeout                *timeout,
+                                       struct TicketLockState *lock);
 
 /**
  * Release a ticket lock.
