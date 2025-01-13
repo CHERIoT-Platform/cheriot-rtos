@@ -188,10 +188,6 @@ namespace
 		return {shouldRecalculatePriorityBoost, woke};
 	}
 
-} // namespace
-
-namespace sched
-{
 	using namespace priv;
 
 	/**
@@ -211,32 +207,6 @@ namespace sched
 			return nullptr;
 		}
 		return &(reinterpret_cast<Thread *>(threadSpaces))[threadId - 1];
-	}
-
-	[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-	  scheduler_entry(const ThreadLoaderInfo *info)
-	{
-		Debug::Invariant(Capability{info}.length() ==
-		                   sizeof(*info) * CONFIG_THREADS_NUM,
-		                 "Thread info is {} bytes, expected {} for {} threads",
-		                 Capability{info}.length(),
-		                 sizeof(*info) * CONFIG_THREADS_NUM,
-		                 CONFIG_THREADS_NUM);
-
-		for (size_t i = 0; auto *threadSpace : threadSpaces)
-		{
-			Debug::log("Created thread for trusted stack {}",
-			           info[i].trustedStack);
-			Thread *th = new (threadSpace)
-			  Thread(info[i].trustedStack, i + 1, info[i].priority);
-			th->ready(Thread::WakeReason::Timer);
-			i++;
-		}
-
-		InterruptController::master_init();
-		Timer::interrupt_setup();
-
-		return 0;
 	}
 
 	static void __dead2 sched_panic(size_t mcause, size_t mepc, size_t mtval)
@@ -260,107 +230,6 @@ namespace sched
 		{
 			wfi();
 		}
-	}
-
-	[[cheri::interrupt_state(disabled)]] TrustedStack *
-	  __cheri_compartment("scheduler")
-	    exception_entry(TrustedStack *sealedTStack,
-	                    size_t        mcause,
-	                    size_t        mepc,
-	                    size_t        mtval)
-	{
-		if constexpr (DebugScheduler)
-		{
-			/* Ensure that we got here from an IRQ-s deferred context */
-			Capability returnAddress{__builtin_return_address(0)};
-			Debug::Assert(
-			  returnAddress.type() == CheriSealTypeReturnSentryDisabling,
-			  "Scheduler exception_entry called from IRQ-enabled context");
-		}
-
-		// The cycle count value the last time the scheduler returned.
-		bool schedNeeded;
-		if constexpr (Accounting)
-		{
-			uint64_t  currentCycles = rdcycle64();
-			auto     *thread        = Thread::current_get();
-			uint64_t &threadCycleCounter =
-			  thread ? thread->cycles : Thread::idleThreadCycles;
-			auto elapsedCycles = currentCycles - cyclesAtLastSchedulingEvent;
-			threadCycleCounter += elapsedCycles;
-		}
-
-		ExceptionGuard g{[=]() { sched_panic(mcause, mepc, mtval); }};
-
-		bool tick = false;
-		switch (mcause)
-		{
-			// Explicit yield call
-			case MCAUSE_ECALL_MACHINE:
-			{
-				schedNeeded           = true;
-				Thread *currentThread = Thread::current_get();
-				tick = currentThread && currentThread->is_ready();
-				break;
-			}
-			case MCAUSE_INTR | MCAUSE_MTIME:
-				schedNeeded = true;
-				tick        = true;
-				break;
-			case MCAUSE_INTR | MCAUSE_MEXTERN:
-				schedNeeded = false;
-				InterruptController::master().do_external_interrupt().and_then(
-				  [&](uint32_t &word) {
-					  // Increment the futex word so that anyone preempted on
-					  // the way into the scheduler sleeping on its old value
-					  // will still see this update.
-					  word++;
-					  // Wake anyone sleeping on this futex.  Interrupt futexes
-					  // are not priority inheriting.
-					  int woke;
-					  Debug::log("Waking waiters on interrupt futex {}", &word);
-					  std::tie(std::ignore, woke) =
-					    futex_wake(Capability{&word}.address());
-					  schedNeeded |= (woke > 0);
-				  });
-				tick = schedNeeded;
-				break;
-			case MCAUSE_THREAD_EXIT:
-				// Make the current thread non-runnable.
-				if (Thread::exit())
-				{
-#ifdef SIMULATION
-					// If we have no threads left (not counting the idle
-					// thread), exit.
-					platform_simulation_exit(0);
-#endif
-				}
-				// We cannot continue exiting this thread, make sure we will
-				// pick a new one.
-				schedNeeded  = true;
-				tick         = true;
-				sealedTStack = nullptr;
-				break;
-			default:
-				sched_panic(mcause, mepc, mtval);
-		}
-		if (tick || !Thread::any_ready())
-		{
-			Timer::expiretimers();
-		}
-		auto newContext =
-		  schedNeeded ? Thread::schedule(sealedTStack) : sealedTStack;
-#if 0
-		Debug::log("Thread: {}",
-		           Thread::current_get() ? Thread::current_get()->id_get() : 0);
-#endif
-		Timer::update();
-
-		if constexpr (Accounting)
-		{
-			cyclesAtLastSchedulingEvent = rdcycle64();
-		}
-		return newContext;
 	}
 
 	/**
@@ -427,9 +296,132 @@ namespace sched
 		});
 	}
 
-} // namespace sched
+} // namespace
 
-using namespace sched;
+[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+  scheduler_entry(const ThreadLoaderInfo *info)
+{
+	Debug::Invariant(Capability{info}.length() ==
+	                   sizeof(*info) * CONFIG_THREADS_NUM,
+	                 "Thread info is {} bytes, expected {} for {} threads",
+	                 Capability{info}.length(),
+	                 sizeof(*info) * CONFIG_THREADS_NUM,
+	                 CONFIG_THREADS_NUM);
+
+	for (size_t i = 0; auto *threadSpace : threadSpaces)
+	{
+		Debug::log("Created thread for trusted stack {}", info[i].trustedStack);
+		Thread *th = new (threadSpace)
+		  Thread(info[i].trustedStack, i + 1, info[i].priority);
+		th->ready(Thread::WakeReason::Timer);
+		i++;
+	}
+
+	InterruptController::master_init();
+	Timer::interrupt_setup();
+
+	return 0;
+}
+
+[[cheri::interrupt_state(disabled)]] TrustedStack *
+  __cheri_compartment("scheduler") exception_entry(TrustedStack *sealedTStack,
+                                                   size_t        mcause,
+                                                   size_t        mepc,
+                                                   size_t        mtval)
+{
+	if constexpr (DebugScheduler)
+	{
+		/* Ensure that we got here from an IRQ-s deferred context */
+		Capability returnAddress{__builtin_return_address(0)};
+		Debug::Assert(
+		  returnAddress.type() == CheriSealTypeReturnSentryDisabling,
+		  "Scheduler exception_entry called from IRQ-enabled context");
+	}
+
+	// The cycle count value the last time the scheduler returned.
+	bool schedNeeded;
+	if constexpr (Accounting)
+	{
+		uint64_t  currentCycles = rdcycle64();
+		auto     *thread        = Thread::current_get();
+		uint64_t &threadCycleCounter =
+		  thread ? thread->cycles : Thread::idleThreadCycles;
+		auto elapsedCycles = currentCycles - cyclesAtLastSchedulingEvent;
+		threadCycleCounter += elapsedCycles;
+	}
+
+	ExceptionGuard g{[=]() { sched_panic(mcause, mepc, mtval); }};
+
+	bool tick = false;
+	switch (mcause)
+	{
+		// Explicit yield call
+		case MCAUSE_ECALL_MACHINE:
+		{
+			schedNeeded           = true;
+			Thread *currentThread = Thread::current_get();
+			tick                  = currentThread && currentThread->is_ready();
+			break;
+		}
+		case MCAUSE_INTR | MCAUSE_MTIME:
+			schedNeeded = true;
+			tick        = true;
+			break;
+		case MCAUSE_INTR | MCAUSE_MEXTERN:
+			schedNeeded = false;
+			InterruptController::master().do_external_interrupt().and_then(
+			  [&](uint32_t &word) {
+				  // Increment the futex word so that anyone preempted on
+				  // the way into the scheduler sleeping on its old value
+				  // will still see this update.
+				  word++;
+				  // Wake anyone sleeping on this futex.  Interrupt futexes
+				  // are not priority inheriting.
+				  int woke;
+				  Debug::log("Waking waiters on interrupt futex {}", &word);
+				  std::tie(std::ignore, woke) =
+				    futex_wake(Capability{&word}.address());
+				  schedNeeded |= (woke > 0);
+			  });
+			tick = schedNeeded;
+			break;
+		case MCAUSE_THREAD_EXIT:
+			// Make the current thread non-runnable.
+			if (Thread::exit())
+			{
+#ifdef SIMULATION
+				// If we have no threads left (not counting the idle
+				// thread), exit.
+				platform_simulation_exit(0);
+#endif
+			}
+			// We cannot continue exiting this thread, make sure we will
+			// pick a new one.
+			schedNeeded  = true;
+			tick         = true;
+			sealedTStack = nullptr;
+			break;
+		default:
+			sched_panic(mcause, mepc, mtval);
+	}
+	if (tick || !Thread::any_ready())
+	{
+		Timer::expiretimers();
+	}
+	auto newContext =
+	  schedNeeded ? Thread::schedule(sealedTStack) : sealedTStack;
+#if 0
+	Debug::log("Thread: {}",
+				Thread::current_get() ? Thread::current_get()->id_get() : 0);
+#endif
+	Timer::update();
+
+	if constexpr (Accounting)
+	{
+		cyclesAtLastSchedulingEvent = rdcycle64();
+	}
+	return newContext;
+}
 
 // thread APIs
 SystickReturn __cheri_compartment("scheduler") thread_systemtick_get()
