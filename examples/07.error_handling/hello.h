@@ -6,4 +6,4 @@
 /**
  * Write `msg` to the default uart.
  */
-void __cheri_compartment("uart") write(const char *msg);
+int __cheri_compartment("uart") write(const char *msg);

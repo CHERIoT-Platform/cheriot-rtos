@@ -32,7 +32,7 @@ struct Revoker
 
 static_assert(Revoker::IsAsynchronous, "This test is for async revokers");
 
-void __cheri_compartment("top") entry()
+int __cheri_compartment("top") entry()
 {
 	Revoker r{};
 	r.init();
@@ -68,4 +68,6 @@ void __cheri_compartment("top") entry()
 			r.system_bg_revoker_kick();
 		}
 	}
+
+	return 0;
 }

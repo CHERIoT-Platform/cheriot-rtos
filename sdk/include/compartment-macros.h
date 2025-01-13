@@ -229,7 +229,7 @@
 	/* Make sure the type that we're casting this to is not bigger than the    \
 	 * value that we've emitted. */                                            \
 	_Static_assert(sizeof(__sealed_type_placeholder_##name) <=                 \
-	               sizeof(name.body))
+	               sizeof((name).body))
 
 /**
  * Forward-declare a static sealed object.  This declares an object of type

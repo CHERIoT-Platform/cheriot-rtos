@@ -68,8 +68,8 @@ int identifier_value(SealedIdentifier identifier)
 /**
  * Destroy the identifier provided as an argument.
  */
-void identifier_destroy(SealedIdentifier identifier)
+int identifier_destroy(SealedIdentifier identifier)
 {
 	// The allocator does validity checks here, so we can skip them.
-	token_obj_destroy(MALLOC_CAPABILITY, key(), identifier);
+	return token_obj_destroy(MALLOC_CAPABILITY, key(), identifier);
 }

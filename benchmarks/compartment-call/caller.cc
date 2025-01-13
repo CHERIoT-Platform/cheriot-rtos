@@ -1,11 +1,14 @@
 #include "../timing.h"
 #include "callee.h"
 #include <compartment.h>
+#include <debug.hh>
 #include <locks.hh>
 #include <stdio.h>
 #include <vector>
 
-void __cheri_compartment("caller") run()
+using Debug = ConditionalDebug<DEBUG_CALLER, "Compartment call benchmark">;
+
+int __cheri_compartment("caller") run()
 {
 	static std::array<std::tuple<size_t, int, int, int>, 5> results;
 	static int                                              nextResult = 0;
@@ -17,7 +20,8 @@ void __cheri_compartment("caller") run()
 	if (stackSize == 0x1000)
 	{
 		Timeout timeout{100};
-		thread_sleep(&timeout);
+		Debug::Invariant(thread_sleep(&timeout) != -ECOMPARTMENTFAIL,
+		                 "Compartment call thread_sleep failed");
 	}
 	LockGuard g{lock};
 	auto [full, callPath, returnPath] = CHERI::with_interrupts_disabled([&]() {
@@ -39,4 +43,6 @@ void __cheri_compartment("caller") run()
 			       returnPath);
 		}
 	}
+
+	return 0;
 }
