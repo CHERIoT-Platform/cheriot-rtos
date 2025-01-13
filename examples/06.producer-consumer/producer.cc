@@ -13,14 +13,15 @@ using Debug = ConditionalDebug<true, "Producer">;
 /**
  * Run the producer thread, sending integers to the consumer.
  */
-void __cheri_compartment("producer") run()
+int __cheri_compartment("producer") run()
 {
 	// Allocate the queue
 	CHERI_SEALED(struct MessageQueue *) queue;
 	non_blocking<queue_create_sealed>(
 	  MALLOC_CAPABILITY, &queue, sizeof(int), 16);
 	// Pass the queue handle to the consumer.
-	set_queue(queue);
+	Debug::Invariant(set_queue(queue) != -ECOMPARTMENTFAIL,
+	                 "Compartment call to set_queue failed");
 	Debug::log("Starting producer loop");
 	// Loop, sending some numbers to the other thread.
 	for (int i = 1; i < 200; i++)
@@ -30,4 +31,5 @@ void __cheri_compartment("producer") run()
 		Debug::Invariant(ret == 0, "Queue send failed {}", ret);
 	}
 	Debug::log("Producer sent all messages to consumer");
+	return 0;
 }

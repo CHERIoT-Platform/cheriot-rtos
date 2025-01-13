@@ -44,8 +44,9 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 }
 
 /// Write a message to the UART.
-void write(const char *msg)
+int write(const char *msg)
 {
 	LockGuard g{lock};
 	Debug::log("Message provided by caller: {}", msg);
+	return 0;
 }

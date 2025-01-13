@@ -14,7 +14,7 @@ using Debug = ConditionalDebug<true, "UART compartment">;
 using namespace CHERI;
 
 /// Write a message to the UART.
-void write(const char *msg)
+int write(const char *msg)
 {
 	// Word containing the lock, this is 0 for unlocked, 1 for locked.
 	static uint32_t lockWord = 0;
@@ -38,5 +38,7 @@ void write(const char *msg)
 	}
 	// Release the lock.
 	lockWord = 0;
-	futex_wake(&lockWord, -1);
+	Debug::Invariant(futex_wake(&lockWord, -1) != -ECOMPARTMENTFAIL,
+	                 "Compartment call to futex_wake failed");
+	return 0;
 }

@@ -15,7 +15,10 @@ option("board")
 compartment("callee")
     add_files("callee.cc")
 
+debugOption("caller");
 compartment("caller")
+    -- Allow allocating an effectively unbounded amount of memory (more than exists)
+    add_rules("cheriot.component-debug")
     add_defines("BOARD=" .. tostring(get_config("board")))
     add_files("caller.cc")
 

@@ -145,6 +145,7 @@ toolchain("cheriot-clang")
 			"-I" .. path.join(include_directory, "c++-config"),
 			"-I" .. path.join(include_directory, "libc++"),
 			"-I" .. include_directory,
+			"-Wcheri-compartment-return-void",
 		}
 		-- C/C++ flags
 		toolchain:add("cxflags", default_flags, {force = true})

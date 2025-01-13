@@ -31,5 +31,5 @@ int __cheri_compartment("caesar")
 
 ssize_t __cheri_compartment("producer")
   produce_message(char *buffer, size_t length);
-void __cheri_compartment("consumer")
+int __cheri_compartment("consumer")
   consume_message(const char *buffer, size_t length);
