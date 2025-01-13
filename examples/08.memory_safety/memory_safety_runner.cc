@@ -14,7 +14,7 @@ using Debug = ConditionalDebug<true, "Memory safety compartment">;
 // Import some useful things from the CHERI namespace.
 using namespace CHERI;
 
-void __cheri_compartment("memory_safety_runner") entry()
+int __cheri_compartment("memory_safety_runner") entry()
 {
 	Debug::log("Demonstrate memory safety");
 
@@ -24,4 +24,5 @@ void __cheri_compartment("memory_safety_runner") entry()
 		  int ret = memory_safety_inner_entry(bug);
 		  Debug::Assert(ret == -1, "{} operation should have crashed", bug);
 	  });
+	return 0;
 }
