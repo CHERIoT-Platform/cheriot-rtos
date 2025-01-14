@@ -32,12 +32,12 @@ int test_multiwaiter()
 	EventWaiterSource events[4];
 
 	debug_log("Testing error case: Invalid values");
-	events[0] = {nullptr, static_cast<EventWaiterKind>(5), 0};
+	events[0] = {nullptr, 0};
 	ret       = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == -EINVAL, "multiwaiter returned {}, expected {}", ret, -EINVAL);
 
 	debug_log("Testing one futex, already ready");
-	events[0]   = {&futex, EventWaiterFutex, 1};
+	events[0]   = {&futex, 1};
 	t.remaining = 5;
 	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
@@ -53,7 +53,7 @@ int test_multiwaiter()
 
 	debug_log("Testing one futex, not yet ready");
 	setFutex(&futex, 1);
-	events[0]   = {&futex, EventWaiterFutex, 0};
+	events[0]   = {&futex, 0};
 	t.remaining = 6;
 	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
@@ -62,8 +62,8 @@ int test_multiwaiter()
 	futex  = 0;
 	futex2 = 2;
 	setFutex(&futex2, 3);
-	events[0]   = {&futex, EventWaiterFutex, 0};
-	events[1]   = {&futex2, EventWaiterFutex, 2};
+	events[0]   = {&futex, 0};
+	events[1]   = {&futex2, 2};
 	t.remaining = 6;
 	ret         = multiwaiter_wait(&t, mw, events, 2);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
@@ -118,7 +118,7 @@ int test_multiwaiter()
 	futex = 0;
 	setFutex(&futex, 1);
 	multiwaiter_queue_receive_init(&events[0], queue);
-	events[1]   = {&futex, EventWaiterFutex, 0};
+	events[1]   = {&futex, 0};
 	t.remaining = 6;
 	ret         = multiwaiter_wait(&t, mw, events, 2);
 	TEST(ret == 0, "multiwait on futex and queue returned {}", ret);
