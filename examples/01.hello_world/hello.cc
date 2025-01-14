@@ -9,8 +9,9 @@
 using Debug = ConditionalDebug<true, "Hello world compartment">;
 
 /// Thread entry point.
-void __cheri_compartment("hello") say_hello()
+int __cheri_compartment("hello") say_hello()
 {
 	// Print hello world, along with the compartment's name to the default UART.
 	Debug::log("Hello world");
+	return 0;
 }

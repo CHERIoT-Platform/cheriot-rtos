@@ -88,7 +88,7 @@ namespace
 } // namespace
 
 /// Thread entry point.
-void __cheri_compartment("hello") say_hello()
+int __cheri_compartment("hello") say_hello()
 {
 	mvm_TeError                         err;
 	std::unique_ptr<mvm_VM, MVMDeleter> vm;
@@ -138,4 +138,6 @@ void __cheri_compartment("hello") say_hello()
 	Debug::log("Peak heap used: {} bytes, peak stack used: {} bytes",
 	           stats.virtualHeapHighWaterMark,
 	           stats.stackHighWaterMark);
+
+	return 0;
 }

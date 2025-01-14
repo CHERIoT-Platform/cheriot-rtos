@@ -17,29 +17,32 @@ SObj queue;
 /**
  * Set the queue that the thread in this compartment will use.
  */
-void set_queue(SObj newQueue)
+int set_queue(SObj newQueue)
 {
 	// Check that this is a valid queue
 	size_t items;
 	if (queue_items_remaining_sealed(newQueue, &items) != 0)
 	{
-		return;
+		return -1;
 	}
 	// Set it in the global and allow the thread to start.
 	queue = newQueue;
 	Debug::log("Queue set to {}", queue);
-	futex_wake(reinterpret_cast<uint32_t *>(&queue), 1);
+	Debug::Invariant(futex_wake(reinterpret_cast<uint32_t *>(&queue), 1) >= 0,
+	                 "Unable to call futex_wake");
+	return 0;
 }
 
 /**
  * Run loop for the consumer thread.
  */
-void __cheri_compartment("consumer") run()
+int __cheri_compartment("consumer") run()
 {
 	// Use the queue pointer as a futex.  It is initialised to 0, if the other
 	// thread has stored a valid pointer here then it will not be zero and so
 	// futex_wait will return immediately.
-	futex_wait(reinterpret_cast<uint32_t *>(&queue), 0);
+	Debug::Invariant(futex_wait(reinterpret_cast<uint32_t *>(&queue), 0) >= 0,
+	                 "Unable to call futex_wake");
 	Debug::log("Waiting for messages");
 	// Get a message from the queue and print it.  This blocks indefinitely.
 	int     value = 0;
@@ -48,4 +51,5 @@ void __cheri_compartment("consumer") run()
 	{
 		Debug::log("Read {} from queue", value);
 	}
+	return 0;
 }

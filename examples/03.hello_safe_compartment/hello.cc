@@ -2,12 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 #include "hello.h"
+#include <debug.hh>
 #include <fail-simulator-on-error.h>
 
+/// Expose debugging features unconditionally for this compartment.
+using Debug = ConditionalDebug<true, "Hello compartment">;
+
 /// Thread entry point.
-void __cheri_compartment("hello") entry()
+int __cheri_compartment("hello") entry()
 {
 	char maliciousString[] = {'h', 'e', 'l', 'l', 'o'};
-	write(maliciousString);
-	write("Non-malicious string");
+	Debug::Invariant(write(maliciousString) >= 0, "Unable to call write");
+	Debug::Invariant(write("Non-malicious string") >= 0,
+	                 "Unable to call write");
+	return 0;
 }

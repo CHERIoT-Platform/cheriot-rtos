@@ -9,16 +9,18 @@ using Debug = ConditionalDebug<true, "Entry compartment">;
 char buffer[1024];
 
 /// Thread entry point.
-void __cheri_compartment("entry") entry()
+int __cheri_compartment("entry") entry()
 {
 	ssize_t length = produce_message(buffer, sizeof(buffer));
 	if (length < 0)
 	{
 		Debug::log("Failed to get encrypted message");
-		return;
+		return -1;
 	}
 	Debug::log("Received encrypted message: '{}' ({} bytes)",
 	           std::string_view{buffer, static_cast<size_t>(length)},
 	           length);
-	consume_message(buffer, length);
+	Debug::Invariant(consume_message(buffer, length) >= 0,
+	                 "Unable to call consume_message");
+	return 0;
 }

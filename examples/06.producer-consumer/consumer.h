@@ -4,4 +4,4 @@
 #include <compartment.h>
 #include <cstdlib>
 
-void __cheri_compartment("consumer") set_queue(SObjStruct *queueHandle);
+int __cheri_compartment("consumer") set_queue(SObjStruct *queueHandle);
