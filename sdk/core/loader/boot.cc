@@ -557,6 +557,12 @@ namespace
 			auto ret = build(entry.address, entry.size());
 			// Remove any permissions that shouldn't be held here.
 			ret.permissions() &= entry.permissions();
+
+			Debug::Invariant(ret.is_valid(),
+			                 "MMIO construction {}--{} is not valid",
+			                 entry.address,
+			                 entry.address + entry.size());
+
 			return ret;
 		};
 
