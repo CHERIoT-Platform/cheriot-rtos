@@ -9,10 +9,10 @@ SCRIPT_DIRECTORY="$(dirname "$(realpath "$0")")"
 
 OBJCOPY=$(find_llvm_tool_required llvm-objcopy)
 
-command -v uf2conv > /dev/null
-if [ ! $? ] ; then
+if ! command -v uf2conv > /dev/null ; then
 	echo "uf2conv not found.  On macOS / Linux systems with Python3 installed, you can install it with:"
 	echo "python3 -m pip install --pre -U git+https://github.com/makerdiary/uf2utils.git@main"
+	exit 1
 fi
 
 # Convert the ELF file to a binary file
