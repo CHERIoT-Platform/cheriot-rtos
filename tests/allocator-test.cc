@@ -28,6 +28,17 @@ using namespace CHERI;
 DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(emptyHeap, 0);
 #define EMPTY_HEAP STATIC_SEALED_VALUE(emptyHeap)
 
+/* Used to test that the revoker sweeps static sealed capabilities */
+struct AllocatorTestStaticSealedType
+{
+	void *pointer;
+};
+DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(struct AllocatorTestStaticSealedType,
+                                       allocator_test,
+                                       AllocatorTestCapabilityType,
+                                       allocatorTestStaticSealedValue,
+                                       0);
+
 namespace
 {
 	/**
@@ -89,9 +100,92 @@ namespace
 	 */
 	__noinline void test_revoke(const size_t HeapSize)
 	{
+#ifdef TEMPORAL_SAFETY
+		{
+			static cheriot::atomic<int> state = 2;
+			int                         sleeps;
+
+			void *volatile pStack = malloc(16);
+			TEST(__builtin_cheri_tag_get(pStack),
+			     "Failed to allocate for test");
+
+			static void *volatile pGlobal = malloc(16);
+			TEST(__builtin_cheri_tag_get(pGlobal),
+			     "Failed to allocate for test");
+
+			auto unsealedToken = token_unseal<AllocatorTestStaticSealedType>(
+			  STATIC_SEALING_TYPE(AllocatorTestCapabilityType),
+			  STATIC_SEALED_VALUE(allocatorTestStaticSealedValue));
+			unsealedToken->pointer = pGlobal;
+
+			/*
+			 * Check that trusted stacks are swept.  This one is fun: we need to
+			 * somehow ensure that a freed pointer is in the register file of an
+			 * off-core thread.  async() and inline asm it is!
+			 */
+			async([=]() {
+				int ptag, scratch;
+
+				// Tell the main thread to go
+				state = 0;
+
+				/*
+				 * Busy spin, ensuring that our test pointer is in a register
+				 * throughout, then get its tag.
+				 */
+				__asm__ volatile("1:\n"
+				                 "clw %[scratch], 0(%[state])\n"
+				                 "beqz %[scratch], 1b\n"
+				                 "cgettag %[out], %[p]\n"
+				                 : [out] "+&r"(ptag), [scratch] "=&r"(scratch)
+				                 : [p] "C"(pGlobal), [state] "C"(&state));
+
+				TEST(ptag == 0, "Revoker failed to sweep trusted stack");
+
+				/* Release the main thread */
+				state = 3;
+			});
+
+			sleeps = 0;
+			while (state.load() != 0)
+			{
+				TEST(sleep(1) >= 0, "Failed to sleep");
+				TEST(sleeps++ < 100, "Background thread not ready");
+			}
+
+			free(pStack);
+			free(pGlobal);
+			heap_quarantine_empty();
+
+			state = 1;
+
+			/* Check that globals are swept */
+			TEST(!__builtin_cheri_tag_get_temporal(pGlobal),
+			     "Revoker failed to sweep globals");
+
+			/* Check that the stack is swept */
+			TEST(!__builtin_cheri_tag_get_temporal(pStack),
+			     "Revoker failed to sweep stack");
+
+			TEST(!__builtin_cheri_tag_get_temporal(unsealedToken->pointer),
+			     "Revoker failed to sweep static sealed cap");
+
+			/* Wait for the async thread to have performed its test */
+			sleeps = 0;
+			while (state.load() != 3)
+			{
+				TEST(sleep(1) >= 0, "Failed to sleep");
+				TEST(sleeps++ < 100, "Background thread not finished");
+			}
+		}
+#else
+		debug_log("Skipping temporal safety checks");
+#endif
+
 		const size_t AllocSize = HeapSize / (MaxAllocCount + 2);
 		debug_log("test_revoke using {}-byte objects", AllocSize);
 
+		/* Repeatedly cycle quarantine */
 		allocations.resize(MaxAllocCount);
 		for (size_t i = 0; i < TestIterations; ++i)
 		{
