@@ -27,7 +27,8 @@ using namespace CHERI;
 		  "" instructions "\n"                                                 \
 		  "cjalr ct2\n"                                                        \
 		  : /* no outputs; we're jumping and probably not coming back */       \
-		  : "C"(rfn), "r"(additional_input));                                  \
+		  : "C"(rfn), "r"(additional_input)                                    \
+		  : "ct2");                                                            \
                                                                                \
 		TEST(false, "Should be unreachable");                                  \
 	})
