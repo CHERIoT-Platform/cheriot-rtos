@@ -85,13 +85,8 @@ int test_thread_pool()
 	free(heapInt);
 
 	async([]() {
-		auto fast = thread_id_get();
-		auto slow = thread_id_get();
-		TEST(fast == slow,
-		     "Thread ID is different in fast ({}) and slow ({}) accessors",
-		     fast,
-		     slow);
-		TEST(fast != 1, "Thread ID for thread pool thread should not be 1");
+		TEST(thread_id_get() != 1,
+		     "Thread ID for thread pool thread should not be 1");
 	});
 
 	CHERI::Capability<void> mainThread{switcher_current_thread()};
