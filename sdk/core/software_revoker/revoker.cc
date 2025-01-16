@@ -11,15 +11,14 @@ using CHERI::Capability;
 using CHERI::Permission;
 
 /**
- * We need an array of the three allocations that provide the globals at the
+ * We need an array of the allocations that provide the globals at the
  * start of our PCC, but the compiler doesn't currently provide a good way of
- * doing this, so do it with an assembly stub for loading the three
- * capabilities.
+ * doing this, so do it with an assembly stub for loading the capabilities.
  */
 __asm__("	.section .text, \"ax\", @progbits\n"
         "	.p2align 3\n"
         "globals:\n"
-        "	.zero 3*8\n"
+        "	.zero 1*8\n"
         "	.globl get_globals\n"
         "get_globals:\n"
         "	sll        a0, a0, 3\n"
@@ -35,7 +34,7 @@ extern "C" volatile void *volatile *get_globals(int idx);
 namespace
 {
 	/**
-	 * The index of the current range to scan.  Must be 0-2 or negative.
+	 * The index of the current range to scan.  Must be 0 or -1.
 	 */
 	int currentRange;
 	/**
@@ -62,18 +61,9 @@ namespace
 		 */
 		NotRunning,
 		/**
-		 * The revoker is scanning globals.
+		 * The revoker is scanning.
 		 */
-		ScanningGlobals,
-		/**
-		 * The revoker is scanning the heap.
-		 */
-		ScanningHeap,
-		/**
-		 * The revoker is scanning stacks (including trusted stacks and the
-		 * register-save areas).
-		 */
-		ScanningStacks
+		Scanning
 	} state;
 
 	/**
@@ -84,12 +74,8 @@ namespace
 		switch (state)
 		{
 			case State::NotRunning:
-				return {0, State::ScanningGlobals};
-			case State::ScanningGlobals:
-				return {1, State::ScanningHeap};
-			case State::ScanningHeap:
-				return {2, State::ScanningStacks};
-			case State::ScanningStacks:
+				return {0, State::Scanning};
+			case State::Scanning:
 				return {-1, State::NotRunning};
 		}
 	}

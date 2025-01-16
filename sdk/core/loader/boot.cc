@@ -1392,57 +1392,43 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	  csp);
 
 #ifdef SOFTWARE_REVOKER
-	// If we are using a software revoker then we need to provide it with three
+	// If we are using a software revoker then we need to provide it with some
 	// terrifyingly powerful capabilities.  These break some of the rules that
-	// we enforce for everything else, especially the last one, which is a
-	// stack capability that is reachable from a global.  The only code that
+	// we enforce for everything else (e.g. they may point to stacks
+	// but are reachable from a global).  The only code that
 	// accesses these in the revoker is very small and amenable to auditing
 	// (the only memory accesses are a load and a store back at the same
 	// location, with interrupts disabled, to trigger the load barrier).
-	//
-	// We use imprecise set-bounds operations here because we need to ensure
-	// that the regions are completely scanned and scanning slightly more is
+
+	// The scary capabilities are stored at the beginning of the software
+	// revoker compartment. At the moment we only need one.
+	auto scaryCapabilities = build<Capability<void>,
+	                               Root::Type::RWStoreL,
+	                               Root::Permissions<Root::Type::RWStoreL>,
+	                               /* Precise: */ true>(
+	  imgHdr.privilegedCompartments.software_revoker().code.start(),
+	  sizeof(void *));
+	Debug::log("Writing scary capabilities for software revoker to {}",
+	           scaryCapabilities);
+	// Construct a capability to all RW globals, stacks and heap.
+	// We use an imprecise set-bounds operation here because we need to ensure
+	// that the region is completely scanned and scanning slightly more is
 	// not a problem unless the revoker is compromised.  The software revoker
 	// already has a terrifying set of rights, so this doesn't really make
 	// things worse and is another good reason to use a hardware revoker.
 	// Given that hardware revokers are lower power, faster, and more secure,
 	// there's little reason for the software revoker to be used for anything
 	// other than testing.
-	auto scaryCapabilities = build<Capability<void>,
-	                               Root::Type::RWStoreL,
-	                               Root::Permissions<Root::Type::RWStoreL>,
-	                               /* Precise: */ false>(
-	  imgHdr.privilegedCompartments.software_revoker().code.start(),
-	  3 * sizeof(void *));
-	// Read-write capability to all globals.  This is scary because a bug in
-	// the revoker could violate compartment isolation.
-	Debug::log("Writing scary capabilities for software revoker to {}",
-	           scaryCapabilities);
-	scaryCapabilities[0] =
-	  build(LA_ABS(__compart_cgps),
-	        LA_ABS(__compart_cgps_end) - LA_ABS(__compart_cgps));
+	scaryCapabilities[0] = build<void,
+	                             Root::Type::RWStoreL,
+	                             Root::Permissions<Root::Type::RWStoreL>,
+	                             /* Precise: */ false>(
+	  LA_ABS(__revoker_scan_start),
+	  LA_ABS(__export_mem_heap_end) - LA_ABS(__revoker_scan_start));
 	scaryCapabilities[0].address() = scaryCapabilities[0].base();
-	Debug::log("Wrote scary capability {}", scaryCapabilities[0]);
-	// Read-write capability to the whole heap.  This is scary because a bug in
-	// the revoker could violate heap safety.
-	scaryCapabilities[1] =
-	  build<void,
-	        Root::Type::RWGlobal,
-	        Root::Permissions<Root::Type::RWGlobal>,
-	        false>(LA_ABS(__export_mem_heap),
-	               LA_ABS(__export_mem_heap_end) - LA_ABS(__export_mem_heap));
-	scaryCapabilities[1].address() = scaryCapabilities[1].base();
-	Debug::log("Wrote scary capability {}", scaryCapabilities[1]);
-	// Read-write capability to the entire stack.  This is scary because a bug
-	// in the revoker could violate thread isolation.
-	scaryCapabilities[2] =
-	  build<void,
-	        Root::Type::RWStoreL,
-	        Root::Permissions<Root::Type::RWStoreL>,
-	        false>(LA_ABS(__stack_space_start),
-	               LA_ABS(__stack_space_end) - LA_ABS(__stack_space_start));
-	scaryCapabilities[2].address() = scaryCapabilities[2].base();
-	Debug::log("Wrote scary capability {}", scaryCapabilities[2]);
+	Debug::log("Wrote scary cap[0]={} requested_start={}",
+	           scaryCapabilities[0],
+	           LA_ABS(__revoker_scan_start));
 #endif
 
 	// Set up the exception entry point

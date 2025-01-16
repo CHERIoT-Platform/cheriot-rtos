@@ -13,12 +13,6 @@ SECTIONS
 		*(.loader_start);
 	}
 
-	@thread_trusted_stacks@
-
-	__stack_space_start = .;
-	@thread_stacks@
-	__stack_space_end = .;
-
 	.compartment_export_tables : ALIGN(8)
 	{
 		# The scheduler and allocator's export tables are at the start.
@@ -83,8 +77,18 @@ SECTIONS
 	@software_revoker_code@
 
 	@pcc_ld@
-
 	__compart_pccs_end = .;
+
+	# Revoker scan region must be cap aligned
+	. = ALIGN(8);
+	__revoker_scan_start = .;
+	__stack_space_start = .;
+
+	@thread_trusted_stacks@
+
+	@thread_stacks@
+
+	__stack_space_end = .;
 
 	__compart_cgps = ALIGN(64);
 
