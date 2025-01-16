@@ -253,19 +253,141 @@ target("cheriot.software_revoker")
 		target:set("cheriot.ldscript", "software_revoker.ldscript")
 	end)
 
--- Helper to get the board file for a given target
-local board_file = function(target)
-	local boardfile = target:values("board")
-	if not boardfile then
-		raise("target " .. target:name() .. " does not define a board name")
-	end
+-- Helper to find a board file given either the name of a board file or a path.
+local function board_file_for_name(boardName)
+	local boardfile = boardName
 	-- The directory containing the board file.
 	local boarddir = path.directory(boardfile);
+	-- If this isn't a path, look in the boards directory
 	if path.basename(boardfile) == boardfile then
 		boarddir = path.join(scriptdir, "boards")
-		boardfile = path.join(boarddir, boardfile .. '.json')
+		local fullBoardPath = path.join(boarddir, boardfile .. '.json')
+		if not os.isfile(fullBoardPath) then
+			fullBoardPath = path.join(boarddir, boardfile .. '.patch')
+		end
+		if not os.isfile(fullBoardPath) then
+			print("unable to find board file " .. boardfile .. ".  Try specifying a full path")
+			return nil
+		end
+		boardfile = fullBoardPath
 	end
 	return boarddir, boardfile
+end
+
+-- Helper to get the board file for a given target
+local function board_file_for_target(target)
+	local boardName = target:values("board")
+	if not boardName then
+		print("target " .. target:name() .. " does not define a board name")
+		return nil
+	end
+	return board_file_for_name(boardName)
+end
+
+-- Helper to load a board file.  This must be passed the json object provided
+-- by import("core.base.json") because import does not work in helper
+-- functions at the top level.
+local function load_board_file(json, boardFile)
+	if path.extension(boardFile) == ".json" then
+		return json.loadfile(boardFile)
+	end
+	if path.extension(boardFile) ~= ".patch" then
+		print("unknown extension for board file: " .. boardFile)
+		return nil
+	end
+	local patch = json.loadfile(boardFile)
+	if not patch.base then
+		print("Board file " .. boardFile .. " does not specify a base")
+		return nil
+	end
+	local _, baseFile = board_file_for_name(patch.base)
+	local base = load_board_file(json, baseFile)
+
+	-- If a string value is a number, return it as number, otherwise return it
+	-- in its original form.
+	function asNumberIfNumber(value)
+		if tostring(tonumber(value)) == value then
+			return tonumber(value)
+		end
+		return value
+	end
+
+	-- Heuristic to tell a Lua table is probably an array in Lua
+	-- This is O(n), but n is usually very small, and this happens once per
+	-- build so this doesn't really matter.
+	function isarray(t)
+		local i = 1
+		for k, v in pairs(t) do
+			if k ~= i then
+				return false
+			end
+			i = i+1
+		end
+		return true
+	end
+
+	for _, p in ipairs(patch.patch) do
+		if not p.op then
+			print("missing op in "..json.encode(p))
+			return nil
+		end
+		if not p.path or (type(p.path) ~= "string") then
+			print("missing or invalid path in "..json.encode(p))
+			return nil
+		end
+
+		-- Parse the JSON Pointer into an array of filed names, converting
+		-- numbers into Lua numbers if we see them.  This is not quite right,
+		-- because it doesn't handle field names with / in them, but we don't
+		-- currently use those for anything.  It also assumes that we really do
+		-- mean array indexes when we say numbers.  If we have an object with
+		-- "3" as the key and try to replace 3, it will currently not do the
+		-- right thing.  
+		local objectPath = {}
+		for entry in string.gmatch(p.path, "/([^/]+)") do
+			table.insert(objectPath, asNumberIfNumber(entry))
+		end
+
+		if #objectPath < 1 then
+			print("invalid path in "..json.encode(p))
+			return nil
+		end
+
+		-- Last path object is the name of the key we're going to modify.
+		local nodeName = table.remove(objectPath)
+		-- Walk the path to find the object that we're going to modify.
+		local nodeToModify = base
+		for _, pathComponent in ipairs(objectPath) do
+			nodeToModify = nodeToModify[pathComponent]
+		end
+
+		-- JSON arrays are indexed from 0, Lua's are from 1.  If someone says
+		-- array index 0, we need to map that to 1, and so on.
+		local isArrayOperation = false
+		if (type(nodeName) == "number") and isarray(nodeToModify) then
+			nodeName = nodeName + 1
+			isArrayOperation = true
+		end
+
+		-- Handle the operation
+		if (p.op == "replace") or (p.op == "add") then
+			if not p.value then
+				print(tostring(p.op).. " requires a value, missing in ", json.encode(p))
+				return nil
+			end
+			if isArrayOperation and p.op == "add" then
+				table.insert(nodeToModify, nodeName, p.value)
+			else
+				nodeToModify[nodeName] = p.value
+			end
+		elseif p.op == "remove" then
+			nodeToModify[nodeName] = nil
+		else
+			print(tostring(p.op) .. " is not a valid operation in ", json.encode(p))
+			return nil
+		end
+	end
+	return base
 end
 
 -- Helper to visit all dependencies of a specified target exactly once and call
@@ -284,14 +406,13 @@ local function visit_all_dependencies_of(target, callback)
 	visit(target)
 end
 
-
 -- Rule for defining a firmware image.
 rule("firmware")
 	on_run(function (target)
 		import("core.base.json")
 		import("core.project.config")
-		local boarddir, boardfile = board_file(target)
-		local board = json.loadfile(boardfile)
+		local boarddir, boardfile = board_file_for_target(target)
+		local board = load_board_file(json, boardfile)
 		if not board.simulator then
 			raise("board description " .. boardfile .. " does not define a run command")
 		end
@@ -339,9 +460,10 @@ rule("firmware")
 			visit_all_dependencies_of(target, callback)
 		end
 
-		local boarddir, boardfile = board_file(target);
-		local board = json.loadfile(boardfile)
-
+		local boarddir, boardfile = board_file_for_target(target);
+		local board = load_board_file(json, boardfile)
+		print("Board file saved as ", target:targetfile()..".board.json")
+		json.savefile(target:targetfile()..".board.json", board)
 
 		-- Add defines to all dependencies.
 		local add_defines = function (defines)

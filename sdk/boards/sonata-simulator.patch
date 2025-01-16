@@ -1,0 +1,15 @@
+{
+  "base": "sonata-prerelease",
+  "patch": [
+    {
+      "op": "replace",
+      "path": "/simulation",
+      "value": true
+    },
+    {
+      "op": "replace",
+      "path": "/simulator",
+      "value": "${sdk}/../scripts/run-sonata-sim.sh"
+    }
+  ]
+}
