@@ -87,9 +87,9 @@ namespace Ibex
 			 * revoke capabilities everywhere from the start of compartment
 			 * globals to the end of the heap.
 			 */
-			extern char __compart_cgps, __export_mem_heap_end;
+			extern char __revoker_scan_start, __export_mem_heap_end;
 
-			auto  base   = LA_ABS(__compart_cgps);
+			auto  base   = LA_ABS(__revoker_scan_start);
 			auto  top    = LA_ABS(__export_mem_heap_end);
 			auto &device = revoker_device();
 			device.base  = base;
