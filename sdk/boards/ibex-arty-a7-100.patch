@@ -71,7 +71,7 @@
     },
     {
       "op": "remove",
-      "path": "/simulator"
+      "path": "/run_command"
     }
   ]
 }
