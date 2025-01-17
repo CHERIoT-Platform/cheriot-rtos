@@ -49,5 +49,5 @@
     "revoker" : "hardware",
     "stack_high_water_mark" : true,
     "simulation": true,
-    "simulator" : "${sdk}/../scripts/run-ibex-safe-sim.sh"
+    "run_command" : "${sdk}/../scripts/run-ibex-safe-sim.sh"
 }

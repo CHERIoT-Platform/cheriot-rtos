@@ -413,10 +413,10 @@ rule("firmware")
 		import("core.project.config")
 		local boarddir, boardfile = board_file_for_target(target)
 		local board = load_board_file(json, boardfile)
-		if not board.simulator then
+		if (not board.run_command) and (not board.simulator) then
 			raise("board description " .. boardfile .. " does not define a run command")
 		end
-		local simulator = board.simulator
+		local simulator = board.run_command or board.simulator
 		simulator = string.gsub(simulator, "${(%w*)}", { sdk=scriptdir, board=boarddir })
 		local firmware = target:targetfile()
 		local directory = path.directory(firmware)
