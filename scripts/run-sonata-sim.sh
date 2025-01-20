@@ -4,7 +4,7 @@ set -e
 
 # Specify the default environment variables if they haven't been already.
 : "${SONATA_SIMULATOR:=/cheriot-tools/bin/sonata_simulator}"
-: "${SONATA_SIMULATOR_BOOT_STUB:=/cheriot-tools/elf/sonata_simulator_boot_stub}"
+: "${SONATA_SIMULATOR_BOOT_STUB:=/cheriot-tools/elf/sonata_simulator_hyperram_boot_stub}"
 : "${SONATA_SIMULATOR_UART_LOG=uart0.log}"
 
 if [ -z "$1" ] ; then
