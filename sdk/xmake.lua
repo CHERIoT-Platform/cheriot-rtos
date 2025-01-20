@@ -445,6 +445,7 @@ rule("firmware")
 	-- This must be after load so that dependencies are resolved.
 	after_load(function (target)
 		import("core.base.json")
+		import("core.project.config")
 
 		local function visit_all_dependencies(callback)
 			visit_all_dependencies_of(target, callback)
@@ -558,7 +559,22 @@ rule("firmware")
 		mmio = format("__mmio_region_start = 0x%x;\n%s__mmio_region_end = 0x%x;\n__export_mem_heap_end = 0x%x;\n",
 			mmio_start, mmio, mmio_end, board.heap["end"])
 
-		local code_start = format("0x%x", board.instruction_memory.start)
+		local code_start = format("0x%x", board.instruction_memory.start);
+		-- Put the data either at the specified address if given, or directly after code
+		local data_start = board.data_memory and format("0x%x", board.data_memory.start) or '.';
+		local rwdata_ldscript = path.join(config.buildir(), target:name() .. "-firmware.rwdata.ldscript")
+		local rocode_ldscript = path.join(config.buildir(), target:name() .. "-firmware.rocode.ldscript")
+		if not board.data_memory or (board.instruction_memory.start < board.data_memory.start) then
+			-- If we're not explicilty given a data address or it's lower than the code address
+			-- then code needs to go first in the linker script.
+			firmware_low_ldscript = rocode_ldscript
+			firmware_high_ldscript = rwdata_ldscript
+		else
+			-- Otherwise the data is at a lower address than code (e.g. Sonata with SRAM and hyperram)
+			-- so it needs to go first.
+			firmware_low_ldscript = rwdata_ldscript;
+			firmware_high_ldscript = rocode_ldscript;
+		end
 
 		-- Set the start of memory that can be revoked.
 		-- By default, this is the start of code memory but it can be
@@ -752,8 +768,11 @@ rule("firmware")
 			software_revoker_header="",
 			sealed_objects="",
 			mmio=mmio,
+			data_start=data_start,
 			code_start=code_start,
 			heap_start=heap_start,
+			firmware_low_ldscript=firmware_low_ldscript,
+			firmware_high_ldscript=firmware_high_ldscript,
 			thread_count=#(threads),
 			thread_headers=thread_headers,
 			thread_trusted_stacks=thread_trusted_stacks,
@@ -884,7 +903,9 @@ rule("firmware")
 		import("core.project.config")
 		-- Get a specified linker script, or set the default to the compartment
 		-- linker script.
-		local linkerscript = path.join(config.buildir(), target:name() .. "-firmware.ldscript")
+		local linkerscript1 = path.join(config.buildir(), target:name() .. "-firmware.ldscript")
+		local linkerscript2 = path.join(config.buildir(), target:name() .. "-firmware.rocode.ldscript")
+		local linkerscript3 = path.join(config.buildir(), target:name() .. "-firmware.rwdata.ldscript")
 		-- Link using the firmware's linker script.
 		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
 		batchcmds:mkdir(target:targetdir())
@@ -897,11 +918,11 @@ rule("firmware")
 				table.insert(objects, dep:targetfile())
 			end
 		end)
-		batchcmds:vrunv(target:tool("ld"), table.join({"-n", "--script=" .. linkerscript, "--relax", "-o", target:targetfile(), "--compartment-report=" .. target:targetfile() .. ".json" }, objects), opt)
+		batchcmds:vrunv(target:tool("ld"), table.join({"-n", "--script=" .. linkerscript1, "--relax", "-o", target:targetfile(), "--compartment-report=" .. target:targetfile() .. ".json" }, objects), opt)
 		batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
 		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
 		batchcmds:vexecv(target:tool("objdump"), {"-glxsdrS", "--demangle", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
-		batchcmds:add_depfiles(linkerscript)
+		batchcmds:add_depfiles(linkerscript1, linkerscript2, linkerscript3)
 		batchcmds:add_depfiles(objects)
 	end)
 
@@ -970,6 +991,8 @@ function firmware(name)
 		-- The firmware linker script will be populated based on the set of
 		-- compartments.
 		add_configfiles(path.join(scriptdir, "firmware.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.ldscript"})
+		add_configfiles(path.join(scriptdir, "firmware.rocode.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.rocode.ldscript"})
+		add_configfiles(path.join(scriptdir, "firmware.rwdata.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.rwdata.ldscript"})
 end
 
 -- Helper to create a library.

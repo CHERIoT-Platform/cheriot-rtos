@@ -77,9 +77,13 @@
             "end"   : 0x88400000
         }
     },
+    "data_memory": {
+        "start" : 0x00101000,
+        "end" :   0x00120000
+    },
     "instruction_memory": {
-        "start": 0x00101000,
-        "end":   0x00120000
+        "start": 0x40000000,
+        "end":   0x40100000
     },
     "heap": {
         "end": 0x00120000
