@@ -45,8 +45,6 @@ jobs:
         xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
         xmake
     - name: Run tests
-      # Test suite needs HyperRAM support to be added to RTOS because SRAM is not big enough.
-      if: ${{ !matrix.sonata }}
       run: |
         cd tests
         xmake run
