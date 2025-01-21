@@ -310,7 +310,7 @@ static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size)
 		}                                                                      \
 		ret;                                                                   \
 	})
-#define MVM_CONTEXTUAL_FREE(ptr, context) heap_free(context, ptr)
+#define MVM_CONTEXTUAL_FREE(ptr, context) (void)heap_free(context, ptr)
 
 /**
  * Expose the timeout APIs.

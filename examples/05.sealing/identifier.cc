@@ -68,9 +68,9 @@ int identifier_value(Identifier *identifier)
 /**
  * Destroy the identifier provided as an argument.
  */
-void identifier_destroy(Identifier *identifier)
+int identifier_destroy(Identifier *identifier)
 {
 	// The allocator does validity checks here, so we can skip them.
-	token_obj_destroy(
+	return token_obj_destroy(
 	  MALLOC_CAPABILITY, key(), reinterpret_cast<SObj>(identifier));
 }
