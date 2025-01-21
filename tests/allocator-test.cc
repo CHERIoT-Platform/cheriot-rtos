@@ -126,14 +126,12 @@ namespace
 			async([=]() {
 				int ptag, scratch;
 
-				// Tell the main thread to go
-				state = 0;
-
 				/*
-				 * Busy spin, ensuring that our test pointer is in a register
-				 * throughout, then get its tag.
+				 * Release the main thread, then busy spin, ensuring that our
+				 * test pointer is in a register throughout, then get its tag.
 				 */
-				__asm__ volatile("1:\n"
+				__asm__ volatile("csw zero, 0(%[state])\n"
+				                 "1:\n"
 				                 "clw %[scratch], 0(%[state])\n"
 				                 "beqz %[scratch], 1b\n"
 				                 "cgettag %[out], %[p]\n"
