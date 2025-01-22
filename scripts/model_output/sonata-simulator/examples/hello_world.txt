@@ -1,1 +1,0 @@
-[35mHello world compartment[0m: Hello world

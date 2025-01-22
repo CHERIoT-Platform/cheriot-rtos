@@ -25,27 +25,14 @@ fi
 # Remove old uart log
 rm -f "${SONATA_SIMULATOR_UART_LOG}"
 
-# If a second argument is provided, check content of UART log.
-if [ -n "$2" ] ; then
-	# Run the simulator in the background.
-	${SONATA_SIMULATOR} -E "${SONATA_SIMULATOR_BOOT_STUB}" -E "$1" &
-	LOOP_TRACKER=0
-	while (( LOOP_TRACKER <= 60 ))
-	do
-		sleep 1s
-		# Returns 0 if found and 1 if not.
-		MATCH_FOUND=$(grep -q -F -f "$2" "${SONATA_SIMULATOR_UART_LOG}"; echo $?)
-		if (( MATCH_FOUND == 0 )) ; then
-			# Match was found so exit with success
-			pkill -P $$
-			exit 0
-		fi
-		LOOP_TRACKER=$((LOOP_TRACKER+1))
-	done
-	# Timeout was hit so no success.
-	pkill -P $$
+if ! ${SONATA_SIMULATOR} -E "${SONATA_SIMULATOR_BOOT_STUB}" -E "$1"; then
+	echo "Simulator exited with failure! UART output:"
+	cat "${SONATA_SIMULATOR_UART_LOG}"
 	exit 4
-else
-	# If there is no second argument, run simulator in foreground.
-	${SONATA_SIMULATOR} -E "${SONATA_SIMULATOR_BOOT_STUB}" -E "$1"
+fi
+
+# Check to see if the output indicates failure
+if grep -i failure "${SONATA_SIMULATOR_UART_LOG}"; then
+	echo "Log output contained 'failure'"
+	exit 5
 fi

@@ -1,2 +1,0 @@
-[35mUART compartment[0m: Hello world
-[35mUART compartment[0m: Hello from the stack

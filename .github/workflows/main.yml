@@ -27,7 +27,7 @@ jobs:
             build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=n -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y
           - board: sonata-simulator
             build-type: release
-            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=n -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y --testing-model-output=y
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=n -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y
             sonata: true
       fail-fast: false
     runs-on: ubuntu-latest
