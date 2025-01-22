@@ -389,28 +389,30 @@ namespace
 	 * is not a heap capability.
 	 */
 	PrivateAllocatorCapabilityState *
-	malloc_capability_unseal(SealedAllocation in)
+	malloc_capability_unseal(AllocatorCapability in)
 	{
-		auto  key = STATIC_SEALING_TYPE(MallocKey);
-		auto *capability =
-		  token_unseal<PrivateAllocatorCapabilityState>(key, in.get());
+		auto  key        = STATIC_SEALING_TYPE(MallocKey);
+		auto *capability = token_unseal<AllocatorCapabilityState>(key, in);
 		if (!capability)
 		{
 			Debug::log("Invalid malloc capability {}", in);
 			return nullptr;
 		}
 
+		auto *state =
+		  reinterpret_cast<PrivateAllocatorCapabilityState *>(capability);
+
 		// Assign an identifier if this is the first time that we've seen this.
-		if (capability->identifier == 0)
+		if (state->identifier == 0)
 		{
 			static uint32_t nextIdentifier = 1;
 			if (nextIdentifier >= (1 << MChunkHeader::OwnerIDWidth))
 			{
 				return nullptr;
 			}
-			capability->identifier = nextIdentifier++;
+			state->identifier = nextIdentifier++;
 		}
-		return capability;
+		return state;
 	}
 
 	/**
@@ -815,8 +817,9 @@ namespace
 		return -EPERM;
 	}
 
-	__noinline int
-	heap_free_internal(SObj heapCapability, void *rawPointer, bool reallyFree)
+	__noinline int heap_free_internal(AllocatorCapability heapCapability,
+	                                  void               *rawPointer,
+	                                  bool                reallyFree)
 	{
 		auto *capability = malloc_capability_unseal(heapCapability);
 		if (capability == nullptr)
@@ -847,7 +850,7 @@ namespace
 } // namespace
 
 __cheriot_minimum_stack(0x90) ssize_t
-  heap_quota_remaining(struct SObjStruct *heapCapability)
+  heap_quota_remaining(AllocatorCapability heapCapability)
 {
 	STACK_CHECK(0x90);
 	LockGuard g{lock};
@@ -877,10 +880,11 @@ __cheriot_minimum_stack(0xc0) int heap_quarantine_empty()
 	return 0;
 }
 
-__cheriot_minimum_stack(0x220) void *heap_allocate(Timeout *timeout,
-                                                   SObj     heapCapability,
-                                                   size_t   bytes,
-                                                   uint32_t flags)
+__cheriot_minimum_stack(0x220) void *heap_allocate(
+  Timeout            *timeout,
+  AllocatorCapability heapCapability,
+  size_t              bytes,
+  uint32_t            flags)
 {
 	STACK_CHECK(0x220);
 	if (!check_timeout_pointer(timeout))
@@ -898,7 +902,7 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(Timeout *timeout,
 }
 
 __cheriot_minimum_stack(0x1c0) ssize_t
-  heap_claim(SObj heapCapability, void *pointer)
+  heap_claim(AllocatorCapability heapCapability, void *pointer)
 {
 	STACK_CHECK(0x1c0);
 	LockGuard g{lock};
@@ -927,8 +931,8 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 	return 0;
 }
 
-__cheriot_minimum_stack(0x260) int heap_can_free(SObj  heapCapability,
-                                                 void *rawPointer)
+__cheriot_minimum_stack(
+  0x260) int heap_can_free(AllocatorCapability heapCapability, void *rawPointer)
 {
 	// This function requires much less space, but we claim that we require as
 	// much as `heap_free` so that a call to `heap_free` will not fail due to
@@ -939,7 +943,7 @@ __cheriot_minimum_stack(0x260) int heap_can_free(SObj  heapCapability,
 	return heap_free_internal(heapCapability, rawPointer, false);
 }
 
-int heap_free_nostackcheck(SObj heapCapability, void *rawPointer)
+int heap_free_nostackcheck(AllocatorCapability heapCapability, void *rawPointer)
 {
 	LockGuard g{lock};
 	int       ret = heap_free_internal(heapCapability, rawPointer, true);
@@ -959,15 +963,16 @@ int heap_free_nostackcheck(SObj heapCapability, void *rawPointer)
 	return 0;
 }
 
-__cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
-                                             void *rawPointer)
+__cheriot_minimum_stack(0x260) int heap_free(AllocatorCapability heapCapability,
+                                             void               *rawPointer)
 {
 	// If this value changes, update `heap_can_free` as well.
 	STACK_CHECK(0x260);
 	return heap_free_nostackcheck(heapCapability, rawPointer);
 }
 
-__cheriot_minimum_stack(0x1a0) ssize_t heap_free_all(SObj heapCapability)
+__cheriot_minimum_stack(0x1a0) ssize_t
+  heap_free_all(AllocatorCapability heapCapability)
 {
 	STACK_CHECK(0x1a0);
 	LockGuard g{lock};
@@ -1006,11 +1011,12 @@ __cheriot_minimum_stack(0x1a0) ssize_t heap_free_all(SObj heapCapability)
 	return freed;
 }
 
-__cheriot_minimum_stack(0x220) void *heap_allocate_array(Timeout *timeout,
-                                                         SObj   heapCapability,
-                                                         size_t nElements,
-                                                         size_t elemSize,
-                                                         uint32_t flags)
+__cheriot_minimum_stack(0x220) void *heap_allocate_array(
+  Timeout            *timeout,
+  AllocatorCapability heapCapability,
+  size_t              nElements,
+  size_t              elemSize,
+  uint32_t            flags)
 {
 	STACK_CHECK(0x220);
 	if (!check_timeout_pointer(timeout))
@@ -1050,14 +1056,14 @@ namespace
 	 * our hardware sealing key.  Returns the unsealed pointer, `nullptr` if it
 	 * cannot be helped.
 	 */
-	SealedAllocation unseal_if_valid(SealedAllocation in)
+	SealedAllocation unseal_if_valid(Capability<SObjStruct, true> in)
 	{
 		// The input must be tagged and sealed with our type.
 		// FIXME: At the moment the ISA is still shuffling types around, but
 		// eventually we want to know the type statically and don't need dynamic
 		// instructions.
-		in.unseal(allocatorSealingKey);
-		return in.is_valid() ? in : SealedAllocation{nullptr};
+		auto unsealed = in.unseal(allocatorSealingKey);
+		return unsealed.is_valid() ? unsealed : SealedAllocation{nullptr};
 	}
 
 	/**
@@ -1065,12 +1071,12 @@ namespace
 	 * unsealed capabilities to the object.  Requires that the sealing key have
 	 * all of the permissions in `permissions`.
 	 */
-	std::pair<SObj, void *>
-	  __noinline allocate_sealed_unsealed(Timeout      *timeout,
-	                                      SObj          heapCapability,
-	                                      SealingKey    key,
-	                                      size_t        requestedSize,
-	                                      PermissionSet permissions)
+	std::pair<CHERI_SEALED(void *), void *>
+	  __noinline allocate_sealed_unsealed(Timeout            *timeout,
+	                                      AllocatorCapability heapCapability,
+	                                      SealingKey          key,
+	                                      size_t              requestedSize,
+	                                      PermissionSet       permissions)
 	{
 		if (!check_timeout_pointer(timeout))
 		{
@@ -1115,7 +1121,7 @@ namespace
 		{
 			return {nullptr, nullptr};
 		}
-		SealedAllocation obj{static_cast<SObj>(malloc_internal(
+		SealedAllocation obj{static_cast<SObjStruct *>(malloc_internal(
 		  sealedSize, std::move(g), capability, timeout, true))};
 		if (obj == nullptr)
 		{
@@ -1136,8 +1142,7 @@ namespace
 		obj.align_down(MallocAlignment);
 
 		obj->type   = key.address();
-		auto sealed = obj;
-		sealed.seal(allocatorSealingKey);
+		auto sealed = obj.seal(allocatorSealingKey);
 		obj.address() += ObjHdrSize; // Exclude the header.
 		obj.bounds() = obj.top() - obj.address();
 		Debug::Assert(
@@ -1169,17 +1174,17 @@ SKey token_key_new()
 	return nullptr;
 }
 
-__cheriot_minimum_stack(0x280) SObj
-  token_sealed_unsealed_alloc(Timeout *timeout,
-                              SObj     heapCapability,
-                              SKey     key,
-                              size_t   sz,
-                              void   **unsealed)
+__cheriot_minimum_stack(0x280) CHERI_SEALED(void *)
+  token_sealed_unsealed_alloc(Timeout            *timeout,
+                              AllocatorCapability heapCapability,
+                              SKey                key,
+                              size_t              sz,
+                              void              **unsealed)
 {
 	STACK_CHECK(0x280);
 	if (!check_timeout_pointer(timeout))
 	{
-		return INVALID_SOBJ;
+		return nullptr;
 	}
 	auto [sealed, obj] = allocate_sealed_unsealed(
 	  timeout, heapCapability, key, sz, {Permission::Seal, Permission::Unseal});
@@ -1204,10 +1209,11 @@ __cheriot_minimum_stack(0x280) SObj
 	return sealed;
 }
 
-__cheriot_minimum_stack(0x260) SObj token_sealed_alloc(Timeout *timeout,
-                                                       SObj     heapCapability,
-                                                       SKey     rawKey,
-                                                       size_t   sz)
+__cheriot_minimum_stack(0x260) CHERI_SEALED(void *)
+  token_sealed_alloc(Timeout            *timeout,
+                     AllocatorCapability heapCapability,
+                     SKey                rawKey,
+                     size_t              sz)
 {
 	STACK_CHECK(0x260);
 	return allocate_sealed_unsealed(
@@ -1220,7 +1226,8 @@ __cheriot_minimum_stack(0x260) SObj token_sealed_alloc(Timeout *timeout,
  * relevant checks and returns nullptr if this is not a valid key and object
  * sealed with that key.
  */
-__noinline static SealedAllocation unseal_internal(SKey rawKey, SObj obj)
+__noinline static SealedAllocation
+unseal_internal(SKey rawKey, CHERI_SEALED(SObjStruct *) obj)
 {
 	SealingKey key{rawKey};
 	Capability unsealedInner = token_unseal<void>(key, obj);
@@ -1237,15 +1244,17 @@ __noinline static SealedAllocation unseal_internal(SKey rawKey, SObj obj)
 	return unseal_if_valid(obj);
 }
 
-__cheriot_minimum_stack(0x260) int token_obj_destroy(SObj heapCapability,
-                                                     SKey key,
-                                                     SObj object)
+__cheriot_minimum_stack(0x260) int token_obj_destroy(
+  AllocatorCapability heapCapability,
+  SKey                key,
+  CHERI_SEALED(void *) object)
 {
 	STACK_CHECK(0x260);
 	void *unsealed;
 	{
 		LockGuard g{lock};
-		unsealed = unseal_internal(key, object);
+		unsealed = unseal_internal(
+		  key, reinterpret_cast<CHERI_SEALED(SObjStruct *)>(object));
 		if (unsealed == nullptr)
 		{
 			return -EINVAL;
@@ -1259,15 +1268,17 @@ __cheriot_minimum_stack(0x260) int token_obj_destroy(SObj heapCapability,
 	return heap_free_nostackcheck(heapCapability, unsealed);
 }
 
-__cheriot_minimum_stack(0xf0) int token_obj_can_destroy(SObj heapCapability,
-                                                        SKey key,
-                                                        SObj object)
+__cheriot_minimum_stack(0xf0) int token_obj_can_destroy(
+  AllocatorCapability heapCapability,
+  SKey                key,
+  CHERI_SEALED(void *) object)
 {
 	STACK_CHECK(0xf0);
 	void *unsealed;
 	{
 		LockGuard g{lock};
-		unsealed = unseal_internal(key, object);
+		unsealed = unseal_internal(
+		  key, reinterpret_cast<CHERI_SEALED(SObjStruct *)>(object));
 		if (unsealed == nullptr)
 		{
 			return -EINVAL;

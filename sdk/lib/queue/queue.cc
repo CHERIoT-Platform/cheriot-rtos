@@ -335,7 +335,7 @@ namespace
 
 } // namespace
 
-int queue_destroy(struct SObjStruct   *heapCapability,
+int queue_destroy(AllocatorCapability  heapCapability,
                   struct MessageQueue *handle)
 {
 	int ret = 0;
@@ -393,7 +393,7 @@ ssize_t queue_allocation_size(size_t elementSize, size_t elementCount)
 }
 
 int queue_create(Timeout              *timeout,
-                 struct SObjStruct    *heapCapability,
+                 AllocatorCapability   heapCapability,
                  struct MessageQueue **outQueue,
                  size_t                elementSize,
                  size_t                elementCount)

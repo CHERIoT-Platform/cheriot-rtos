@@ -699,10 +699,10 @@ namespace
 					                 "Invalid sealed object {}",
 					                 typeAddress);
 				}
-				Capability sealedObject = build(entry.address, entry.size());
 				// Seal with the allocator's sealing key
-				sealedObject.seal(
-				  build<void, Root::Type::Seal>(StaticToken, 1));
+				Capability sealedObject =
+				  build(entry.address, entry.size())
+				    .seal(build<void, Root::Type::Seal>(StaticToken, 1));
 				Debug::log("Static sealed object: {}", sealedObject);
 				return sealedObject;
 			}
@@ -975,9 +975,7 @@ namespace
 
 			Debug::log("Thread's trusted stack is {}", threadTStack);
 
-			threadTStack.seal(trustedStackKey);
-
-			threadInfo[i].trustedStack = threadTStack;
+			threadInfo[i].trustedStack = threadTStack.seal(trustedStackKey);
 			threadInfo[i].priority     = config.priority;
 			i++;
 		}
@@ -1372,7 +1370,13 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	  build<ExportEntry>(
 	    imgHdr.scheduler().exportTable,
 	    LA_ABS(
-	      __export_scheduler__Z15exception_entryP19TrustedStackGenericILj0EEjjj))
+#if __has_extension(cheri_sealed_pointers) &&                                  \
+  !defined(CHERIOT_NO_SEALED_POINTERS)
+	      __export_scheduler__Z15exception_entryU19__sealed_capabilityP19TrustedStackGenericILj0EEjjj
+#else
+	      __export_scheduler__Z15exception_entryP10SObjStructjjj
+#endif
+	      ))
 	    ->functionStart;
 	auto schedExceptionEntry = build_pcc(imgHdr.scheduler());
 	schedExceptionEntry.address() += exceptionEntryOffset;

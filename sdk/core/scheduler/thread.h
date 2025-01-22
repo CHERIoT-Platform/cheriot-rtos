@@ -11,14 +11,14 @@
 #include <tick_macros.h>
 #include <utils.hh>
 
+// Forward declaration of MultiWaiter so that we can use a pointer to it in
+// thread structures.
+class MultiWaiterInternal;
+
 namespace
 {
 	/// The total number of thread priorities.
 	constexpr uint16_t ThreadPrioNum = 32U;
-
-	// Forward declaration of MultiWaiter so that we can use a pointer to it in
-	// thread structures.
-	class MultiWaiterInternal;
 
 	uint64_t expiry_time_for_timeout(uint32_t timeout);
 
@@ -78,7 +78,8 @@ namespace
 		 * sealed capability to the trusted stack of the new thread, ready to be
 		 * installed.
 		 */
-		static TrustedStack *schedule(TrustedStack *tstack)
+		static CHERI_SEALED(TrustedStack *)
+		  schedule(CHERI_SEALED(TrustedStack *) tstack)
 		{
 			ThreadImpl *th = current;
 
@@ -189,9 +190,11 @@ namespace
 		 * This is also a sealed handle from the switcher, which can only be
 		 * used for comparison.
 		 */
-		static inline TrustedStack *schedTStack;
+		static inline CHERI_SEALED(TrustedStack *) schedTStack;
 
-		ThreadImpl(TrustedStack *tstack, uint16_t threadid, uint16_t priority)
+		ThreadImpl(CHERI_SEALED(TrustedStack *) tstack,
+		           uint16_t threadid,
+		           uint16_t priority)
 		  : threadId(threadid),
 		    priority(priority),
 		    OriginalPriority(priority),
@@ -617,7 +620,11 @@ namespace
 			 */
 			MultiWaiterInternal *multiWaiter;
 		};
-		TrustedStack *tStackPtr;
+
+		/**
+		 * Sealed pointer to this thread's trusted stack and register-save area.
+		 */
+		CHERI_SEALED(TrustedStack *) tStackPtr;
 
 		private:
 		/**

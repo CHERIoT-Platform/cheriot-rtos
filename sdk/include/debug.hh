@@ -399,11 +399,11 @@ struct DebugFormatArgumentAdaptor<T>
  * Specialisation for the CHERI capability wrapper class, prints the capability
  * in the same format as bare pointers.
  */
-template<typename T>
-struct DebugFormatArgumentAdaptor<CHERI::Capability<T>>
+template<typename T, bool Sealed>
+struct DebugFormatArgumentAdaptor<CHERI::Capability<T, Sealed>>
 {
 	__always_inline static DebugFormatArgument
-	construct(CHERI::Capability<T> value)
+	construct(CHERI::Capability<T, Sealed> value)
 	{
 		return {reinterpret_cast<uintptr_t>(
 		          static_cast<const volatile void *>(value)),

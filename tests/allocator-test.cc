@@ -1,7 +1,6 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 // Use a large quota for this compartment.
-#include "token.h"
 #define MALLOC_QUOTA 0x100000
 #define TEST_NAME "Allocator"
 
@@ -17,6 +16,7 @@
 #include <switcher.h>
 #include <thread.h>
 #include <thread_pool.h>
+#include <token.h>
 #include <vector>
 
 using thread_pool::async;
@@ -157,6 +157,7 @@ namespace
 
 			state = 1;
 
+#	if __has_builtin(__builtin_cheri_tag_get_temporal)
 			/* Check that globals are swept */
 			TEST(!__builtin_cheri_tag_get_temporal(pGlobal),
 			     "Revoker failed to sweep globals");
@@ -167,6 +168,7 @@ namespace
 
 			TEST(!__builtin_cheri_tag_get_temporal(unsealedToken->pointer),
 			     "Revoker failed to sweep static sealed cap");
+#	endif
 
 			/* Wait for the async thread to have performed its test */
 			sleeps = 0;

@@ -20,7 +20,6 @@
 #include <timeout.h>
 
 struct EventGroup;
-struct SObjStruct;
 
 /**
  * Create a new event group, allocated using `heapCapability`.  The event group
@@ -31,7 +30,7 @@ struct SObjStruct;
  * allocated it returns `-ENOMEM`.
  */
 int __cheri_libcall eventgroup_create(struct Timeout     *timeout,
-                                      struct SObjStruct  *heapCapability,
+                                      AllocatorCapability heapCapability,
                                       struct EventGroup **outGroup);
 
 /**
@@ -106,8 +105,8 @@ int __cheri_libcall eventgroup_get(struct EventGroup *group, uint32_t *outBits);
  * Destroy an event group.  This forces all waiters to wake and frees the
  * underlying memory.
  */
-int __cheri_libcall eventgroup_destroy(struct SObjStruct *heapCapability,
-                                       struct EventGroup *group);
+int __cheri_libcall eventgroup_destroy(AllocatorCapability heapCapability,
+                                       struct EventGroup  *group);
 
 /**
  * Destroy an event group without tacking the lock.
@@ -115,5 +114,5 @@ int __cheri_libcall eventgroup_destroy(struct SObjStruct *heapCapability,
  * This API is inherently racy. Its main purpose is to cleanup the event group
  * in an error handler context, when taking lock may be impossible.
  */
-int __cheri_libcall eventgroup_destroy_force(struct SObjStruct *heapCapability,
-                                             struct EventGroup *group);
+int __cheri_libcall eventgroup_destroy_force(AllocatorCapability heapCapability,
+                                             struct EventGroup  *group);

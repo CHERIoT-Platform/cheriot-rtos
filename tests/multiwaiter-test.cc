@@ -19,7 +19,7 @@ int test_multiwaiter()
 	static uint32_t futex  = 0;
 	static uint32_t futex2 = 0;
 	int             ret;
-	MultiWaiter    *mw;
+	MultiWaiter     mw;
 	Timeout         t{0};
 	ret = multiwaiter_create(&t, MALLOC_CAPABILITY, &mw, 4);
 	TEST((ret == 0) && (mw != nullptr),

@@ -112,13 +112,14 @@ __sealingkey_dynamic:
  * An in-assembler implementation of
  *
  * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
- * token_obj_unseal(struct SKeyStruct *, struct SObjStruct *);
+ * token_obj_unseal(struct SKeyStruct *, void* __sealed_capability);
  *
  * The name has been manually mangled as per the C++ rules.
  */
 	.hidden _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 	.globl  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
 _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
+_Z16token_obj_unsealP10SKeyStructU19__sealed_capabilityPv:
 	LoadCapPCC ca2, __sealingkey_either
 
 	/*
@@ -142,6 +143,7 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
 	.hidden  _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
 	.globl   _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
 _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct:
+_Z23token_obj_unseal_staticP10SKeyStructU19__sealed_capabilityPv:
 	LoadCapPCC ca2, __sealingkey_static
 	j          .Ltoken_unseal_internal
 
@@ -156,6 +158,7 @@ _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct:
 	.hidden  _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct
 	.globl   _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct
 _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct:
+_Z24token_obj_unseal_dynamicP10SKeyStructU19__sealed_capabilityPv:
 	LoadCapPCC ca2, __sealingkey_dynamic
 	j          .Ltoken_unseal_internal
 
@@ -172,5 +175,24 @@ CHERIOT_EXPORT_LIBCALL \
 
 CHERIOT_EXPORT_LIBCALL \
   _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, zero two registers */
+
+// TODO: For now, we export these with both names.  Eventually the ones above
+// can be garbage collected.  This doesn't make much difference because the
+// export table entries use memory that we can reuse for heap later.
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z16token_obj_unsealP10SKeyStructU19__sealed_capabilityPv, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, zero two registers */
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z23token_obj_unseal_staticP10SKeyStructU19__sealed_capabilityPv, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, zero two registers */
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z24token_obj_unseal_dynamicP10SKeyStructU19__sealed_capabilityPv, \
   0 /* No stack usage */, \
   0b00010010 /* IRQs deferred, zero two registers */

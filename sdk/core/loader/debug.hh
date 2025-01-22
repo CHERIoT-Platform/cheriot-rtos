@@ -132,8 +132,8 @@ namespace
 		/**
 		 * Append a capability.
 		 */
-		template<typename T>
-		__always_inline void append(CHERI::Capability<T> capability)
+		template<typename T, bool IsSealed>
+		__always_inline void append(CHERI::Capability<T, IsSealed> capability)
 		{
 			append(static_cast<const void *>(capability.get()));
 		}

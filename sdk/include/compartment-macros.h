@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <__cheri_sealed.h>
 #include <cdefs.h>
 #include <stdbool.h>
 
@@ -209,6 +210,11 @@
  */
 #define DECLARE_STATIC_SEALED_VALUE(type, compartment, keyName, name)          \
 	struct __##name##_type; /* NOLINT(bugprone-macro-parentheses) */           \
+	/* Implementation detail: This declaration in the reserved namespace       \
+	 * exists only so that __typeof__ can be used later to determine the       \
+	 * original type.  This will be removed once the compiler understands      \
+	 * static sealed objects natively. */                                      \
+	extern type __sealed_type_placeholder_##name;                              \
 	extern __if_cxx("C") struct __##name##_type                                \
 	{                                                                          \
 		uint32_t key;                                                          \
@@ -261,7 +267,8 @@
  */
 #define STATIC_SEALED_VALUE(name)                                              \
 	({                                                                         \
-		struct SObjStruct *ret; /* NOLINT(bugprone-macro-parentheses) */       \
+		CHERI_SEALED(__typeof__(__sealed_type_placeholder_##name) *)           \
+		ret; /* NOLINT(bugprone-macro-parentheses) */                          \
 		__asm(".ifndef __import.sealed_object." #name "\n"                     \
 		      "  .type     __import.sealed_object." #name ",@object\n"         \
 		      "  .section  .compartment_imports." #name                        \

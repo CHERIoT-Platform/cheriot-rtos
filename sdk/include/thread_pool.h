@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <__cheri_sealed.h>
 #include <cdefs.h>
 
 /**
@@ -9,7 +10,7 @@
  * run in the compartment that schedule the work to run, but a different
  * thread.
  */
-typedef __cheri_callback void (*ThreadPoolCallback)(void *);
+typedef __cheri_callback void (*ThreadPoolCallback)(CHERI_SEALED(void *));
 
 /**
  * Message to a thread pool.  This encapsulates a simple closure that will be
@@ -24,7 +25,7 @@ struct ThreadPoolMessage
 	/**
 	 * The data associated with the asynchronous invocation.
 	 */
-	void *data;
+	CHERI_SEALED(void *) data;
 };
 
 __BEGIN_DECLS
@@ -42,7 +43,7 @@ __BEGIN_DECLS
  * Returns 0 on success, -EINVAL if either of the arguments are invalid.
  */
 int __cheri_compartment("thread_pool")
-  thread_pool_async(ThreadPoolCallback fn, void *data);
+  thread_pool_async(ThreadPoolCallback fn, CHERI_SEALED(void *) data);
 
 /**
  * Run a thread pool.  This does not return, despite the claimed type, and can
@@ -52,7 +53,6 @@ int __cheri_compartment("thread_pool") thread_pool_run(void);
 __END_DECLS
 
 #ifdef __cplusplus
-#	include <memory>
 #	include <stdlib.h>
 #	include <token.h>
 #	include <type_traits>
@@ -85,10 +85,11 @@ namespace thread_pool
 		 * `sealing_key_for_type` helper.
 		 */
 		template<typename T>
-		__cheri_callback void wrap_callback_lambda(void *rawFn)
+		__cheri_callback void wrap_callback_lambda(CHERI_SEALED(void *) rawFn)
 		{
 			auto key = sealing_key_for_type<T>();
-			auto fn  = token_unseal(key, Sealed(static_cast<T *>(rawFn)));
+			auto fn  = token_unseal(
+              key, Sealed<T>(static_cast<CHERI_SEALED(T *)>(rawFn)));
 			if (fn == nullptr)
 			{
 				return;
@@ -100,8 +101,7 @@ namespace thread_pool
 			 * in its initial trusted activation frame and near the beginning
 			 * (highest address) of its stack.
 			 */
-			(void)token_obj_destroy(
-			  MALLOC_CAPABILITY, key, static_cast<SObj>(rawFn));
+			(void)token_obj_destroy(MALLOC_CAPABILITY, key, rawFn);
 		}
 
 		/**
@@ -109,7 +109,7 @@ namespace thread_pool
 		 * callback.
 		 */
 		template<typename Fn>
-		__cheri_callback void wrap_callback_function(void *)
+		__cheri_callback void wrap_callback_function(CHERI_SEALED(void *))
 		{
 			// C++ objects are guaranteed to have unique addresses and so a
 			// zero-sized object is actually 1 byte and using `sizeof(Fn) == 1`
@@ -162,12 +162,13 @@ namespace thread_pool
 			// Allocate a new sealed object with a key that is unique to this
 			// type.
 			Timeout t{UnlimitedTimeout};
-			void   *sealed = token_sealed_unsealed_alloc(
-              &t,
-              MALLOC_CAPABILITY,
-              detail::sealing_key_for_type<LambdaType>(),
-              sizeof(lambda),
-              &buffer);
+			CHERI_SEALED(void *)
+			sealed = token_sealed_unsealed_alloc(
+			  &t,
+			  MALLOC_CAPABILITY,
+			  detail::sealing_key_for_type<LambdaType>(),
+			  sizeof(lambda),
+			  &buffer);
 			/*
 			 * Copy the lambda into the new allocation.
 			 *
