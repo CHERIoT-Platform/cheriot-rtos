@@ -105,11 +105,11 @@ void test_queue_sealed()
 {
 	auto    heapSpace = heap_quota_remaining(MALLOC_CAPABILITY);
 	Timeout t{1};
-	SObj    receiveHandle;
-	SObj    sendHandle;
-	SObj    queue;
-	char    bytes[ItemSize];
-	int     ret =
+	CHERI_SEALED(struct MessageQueue *) receiveHandle;
+	CHERI_SEALED(struct MessageQueue *) sendHandle;
+	CHERI_SEALED(struct MessageQueue *) queue;
+	char bytes[ItemSize];
+	int  ret =
 	  queue_create_sealed(&t, MALLOC_CAPABILITY, &queue, ItemSize, MaxItems);
 	TEST(ret == 0, "MessageQueue creation failed with {}", ret);
 	ret = queue_receive_handle_create_sealed(

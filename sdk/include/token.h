@@ -5,15 +5,11 @@
 
 #include <cdefs.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <timeout.h>
 
 struct SKeyStruct;
-struct SObjStruct;
 typedef struct SKeyStruct *SKey;
-typedef struct SObjStruct *SObj;
-
-#define INVALID_SKEY ((SKey)0)
-#define INVALID_SOBJ ((SObj)0)
 
 __BEGIN_DECLS
 
@@ -34,7 +30,7 @@ __BEGIN_DECLS
  * compartments to either seal or unseal the capabilities with this key.
  *
  * If the sealing keys have been exhausted then this will return
- * `INVALID_SKEY`.  This API is guaranteed never to block.
+ * null.  This API is guaranteed never to block.
  */
 SKey __cheri_compartment("allocator") token_key_new(void);
 
@@ -50,14 +46,15 @@ SKey __cheri_compartment("allocator") token_key_new(void);
  * The `key` parameter must have both the permit-seal and permit-unseal
  * permissions.
  *
- * On error, this returns `INVALID_SOBJ`.
+ * On error, this returns null.
  */
-SObj __cheri_compartment("allocator")
-  token_sealed_unsealed_alloc(Timeout           *timeout,
-                              struct SObjStruct *heapCapability,
-                              SKey               key,
-                              size_t             sz,
-                              void             **unsealed);
+CHERI_SEALED(void *)
+__cheri_compartment("allocator")
+  token_sealed_unsealed_alloc(Timeout            *timeout,
+                              AllocatorCapability heapCapability,
+                              SKey                key,
+                              size_t              sz,
+                              void              **unsealed);
 
 /**
  * Same as token_sealed_unsealed_alloc() without getting the unsealed
@@ -65,9 +62,10 @@ SObj __cheri_compartment("allocator")
  *
  * The key must have the permit-seal permission.
  */
-SObj __cheri_compartment("allocator")
-  token_sealed_alloc(Timeout           *timeout,
-                     struct SObjStruct *heapCapability,
+CHERI_SEALED(void *)
+__cheri_compartment("allocator")
+  token_sealed_alloc(Timeout            *timeout,
+                     AllocatorCapability heapCapability,
                      SKey,
                      size_t);
 
@@ -87,7 +85,7 @@ SObj __cheri_compartment("allocator")
  * succeeds, or null if both fail.
  */
 [[cheri::interrupt_state(disabled)]] void *
-  __cheri_libcall token_obj_unseal(SKey, SObj);
+  __cheri_libcall token_obj_unseal(SKey, CHERI_SEALED(void *));
 
 /**
  * Unseal the object given the key.
@@ -100,7 +98,7 @@ SObj __cheri_compartment("allocator")
  * correct type, null otherwise.
  */
 [[cheri::interrupt_state(disabled)]] void *
-  __cheri_libcall token_obj_unseal_static(SKey, SObj);
+  __cheri_libcall token_obj_unseal_static(SKey, CHERI_SEALED(void *));
 
 /**
  * Unseal the object given the key.
@@ -114,7 +112,7 @@ SObj __cheri_compartment("allocator")
  * correct type, null otherwise.
  */
 [[cheri::interrupt_state(disabled)]] void *
-  __cheri_libcall token_obj_unseal_dynamic(SKey, SObj);
+  __cheri_libcall token_obj_unseal_dynamic(SKey, CHERI_SEALED(void *));
 
 /**
  * Destroy the obj given its key, freeing memory.
@@ -125,7 +123,9 @@ SObj __cheri_compartment("allocator")
  * match, or double destroy.
  */
 int __cheri_compartment("allocator")
-  token_obj_destroy(struct SObjStruct *heapCapability, SKey, SObj);
+  token_obj_destroy(AllocatorCapability heapCapability,
+                    SKey,
+                    CHERI_SEALED(void *));
 
 /**
  * Check whether the pair of a sealing key and a heap capability can unseal a
@@ -135,7 +135,9 @@ int __cheri_compartment("allocator")
  * the errors from `heap_can_free` if the free would fail for other reasons.
  */
 int __cheri_compartment("allocator")
-  token_obj_can_destroy(SObj heapCapability, SKey key, SObj object);
+  token_obj_can_destroy(AllocatorCapability heapCapability,
+                        SKey                key,
+                        CHERI_SEALED(void *) object);
 
 __END_DECLS
 
@@ -150,33 +152,44 @@ template<typename T>
 class Sealed
 {
 	/// The raw sealed pointer
-	SObj sealedPointer;
+	CHERI_SEALED(T *) sealedPointer;
 
 	public:
+#	if __has_extension(cheri_sealed_pointers) &&                              \
+	  !defined(CHERIOT_NO_SEALED_POINTERS)
 	/// Constructor from a raw sealed pointer.
-	Sealed(SObj sealedPointer) : sealedPointer(sealedPointer) {}
+	Sealed(CHERI_SEALED(T *) sealedPointer) : sealedPointer(sealedPointer) {}
+#	else
+	Sealed(void *sealedPointer)
+	  : sealedPointer(reinterpret_cast<SObj>(sealedPointer))
+	{
+	}
+#	endif
+
 	/**
 	 * Explicit constructor from a sealed T*.  This is explicit because this is
 	 * used only in APIs that want to expose their internal sealed type as a
 	 * public type.
 	 */
-	explicit Sealed(T *sealedPointer)
-	  : sealedPointer(reinterpret_cast<SObj>(sealedPointer))
+	template<typename U>
+	explicit Sealed(U *sealedPointer)
+	  : sealedPointer(reinterpret_cast<decltype(sealedPointer)>(sealedPointer))
 	{
 	}
 	/// Implicitly convert back to the wrapped value.
-	operator SObj()
+	operator decltype(sealedPointer)()
 	{
 		return sealedPointer;
 	}
+
 	/**
 	 * Explicitly convert to the real type.  This is explicit because the
 	 * resulting value cannot be used as a `T*` in the general case, it can be
 	 * used only as an opaque `T*` that can be unsealed to give a usable `T*`.
 	 */
-	T *get()
+	CHERI_SEALED(T *) get()
 	{
-		return reinterpret_cast<T *>(sealedPointer);
+		return sealedPointer;
 	}
 	/**
 	 * Return the tag of the underlying pointer
@@ -195,16 +208,29 @@ class Sealed
  */
 template<typename T>
 __always_inline std::pair<T *, Sealed<T>>
-token_allocate(Timeout *timeout, struct SObjStruct *heapCapability, SKey key)
+token_allocate(Timeout *timeout, AllocatorCapability heapCapability, SKey key)
 {
 	/*
 	 * Explicitly initialize unsealed, since callers like to check it, and not
 	 * the sealed result, for validity.
 	 */
 	void *unsealed = nullptr;
-	SObj  sealed   = token_sealed_unsealed_alloc(
-      timeout, heapCapability, key, sizeof(T), &unsealed);
-	return {static_cast<T *>(unsealed), Sealed<T>{sealed}};
+	CHERI_SEALED(void *)
+	sealed = token_sealed_unsealed_alloc(
+	  timeout, heapCapability, key, sizeof(T), &unsealed);
+	return
+	{
+		static_cast<T *>(unsealed),
+#	if __has_extension(cheri_sealed_pointers) &&                              \
+	  !defined(CHERIOT_NO_SEALED_POINTERS)
+		  static_cast<CHERI_SEALED(T *)>(sealed)
+#	else
+		  Sealed<T>
+		{
+			sealed
+		}
+#	endif
+	};
 }
 
 template<typename T>

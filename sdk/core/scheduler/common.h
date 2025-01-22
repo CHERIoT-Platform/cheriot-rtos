@@ -67,9 +67,9 @@ namespace
 		 * pointer to an object of the correct type.
 		 */
 		template<typename T>
-		static T *unseal(void *unsafePointer)
+		static T *unseal(CHERI_SEALED(void *) unsafePointer)
 		{
-			return static_cast<Handle *>(unsafePointer)->unseal_as<T>();
+			return reinterpret_cast<Handle *>(unsafePointer)->unseal_as<T>();
 		}
 
 		/**
@@ -85,13 +85,13 @@ namespace
 			void *result;
 			if constexpr (IsDynamic)
 			{
-				result = token_obj_unseal_dynamic(T::sealing_type(),
-				                                  reinterpret_cast<SObj>(this));
+				result = token_obj_unseal_dynamic(
+				  T::sealing_type(), reinterpret_cast<CHERI_SEALED(T *)>(this));
 			}
 			else
 			{
-				result = token_obj_unseal_static(T::sealing_type(),
-				                                 reinterpret_cast<SObj>(this));
+				result = token_obj_unseal_static(
+				  T::sealing_type(), reinterpret_cast<CHERI_SEALED(T *)>(this));
 			}
 			return static_cast<T *>(result);
 		}

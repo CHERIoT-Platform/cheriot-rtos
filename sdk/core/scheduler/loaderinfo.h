@@ -1,4 +1,5 @@
 #pragma once
+#include <__cheri_sealed.h>
 #include <cstddef>
 #include <cstdint>
 
@@ -15,7 +16,7 @@ struct ThreadLoaderInfo
 {
 	/// The trusted stack for this thread. This field should be sealed by
 	/// the loader and contain populated PCC, CGP and CSP caps.
-	TrustedStack *trustedStack;
+	CHERI_SEALED(TrustedStack *) trustedStack;
 	/// Thread priority. The higher the more prioritised.
 	uint16_t priority;
 };

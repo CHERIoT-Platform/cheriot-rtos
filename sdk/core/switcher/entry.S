@@ -2189,7 +2189,7 @@ __Z39switcher_handler_invocation_count_resetv:
 // for library export tables, but since they don't consume RAM after loading
 // it's not urgent.
 	.section	.compartment_export_table,"a",@progbits
-export_table_start:
+.p2align	3
 .space 20, 0
 
 /**

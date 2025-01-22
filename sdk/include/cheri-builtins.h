@@ -1,8 +1,9 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
-#ifndef _CHERI_BUILTINS_
-#define _CHERI_BUILTINS_
+#pragma once
+
+#include <__cheri_sealed.h>
 
 #define CHERI_PERM_GLOBAL (1U << 0)
 #define CHERI_PERM_LOAD_GLOBAL (1U << 1)
@@ -103,7 +104,7 @@ static inline __always_inline auto cheri_seal(auto *x, auto *y)
 	return __builtin_cheri_seal(x, y);
 }
 
-static inline __always_inline auto cheri_unseal(auto *x, auto *y)
+static inline __always_inline auto cheri_unseal(CHERI_SEALED(auto *) x, auto *y)
 {
 	return __builtin_cheri_unseal(x, y);
 }
@@ -216,8 +217,10 @@ static inline __always_inline auto cheri_round_representable_length(size_t len)
 #		define cheri_permissions_get(x) __builtin_cheri_perms_get(x)
 #		define cheri_permissions_and(x, y) __builtin_cheri_perms_and((x), (y))
 #		define cheri_type_get(x) __builtin_cheri_type_get(x)
-#		define cheri_seal(a, b) __builtin_cheri_seal((a), (b))
-#		define cheri_unseal(a, b) __builtin_cheri_unseal((a), (b))
+#		define cheri_seal(a, b)                                               \
+			(CHERI_SEALED((__typeof__((a)))) __builtin_cheri_seal((a), (b)))
+#		define cheri_unseal(a, b)                                             \
+			((__typeof__(*(a)) *)__builtin_cheri_unseal((a), (b)))
 #		define cheri_bounds_set(a, b) __builtin_cheri_bounds_set((a), (b))
 #		define cheri_bounds_set_exact(a, b)                                   \
 			__builtin_cheri_bounds_set_exact((a), (b))
@@ -230,5 +233,3 @@ static inline __always_inline auto cheri_round_representable_length(size_t len)
 #	endif // __ASSEMBLER__
 
 #endif
-
-#endif // _CHERI_BUILTINS_

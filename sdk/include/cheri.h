@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <__cheri_sealed.h>
 #include <compartment-macros.h>
 #include <stddef.h>
 #include <stdint.h>

@@ -57,26 +57,31 @@ struct EventWaiterSource
 };
 
 /**
- * Opqaue type for multiwaiter objects.  Callers will always see this as a
+ * Structure used for the MultiWaiter inside the scheduler.
+ */
+struct MultiWaiterInternal;
+
+/**
+ * Opaque type for multiwaiter objects.  Callers will always see this as a
  * sealed object.
  */
-struct MultiWaiter;
+typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
 
 /**
  * Create a multiwaiter object.  This is a stateful object that can wait on at
  * most `maxItems` event sources.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  multiwaiter_create(Timeout             *timeout,
-                     struct SObjStruct   *heapCapability,
-                     struct MultiWaiter **ret,
-                     size_t               maxItems);
+  multiwaiter_create(Timeout            *timeout,
+                     AllocatorCapability heapCapability,
+                     MultiWaiter        *ret,
+                     size_t              maxItems);
 
 /**
  * Destroy a multiwaiter object.
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  multiwaiter_delete(struct SObjStruct *heapCapability, struct MultiWaiter *mw);
+  multiwaiter_delete(AllocatorCapability heapCapability, MultiWaiter mw);
 
 /**
  * Wait for events.  The first argument is the multiwaiter to wait on.  New
@@ -92,6 +97,6 @@ struct MultiWaiter;
  */
 [[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   multiwaiter_wait(Timeout                  *timeout,
-                   struct MultiWaiter       *waiter,
+                   MultiWaiter               waiter,
                    struct EventWaiterSource *events,
                    size_t                    newEventsCount);
