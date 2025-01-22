@@ -423,16 +423,6 @@ rule("firmware")
 		firmware = path.filename(firmware)
 		local run = function(simulator)
 			local simargs = { firmware }
-			if get_config("testing-model-output") then
-				modeldir = path.join(scriptdir,
-				                     "..",
-				                     "scripts",
-				                     "model_output",
-				                     path.basename(target:values("board")),
-				                     "examples")
-				local modelout = path.join(modeldir, firmware .. ".txt")
-				simargs[#simargs+1] = modelout
-			end
 			os.execv(simulator, simargs, { curdir = directory })
 		end
 		-- Try executing the simulator from the sdk directory, if it's there.
