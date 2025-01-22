@@ -384,17 +384,103 @@ namespace CHERI
 		       representable_length(size) == size;
 	}
 
+#if __has_extension(cheri_sealed_pointers)
+	/**
+	 * Type trait to remove sealed from a capability type.
+	 */
+	template<typename T>
+	struct remove_sealed; // NOLINT(readability-identifier-naming)
+
+	/**
+	 * Specialisation to
+	 */
+	template<typename T>
+	struct remove_sealed<T *__sealed_capability>
+	{
+		using type = T *; // NOLINT(readability-identifier-naming)
+	};
+
+	/**
+	 * Type trait for checking if a type is a sealed capability.
+	 */
+	template<typename T>
+	struct is_sealed_capability // NOLINT(readability-identifier-naming)
+	{
+		static constexpr bool value = // NOLINT(readability-identifier-naming)
+		  false;
+	};
+
+	/**
+	 * Type trait for checking if a type is a sealed capability.
+	 */
+	template<typename T>
+	struct is_sealed_capability<T *__sealed_capability>
+	{
+		static constexpr bool value = // NOLINT(readability-identifier-naming)
+		  true;
+	};
+
+#else
+
+	// Fallback versions for when the compiler doesn't know something is
+	// sealed.
+
+	/**
+	 * Type trait to remove sealed from a capability type.
+	 */
+	template<typename T>
+	struct remove_sealed; // NOLINT(readability-identifier-naming)
+
+	/**
+	 * Specialisation to
+	 */
+	template<typename T>
+	struct remove_sealed<T *>
+	{
+		using type = T *; // NOLINT(readability-identifier-naming)
+	};
+
+	/**
+	 * Type trait for checking if a type is a sealed capability.
+	 */
+	template<typename T>
+	struct is_sealed_capability // NOLINT(readability-identifier-naming)
+	{
+		static constexpr bool value = // NOLINT(readability-identifier-naming)
+		  false;
+	};
+
+#endif
+
+	/**
+	 * Helper that provides the type of an unsealed capability from a sealed
+	 * capability.
+	 */
+	template<typename T>
+	using remove_sealed_t = // NOLINT(readability-identifier-naming)
+	  remove_sealed<T>::type;
+
+
+	/**
+	 * Helper to check that a type is a sealed capability.
+	 */
+	template<typename T>
+	constexpr bool
+	  is_sealed_capability_v = // NOLINT(readability-identifier-naming)
+	  is_sealed_capability<T>::value;
+
 	/**
 	 * Helper class for accessing capability properties on pointers.
 	 */
-	template<typename T>
+	template<typename T, bool IsSealed = false>
 	class Capability
 	{
 		protected:
 		/// The capability that this class wraps.
-		T *ptr;
+		std::conditional_t<IsSealed, CHERI_SEALED(T *), T *> ptr;
 
 		private:
+
 		/**
 		 * Constructs a PermissionSet with the permissions of the given pointer.
 		 */
@@ -432,7 +518,7 @@ namespace CHERI
 			/**
 			 * Returns the capability's pointer.
 			 */
-			[[nodiscard]] T *ptr() const
+			[[nodiscard]] auto ptr() const
 			{
 				return cap.ptr;
 			}
@@ -739,7 +825,7 @@ namespace CHERI
 		/// Default constructor, initialises with a null pointer.
 		constexpr Capability() : ptr(nullptr) {}
 		/// Constructor, takes an existing pointer to wrap
-		constexpr Capability(T *p) : ptr(p) {}
+		constexpr Capability(decltype(ptr) p) : ptr(p) {}
 		/// Copy constructor, aliases the object that is pointed to by `ptr`.
 		constexpr Capability(const Capability &other) : ptr(other.ptr) {}
 		/// Move constructor.
@@ -997,11 +1083,21 @@ namespace CHERI
 		}
 
 		/**
-		 * Implicit cast to the raw pointer type.
+		 * Implicit cast to the raw pointer type (unsealed version).
 		 */
 		template<typename U = T>
-		    requires(!std::same_as<U, void>)
+		    requires(!std::same_as<U, void> && !IsSealed)
 		operator U *()
+		{
+			return ptr;
+		}
+
+		/**
+		 * Implicit cast to the raw pointer type (sealed version)
+		 */
+		template<typename U = T>
+		    requires(!std::same_as<U, void> && IsSealed)
+		operator CHERI_SEALED(U *)()
 		{
 			return ptr;
 		}
@@ -1034,7 +1130,7 @@ namespace CHERI
 		 * Dereference operator.
 		 */
 		template<typename U = T>
-		    requires(!std::same_as<U, void>)
+		    requires(!std::same_as<U, void> && !IsSealed)
 		U &operator*()
 		{
 			return *ptr;
@@ -1044,9 +1140,11 @@ namespace CHERI
 		 * Cast this capability to some other type.
 		 */
 		template<typename U>
-		Capability<U> cast()
+		Capability<U, IsSealed> cast()
 		{
-			return {static_cast<U *>(ptr)};
+			return {
+			  static_cast<std::conditional_t<IsSealed, CHERI_SEALED(U *), U *>>(
+			    ptr)};
 		}
 
 		/**
@@ -1055,7 +1153,7 @@ namespace CHERI
 		 * all other cases.
 		 */
 		template<typename U>
-		bool is_subset_of(Capability<U> other)
+		bool is_subset_of(Capability<U, IsSealed> other)
 		{
 			return __builtin_cheri_subset_test(other.ptr, ptr);
 		}
@@ -1063,19 +1161,24 @@ namespace CHERI
 		/**
 		 * Seal this capability with the given key.
 		 */
-		Capability<T> &seal(void *key)
+		[[nodiscard]] Capability<T, true> seal(void *key)
 		{
-			ptr = static_cast<T *>(__builtin_cheri_seal(ptr, key));
-			return *this;
+			return {reinterpret_cast<CHERI_SEALED(T *)>(
+			  __builtin_cheri_seal(ptr, key))};
 		}
 
 		/**
 		 * Unseal this capability with the given key.
 		 */
-		Capability<T> &unseal(void *key)
+		[[nodiscard]] Capability<T, false> unseal(void *key)
 		{
-			ptr = static_cast<T *>(__builtin_cheri_unseal(ptr, key));
-			return *this;
+#if __has_extension(cheri_sealed_pointers) &&                                  \
+  defined(CHERIOT_NO_SEALED_POINTERS)
+			return {static_cast<T *>(__builtin_cheri_unseal(
+			  reinterpret_cast<void *__sealed_capability>(ptr), key))};
+#else
+			return {static_cast<T *>(__builtin_cheri_unseal(ptr, key))};
+#endif
 		}
 
 		/**
@@ -1115,6 +1218,15 @@ namespace CHERI
 			return *this;
 		}
 	};
+
+	template<typename T>
+	Capability(T *) -> Capability<T, false>;
+
+#if __has_extension(cheri_sealed_pointers) &&                                  \
+  !defined(CHERIOT_NO_SEALED_POINTERS)
+	template<typename T>
+	Capability(CHERI_SEALED(T *)) -> Capability<T, true>;
+#endif
 
 	/**
 	 * Concept that matches pointers.

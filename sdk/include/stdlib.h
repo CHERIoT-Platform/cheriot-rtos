@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <__cheri_sealed.h>
 #include <cdefs.h>
 #include <compartment-macros.h>
 #include <riscvreg.h>
@@ -40,7 +41,10 @@ struct AllocatorCapabilityState
 	uintptr_t reserved[2];
 };
 
-struct SObjStruct;
+/**
+ * Type for allocator capabilities.
+ */
+typedef CHERI_SEALED(struct AllocatorCapabilityState *) AllocatorCapability;
 
 /**
  * Helper macro to forward declare an allocator capability.
@@ -55,7 +59,7 @@ struct SObjStruct;
  */
 #define DEFINE_ALLOCATOR_CAPABILITY(name, quota)                               \
 	DEFINE_STATIC_SEALED_VALUE(struct AllocatorCapabilityState,                \
-	                           allocator,                                          \
+	                           allocator,                                      \
 	                           MallocKey,                                      \
 	                           name,                                           \
 	                           (quota),                                        \
@@ -177,10 +181,10 @@ enum [[clang::flag_enum]] AllocateWaitFlags
  * Memory returned from this interface is guaranteed to be zeroed.
  */
 void *__cheri_compartment("allocator")
-  heap_allocate(Timeout           *timeout,
-                struct SObjStruct *heapCapability,
-                size_t             size,
-                uint32_t flags     __if_cxx(= AllocateWaitAny));
+  heap_allocate(Timeout            *timeout,
+                AllocatorCapability heapCapability,
+                size_t              size,
+                uint32_t flags      __if_cxx(= AllocateWaitAny));
 
 /**
  * Non-standard allocation API.  Allocates `size` * `nmemb` bytes of memory,
@@ -199,11 +203,11 @@ void *__cheri_compartment("allocator")
  * Memory returned from this interface is guaranteed to be zeroed.
  */
 void *__cheri_compartment("allocator")
-  heap_allocate_array(Timeout           *timeout,
-                      struct SObjStruct *heapCapability,
-                      size_t             nmemb,
-                      size_t             size,
-                      uint32_t flags     __if_cxx(= AllocateWaitAny));
+  heap_allocate_array(Timeout            *timeout,
+                      AllocatorCapability heapCapability,
+                      size_t              nmemb,
+                      size_t              size,
+                      uint32_t flags      __if_cxx(= AllocateWaitAny));
 
 /**
  * Add a claim to an allocation.  The object will be counted against the quota
@@ -217,7 +221,7 @@ void *__cheri_compartment("allocator")
  * insufficiently large to run the function.
  */
 ssize_t __cheri_compartment("allocator")
-  heap_claim(struct SObjStruct *heapCapability, void *pointer);
+  heap_claim(AllocatorCapability heapCapability, void *pointer);
 
 /**
  * Interface to the fast claims mechanism.  This claims two pointers using the
@@ -259,7 +263,7 @@ heap_claim_fast(Timeout         *timeout,
  * insufficiently large to safely run the function.
  */
 int __cheri_compartment("allocator")
-  heap_free(struct SObjStruct *heapCapability, void *ptr);
+  heap_free(AllocatorCapability heapCapability, void *ptr);
 
 /**
  * Free all allocations owned by this capability.
@@ -269,14 +273,14 @@ int __cheri_compartment("allocator")
  * to safely run the function.
  */
 ssize_t __cheri_compartment("allocator")
-  heap_free_all(struct SObjStruct *heapCapability);
+  heap_free_all(AllocatorCapability heapCapability);
 
 /**
  * Returns 0 if the allocation can be freed with the given capability, a
  * negated errno value otherwise.
  */
 int __cheri_compartment("allocator")
-  heap_can_free(struct SObjStruct *heapCapability, void *ptr);
+  heap_can_free(AllocatorCapability heapCapability, void *ptr);
 
 /**
  * Returns the space available in the given quota. This will return -1 if
@@ -284,7 +288,7 @@ int __cheri_compartment("allocator")
  * function.
  */
 ssize_t __cheri_compartment("allocator")
-  heap_quota_remaining(struct SObjStruct *heapCapability);
+  heap_quota_remaining(AllocatorCapability heapCapability);
 
 /**
  * Block until the quarantine is empty.

@@ -68,6 +68,11 @@ struct InterruptCapabilityState
 };
 
 /**
+ * Type for sealed capabilities that authorise access to interrupts.
+ */
+typedef CHERI_SEALED(struct InterruptCapabilityState *) InterruptCapability;
+
+/**
  * Helper macro to forward declare an interrupt capability.
  */
 #define DECLARE_INTERRUPT_CAPABILITY(name)                                     \
@@ -98,7 +103,6 @@ struct InterruptCapabilityState
   name, number, mayWait, mayComplete)                                          \
 	DECLARE_INTERRUPT_CAPABILITY(name);                                        \
 	DEFINE_INTERRUPT_CAPABILITY(name, number, mayWait, mayComplete)
-struct SObjStruct;
 
 /**
  * Request the futex associated with an interrupt.  The argument is a sealed
@@ -109,7 +113,7 @@ struct SObjStruct;
  * Returns `nullptr` on failure.
  */
 __cheri_compartment("scheduler") const uint32_t *interrupt_futex_get(
-  struct SObjStruct *);
+  InterruptCapability interruptcapability);
 
 /**
  * Acknowledge the end of handling an interrupt.  The argument is a sealed
@@ -120,4 +124,5 @@ __cheri_compartment("scheduler") const uint32_t *interrupt_futex_get(
  * Returns 0 on success or `-EPERM` if the argument does not authorise this
  * operation.
  */
-__cheri_compartment("scheduler") int interrupt_complete(struct SObjStruct *);
+__cheri_compartment("scheduler") int interrupt_complete(
+  InterruptCapability interruptcapability);

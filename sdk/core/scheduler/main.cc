@@ -242,7 +242,7 @@ namespace
 	 * whether to yield at the end.
 	 */
 	template<typename T>
-	int typed_op(void *sealed, auto &&fn)
+	int typed_op(CHERI_SEALED(void *) sealed, auto &&fn)
 	{
 		auto *unsealed = T::template unseal<T>(sealed);
 		// If we can't unseal the sealed capability and have it be of the
@@ -275,7 +275,7 @@ namespace
 
 	/// Helper to safely deallocate an instance of `T`.
 	template<typename T>
-	int deallocate(SObjStruct *heapCapability, void *objectPtr)
+	int deallocate(AllocatorCapability heapCapability, CHERI_SEALED(T *) object)
 	{
 		static_assert(T::IsDynamic);
 
@@ -283,8 +283,7 @@ namespace
 		// to free the same object racing, so we cause others to back up behind
 		// this one.  They will then fail in the unseal operation.
 		LockGuard g{deallocLock};
-		return typed_op<T>(objectPtr, [&](T &unsealed) {
-			SObj object = static_cast<SObj>(objectPtr);
+		return typed_op<T>(object, [&](T &unsealed) {
 			if (int ret = token_obj_can_destroy(
 			      heapCapability, T::sealing_type(), object);
 			    ret != 0)
@@ -323,11 +322,12 @@ namespace
 	return 0;
 }
 
-[[cheri::interrupt_state(disabled)]] TrustedStack *
-  __cheri_compartment("scheduler") exception_entry(TrustedStack *sealedTStack,
-                                                   size_t        mcause,
-                                                   size_t        mepc,
-                                                   size_t        mtval)
+[[cheri::interrupt_state(disabled)]] CHERI_SEALED(TrustedStack *)
+  __cheri_compartment("scheduler")
+    exception_entry(CHERI_SEALED(TrustedStack *) sealedTStack,
+                    size_t mcause,
+                    size_t mepc,
+                    size_t mtval)
 {
 	if constexpr (DebugScheduler)
 	{
@@ -601,16 +601,16 @@ __cheriot_minimum_stack(0xa0) int futex_wake(uint32_t *address, uint32_t count)
 }
 
 __cheriot_minimum_stack(0x60) int multiwaiter_create(
-  Timeout           *timeout,
-  struct SObjStruct *heapCapability,
-  MultiWaiter      **ret,
-  size_t             maxItems)
+  Timeout            *timeout,
+  AllocatorCapability heapCapability,
+  MultiWaiter        *ret,
+  size_t              maxItems)
 {
 	STACK_CHECK(0x60);
 	int error;
 	// Don't bother checking if timeout is valid, the allocator will check for
 	// us.
-	auto mw =
+	Capability mw =
 	  MultiWaiterInternal::create(timeout, heapCapability, maxItems, error);
 	if (!mw)
 	{
@@ -626,15 +626,15 @@ __cheriot_minimum_stack(0x60) int multiwaiter_create(
 }
 
 __cheriot_minimum_stack(0x70) int multiwaiter_delete(
-  struct SObjStruct *heapCapability,
-  MultiWaiter       *mw)
+  AllocatorCapability heapCapability,
+  MultiWaiter         mw)
 {
 	STACK_CHECK(0x70);
 	return deallocate<MultiWaiterInternal>(heapCapability, mw);
 }
 
 __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
-                                                   MultiWaiter       *waiter,
+                                                   MultiWaiter        waiter,
                                                    EventWaiterSource *events,
                                                    size_t newEventsCount)
 {
@@ -698,7 +698,7 @@ namespace
 	/**
 	 * An interrupt capability.
 	 */
-	struct InterruptCapability : Handle</*IsDynamic=*/false>
+	struct InterruptCapabilityWrapper : Handle</*IsDynamic=*/false>
 	{
 		/**
 		 * Sealing type used by `Handle`.
@@ -716,11 +716,11 @@ namespace
 } // namespace
 
 [[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
-  0x30) const uint32_t *interrupt_futex_get(struct SObjStruct *sealed)
+  0x30) const uint32_t *interrupt_futex_get(InterruptCapability sealed)
 {
 	STACK_CHECK(0x30);
 	auto *interruptCapability =
-	  InterruptCapability::unseal<InterruptCapability>(sealed);
+	  InterruptCapabilityWrapper::unseal<InterruptCapabilityWrapper>(sealed);
 	uint32_t *result = nullptr;
 	if (interruptCapability && interruptCapability->state.mayWait)
 	{
@@ -737,11 +737,11 @@ namespace
 }
 
 [[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
-  0x20) int interrupt_complete(struct SObjStruct *sealed)
+  0x20) int interrupt_complete(InterruptCapability sealed)
 {
 	STACK_CHECK(0x20);
 	auto *interruptCapability =
-	  InterruptCapability::unseal<InterruptCapability>(sealed);
+	  InterruptCapabilityWrapper::unseal<InterruptCapabilityWrapper>(sealed);
 	if (interruptCapability && interruptCapability->state.mayComplete)
 	{
 		InterruptController::master().interrupt_complete(
