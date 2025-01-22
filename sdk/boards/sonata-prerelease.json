@@ -92,7 +92,8 @@
         "SUNBURST_SHADOW_SIZE=0x800",
         "ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM=1",
         "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM=1",
-        "CHERIOT_NO_SAIL_83"
+        "CHERIOT_NO_SAIL_83",
+        "STDERR_TO_STDOUT=1"
     ],
     "cxflags": "-mllvm -enable-machine-outliner=never",
     "driver_includes" : [

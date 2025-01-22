@@ -28,12 +28,16 @@ typedef volatile void FILE;
 #elif DEVICE_EXISTS(uart)
 #	define stdout MMIO_CAPABILITY(void, uart)
 #	define stdin MMIO_CAPABILITY(void uart)
+#else
+#error No device found for stdout and stderr
 #endif
 
-#if DEVICE_EXISTS(uart1)
+#if DEVICE_EXISTS(uart1) && !STDERR_TO_STDOUT
 #	define stderr MMIO_CAPABILITY(void, uart1)
 #elif defined(stdout)
 #	define stderr stdout
+#else
+#error No device found for stderr
 #endif
 
 int __cheri_libcall vfprintf(FILE *stream, const char *fmt, va_list ap);
