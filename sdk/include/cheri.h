@@ -5,6 +5,7 @@
 #include <compartment-macros.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <__cheri_sealed.h>
 
 struct Timeout;
 
@@ -383,3 +384,4 @@ bool __cheri_libcall check_pointer(const void *ptr,
  * address.
  */
 bool __cheri_libcall check_timeout_pointer(const struct Timeout *timeout);
+
