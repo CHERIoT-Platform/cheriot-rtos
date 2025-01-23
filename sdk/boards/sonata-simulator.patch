@@ -1,5 +1,5 @@
 {
-  "base": "sonata-prerelease",
+  "base": "sonata-1.1",
   "patch": [
     {
       "op": "replace",
