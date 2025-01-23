@@ -259,7 +259,7 @@ local function board_file_for_name(boardName)
 	-- The directory containing the board file.
 	local boarddir = path.directory(boardfile);
 	-- If this isn't a path, look in the boards directory
-	if path.basename(boardfile) == boardfile then
+	if not os.isfile(boardfile) then
 		boarddir = path.join(scriptdir, "boards")
 		local fullBoardPath = path.join(boarddir, boardfile .. '.json')
 		if not os.isfile(fullBoardPath) then
