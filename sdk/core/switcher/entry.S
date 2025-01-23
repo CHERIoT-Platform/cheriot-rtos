@@ -218,7 +218,7 @@ switcher_scheduler_entry_csp:
 
 /**
  * Clear the hazard pointers associated with this thread.  (See
- * include/stdlib.h:/heap_claim_fast, and its implementation in
+ * include/stdlib.h:/heap_claim_ephemeral, and its implementation in
  * lib/compartment_helpers/claim_fast.cc for more about hazard pointers.)  We
  * don't care about leaks here (they're store-only from anywhere except the
  * allocator), so just write a 32-bit zero over half of each one to clobber the

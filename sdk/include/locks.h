@@ -95,7 +95,7 @@ int __cheri_libcall flaglock_trylock(Timeout              *timeout,
  *
  * Note: if the object is deallocated while trying to acquire the lock, then
  * this will fault.  In many cases, this is called at a compartment boundary
- * and so this is fine.  If it is not acceptable, use `heap_claim_fast` to
+ * and so this is fine.  If it is not acceptable, use `heap_claim_ephemeral` to
  * ensure that the object remains live until after the call.
  */
 int __cheri_libcall
