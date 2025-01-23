@@ -19,6 +19,9 @@ fi
 ${STRIP} ${FIRMWARE_ELF} -o ${FIRMWARE_ELF}.strip
 # Convert the stripped elf to a UF2 (Microsoft USB Flashing Format) file
 uf2conv ${FIRMWARE_ELF}.strip -b0x00000000 -f0x6CE29E60 -co ${FIRMWARE_ELF}.slot1.uf2
+uf2conv ${FIRMWARE_ELF}.strip -b0x10000000 -f0x6CE29E60 -co ${FIRMWARE_ELF}.slot2.uf2
+uf2conv ${FIRMWARE_ELF}.strip -b0x20000000 -f0x6CE29E60 -co ${FIRMWARE_ELF}.slot3.uf2
+
 
 # Try to copy the firmware to the SONATA drive, if we can find one.
 try_copy()
