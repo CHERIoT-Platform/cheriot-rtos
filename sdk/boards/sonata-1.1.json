@@ -91,6 +91,7 @@
     "revokable_memory_start": 0x00100000,
     "defines" : [
         "IBEX",
+        "SONATA=10100",
         "SUNBURST",
         "SUNBURST_SHADOW_BASE=0x30000000",
         "SUNBURST_SHADOW_SIZE=0x800",

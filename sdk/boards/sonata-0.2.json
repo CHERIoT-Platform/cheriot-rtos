@@ -68,6 +68,7 @@
     ],
     "defines" : [
         "IBEX",
+        "SONATA=200",
         "SUNBURST",
         "SUNBURST_SHADOW_BASE=0x30000000",
         "SUNBURST_SHADOW_SIZE=0x4000",
