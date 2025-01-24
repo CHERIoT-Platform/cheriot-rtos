@@ -569,8 +569,10 @@ namespace
 			                   (interruptStatus == InterruptStatus::Disabled),
 			                 "Functions exported from compartments must have "
 			                 "an explicit interrupt posture");
-			return build(compartment.exportTable, entry.address)
-			  .seal(exportSealingKey);
+
+			exportEntry.without_permissions(Permission::Store);
+
+			return exportEntry.seal(exportSealingKey);
 		};
 
 		// If the low bit is 1, then this is either an MMIO region or direct
