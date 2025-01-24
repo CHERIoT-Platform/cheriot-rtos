@@ -129,4 +129,7 @@ unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
 #	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
 #endif
 
+#define CHERIOT_VERSION_TRIPLE(major, minor, patch)                            \
+	((major * 10000) + (minor * 100) + (patch))
+
 #endif // _CDEFS_H_
