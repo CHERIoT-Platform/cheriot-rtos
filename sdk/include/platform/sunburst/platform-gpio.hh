@@ -40,13 +40,24 @@ struct SonataGPIO
 	uint32_t arduinoShieldMask;
 
 	/**
+	 * Is the current target Sonata 1.0.0 or later?
+	 */
+	static bool constexpr Sonata1OrLater =
+#if SONATA >= CHERIOT_VERSION_TRIPLE(1, 0, 0)
+	  true
+#else
+	  false
+#endif
+	  ;
+
+	/**
 	 * The bit index of the first GPIO pin connected to a user LED.
 	 */
-	static constexpr uint32_t FirstLED = 4;
+	static constexpr uint32_t FirstLED = Sonata1OrLater ? 0 : 4;
 	/**
 	 * The bit index of the last GPIO pin connected to a user LED.
 	 */
-	static constexpr uint32_t LastLED = 11;
+	static constexpr uint32_t LastLED = Sonata1OrLater ? 7 : 11;
 	/**
 	 * The number of user LEDs.
 	 */
