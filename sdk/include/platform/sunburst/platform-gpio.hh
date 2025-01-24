@@ -102,11 +102,11 @@ struct SonataGPIO
 	/**
 	 * The bit index of the first GPIO pin connected to a user switch.
 	 */
-	static constexpr uint32_t FirstSwitch = 5;
+	static constexpr uint32_t FirstSwitch = Sonata1OrLater ? 0 : 5;
 	/**
 	 * The bit index of the last GPIO pin connected to a user switch.
 	 */
-	static constexpr uint32_t LastSwitch = 13;
+	static constexpr uint32_t LastSwitch = Sonata1OrLater ? 7 : 13;
 	/**
 	 * The number of user switches.
 	 */
