@@ -12,12 +12,11 @@ int test_stdio()
 	const size_t BufferSize = 64;
 	char         buffer[BufferSize];
 	snprintf(buffer, BufferSize, "%d", 42);
-	TEST(strcmp(buffer, "42") == 0,
-	     "snprintf(\"%d\", 42) gave {}",
-	     std::string_view{buffer, BufferSize});
+	// Using std::string_view makes equality do string comparison
+	TEST_EQUAL(std::string_view(buffer), "42", "snprintf(\"%d\", 42) failed");
 	snprintf(buffer, BufferSize, "%d", -42);
-	TEST(strcmp(buffer, "-42") == 0,
-	     "snprintf(\"%d\", -42) gave {}",
-	     std::string_view{buffer, BufferSize});
+	TEST_EQUAL(std::string_view(buffer), "-42", "snprintf(\"%d\", -42) failed");
+	sprintf(buffer, "%x", 6 * 9);
+	TEST_EQUAL(std::string_view(buffer), "36", "sprintf(\"%x\", 6 * 9) failed");
 	return 0;
 }
