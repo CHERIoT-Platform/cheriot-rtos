@@ -34,5 +34,6 @@ fi
 # Check to see if the output indicates failure
 if grep -i failure "${SONATA_SIMULATOR_UART_LOG}"; then
 	echo "Log output contained 'failure'"
+	cat "${SONATA_SIMULATOR_UART_LOG}"
 	exit 5
 fi

@@ -129,7 +129,7 @@ int exhaust_thread_stack_spill(__cheri_callback int (*fn)())
 	  : /* clobbers */ "ct2", "cs0", "cs1");
 
 	*threadStackTestFailed = false;
-	TEST(res == -ENOTENOUGHSTACK, "Bad return {}", res);
+	TEST_EQUAL(res, -ENOTENOUGHSTACK, "Bad return value for stack exhaustion");
 
 	return 0;
 }

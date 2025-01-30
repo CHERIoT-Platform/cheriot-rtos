@@ -39,9 +39,40 @@ function debugOption(name)
 	option_end()
 end
 
+function debugLevelOption(name)
+	option("debug-" .. name)
+		set_default("none")
+		set_description("Specify verbose output level (none|information|warning|error|critical) in the " .. name)
+		set_showmenu(true)
+		set_category("Debugging")
+		set_values("none", "information", "warning", "error", "critical")
+		before_check(function (option)
+			-- For some reason, xmake calls this with a nil option sometimes.
+			-- Just pretend it makes sense.
+			if option == nil then
+				return
+			end
+			-- Map possible options to the define values that we want:
+			local values = {
+				none = "None",
+				information = "Information",
+				warning = "Warning",
+				error = "Error",
+				critical = "Critical"
+			}
+			local value = values[tostring(option:value())]
+			-- Even though we've specified the allowed values, xmake doesn't
+			-- enforce this, so do it ourselves.
+			if not value then
+				raise("Invalid value " .. tostring(option:value()) .. " for option "..option:name())
+			end
+		end)
+	option_end()
+end
+
 debugOption("loader")
 debugOption("scheduler")
-debugOption("allocator")
+debugLevelOption("allocator")
 debugOption("token_library")
 
 function stackCheckOption(name)
@@ -930,8 +961,15 @@ rule("firmware")
 rule("cheriot.component-debug")
 	after_load(function (target)
 		local name = target:get("cheriot.debug-name") or target:name()
+		local value = get_config("debug-"..name)
+		if type(value) == "boolean" then
+			value = tostring(value)
+		else
+			-- Initial capital
+			value = "DebugLevel::" .. string.sub(value, 1, 1):upper() .. string.sub(value, 2)
+		end
 		target:add('options', "debug-" .. name)
-		target:add('defines', "DEBUG_" .. name:upper() .. "=" .. tostring(get_config("debug-"..name)))
+		target:add('defines', "DEBUG_" .. name:upper() .. "=" .. value);
 	end)
 
 -- Rule for conditionally enabling stack checks for a component.

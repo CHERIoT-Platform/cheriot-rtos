@@ -395,7 +395,7 @@ namespace
 		auto *capability = token_unseal<AllocatorCapabilityState>(key, in);
 		if (!capability)
 		{
-			Debug::log("Invalid malloc capability {}", in);
+			Debug::log<DebugLevel::Warning>("Invalid malloc capability {}", in);
 			return nullptr;
 		}
 
@@ -695,7 +695,7 @@ namespace
 		{
 			if (owner.quota < size)
 			{
-				Debug::log("quota insufficient");
+				Debug::log<DebugLevel::Warning>("quota insufficient");
 				return false;
 			}
 			owner.quota -= size;
@@ -720,7 +720,7 @@ namespace
 		{
 			owner.quota += size;
 		}
-		Debug::log("Failed to add claim");
+		Debug::log<DebugLevel::Warning>("Failed to add claim");
 		return false;
 	}
 
@@ -824,7 +824,8 @@ namespace
 		auto *capability = malloc_capability_unseal(heapCapability);
 		if (capability == nullptr)
 		{
-			Debug::log("Invalid heap capability {}", heapCapability);
+			Debug::log<DebugLevel::Warning>("Invalid heap capability {}",
+			                                heapCapability);
 			return -EPERM;
 		}
 		Capability<void> mem{rawPointer};
@@ -862,9 +863,9 @@ __cheriot_minimum_stack(0x90) ssize_t
 	return cap->quota;
 }
 
-__cheriot_minimum_stack(0xc0) int heap_quarantine_empty()
+__cheriot_minimum_stack(0xd0) int heap_quarantine_empty()
 {
-	STACK_CHECK(0xc0);
+	STACK_CHECK(0xd0);
 	LockGuard g{lock};
 	while (gm->heapQuarantineSize > 0)
 	{
@@ -909,25 +910,25 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
-		Debug::log("Invalid heap cap");
+		Debug::log<DebugLevel::Warning>("Invalid heap cap");
 		return 0;
 	}
 	if (!Capability{pointer}.is_valid())
 	{
-		Debug::log("Invalid claimed cap");
+		Debug::log<DebugLevel::Warning>("Invalid claimed cap");
 		return 0;
 	}
 	auto *chunk = gm->allocation_start(Capability{pointer}.address());
 	if (chunk == nullptr)
 	{
-		Debug::log("chunk not found");
+		Debug::log<DebugLevel::Warning>("chunk not found");
 		return 0;
 	}
 	if (claim_add(*cap, *chunk))
 	{
 		return gm->chunk_body_size(*chunk);
 	}
-	Debug::log("failed to add claim");
+	Debug::log<DebugLevel::Warning>("failed to add claim");
 	return 0;
 }
 
@@ -979,7 +980,8 @@ __cheriot_minimum_stack(0x1a0) ssize_t
 	auto     *capability = malloc_capability_unseal(heapCapability);
 	if (capability == nullptr)
 	{
-		Debug::log("Invalid heap capability {}", heapCapability);
+		Debug::log<DebugLevel::Warning>("Invalid heap capability {}",
+		                                heapCapability);
 		return -EPERM;
 	}
 
@@ -1085,7 +1087,7 @@ namespace
 
 		if (!permissions.can_derive_from(key.permissions()))
 		{
-			Debug::log(
+			Debug::log<DebugLevel::Warning>(
 			  "Operation requires {}, cannot derive from {}", permissions, key);
 			return {nullptr, nullptr};
 		}
@@ -1098,7 +1100,8 @@ namespace
 		// Very large sizes may be rounded 'up' to zero.  Don't allow this.
 		if (unsealedSize == 0)
 		{
-			Debug::log("Requested size {} is not representable", requestedSize);
+			Debug::log<DebugLevel::Warning>(
+			  "Requested size {} is not representable", requestedSize);
 			return {nullptr, nullptr};
 		}
 
@@ -1110,8 +1113,9 @@ namespace
 		size_t sealedSize = unsealedSize + ObjHdrSize;
 		if (__builtin_add_overflow(ObjHdrSize, unsealedSize, &sealedSize))
 		{
-			Debug::log("Requested size {} is too large to include header",
-			           requestedSize);
+			Debug::log<DebugLevel::Warning>(
+			  "Requested size {} is too large to include header",
+			  requestedSize);
 			return {nullptr, nullptr};
 		}
 
@@ -1125,7 +1129,8 @@ namespace
 		  sealedSize, std::move(g), capability, timeout, true))};
 		if (obj == nullptr)
 		{
-			Debug::log("Underlying allocation failed for sealed object");
+			Debug::log<DebugLevel::Warning>(
+			  "Underlying allocation failed for sealed object");
 			return {nullptr, nullptr};
 		}
 		obj.address() = obj.top() - sealedSize;
@@ -1174,14 +1179,14 @@ SKey token_key_new()
 	return nullptr;
 }
 
-__cheriot_minimum_stack(0x280) CHERI_SEALED(void *)
+__cheriot_minimum_stack(0x290) CHERI_SEALED(void *)
   token_sealed_unsealed_alloc(Timeout            *timeout,
                               AllocatorCapability heapCapability,
                               SKey                key,
                               size_t              sz,
                               void              **unsealed)
 {
-	STACK_CHECK(0x280);
+	STACK_CHECK(0x290);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
