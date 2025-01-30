@@ -39,7 +39,7 @@ using Test = ConditionalDebug<true,
 template<typename... Args>
 void debug_log(const char *fmt, Args... args)
 {
-	Test::log(fmt, args...);
+	Test::log(fmt, std::forward<Args>(args)...);
 }
 
 #define TEST(cond, msg, ...) Test::Invariant((cond), msg, ##__VA_ARGS__)

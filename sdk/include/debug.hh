@@ -5,13 +5,11 @@
 #include <__debug.h>
 #include <cheri.hh>
 #include <compartment.h>
-#include <concepts>
 #include <cstddef>
 #include <platform-uart.hh>
 #include <string.h>
 #include <switcher.h>
 
-#include <array>
 #include <string_view>
 #include <type_traits>
 
@@ -579,39 +577,142 @@ namespace
 	};
 
 	/**
+	 * Debug level.
+	 */
+	enum DebugLevel
+	{
+		/**
+		 * This is informative and may be helpful for debugging.
+		 */
+		Information,
+		/**
+		 * This is probably wrong but the component issuing the warning can
+		 * recover.  For example, you called an API with an invalid argument.
+		 */
+		Warning,
+		/**
+		 * This is definitely wrong and may cause problems but the rest of the
+		 * system is not impacted.  For example, you have called an API in a
+		 * way that caused the compartment to raise an error, but the
+		 * compartment has some form of isolation between callers and so this
+		 * doesn't affect anyone else.
+		 */
+		Error,
+		/**
+		 * Something is completely broken.  For example, a compartment with
+		 * state shared between callers has detected internal consistency
+		 * errors and may not be able to proceed at all.
+		 */
+		Critical,
+		/**
+		 * No debugging information should be reported.
+		 */
+		None,
+	};
+
+	/**
+	 * Compatibility wrapper that can be constructed from a boolean or a
+	 * `DebugLevel`.
+	 */
+	struct DebugLevelTemplateArgument
+	{
+		/**
+		 * The `DebugLevel` that this encapsulates.
+		 */
+		const DebugLevel Value;
+
+		/**
+		 * Construct from a boolean, enables all debug reporting for `true`.
+		 */
+		consteval DebugLevelTemplateArgument(bool enabled)
+		  : Value(enabled ? DebugLevel::Information : DebugLevel::None)
+		{
+		}
+
+		/**
+		 * Construct from a `DebugLevel`, captures the argument.
+		 */
+		consteval DebugLevelTemplateArgument(DebugLevel level) : Value(level) {}
+
+		consteval operator DebugLevel() const
+		{
+			return Value;
+		}
+	};
+
+	/**
+	 * Comparison operator to determine whether a provided debug level is above
+	 * the threshold at which it should be reported.
+	 */
+	consteval std::strong_ordering operator<=>(const DebugLevel Level,
+	                                           const DebugLevel Threshold)
+	{
+		return static_cast<int>(Level) <=> static_cast<int>(Threshold);
+	}
+
+	/**
 	 * Conditional debug class.  Used to control conditional output and
-	 * assertion checking.  Enables debug log messages and assertions if
-	 * `Enabled` is true.  Uses `Context` to print additional detail on debug
-	 * lines.  Each line is prefixed with the context string in magenta to make
-	 * it easy to see debug output from different subsystems in the same trace.
+	 * assertion checking.  The first template parameter is a threshold for
+	 * reporting. Log messages will be printed if they are at or above this
+	 * threshold.
+	 *
+	 * By default, assertions will be checked if the threshold is Warning or
+	 * lower.  This can be overridden by passing `true` or `false` as the third
+	 * template argument, to explicitly enable or disable assertions.
+	 *
+	 * Invariants are always checked but, by default, will log a message only if
+	 * the threshold is warning or lower. This can be overridden by passing
+	 * `true` or `false` as the fourth template argument, to explicitly enable
+	 * or disable verbose messages on invariant failure.
+	 *
+	 * If you wish to reduce verbosity of log messages but still have verbose
+	 * error messages for invariant failure, you can pass `true` as the third
+	 * template argument.  This will unconditionally enable assertions and
+	 * verbose messages from invariants, even if
+	 *
+	 * Uses `Context` to print additional detail on debug lines.  Each line is
+	 * prefixed with the context string in magenta to make it easy to see debug
+	 * output from different subsystems in the same trace.
 	 *
 	 * This class is expected to be used as a type alias, something like:
 	 *
 	 * ```c++
-	 * constexpr bool DebugFoo = DEBUG_FOO;
-	 * using Debug = ConditionalDebug<DebugFoo, "Foo">;
+	 * using Debug = ConditionalDebug<DEBUG_FOO, "Foo">;
 	 * ```
+	 *
+	 * The xmake build system exposes `debugOption` and `debugLevelOption`
+	 * values to define these macros.  If `debugOption(foo)` is used, the
+	 * option will be exposed as `--debug-foo=[y,n]`, where setting the option
+	 * to true defines the threshold as `Information` and false (the default)
+	 * as `None`.  If `debugLevelOption(foo)` is used, the user can specify any
+	 * level from `none` to `critical` on the command line.
 	 */
-	template<bool Enabled, DebugContext Context>
+	template<DebugLevelTemplateArgument Threshold,
+	         DebugContext               Context,
+	         bool EnableAssertions  = (Threshold <= DebugLevel::Warning),
+	         bool VerboseInvariants = (Threshold <= DebugLevel::Warning)>
 	class ConditionalDebug
 	{
 		public:
 		/**
 		 * Log a message.
 		 *
-		 * This function does nothing if the `Enabled` condition is false.
+		 * This function does nothing if the level is less than the threshold.
 		 */
-		template<typename... Args>
-		static void log(const char *fmt, Args... args)
+		template<DebugLevel Level = DebugLevel::Information>
+		static void log(const char *fmt, auto... args)
 		{
-			if constexpr (Enabled)
+			static_assert(
+			  Level != DebugLevel::None,
+			  "None is valid only as a threshold, not as a reporting level");
+			if constexpr (Level >= Threshold)
 			{
 				asm volatile("" ::: "memory");
-				DebugFormatArgument arguments[sizeof...(Args)];
+				DebugFormatArgument arguments[sizeof...(args)];
 				make_debug_arguments_list(arguments, args...);
 				const char *context = Context;
 				debug_log_message_write(
-				  context, fmt, arguments, sizeof...(Args));
+				  context, fmt, arguments, sizeof...(args));
 				asm volatile("" ::: "memory");
 			}
 		}
@@ -647,7 +748,8 @@ namespace
 		 * ConditionalDebug::Invariant(someCondition, "A message...", ...);
 		 *
 		 * Invariants are checked unconditionally but will log a verbose
-		 * message only if `Enabled` is true.
+		 * message only if `VerboseInvariants` is true (by default, if the
+		 * threshold is less than or equal to `Warning`).
 		 */
 		template<typename... Args>
 		struct Invariant
@@ -663,7 +765,7 @@ namespace
 			{
 				if (__predict_false(!condition))
 				{
-					if constexpr (Enabled)
+					if constexpr (VerboseInvariants)
 					{
 						report_failure("Invariant",
 						               loc.file_name(),
@@ -676,13 +778,15 @@ namespace
 				}
 			}
 		};
+
 		/**
 		 * Function-like class for assertions that is expected to be used via
 		 * the deduction guide as:
 		 *
 		 * ConditionalDebug::Assert(someCondition, "A message...", ...);
 		 *
-		 * Assertions are checked only if `Enabled` is true.
+		 * Assertions are checked only if `EnableAssertions` is true (by
+		 * default, if the threshold is lower than or equal to `Warning`).
 		 */
 		template<typename... Args>
 		struct Assert
@@ -698,7 +802,7 @@ namespace
 			       Args... args,
 			       SourceLocation loc = SourceLocation::current())
 			{
-				if constexpr (Enabled)
+				if constexpr (EnableAssertions)
 				{
 					if (__predict_false(!condition))
 					{
@@ -730,7 +834,7 @@ namespace
 			       Args... args,
 			       SourceLocation loc = SourceLocation::current())
 			{
-				if constexpr (Enabled)
+				if constexpr (EnableAssertions)
 				{
 					if (__predict_false(!condition()))
 					{

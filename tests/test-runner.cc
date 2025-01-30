@@ -63,16 +63,17 @@ namespace
 extern "C" enum ErrorRecoveryBehaviour
 compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 {
+	debug_log("mcause: {}, pcc: {}, cra: {}",
+	          mcause,
+	          frame->pcc,
+	          frame->get_register_value<RegisterNumber::CRA>());
+	auto [reg, cause] = CHERI::extract_cheri_mtval(mtval);
+	debug_log("Error {} in register {}", reg, cause);
 	if (mcause == 0x2)
 	{
 		debug_log("Test failure in test runner");
 		simulation_exit(1);
 	}
-	debug_log("mcause: {}, pcc: {}", mcause, frame->pcc);
-	auto [reg, cause] = CHERI::extract_cheri_mtval(mtval);
-	debug_log("Error {} in register {}", reg, cause);
-	debug_log("Current test crashed");
-	crashDetected = true;
 	return ErrorRecoveryBehaviour::InstallContext;
 }
 
