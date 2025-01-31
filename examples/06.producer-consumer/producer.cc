@@ -16,7 +16,7 @@ using Debug = ConditionalDebug<true, "Producer">;
 void __cheri_compartment("producer") run()
 {
 	// Allocate the queue
-	SObj queue;
+	CHERI_SEALED(struct MessageQueue *) queue;
 	non_blocking<queue_create_sealed>(
 	  MALLOC_CAPABILITY, &queue, sizeof(int), 16);
 	// Pass the queue handle to the consumer.

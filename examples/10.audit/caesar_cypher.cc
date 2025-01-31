@@ -5,7 +5,7 @@
 
 using Debug = ConditionalDebug<true, "Caesar">;
 
-int caesar_encrypt(SObj        capability,
+int caesar_encrypt(CHERI_SEALED(struct CaesarCapability *) capability,
                    const char *input,
                    char       *output,
                    size_t      length)
@@ -42,7 +42,7 @@ int caesar_encrypt(SObj        capability,
 	return 0;
 }
 
-int caesar_decrypt(SObj        capability,
+int caesar_decrypt(CHERI_SEALED(struct CaesarCapability *) capability,
                    const char *input,
                    char       *output,
                    size_t      length)
