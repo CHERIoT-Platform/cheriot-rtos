@@ -116,6 +116,15 @@ struct SonataGPIO
 	 */
 	static constexpr uint32_t SwitchMask = ((1 << SwitchCount) - 1)
 	                                       << FirstSwitch;
+	/**
+	 * The bit index of the first GPIO pin connected to the joystick.
+	 */
+	static constexpr uint32_t JoystickStart = Sonata1OrLater ? 8 : 0;
+	/**
+	 * The mask for extracting the joystick value. There are 5 bits as per
+	 * SonataJoystick above.
+	 */
+	static constexpr uint32_t JoystickMask = 0x1f;
 
 	/**
 	 * The input bit mask for a given user switch index
@@ -138,6 +147,7 @@ struct SonataGPIO
 	 */
 	SonataJoystick read_joystick() volatile
 	{
-		return static_cast<SonataJoystick>(input & 0x1f);
+		return static_cast<SonataJoystick>((input >> JoystickStart) &
+		                                   JoystickMask);
 	}
 };
