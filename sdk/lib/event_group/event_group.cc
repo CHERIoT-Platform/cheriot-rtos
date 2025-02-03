@@ -71,7 +71,7 @@ int eventgroup_wait(Timeout    *timeout,
 		return (waitForAll ? ((bitsWanted & bits) == bitsWanted)
 		                   : ((bitsWanted & bits) != 0));
 	};
-	auto    &waiter = group->waiters[thread_id_get()];
+	auto    &waiter = group->waiters[thread_id_get() - 1];
 	uint32_t bitsSeen;
 	// Set up our state for the waiter with the lock held.
 	if (LockGuard g{group->lock, timeout})
