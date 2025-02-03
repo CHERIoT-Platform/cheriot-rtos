@@ -68,6 +68,12 @@ enum ThreadSleepFlags : uint32_t
  * This is mostly useful where one compartment can run under different threads
  * and it matters which thread entered this compartment.
  *
+ * User threads (that is, those defined in the xmake firmware configuration)
+ * are 1-indexed, with 0 indicating primordial idle and scheduling contexts.
+ * Those contexts are very restricted in what it can do, so almost surely
+ * subtract one from the returned ID if it's being used as an index into an
+ * array.
+ *
  * This is implemented in the switcher.
  */
 uint16_t __cheri_libcall thread_id_get(void);
@@ -89,7 +95,8 @@ __cheri_compartment("scheduler") uint64_t thread_elapsed_cycles_idle(void);
 __cheri_compartment("scheduler") uint64_t thread_elapsed_cycles_current(void);
 
 /**
- * Returns the number of threads, including threads that have exited.
+ * Returns the number of user threads (that is, those defined in the xmake
+ * firmware configuration), including threads that have exited.
  *
  * This API never fails, but if the trusted stack is exhausted  and it cannot
  * be called then it will return -1.  Callers that have not probed the trusted
