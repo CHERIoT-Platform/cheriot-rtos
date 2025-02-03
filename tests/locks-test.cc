@@ -405,6 +405,7 @@ int test_locks()
 	test_flaglock_unlock();
 	test_trylock(flagLock);
 	test_trylock(flagLockPriorityInherited);
+	test_trylock(ticketLock);
 	test_destruct_lock_wake_up(flagLock);
 	test_destruct_lock_wake_up(flagLockPriorityInherited);
 	test_destruct_flag_lock_acquire();
