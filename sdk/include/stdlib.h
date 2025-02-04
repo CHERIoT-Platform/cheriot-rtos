@@ -375,4 +375,31 @@ static inline void yield(void)
 {
 	__asm volatile("ecall" ::: "memory");
 }
+
+/**
+ * Convert an ASCII string into a signed long.
+ *
+ * This function, and indeed the CHERIoT-RTOS in general, has no notion of
+ * locale.
+ *
+ * While prototyped here, it is available as part of a dedicated 'strtol'
+ * library, which may be omitted from firmware builds if the implementation is
+ * not required.
+ */
+long __cheri_libcall strtol(const char *nptr, char **endptr, int base);
+
+/**
+ * Convert an ASCII string into an unsigned long.
+ *
+ * This function, and indeed the CHERIoT-RTOS in general, has no notion of
+ * locale.
+ *
+ * While prototyped here, it is available as part of a dedicated 'strtol'
+ * library, which may be omitted from firmware builds if the implementation is
+ * not required.
+ */
+unsigned long __cheri_libcall strtoul(const char *nptr,
+                                      char      **endptr,
+                                      int         base);
+
 __END_DECLS
