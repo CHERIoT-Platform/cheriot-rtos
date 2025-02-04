@@ -103,6 +103,7 @@ firmware("test-suite")
     add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers", "debug")
     add_deps("message_queue", "locks", "event_group")
     add_deps("stdio")
+    add_deps("strtol")
     -- Tests
     add_deps("mmio_test")
     add_deps("eventgroup_test")

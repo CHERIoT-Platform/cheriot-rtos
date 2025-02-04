@@ -5,6 +5,7 @@
 #include "tests.hh"
 #include <compartment-macros.h>
 #include <ds/pointer.h>
+#include <stdlib.h>
 #include <string.h>
 #include <timeout.h>
 
@@ -128,6 +129,28 @@ namespace
 
 		TEST(memrchr(stringWithNull, 'Y', 0) == NULL,
 		     "memrchr must return NULL for zero-size pointers.");
+	}
+
+	/**
+	 * Test strto{,u}l
+	 */
+	void check_strtol()
+	{
+		const char *p;
+		char       *r;
+
+		debug_log("Test strtol.");
+
+		TEST_EQUAL(strtol("0", nullptr, 10), 0, "strtol 0");
+		TEST_EQUAL(
+		  strtoul("4294967295", nullptr, 10), 4294967295, "strtoul UINT_MAX");
+		TEST_EQUAL(
+		  strtol("-2147483648", nullptr, 10), -2147483648, "strtol INT_MIN");
+		TEST_EQUAL(strtol("-1", nullptr, 0), -1, "strtol -1");
+
+		p = "0x123 45";
+		TEST_EQUAL(strtoul(p, &r, 0), 0x123, "strtoul prefix");
+		TEST_EQUAL(r, p + 5, "strtoul out pointer");
 	}
 
 	/**
@@ -290,6 +313,7 @@ int test_misc()
 	check_timeouts();
 	check_memchr();
 	check_memrchr();
+	check_strtol();
 	check_pointer_utilities();
 	check_capability_set_inexact_at_most();
 	check_sealed_scoping();
