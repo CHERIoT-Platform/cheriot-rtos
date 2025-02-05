@@ -43,6 +43,7 @@
 #include <cstdint>
 #include <function_wrapper.hh>
 #include <inttypes.h>
+#include <limits.h>
 #include <platform-uart.hh>
 #include <stdarg.h>
 #include <stdio.h>
