@@ -3,8 +3,6 @@
 
 #pragma once
 
-#define CHAR_BIT 8
-
 #define __constant_integer_suffix_impl(a, b) a##b
 #define __constant_integer_suffix(a, b) __constant_integer_suffix_impl(a, b)
 
