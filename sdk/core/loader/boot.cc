@@ -45,7 +45,7 @@ namespace
 
 	__BEGIN_DECLS
 	static_assert(CheckSize<CHERIOT_LOADER_TRUSTED_STACK_SIZE,
-	                        sizeof(TrustedStackGeneric<0>)>::value,
+	                        sizeof(TrustedStackGeneric<0>)>::Value,
 	              "Boot trusted stack sizes do not match.");
 	// It must also be aligned sufficiently for trusted stacks, so ensure that
 	// we've captured that requirement above.
@@ -58,7 +58,7 @@ namespace
 	__END_DECLS
 
 	static_assert(
-	  CheckSize<sizeof(ThreadLoaderInfo), BOOT_THREADINFO_SZ>::value);
+	  CheckSize<sizeof(ThreadLoaderInfo), BOOT_THREADINFO_SZ>::Value);
 
 	/**
 	 * Reserved sealing types.
