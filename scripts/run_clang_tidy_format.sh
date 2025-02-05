@@ -35,8 +35,8 @@ DIRECTORIES="sdk tests examples tests.extra"
 # FreeRTOS-Compat headers follow FreeRTOS naming conventions and should be
 # excluded for now.  Eventually they should be included for everything except
 # the identifier naming checks.
-HEADERS=$(find ${DIRECTORIES} -name '*.h' -or -name '*.hh' | grep -v libc++ | grep -v third_party | grep -v 'std.*.h' | grep -v errno.h | grep -v strings.h | grep -v string.h | grep -v -assembly.h | grep -v cdefs.h | grep -v /riscv.h | grep -v inttypes.h | grep -v /cheri-builtins.h | grep -v c++-config | grep -v ctype.h | grep -v switcher.h | grep -v assert.h | grep -v std*.h | grep -v setjmp.h | grep -v unwind.h | grep -v /build/ | grep -v microvium | grep -v FreeRTOS-Compat | grep -v sunburst/v0.2)
-SOURCES=$(find ${DIRECTORIES} -name '*.cc' | grep -v /build/ | grep -v third_party | grep -v arith64.c)
+HEADERS=$(find ${DIRECTORIES} -name '*.h' -or -name '*.hh' | grep -v -f scripts/run_clang_tidy_format.exempt_headers)
+SOURCES=$(find ${DIRECTORIES} -name '*.cc' | grep -v -f scripts/run_clang_tidy_format.exempt_sources)
 
 echo Headers: ${HEADERS}
 echo Sources: ${SOURCES}
