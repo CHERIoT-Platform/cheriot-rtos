@@ -26,16 +26,16 @@ namespace
 	using namespace loader;
 
 	static_assert(CheckSize<offsetof(ImgHdr, loader.code.startAddress),
-	                        IMAGE_HEADER_LOADER_CODE_START_OFFSET>::value,
+	                        IMAGE_HEADER_LOADER_CODE_START_OFFSET>::Value,
 	              "Offset of loader code start is incorrect");
 	static_assert(CheckSize<offsetof(ImgHdr, loader.code.smallSize),
-	                        IMAGE_HEADER_LOADER_CODE_SIZE_OFFSET>::value,
+	                        IMAGE_HEADER_LOADER_CODE_SIZE_OFFSET>::Value,
 	              "Offset of loader code size is incorrect");
 	static_assert(CheckSize<offsetof(ImgHdr, loader.data.startAddress),
-	                        IMAGE_HEADER_LOADER_DATA_START_OFFSET>::value,
+	                        IMAGE_HEADER_LOADER_DATA_START_OFFSET>::Value,
 	              "Offset of loader data start is incorrect");
 	static_assert(CheckSize<offsetof(ImgHdr, loader.data.smallSize),
-	                        IMAGE_HEADER_LOADER_DATA_SIZE_OFFSET>::value,
+	                        IMAGE_HEADER_LOADER_DATA_SIZE_OFFSET>::Value,
 	              "Offset of loader data size is incorrect");
 } // namespace
 #endif

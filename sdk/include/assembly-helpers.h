@@ -18,7 +18,7 @@
 template<auto Real, auto Expected>
 struct CheckSize
 {
-	static constexpr bool value = Real == Expected;
+	static constexpr bool Value = Real == Expected;
 };
 
 /**
@@ -27,7 +27,7 @@ struct CheckSize
  * evaluation of `expression`.
  */
 #	define EXPORT_ASSEMBLY_NAME(name, val)                                    \
-		static_assert(CheckSize<name, val>::value,                             \
+		static_assert(CheckSize<name, val>::Value,                             \
 		              "Value provided for assembly is incorrect");
 
 /**
@@ -37,7 +37,7 @@ struct CheckSize
  */
 #	define EXPORT_ASSEMBLY_EXPRESSION(name, expression, val)                  \
 		static constexpr size_t name = expression;                             \
-		static_assert(CheckSize<name, val>::value,                             \
+		static_assert(CheckSize<name, val>::Value,                             \
 		              "Value provided for assembly is incorrect");
 
 /**
@@ -51,7 +51,7 @@ struct CheckSize
  */
 #	define EXPORT_ASSEMBLY_OFFSET(structure, field, val)                      \
 		static constexpr size_t structure##_offset_##field = val;              \
-		static_assert(CheckSize<offsetof(structure, field), val>::value,       \
+		static_assert(CheckSize<offsetof(structure, field), val>::Value,       \
 		              "Offset provided for assembly is incorrect");
 
 /**
@@ -77,13 +77,11 @@ struct CheckSize
  */
 #	define EXPORT_ASSEMBLY_SIZE(structure, val)                               \
 		static constexpr size_t structure##_size = val;                        \
-		static_assert(CheckSize<sizeof(structure), val>::value,                \
+		static_assert(CheckSize<sizeof(structure), val>::Value,                \
 		              "Size provided for assembly is incorrect");
 #elif defined(__ASSEMBLER__)
-#	define EXPORT_ASSEMBLY_NAME(name, value)                                  \
-		.set name, value
-#	define EXPORT_ASSEMBLY_EXPRESSION(name, expression, value)                \
-		.set name, value
+#	define EXPORT_ASSEMBLY_NAME(name, value) .set name, value
+#	define EXPORT_ASSEMBLY_EXPRESSION(name, expression, value) .set name, value
 #	define EXPORT_ASSEMBLY_OFFSET_NAMED(structure, field, value, name)        \
 		.set name, value
 #	define EXPORT_ASSEMBLY_OFFSET(structure, field, value)                    \
