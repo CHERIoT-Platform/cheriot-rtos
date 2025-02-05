@@ -26,15 +26,14 @@ namespace ds::linked_list
 		 * bit-packed flags in pointer address bits).
 		 */
 		template<typename T>
-		concept HasCellOperations = requires(T &t)
-		{
+		concept HasCellOperations = requires(T &t) {
 			/** Proxies for list linkages */
 			{
 				t.cell_next()
-				} -> ds::pointer::proxy::Proxies<T>;
+			} -> ds::pointer::proxy::Proxies<T>;
 			{
 				t.cell_prev()
-				} -> ds::pointer::proxy::Proxies<T>;
+			} -> ds::pointer::proxy::Proxies<T>;
 		};
 
 		/**
@@ -47,11 +46,10 @@ namespace ds::linked_list
 		 * cell is also packing other state into its representation.
 		 */
 		template<typename T>
-		concept HasReset = requires(T &t)
-		{
+		concept HasReset = requires(T &t) {
 			{
 				t.cell_reset()
-				} -> std::same_as<void>;
+			} -> std::same_as<void>;
 		};
 
 		template<typename T>
@@ -66,27 +64,24 @@ namespace ds::linked_list
 		 * @{
 		 */
 		template<typename T>
-		concept HasIsSingleton = requires(T &t)
-		{
+		concept HasIsSingleton = requires(T &t) {
 			{
 				t.cell_is_singleton()
-				} -> std::same_as<bool>;
+			} -> std::same_as<bool>;
 		};
 
 		template<typename T>
-		concept HasIsSingletonCheck = requires(T &t)
-		{
+		concept HasIsSingletonCheck = requires(T &t) {
 			{
 				t.cell_is_singleton_check()
-				} -> std::same_as<bool>;
+			} -> std::same_as<bool>;
 		};
 
 		template<typename T>
-		concept HasIsDoubleton = requires(T &t)
-		{
+		concept HasIsDoubleton = requires(T &t) {
 			{
 				t.cell_is_doubleton()
-				} -> std::same_as<bool>;
+			} -> std::same_as<bool>;
 		};
 
 		/** @} */
@@ -104,13 +99,15 @@ namespace ds::linked_list
 	 * @{
 	 */
 	template<cell::HasCellOperations T>
-	requires(!cell::HasIsSingleton<T>) __always_inline bool is_singleton(T *e)
+	    requires(!cell::HasIsSingleton<T>)
+	__always_inline bool is_singleton(T *e)
 	{
 		return e == e->cell_prev();
 	}
 
 	template<cell::HasCellOperations T>
-	requires(cell::HasIsSingleton<T>) __always_inline bool is_singleton(T *e)
+	    requires(cell::HasIsSingleton<T>)
+	__always_inline bool is_singleton(T *e)
 	{
 		return e->cell_is_singleton();
 	}
@@ -123,15 +120,15 @@ namespace ds::linked_list
 	 * The default implementation decodes and compares both links.
 	 */
 	template<cell::HasCellOperations T>
-	requires(!cell::HasIsSingletonCheck<T>) __always_inline
-	  bool is_singleton_check(T *e)
+	    requires(!cell::HasIsSingletonCheck<T>)
+	__always_inline bool is_singleton_check(T *e)
 	{
 		return (e == e->cell_next()) && (e == e->cell_prev());
 	}
 
 	template<cell::HasCellOperations T>
-	requires(cell::HasIsSingletonCheck<T>) __always_inline
-	  bool is_singleton_check(T *e)
+	    requires(cell::HasIsSingletonCheck<T>)
+	__always_inline bool is_singleton_check(T *e)
 	{
 		return e->is_singleton_check();
 	}
@@ -147,13 +144,15 @@ namespace ds::linked_list
 	 * @{
 	 */
 	template<cell::HasCellOperations T>
-	requires(!cell::HasIsDoubleton<T>) __always_inline bool is_doubleton(T *e)
+	    requires(!cell::HasIsDoubleton<T>)
+	__always_inline bool is_doubleton(T *e)
 	{
 		return e->cell_prev() == e->cell_next();
 	}
 
 	template<cell::HasCellOperations T>
-	requires(cell::HasIsDoubleton<T>) __always_inline bool is_doubleton(T *e)
+	    requires(cell::HasIsDoubleton<T>)
+	__always_inline bool is_doubleton(T *e)
 	{
 		return e->cell_is_doubleton();
 	}
@@ -206,8 +205,8 @@ namespace ds::linked_list
 	 * less effort spent in provenance and/or alias analysis.
 	 */
 	template<cell::HasCellOperations Cell, typename P>
-	requires std::same_as<P, Cell *> || ds::pointer::proxy::Proxies<P, Cell>
-	  __always_inline void emplace_before(P curr, Cell *elem)
+	    requires std::same_as<P, Cell *> || ds::pointer::proxy::Proxies<P, Cell>
+	__always_inline void emplace_before(P curr, Cell *elem)
 	{
 		auto prev         = curr->cell_prev();
 		elem->cell_next() = curr;
@@ -229,8 +228,8 @@ namespace ds::linked_list
 	 * less effort spent in provenance and/or alias analysis.
 	 */
 	template<cell::HasCellOperations Cell, typename P>
-	requires std::same_as<P, Cell *> || ds::pointer::proxy::Proxies<P, Cell>
-	  __always_inline void emplace_after(P curr, Cell *elem)
+	    requires std::same_as<P, Cell *> || ds::pointer::proxy::Proxies<P, Cell>
+	__always_inline void emplace_after(P curr, Cell *elem)
 	{
 		auto next         = curr->cell_next();
 		elem->cell_prev() = curr;
