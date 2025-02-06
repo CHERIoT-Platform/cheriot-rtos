@@ -178,4 +178,41 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 #endif
 }
 
+/**
+ * Compute a pointer to a Compartment-Invocation-Local Storage slot.
+ *
+ * By convention, this area holds two pointers, with the 0th reserved for the
+ * unwind.h machinery.  Most users of this function should thus use `index` 1.
+ *
+ * See sdk/core/switcher/misc-assembly.h `STACK_ENTRY_RESERVED_SPACE` and its
+ * usage in the switcher and the loader.  Also see sdk/include/unwind-assembly.h
+ * `INVOCATION_LOCAL_UNWIND_LIST_OFFSET` and its uses.
+ */
+static inline void **invocation_state_slot(size_t index __if_cxx(= 1))
+{
+	void     *csp = __builtin_cheri_stack_get();
+	ptraddr_t top = __builtin_cheri_top_get(csp);
+	return (void **)__builtin_cheri_bounds_set_exact(
+	  __builtin_cheri_address_set(csp, top - (index + 1) * sizeof(void *)),
+	  sizeof(void *));
+}
+
 __END_DECLS
+
+#ifdef __cplusplus
+
+/**
+ * Return a typed reference to a Compartment-Invocation-Local Storage slot.
+ *
+ * By convention, this area holds two pointers, with the 0th reserved for the
+ * unwind.h machinery.  Most users of this function should thus use the default
+ * `Index` of 1.
+ */
+template<typename T, size_t Index = 1>
+__always_inline T *&invocation_state()
+{
+	static_assert((Index == 0) || (Index == 1), "Bad invocation state slot");
+	return *reinterpret_cast<T **>(invocation_state_slot(Index));
+}
+
+#endif
