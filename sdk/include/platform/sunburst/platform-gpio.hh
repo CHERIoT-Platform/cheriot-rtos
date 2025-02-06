@@ -6,6 +6,8 @@
 /**
  * A simple driver for the Sonata's GPIO. This struct represents a single
  * GPIO instance, and the methods available to interact with that GPIO.
+ * This class should usually be used via one the aliases / subclasses defined
+ * below which are specialised to the GPIO instance. e.g. see SonataGpioBoard.
  *
  * Documentation source can be found at:
  * https://github.com/lowRISC/sonata-system/blob/9f794fe3bd4eec8d1a01ee81da97a7f2cec0b452/doc/ip/gpio.md
@@ -21,12 +23,13 @@ template<
   uint32_t OutputMask = 0xFFFF'FFFF,
   /**
    * The mask of bits of the `input` and `debouncedInput` registers that
-   * contain meaningful GPIO input.
+   * contain meaningful GPIO input. This is usually the same as OutputMask
+   * if the instance has the same number of input and output pins.
    */
   uint32_t InputMask = OutputMask,
   /**
-   * Returns the bit corresponding to a given GPIO index. Will mask out
-   * the bit if this is outside of the provided mask.
+   * The mask of bits for the `output_enable` register, again this is usually
+   * the same as OutputMask.
    */
   uint32_t OutputEnableMask = OutputMask>
 struct SonataGpioBase : private utils::NoCopyNoMove
@@ -37,8 +40,8 @@ struct SonataGpioBase : private utils::NoCopyNoMove
 	uint32_t outputEnable;
 
 	/**
-	 * Returns a mask with a single bit set corresponding to the given GPIO index
-	 * or 0 if that bit is not set in mask.
+	 * Returns a mask with a single bit set corresponding to the given GPIO
+	 * index or 0 if that bit is not set in mask.
 	 */
 	constexpr static uint32_t gpio_bit(uint32_t index, uint32_t mask)
 	{
@@ -108,7 +111,12 @@ struct SonataGpioBase : private utils::NoCopyNoMove
 };
 
 /**
- * A driver for Sonata's Board GPIO (instance 0).
+ * A driver for Sonata's Board GPIO (instance 0). Example of usage:
+ *
+ * ```
+ * auto gpioBoard = MMIO_CAPABILITY(SonataGpioBoard, gpio_board);
+ * bool switch0 = gpioBoard->read_sitwich(0);
+ * ```
  *
  * Documentation source:
  * https://lowrisc.org/sonata-system/doc/ip/gpio.html
@@ -124,13 +132,55 @@ struct SonataGpioBoard : SonataGpioBase<0x0000'00FF, 0x0001'FFFF, 0x0000'0000>
 	 * (i.e. 2 cardinal directions).
 	 *
 	 */
-	enum class [[clang::flag_enum]] SonataJoystick : uint16_t
+	enum [[clang::flag_enum]] JoystickDirection : uint16_t
 	{
 		Left    = 1u << 8,
 		Up      = 1u << 9,
 		Pressed = 1u << 10,
 		Down    = 1u << 11,
 		Right   = 1u << 12,
+	};
+
+	/**
+	 * Class that wraps a JoystickDirection and provides convience wrappers
+	 * to query the value.
+	 */
+	class JoystickValue
+	{
+		JoystickDirection direction;
+
+		public:
+		JoystickValue(JoystickDirection direction) : direction(direction) {}
+
+		bool is_direction_pressed(JoystickDirection direction)
+		{
+			return this->direction & direction;
+		}
+
+		bool is_left()
+		{
+			return is_direction_pressed(JoystickDirection::Left);
+		}
+
+		bool is_up()
+		{
+			return is_direction_pressed(JoystickDirection::Up);
+		}
+
+		bool is_pressed()
+		{
+			return is_direction_pressed(JoystickDirection::Pressed);
+		}
+
+		bool is_down()
+		{
+			return is_direction_pressed(JoystickDirection::Down);
+		}
+
+		bool is_right()
+		{
+			return is_direction_pressed(JoystickDirection::Right);
+		}
 	};
 
 	/**
@@ -244,9 +294,9 @@ struct SonataGpioBoard : SonataGpioBase<0x0000'00FF, 0x0001'FFFF, 0x0000'0000>
 	/**
 	 * Returns the state of the joystick.
 	 */
-	SonataJoystick read_joystick() volatile
+	JoystickValue read_joystick() volatile
 	{
-		return static_cast<SonataJoystick>(input & Inputs::Joystick);
+		return {static_cast<JoystickDirection>(input & Inputs::Joystick)};
 	}
 };
 
@@ -256,3 +306,7 @@ using SonataGpioPmod           = SonataGpioBase<0x0000'00FF>;
 using SonataGpioPmod0          = SonataGpioPmod;
 using SonataGpioPmod1          = SonataGpioPmod;
 using SonataGpioPmodC          = SonataGpioBase<0x0000'003F>;
+/**
+ * Alias for backwards compatibility with Sonata 0.2 driver.
+ */
+typedef SonataGpioBoard SonataGPIO;
