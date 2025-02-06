@@ -261,6 +261,25 @@ namespace
 		     "This test should never fail but exists to make sure that a "
 		     "comparison result is used");
 	}
+
+	/**
+	 * Test CILS accessors
+	 */
+	void check_cils()
+	{
+		int   x;
+		void *p = &x;
+
+		TEST(__builtin_cheri_equal_exact(nullptr, *invocation_state_slot(0)),
+		     "CILS nonzero pointer 0 on entry");
+
+		TEST(__builtin_cheri_equal_exact(nullptr, *invocation_state_slot(1)),
+		     "CILS nonzero pointer 1 on entry");
+
+		*invocation_state_slot(1) = p;
+		TEST(__builtin_cheri_equal_exact(p, invocation_state<int>()),
+		     "CILS failed to store stack pointer");
+	}
 } // namespace
 
 void check_sealed_scoping()
@@ -317,6 +336,7 @@ int test_misc()
 	check_pointer_utilities();
 	check_capability_set_inexact_at_most();
 	check_sealed_scoping();
+	check_cils();
 
 	debug_log("Testing shared objects.");
 	check_shared_object("exampleK",
