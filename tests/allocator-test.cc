@@ -153,7 +153,7 @@ namespace
 
 			free(pStack);
 			free(pGlobal);
-			heap_quarantine_empty();
+			(void)heap_quarantine_empty();
 
 			state = 1;
 
@@ -271,7 +271,7 @@ namespace
 		 * failure we see below isn't because we aren't allowing the revocation
 		 * state machine to advance.
 		 */
-		heap_quarantine_empty();
+		(void)heap_quarantine_empty();
 
 		bool memoryExhausted = false;
 		for (auto &allocation : allocations)
