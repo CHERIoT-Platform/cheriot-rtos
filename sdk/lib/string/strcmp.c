@@ -31,6 +31,7 @@
 
 #include <cdefs.h>
 #include <stddef.h>
+#include <string.h>
 
 /*
  * Compare strings.

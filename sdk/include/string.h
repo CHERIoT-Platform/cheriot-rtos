@@ -6,27 +6,52 @@
 #include <stddef.h>
 #include <stdint.h>
 
-int __cheri_libcall    memcmp(const void *str1,
-                              const void *str2,
-                              size_t      count) __asm__("memcmp");
-void *__cheri_libcall  memcpy(void       *dest,
-                              const void *src,
-                              size_t      n) __asm__("memcpy");
-void *__cheri_libcall  memset(void *, int, size_t) __asm__("memset");
-void *__cheri_libcall  memmove(void       *dest,
-                               const void *src,
-                               size_t      n) __asm__("memmove");
-void *__cheri_libcall  memchr(const void *, int, size_t);
-void *__cheri_libcall  memrchr(const void *, int, size_t);
-size_t __cheri_libcall strlen(const char *str);
-int __cheri_libcall    strncmp(const char *s1, const char *s2, size_t n);
-char *__cheri_libcall  strncpy(char *dest, const char *src, size_t n);
-int __cheri_libcall    strcmp(const char *s1, const char *s2);
-char *__cheri_libcall  strnstr(const char *haystack,
-                               const char *needle,
-                               size_t      haystackLength);
-char *__cheri_libcall  strchr(const char *s, int c);
-size_t __cheri_libcall strlcpy(char *dest, const char *src, size_t n);
+CHERIOT_DECLARE_STANDARD_LIBCALL(memcmp,
+                                 int,
+                                 const void *str1,
+                                 const void *str2,
+                                 size_t      count)
+CHERIOT_DECLARE_STANDARD_LIBCALL(memcmp,
+                                 int,
+                                 const void *str1,
+                                 const void *str2,
+                                 size_t      count)
+CHERIOT_DECLARE_STANDARD_LIBCALL(memcpy,
+                                 void *,
+                                 void       *dest,
+                                 const void *src,
+                                 size_t      n)
+CHERIOT_DECLARE_STANDARD_LIBCALL(memset, void *, void *, int, size_t)
+CHERIOT_DECLARE_STANDARD_LIBCALL(memmove,
+                                 void *,
+                                 void       *dest,
+                                 const void *src,
+                                 size_t      n)
+CHERIOT_DECLARE_STANDARD_LIBCALL(memchr, void *, const void *, int, size_t)
+CHERIOT_DECLARE_STANDARD_LIBCALL(memrchr, void *, const void *, int, size_t)
+CHERIOT_DECLARE_STANDARD_LIBCALL(strlen, size_t, const char *str)
+CHERIOT_DECLARE_STANDARD_LIBCALL(strncmp,
+                                 int,
+                                 const char *s1,
+                                 const char *s2,
+                                 size_t      n)
+CHERIOT_DECLARE_STANDARD_LIBCALL(strncpy,
+                                 char *,
+                                 char       *dest,
+                                 const char *src,
+                                 size_t      n)
+CHERIOT_DECLARE_STANDARD_LIBCALL(strcmp, int, const char *s1, const char *s2)
+CHERIOT_DECLARE_STANDARD_LIBCALL(strnstr,
+                                 char *,
+                                 const char *haystack,
+                                 const char *needle,
+                                 size_t      haystackLength)
+CHERIOT_DECLARE_STANDARD_LIBCALL(strchr, char *, const char *s, int c)
+CHERIOT_DECLARE_STANDARD_LIBCALL(strlcpy,
+                                 size_t,
+                                 char       *dest,
+                                 const char *src,
+                                 size_t      n)
 
 /**
  * Explicit bzero is a memset variant that the compiler is not permitted to
