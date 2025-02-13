@@ -11,7 +11,7 @@ Allocator capabilities
 ----------------------
 
 Allocating memory requires a capability that authorises memory allocation.
-These are created by the `DECLARE_AND_DEFINE_DEFINE_ALLOCATOR_CAPABILITY` macro, which takes two arguments.
+These are created by the `DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY` macro, which takes two arguments.
 The first is the name of the capability, the second is the amount of memory that this capability authorises the holder to allocate.
 This capability may then be accessed with the `STATIC_SEALED_VALUE` macro, which takes the name as the argument.
 If you wish to refer to the same capability from multiple C compilation units, you can use the separate `DECLARE_` and `DEFINE_` versions of this combined macro.
