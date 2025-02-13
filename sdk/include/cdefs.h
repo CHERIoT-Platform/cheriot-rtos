@@ -1,8 +1,7 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
-#ifndef __CDEFS_H__
-#define __CDEFS_H__
+#pragma once
 
 /*
  * Testing against Clang-specific extensions.
@@ -87,14 +86,6 @@ using _Bool = bool;
 #else
 #	define __cheri_libcall __attribute__((cheri_libcall))
 #	define __cheri_callback __attribute__((cheri_ccallback))
-
-/**
- * Define the symbol for the libcall that the compiler will expand the `strlen`
- * builtin to.  This builtin is used internally in libc++ (and possibly in
- * other places) to avoid the namespace pollution from including `string.h` but
- * is either constant folded in the front end or expanded to a libcall.
- */
-unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
 #endif
 
 #define offsetof(a, b) __builtin_offsetof(a, b)
@@ -132,4 +123,11 @@ unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
 #define CHERIOT_VERSION_TRIPLE(major, minor, patch)                            \
 	((major * 10000) + (minor * 100) + (patch))
 
-#endif // _CDEFS_H_
+/**
+ * Helper for declaring standard library functions that should be exported
+ * as __cheri_libcall, but which should not have their names mangled. This
+ * is needed to enable LLVM optimizations to trigger on standard library
+ * functions.
+ */
+#define CHERIOT_DECLARE_STANDARD_LIBCALL(name, ret, ...)                       \
+	__cheri_libcall ret name(__VA_ARGS__) __asm__(#name);
