@@ -153,7 +153,8 @@ namespace
 
 			free(pStack);
 			free(pGlobal);
-			heap_quarantine_empty();
+			TEST(heap_quarantine_empty() != -ECOMPARTMENTFAIL,
+			     "Compartment call to heap_quarantine_empty failed");
 
 			state = 1;
 
@@ -271,7 +272,8 @@ namespace
 		 * failure we see below isn't because we aren't allowing the revocation
 		 * state machine to advance.
 		 */
-		heap_quarantine_empty();
+		TEST(heap_quarantine_empty() != -ECOMPARTMENTFAIL,
+		     "Compartment call to heap_quarantine_empty failed");
 
 		bool memoryExhausted = false;
 		for (auto &allocation : allocations)
