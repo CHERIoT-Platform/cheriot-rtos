@@ -13,11 +13,10 @@ int consume_message(const char *buffer, size_t length)
 {
 	std::string decrypted;
 	decrypted.resize(length);
-	Debug::Invariant(caesar_decrypt(STATIC_SEALED_VALUE(encrypt),
-	                                buffer,
-	                                decrypted.data(),
-	                                length) != -ECOMPARTMENTFAIL,
-	                 "Compartment call to caesar_decrypt failed");
+	Debug::Invariant(
+	  caesar_decrypt(
+	    STATIC_SEALED_VALUE(encrypt), buffer, decrypted.data(), length) == 0,
+	  "Compartment call to caesar_decrypt failed");
 	Debug::log("Decrypted message: '{}'", decrypted);
 	return 0;
 }

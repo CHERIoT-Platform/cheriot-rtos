@@ -35,7 +35,7 @@ int __cheri_compartment("allocbench") run()
 		auto quota = heap_quota_remaining(MALLOC_CAPABILITY);
 		Debug::Invariant(quota == MALLOC_QUOTA, "Quota remaining {}, should be {}", quota, MALLOC_QUOTA);
 		Debug::log("Flushing quarantine");
-		Debug::Invariant(heap_quarantine_empty() != -ECOMPARTMENTFAIL,
+		Debug::Invariant(heap_quarantine_empty() == 0,
 		                 "Call to heap_quarantine_empty failed");
 		Debug::log("Flushed quarantine");
 	}

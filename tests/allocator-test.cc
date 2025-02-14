@@ -153,8 +153,7 @@ namespace
 
 			free(pStack);
 			free(pGlobal);
-			TEST(heap_quarantine_empty() != -ECOMPARTMENTFAIL,
-			     "Compartment call to heap_quarantine_empty failed");
+			TEST_SUCCESS(heap_quarantine_empty());
 
 			state = 1;
 
@@ -272,9 +271,7 @@ namespace
 		 * failure we see below isn't because we aren't allowing the revocation
 		 * state machine to advance.
 		 */
-		TEST_EQUAL(heap_quarantine_empty(),
-		           0,
-		           "Compartment call to heap_quarantine_empty failed");
+		TEST_SUCCESS(heap_quarantine_empty());
 
 		bool memoryExhausted = false;
 		for (auto &allocation : allocations)
@@ -851,7 +848,7 @@ int test_allocator()
 	TEST(ret == 0, "Freeing array failed: {}", ret);
 
 	test_blocking_allocator(HeapSize);
-	TEST_EQUAL(heap_quarantine_empty(), 0, "Could not flush quarantine");
+	TEST_SUCCESS(heap_quarantine_empty());
 	test_revoke(HeapSize);
 	test_fuzz();
 	allocations.clear();

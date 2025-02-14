@@ -20,7 +20,7 @@ int __cheri_compartment("caller") run()
 	if (stackSize == 0x1000)
 	{
 		Timeout timeout{100};
-		Debug::Invariant(thread_sleep(&timeout) != -ECOMPARTMENTFAIL,
+		Debug::Invariant(thread_sleep(&timeout) >= 0,
 		                 "Compartment call thread_sleep failed");
 	}
 	LockGuard g{lock};

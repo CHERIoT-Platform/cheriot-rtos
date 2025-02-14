@@ -38,7 +38,7 @@ int write(const char *msg)
 	}
 	// Release the lock.
 	lockWord = 0;
-	Debug::Invariant(futex_wake(&lockWord, -1) != -ECOMPARTMENTFAIL,
+	Debug::Invariant(futex_wake(&lockWord, -1) >= 0,
 	                 "Compartment call to futex_wake failed");
 	return 0;
 }

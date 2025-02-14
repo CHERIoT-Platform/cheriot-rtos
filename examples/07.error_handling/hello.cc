@@ -18,7 +18,7 @@ int __cheri_compartment("hello") entry()
 	storeOnlyString.permissions() &= CHERI::Permission::Store;
 	(void)write(storeOnlyString);
 	// Now one that should work
-	Debug::Invariant(write("Non-malicious string") != -ECOMPARTMENTFAIL,
+	Debug::Invariant(write("Non-malicious string") == 0,
 	                 "Compartment call to write failed");
 	return 0;
 }

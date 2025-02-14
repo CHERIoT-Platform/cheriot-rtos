@@ -65,7 +65,7 @@ int __cheri_compartment("allocate") entry()
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
 		// Add a claim for y - the quota remaining is reduced
-		Debug::Invariant(heap_claim(MALLOC_CAPABILITY, y) != -ECOMPARTMENTFAIL,
+		Debug::Invariant(heap_claim(MALLOC_CAPABILITY, y) > 0,
 		                 "Compartment call to heap_claim failed");
 
 		Debug::log("heap quota after claim: {}",
@@ -122,7 +122,7 @@ int __cheri_compartment("allocate") entry()
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
 		// Get the claimant compartment to make a ephemeral claim
-		Debug::Invariant(make_claim(x) != -ECOMPARTMENTFAIL,
+		Debug::Invariant(make_claim(x) == 0,
 		                 "Compartment call to make_claim failed");
 
 		// free x.  We get out quota back but x remains valid as
@@ -132,19 +132,19 @@ int __cheri_compartment("allocate") entry()
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
 		// Get the claimant compartment to show its claim
-		Debug::Invariant(show_claim() != -ECOMPARTMENTFAIL,
+		Debug::Invariant(show_claim() == 0,
 		                 "Compartment call to show_claim failed");
 
 		// Give the claimant another ptr so it releases the first
 		void *y = malloc(10);
-		Debug::Invariant(make_claim(y) != -ECOMPARTMENTFAIL,
+		Debug::Invariant(make_claim(y) == 0,
 		                 "Compartment call to make_claim failed");
 		Debug::log("After make claim");
 		Debug::log("x: {}", x);
 		Debug::log("y: {}", y);
 
 		// Get the claimant compartment to show its new claim
-		Debug::Invariant(show_claim() != -ECOMPARTMENTFAIL,
+		Debug::Invariant(show_claim() == 0,
 		                 "Compartment call to show_claim failed");
 
 		// tidy up

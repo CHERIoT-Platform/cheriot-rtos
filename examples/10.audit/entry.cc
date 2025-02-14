@@ -21,7 +21,7 @@ int __cheri_compartment("entry") entry()
 	Debug::log("Received encrypted message: '{}' ({} bytes)",
 	           std::string_view{buffer, static_cast<size_t>(length)},
 	           length);
-	Debug::Invariant(consume_message(buffer, length) != -ECOMPARTMENTFAIL,
+	Debug::Invariant(consume_message(buffer, length) == 0,
 	                 "Compartment call to consume_message failed");
 	return 0;
 }

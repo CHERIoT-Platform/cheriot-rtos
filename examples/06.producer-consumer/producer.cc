@@ -20,7 +20,7 @@ int __cheri_compartment("producer") run()
 	non_blocking<queue_create_sealed>(
 	  MALLOC_CAPABILITY, &queue, sizeof(int), 16);
 	// Pass the queue handle to the consumer.
-	Debug::Invariant(set_queue(queue) != -ECOMPARTMENTFAIL,
+	Debug::Invariant(set_queue(queue) == 0,
 	                 "Compartment call to set_queue failed");
 	Debug::log("Starting producer loop");
 	// Loop, sending some numbers to the other thread.

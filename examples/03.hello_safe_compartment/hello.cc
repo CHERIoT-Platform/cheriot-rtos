@@ -12,9 +12,9 @@ using Debug = ConditionalDebug<true, "Hello compartment">;
 int __cheri_compartment("hello") entry()
 {
 	char maliciousString[] = {'h', 'e', 'l', 'l', 'o'};
-	Debug::Invariant(write(maliciousString) != -ECOMPARTMENTFAIL,
+	Debug::Invariant(write(maliciousString) == 0,
 	                 "Compartment call to write failed");
-	Debug::Invariant(write("Non-malicious string") != -ECOMPARTMENTFAIL,
+	Debug::Invariant(write("Non-malicious string") == 0,
 	                 "Compartment call to write failed");
 	return 0;
 }
