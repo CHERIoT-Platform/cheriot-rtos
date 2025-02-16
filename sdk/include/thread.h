@@ -20,7 +20,7 @@ typedef struct
 	/// hi 32 bits
 	uint32_t hi;
 } SystickReturn;
-[[cheri::interrupt_state(disabled)]] SystickReturn
+[[cheriot::interrupt_state(disabled)]] SystickReturn
   __cheri_compartment("scheduler") thread_systemtick_get(void);
 
 enum ThreadSleepFlags : uint32_t
@@ -60,7 +60,7 @@ enum ThreadSleepFlags : uint32_t
  * If you are using `thread_sleep` to elapse real time, pass
  * `ThreadSleepNoEarlyWake` as the flags argument to prevent early wakeups.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   thread_sleep(struct Timeout *timeout, uint32_t flags __if_cxx(= 0));
 
 /**

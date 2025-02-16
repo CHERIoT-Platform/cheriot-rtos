@@ -1302,7 +1302,7 @@ size_t heap_available()
 	return gm->heapFreeSize;
 }
 
-[[cheri::interrupt_state(disabled)]] int heap_render()
+[[cheriot::interrupt_state(disabled)]] int heap_render()
 {
 #if HEAP_RENDER
 	gm->render();
