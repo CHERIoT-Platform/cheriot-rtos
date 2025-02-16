@@ -635,7 +635,7 @@ vsnprintf(char *str, // NOLINT (clang-tidy spuriously thinks this should be
 	return (retval);
 }
 
-[[cheri::interrupt_state(disabled)]] int __cheri_libcall
+[[cheriot::interrupt_state(disabled)]] int __cheri_libcall
 vfprintf(FILE *stream, const char *fmt, va_list ap)
 {
 	return kvprintf(

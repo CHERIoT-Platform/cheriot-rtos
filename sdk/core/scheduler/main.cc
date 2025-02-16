@@ -297,7 +297,7 @@ namespace
 
 } // namespace
 
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   scheduler_entry(const ThreadLoaderInfo *info)
 {
 	Debug::Invariant(Capability{info}.length() ==
@@ -322,7 +322,7 @@ namespace
 	return 0;
 }
 
-[[cheri::interrupt_state(disabled)]] CHERI_SEALED(TrustedStack *)
+[[cheriot::interrupt_state(disabled)]] CHERI_SEALED(TrustedStack *)
   __cheri_compartment("scheduler")
     exception_entry(CHERI_SEALED(TrustedStack *) sealedTStack,
                     size_t mcause,
@@ -715,7 +715,7 @@ namespace
 	};
 } // namespace
 
-[[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
+[[cheriot::interrupt_state(disabled)]] __cheriot_minimum_stack(
   0x30) const uint32_t *interrupt_futex_get(InterruptCapability sealed)
 {
 	STACK_CHECK(0x30);
@@ -736,7 +736,7 @@ namespace
 	return result;
 }
 
-[[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
+[[cheriot::interrupt_state(disabled)]] __cheriot_minimum_stack(
   0x20) int interrupt_complete(InterruptCapability sealed)
 {
 	STACK_CHECK(0x20);
@@ -757,12 +757,12 @@ uint16_t thread_count()
 }
 
 #ifdef SCHEDULER_ACCOUNTING
-[[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
+[[cheriot::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
 {
 	return Thread::idleThreadCycles;
 }
 
-[[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_current()
+[[cheriot::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_current()
 {
 	// Calculate the number of cycles not yet reported to the current thread.
 	uint64_t currentCycles = rdcycle64();
