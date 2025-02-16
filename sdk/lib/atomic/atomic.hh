@@ -9,7 +9,7 @@
  * inserts calls to them.  Declare them using the asm label extension.
  */
 #define DECLARE_ATOMIC_LIBCALL(name, ret, ...)                                 \
-	[[cheri::interrupt_state(disabled)]] CHERIOT_DECLARE_STANDARD_LIBCALL(     \
+	[[cheriot::interrupt_state(disabled)]] CHERIOT_DECLARE_STANDARD_LIBCALL(   \
 	  name, ret, __VA_ARGS__)
 
 /**

@@ -1342,7 +1342,7 @@ namespace CHERI
 	 * Invokes the passed callable object with interrupts disabled.
 	 */
 	template<typename T>
-	[[cheri::interrupt_state(disabled)]] auto with_interrupts_disabled(T &&fn)
+	[[cheriot::interrupt_state(disabled)]] auto with_interrupts_disabled(T &&fn)
 	{
 		return fn();
 	}
