@@ -124,7 +124,7 @@ int test_futex()
             while (state != 1)
             {
                 Timeout t{3};
-                (void)thread_sleep(&t);
+                TEST_SUCCESS(thread_sleep(&t));
             }
             debug_log("Consuming all CPU on medium-priority thread");
             state = 2;
@@ -145,7 +145,7 @@ int test_futex()
             debug_log("Low-priority thread finished, unlocking");
             state = 4;
             futex = 0;
-            (void)futex_wake(&futex, 1);
+            TEST_SUCCESS(futex_wake(&futex, 1));
         }
 	};
 	async(priorityBug);

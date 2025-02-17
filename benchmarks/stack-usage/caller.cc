@@ -3,7 +3,7 @@
 #include <compartment.h>
 #include <locks.hh>
 
-void __cheri_compartment("caller") run()
+int __cheri_compartment("caller") run()
 {
 	printf("#board\tstack_use\tcall\treturn\n");
 	for (size_t s = 1; s < 0x1000; s <<= 1)
@@ -18,4 +18,6 @@ void __cheri_compartment("caller") run()
 		});
 		printf(__XSTRING(BOARD) "\t%d\t%d\t%d\n", s, callPath, returnPath);
 	}
+
+	return 0;
 }

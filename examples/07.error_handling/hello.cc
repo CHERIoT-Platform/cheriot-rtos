@@ -2,18 +2,23 @@
 // SPDX-License-Identifier: MIT
 
 #include "hello.h"
+#include <debug.hh>
 #include <fail-simulator-on-error.h>
 
+using Debug = ConditionalDebug<true, "hello compartment">;
+
 /// Thread entry point.
-void __cheri_compartment("hello") entry()
+int __cheri_compartment("hello") entry()
 {
 	// Try writing a string with a missing null terminator
 	char maliciousString[] = {'h', 'e', 'l', 'l', 'o'};
-	write(maliciousString);
+	(void)write(maliciousString);
 	// Now try one that doesn't have read permission:
 	CHERI::Capability storeOnlyString{maliciousString};
 	storeOnlyString.permissions() &= CHERI::Permission::Store;
-	write(storeOnlyString);
+	(void)write(storeOnlyString);
 	// Now one that should work
-	write("Non-malicious string");
+	Debug::Invariant(write("Non-malicious string") == 0,
+	                 "Compartment call to write failed");
+	return 0;
 }

@@ -165,7 +165,7 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 	while ((end > current) && (end - current > MS_PER_TICK))
 	{
 		Timeout t = {0, ((uint32_t)(end - current)) / CyclesPerTick};
-		thread_sleep(&t, ThreadSleepNoEarlyWake);
+		(void)thread_sleep(&t, ThreadSleepNoEarlyWake);
 		current = rdcycle64();
 	}
 	// Spin for the remaining time.

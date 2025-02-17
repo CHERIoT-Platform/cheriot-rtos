@@ -18,7 +18,8 @@ int __cheri_compartment("claimant") make_claim(void *ptr)
 	}
 
 	Timeout t{10};
-	heap_claim(MALLOC_CAPABILITY, ptr);
+	Debug::Invariant(heap_claim(MALLOC_CAPABILITY, ptr) > 0,
+	                 "Compartment call to heap_claim failed");
 	x = ptr;
 
 	Debug::log("Make Claim : {}", x);

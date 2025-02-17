@@ -9,12 +9,13 @@ using Debug = ConditionalDebug<DEBUG_ALLOCBENCH, "Allocator benchmark">;
  * Try allocating 1 MiB of memory in allocation sizes ranging from 32 - 4096
  * bytes, report how long it takes.
  */
-void __cheri_compartment("allocbench") run()
+int __cheri_compartment("allocbench") run()
 {
 	// Make sure sail doesn't print annoying log messages in the middle of the
 	// output the first time that allocation happens.
 	free(malloc(16));
-	heap_quarantine_empty();
+	Debug::Invariant(heap_quarantine_empty() == 0,
+	                 "Call to heap_quarantine_empty failed");
 	printf("#board\tsize\ttime\n");
 	const size_t MinimumSize = 32;
 	const size_t MaximumSize = 131072;
@@ -34,7 +35,10 @@ void __cheri_compartment("allocbench") run()
 		auto quota = heap_quota_remaining(MALLOC_CAPABILITY);
 		Debug::Invariant(quota == MALLOC_QUOTA, "Quota remaining {}, should be {}", quota, MALLOC_QUOTA);
 		Debug::log("Flushing quarantine");
-		heap_quarantine_empty();
+		Debug::Invariant(heap_quarantine_empty() == 0,
+		                 "Call to heap_quarantine_empty failed");
 		Debug::log("Flushed quarantine");
 	}
+
+	return 0;
 }
