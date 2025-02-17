@@ -580,7 +580,7 @@ class Ksz8851Ethernet
 		// it will trigger again immediately after we acknowledge it.
 
 		// Acknowledge the interrupt in the scheduler.
-		interrupt_complete(STATIC_SEALED_VALUE(EthernetInterruptCapability));
+		(void)interrupt_complete(STATIC_SEALED_VALUE(EthernetInterruptCapability));
 		if (*receiveInterruptFutex == lastInterruptValue)
 		{
 			Debug::log("Acknowledged interrupt, sleeping on futex {}",
