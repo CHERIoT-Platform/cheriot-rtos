@@ -137,6 +137,7 @@ toolchain("cheriot-clang")
 			"-ffunction-sections",
 			"-fdata-sections",
 			"-fomit-frame-pointer",
+			"-fno-builtin",
 			"-fno-exceptions",
 			"-fno-asynchronous-unwind-tables",
 			"-fno-c++-static-destructors",
