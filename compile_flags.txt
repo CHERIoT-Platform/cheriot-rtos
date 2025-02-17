@@ -10,7 +10,6 @@ riscv32-unknown-unknown
 -fshort-wchar
 -nostdinc
 -fomit-frame-pointer
--fno-builtin
 -fno-exceptions
 -fno-asynchronous-unwind-tables
 -fno-rtti
