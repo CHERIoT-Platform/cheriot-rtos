@@ -141,7 +141,6 @@ toolchain("cheriot-clang")
 			"-fno-asynchronous-unwind-tables",
 			"-fno-c++-static-destructors",
 			"-fno-rtti",
-			"-Werror",
 			"-I" .. path.join(include_directory, "c++-config"),
 			"-I" .. path.join(include_directory, "libc++"),
 			"-I" .. include_directory,
