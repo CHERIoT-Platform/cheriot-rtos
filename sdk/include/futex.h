@@ -33,6 +33,7 @@ enum [[clang::flag_enum]] FutexWaitFlags
  * call.
  *
  * This returns:
+ *
  *  - 0 on success: either `*address` and `expected` differ or a wake is
  *    received.
  *  - `-EINVAL` if the arguments are invalid.
