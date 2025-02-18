@@ -224,8 +224,8 @@ ssize_t __cheri_compartment("allocator")
   heap_claim(AllocatorCapability heapCapability, void *pointer);
 
 /**
- * Interface to the fast claims mechanism.  This claims two pointers using the
- * hazard-pointer-inspired lightweight claims mechanism.  If this function
+ * Interface to the ephemeral claims mechanism.  This claims two pointers using
+ * the hazard-pointer-inspired lightweight claims mechanism.  If this function
  * returns zero then the heap pointers are guaranteed not to become invalid
  * until either the next cross-compartment call or the next call to this
  * function.
