@@ -30,7 +30,9 @@ enum [[clang::flag_enum]] FutexWaitFlags
  * address.
  *
  * The `flags` argument contains flags that may control the behaviour of the
- * call.
+ * call.  This is either `FutexNone` (zero) for the default behaviour or
+ * `FutexPriorityInheritance` if the low 16 bits should be treated as a thread
+ * ID for priority inheritance.
  *
  * This returns:
  *
