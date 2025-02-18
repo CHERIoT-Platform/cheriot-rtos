@@ -40,3 +40,21 @@
 #include <timeout.h>
 #include <token.h>
 #include <unwind.h>
+#include <setjmp.h>
+
+/**
+ * This is a regression test for 
+ * https://github.com/CHERIoT-Platform/llvm-project/issues/118
+ * which caused setjmp to fail to link when `-fno-builtin` is not used.
+ * This won't actually be called -- we're just testing that it compiles.
+ */
+int __cheri_compartment("ccompile_test") test_setjmp_longjmp ()
+{
+    jmp_buf buf;
+    int ret = setjmp(buf);
+    if (ret == 0) {
+        longjmp(buf, 1);
+    }
+    return ret;
+}
+
