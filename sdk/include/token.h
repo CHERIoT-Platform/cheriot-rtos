@@ -218,17 +218,12 @@ token_allocate(Timeout *timeout, AllocatorCapability heapCapability, SKey key)
 	CHERI_SEALED(void *)
 	sealed = token_sealed_unsealed_alloc(
 	  timeout, heapCapability, key, sizeof(T), &unsealed);
-	return
-	{
-		static_cast<T *>(unsealed),
+	return {static_cast<T *>(unsealed),
 #	if __has_extension(cheri_sealed_pointers) &&                              \
 	  !defined(CHERIOT_NO_SEALED_POINTERS)
-		  static_cast<CHERI_SEALED(T *)>(sealed)
+	        static_cast<CHERI_SEALED(T *)>(sealed)
 #	else
-		  Sealed<T>
-		{
-			sealed
-		}
+	        Sealed<T>{sealed}
 #	endif
 	};
 }

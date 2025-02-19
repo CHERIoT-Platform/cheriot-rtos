@@ -49,26 +49,18 @@ namespace ds::pointer
 		concept Proxies = std::same_as<T, typename P::Type> &&
 		                  requires(P &proxy, P &proxy2, T *ptr) {
 			                  /* Probe for operator=(T*) */
-			                  {
-				                  proxy = ptr
-			                  } -> std::same_as<P &>;
+			                  { proxy = ptr } -> std::same_as<P &>;
 
 			                  /* Probe for operator T*() */
-			                  {
-				                  ptr == proxy
-			                  } -> std::same_as<bool>;
+			                  { ptr == proxy } -> std::same_as<bool>;
 
 			                  /* TODO: How to probe for operator-> ? */
 
 			                  /* Probe for operator==(T*) */
-			                  {
-				                  proxy == ptr
-			                  } -> std::same_as<bool>;
+			                  { proxy == ptr } -> std::same_as<bool>;
 
 			                  /* Probe for operator==(P&) */
-			                  {
-				                  proxy == proxy2
-			                  } -> std::same_as<bool>;
+			                  { proxy == proxy2 } -> std::same_as<bool>;
 
 			                  /* Probe for operator<=>(T*) */
 			                  {
