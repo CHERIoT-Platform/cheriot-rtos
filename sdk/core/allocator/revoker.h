@@ -24,21 +24,15 @@ namespace Revocation
 	 */
 	template<typename T>
 	concept IsHardwareRevokerDevice = requires(T v, uint32_t epoch) {
-		{
-			v.init()
-		};
-		{
-			v.system_epoch_get()
-		} -> std::same_as<uint32_t>;
+		{ v.init() };
+		{ v.system_epoch_get() } -> std::same_as<uint32_t>;
 		{
 			v.template has_revocation_finished_for_epoch<true>(epoch)
 		} -> std::same_as<uint32_t>;
 		{
 			v.template has_revocation_finished_for_epoch<false>(epoch)
 		} -> std::same_as<uint32_t>;
-		{
-			v.system_bg_revoker_kick()
-		} -> std::same_as<void>;
+		{ v.system_bg_revoker_kick() } -> std::same_as<void>;
 	};
 
 	/**
@@ -50,9 +44,7 @@ namespace Revocation
 	template<typename T>
 	concept SupportsInterruptNotification =
 	  requires(T v, Timeout *timeout, uint32_t epoch) {
-		  {
-			  v.wait_for_completion(timeout, epoch)
-		  } -> std::same_as<bool>;
+		  { v.wait_for_completion(timeout, epoch) } -> std::same_as<bool>;
 	  };
 
 	/**

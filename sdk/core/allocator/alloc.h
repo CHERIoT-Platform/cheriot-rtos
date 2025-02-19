@@ -158,16 +158,12 @@ namespace displacement_proxy
 
 	template<auto F, typename D>
 	concept Decoder = requires(D d) {
-		{
-			F(d)
-		} -> std::same_as<size_t>;
+		{ F(d) } -> std::same_as<size_t>;
 	};
 
 	template<auto F, typename D>
 	concept Encoder = requires(size_t s) {
-		{
-			F(s)
-		} -> std::same_as<D>;
+		{ F(s) } -> std::same_as<D>;
 	};
 
 	/**
@@ -1500,7 +1496,7 @@ class MState
 	 */
 	static bool __always_inline capaligned_range_do(void  *start,
 	                                                size_t size,
-	                                                bool   (*fn)(void **))
+	                                                bool (*fn)(void **))
 	{
 		Debug::Assert((size & (sizeof(void *) - 1)) == 0,
 		              "Cap range is not aligned");
