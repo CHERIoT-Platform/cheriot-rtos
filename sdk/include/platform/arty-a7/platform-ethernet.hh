@@ -247,8 +247,7 @@ class KunyanEthernet
 	 * reserve space for them.
 	 */
 	[[no_unique_address]] std::
-	  conditional_t<DebugDroppedFrames, DroppedFrameCount, Empty>
-	    droppedFrames;
+	  conditional_t<DebugDroppedFrames, DroppedFrameCount, Empty> droppedFrames;
 
 	/**
 	 * Log a message if the dropped-frame counter identified by `Reg` has
