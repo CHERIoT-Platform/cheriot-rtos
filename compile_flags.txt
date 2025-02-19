@@ -10,7 +10,8 @@ riscv32-unknown-unknown
 -fshort-wchar
 -nostdinc
 -fomit-frame-pointer
--fno-builtin
+-fno-builtin-setjmp
+-fno-builtin-longjmp
 -fno-exceptions
 -fno-asynchronous-unwind-tables
 -fno-rtti
