@@ -318,6 +318,54 @@ namespace SonataSpi
 			}
 		}
 
+
+		/*
+		* Sends `len` bytes from the given `data` buffer &
+		* receives `len` bytes and puts them in the `data` buffer,
+		* where `len` is at most `0x7ff`.
+		*
+		* This method will block until the requested number of bytes
+		* has been received. There is currently no timeout.
+		*/
+		void blocking_transfer(const uint8_t txData[], uint8_t rxData[], uint16_t len) volatile
+		{
+			Debug::Assert(len <= 0x7ff,
+						"You can't receive more than 0x7ff bytes at a time.");
+			len &= StartByteCountMask;
+			wait_idle();
+			// Do not attempt a zero-byte transfer; not supported by the controller.
+			if (len)
+			{
+				control = ControlReceiveEnable | ControlTransmitEnable;
+				start   = len;
+	
+				uint32_t transmitAvailable = 0;
+				uint16_t txCnt = 0;
+				uint16_t rxCnt = 0;
+				uint8_t dummy;
+				while(rxCnt < len)
+				{
+					// Wait for at least one byte to be available in the RX FIFO
+					if((txCnt < len) && ((status & StatusTxFifoLevel) < 8)) {
+						if(txData != NULL) {
+							transmitFifo = txData[txCnt];
+						} else {
+							transmitFifo = 0xff;
+						}
+						txCnt++;
+					}
+					if((status & StatusRxFifoLevel) > 0) {
+						if(rxData != NULL) {
+							rxData[rxCnt] = static_cast<uint8_t>(receiveFifo);
+						} else {
+							dummy = static_cast<uint8_t>(receiveFifo);
+						}
+						rxCnt++;
+					}
+				}
+			}
+		}
+
 		/**
 		 * Asserts/de-asserts a given chip select.
 		 *
