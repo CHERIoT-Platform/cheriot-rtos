@@ -1270,7 +1270,12 @@ namespace CHERI
 	 * If `EnforceStrictPermissions` is set to `true`, this will also set
 	 * the permissions of passed capability reference to `Permissions`, and
 	 * its bounds to `space`. This is useful for detecting cases where
-	 * compartments ask for less permissions than they actually require.
+	 * compartments ask for less permissions than they actually require and
+	 * callers happen to provide the required permissions.  Similarly, if you
+	 * are calling `check_pointer` in a function that wraps untrusted code such
+	 * as a third-party library, this lets you detect cases where your callers
+	 * are failing to remove permissions that the untrusted code should not
+	 * have.
 	 *
 	 * This function is provided as a wrapper for the `::check_pointer` C
 	 * API. It is always inlined. For each call site, it materialises the
