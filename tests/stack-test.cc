@@ -6,6 +6,7 @@
 #include "tests.hh"
 #include <cheri.hh>
 #include <errno.h>
+#include <priv/riscv.h>
 
 using namespace CHERI;
 
@@ -19,7 +20,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 	TEST(!threadStackTestFailed, "Thread stack test failed");
 
 	// If we're here because of a force unwind from the callee, just continue.
-	if ((mcause == 0x1c) && (mtval == 0))
+	if ((mcause == priv::MCAUSE_CHERI) && (mtval == 0))
 	{
 		return ErrorRecoveryBehaviour::InstallContext;
 	}
@@ -132,17 +133,13 @@ __cheri_callback int (*volatile crossCompartmentCall)();
 int test_stack()
 {
 	int ret = test_with_small_stack(144);
-	TEST(ret == 0,
-	     "test_with_small_stack failed, returned {} with 144-byte stack",
-	     ret);
+	TEST_EQUAL(ret, 0, "test_with_small_stack failed with 144-byte stack");
 	ret = test_with_small_stack(160);
-	TEST(ret == 0,
-	     "test_with_small_stack failed, returned {} with 160-byte stack",
-	     ret);
+	TEST_EQUAL(ret, 0, "test_with_small_stack failed with 160-byte stack");
 	ret = test_with_small_stack(128);
-	TEST(ret == -ENOTENOUGHSTACK,
-	     "test_with_small_stack failed, returned {} with 128-byte stack",
-	     ret);
+	TEST_EQUAL(ret,
+	           -ENOTENOUGHSTACK,
+	           "test_with_small_stack failed (succeeded?) with 128-byte stack");
 	__cheri_callback int (*callback)() = cross_compartment_call;
 
 	crossCompartmentCall = test_trusted_stack_exhaustion;
@@ -161,7 +158,7 @@ int test_stack()
 	TEST_EQUAL(exhaust_thread_stack_spill(callback),
 	           0,
 	           "exhaust_thread_stack_spill failed");
-	TEST(threadStackTestFailed == false, "switcher did not return error");
+	TEST_EQUAL(threadStackTestFailed, false, "switcher did not return error");
 
 	debug_log("modifying stack permissions on fault");
 	PermissionSet compartmentStackPermissions = get_stack_permissions();
