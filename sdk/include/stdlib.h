@@ -89,12 +89,12 @@ DECLARE_ALLOCATOR_CAPABILITY(__default_malloc_capability)
  */
 DEFINE_ALLOCATOR_CAPABILITY(__default_malloc_capability, MALLOC_QUOTA)
 #	endif
-#endif
 
 /**
  * Helper macro to look up the default malloc capability.
  */
-#define MALLOC_CAPABILITY STATIC_SEALED_VALUE(__default_malloc_capability)
+#	define MALLOC_CAPABILITY STATIC_SEALED_VALUE(__default_malloc_capability)
+#endif
 
 #ifndef MALLOC_WAIT_TICKS
 /**
