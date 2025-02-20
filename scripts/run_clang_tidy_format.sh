@@ -17,7 +17,7 @@ if [ ! -x ${CLANG_TIDY} ] ; then
 fi
 if [ ! -x ${CLANG_FORMAT} ] ; then
 	echo Usage: $0 path/to/cheriot/tools/bin
-	echo clang-tidy not found at ${CLANG_FORMAT}
+	echo clang-format not found at ${CLANG_FORMAT}
 	exit 1
 fi
 
