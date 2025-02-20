@@ -238,4 +238,18 @@ __always_inline T *token_unseal(SKey key, Sealed<T> sealed)
 {
 	return static_cast<T *>(token_obj_unseal(key, sealed));
 }
+
 #endif // __cplusplus
+
+#if __has_extension(cheri_sealed_pointers)
+#	ifdef __cplusplus
+template<typename T>
+__always_inline T *token_unseal(SKey key, T *__sealed_capability sealed)
+{
+	return static_cast<T *>(token_obj_unseal(key, sealed));
+}
+#	else
+#		define token_unseal(key, sealed) /*NOLINT*/                           \
+			((__typeof__(*(sealed)) *)token_obj_unseal(key, sealed))
+#	endif
+#endif
