@@ -139,6 +139,7 @@ toolchain("cheriot-clang")
 			"-fomit-frame-pointer",
 			"-fno-builtin-setjmp",
 			"-fno-builtin-longjmp",
+			"-fno-builtin-printf",
 			"-fno-exceptions",
 			"-fno-asynchronous-unwind-tables",
 			"-fno-c++-static-destructors",
