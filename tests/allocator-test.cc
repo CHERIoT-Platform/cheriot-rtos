@@ -276,7 +276,6 @@ namespace
 		bool memoryExhausted = false;
 		for (auto &allocation : allocations)
 		{
-			Timeout t{0};
 			allocation =
 			  heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize);
 			// here test for nullptr (as opposed to the valid tag
