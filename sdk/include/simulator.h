@@ -10,7 +10,7 @@
 /**
  * Exit simulation, reporting the error code given as the argument.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   scheduler_simulation_exit(uint32_t code __if_cxx(= 0));
 #endif
 

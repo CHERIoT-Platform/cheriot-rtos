@@ -71,7 +71,7 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
  * Create a multiwaiter object.  This is a stateful object that can wait on at
  * most `maxItems` event sources.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   multiwaiter_create(Timeout            *timeout,
                      AllocatorCapability heapCapability,
                      MultiWaiter        *ret,
@@ -80,7 +80,7 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
 /**
  * Destroy a multiwaiter object.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   multiwaiter_delete(AllocatorCapability heapCapability, MultiWaiter mw);
 
 /**
@@ -95,7 +95,7 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
  *  - If the timeout is reached without any events being triggered then this
  *    returns -ETIMEOUT.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   multiwaiter_wait(Timeout                  *timeout,
                    MultiWaiter               waiter,
                    struct EventWaiterSource *events,
