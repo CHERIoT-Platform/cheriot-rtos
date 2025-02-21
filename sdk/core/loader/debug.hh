@@ -28,9 +28,7 @@ namespace
 		/// Concept for something that can be lazily called to produce a bool.
 		template<typename T>
 		concept LazyAssertion = requires(T v) {
-			{
-				v()
-			} -> IsBool;
+			{ v() } -> IsBool;
 		};
 	} // namespace DebugConcepts
 

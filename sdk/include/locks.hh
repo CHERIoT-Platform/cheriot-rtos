@@ -237,19 +237,13 @@ using FlagLockPriorityInherited = FlagLockGeneric<true>;
 
 template<typename T>
 concept Lockable = requires(T l) {
-	{
-		l.lock()
-	};
-	{
-		l.unlock()
-	};
+	{ l.lock() };
+	{ l.unlock() };
 };
 
 template<typename T>
 concept TryLockable = Lockable<T> && requires(T l, Timeout *t) {
-	{
-		l.try_lock(t)
-	} -> std::same_as<bool>;
+	{ l.try_lock(t) } -> std::same_as<bool>;
 };
 
 static_assert(TryLockable<NoLock>);

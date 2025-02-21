@@ -1249,9 +1249,7 @@ namespace CHERI
 	 */
 	template<typename T>
 	concept IsSmartPointerLike = requires(T b) {
-		{
-			b.get()
-		} -> IsPointer;
+		{ b.get() } -> IsPointer;
 	} && requires(T b) { b = b.get(); };
 
 	/**

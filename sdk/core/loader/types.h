@@ -282,12 +282,8 @@ namespace loader
 	 */
 	template<typename T>
 	concept RawAddressRange = requires(T range) {
-		{
-			range.size()
-		} -> IsAddress;
-		{
-			range.start()
-		} -> IsAddress;
+		{ range.size() } -> IsAddress;
+		{ range.start() } -> IsAddress;
 	};
 
 	/**

@@ -259,8 +259,8 @@
   type, compartment, keyName, name, initialiser, ...)                          \
 	extern __if_cxx("C") int __sealing_key_##compartment##_##keyName __asm(    \
 	  "__export.sealing_type." #compartment "." #keyName);                     \
-	__attribute__((section(".sealed_objects"), used))                          \
-	__if_cxx(inline) struct __##name##_type                                    \
+	__attribute__((section(".sealed_objects"), used)) __if_cxx(                \
+	  inline) struct __##name##_type                                           \
 	  name = /* NOLINT(bugprone-macro-parentheses) */                          \
 	  {(uint32_t) & __sealing_key_##compartment##_##keyName,                   \
 	   0,                                                                      \
