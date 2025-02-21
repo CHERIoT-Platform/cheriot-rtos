@@ -23,7 +23,7 @@
 		__asm(".ifndef " mangledName "\n"                                      \
 		      "  .type     " mangledName ",@object\n"                          \
 		      "  .section  .compartment_imports." #name                        \
-		      ",\"awG\",@progbits," #name ",comdat\n"                          \
+		      ",\"awG\",@progbits," mangledName ",comdat\n"                    \
 		      "  .globl    " mangledName "\n"                                  \
 		      "  .p2align  3\n" mangledName ":\n"                              \
 		      "  .word " #prefix #name "\n"                                    \
