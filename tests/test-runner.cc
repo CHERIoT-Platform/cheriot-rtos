@@ -121,6 +121,7 @@ int __cheri_compartment("test_runner") run_tests()
 	debug_log("Trying to print unsigned 32-bit integer: {}", 0x12345U);
 	debug_log("Trying to print unsigned 64-bit integer: {}",
 	          0x123456789012345ULL);
+	debug_log("Trying to print function pointer {}", compartment_error_handler);
 	const char *testString = "Hello, world! with some trailing characters";
 	// Make sure that we don't print the trailing characters
 	debug_log("Trying to print std::string_view: {}",
