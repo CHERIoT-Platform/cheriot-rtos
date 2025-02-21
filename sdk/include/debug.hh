@@ -388,7 +388,7 @@ struct DebugFormatArgumentAdaptor<T>
 	__always_inline static DebugFormatArgument construct(T value)
 	{
 		return {reinterpret_cast<uintptr_t>(
-		          static_cast<const volatile void *>(value)),
+		          reinterpret_cast<const volatile void *>(value)),
 		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };
