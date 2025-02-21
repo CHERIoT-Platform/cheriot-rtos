@@ -111,7 +111,7 @@ __sealingkey_dynamic:
 /**
  * An in-assembler implementation of
  *
- * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
+ * [[cheriot::interrupt_state(disabled)]] void *__cheri_libcall
  * token_obj_unseal(struct SKeyStruct *, void* __sealed_capability);
  *
  * The name has been manually mangled as per the C++ rules.
@@ -135,7 +135,7 @@ _Z16token_obj_unsealP10SKeyStructU19__sealed_capabilityPv:
 /**
  * An in-assembler implementation of
  *
- * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
+ * [[cheriot::interrupt_state(disabled)]] void *__cheri_libcall
  * token_obj_unseal_static(struct SKeyStruct *, struct SObjStruct *);
  *
  * The name has been manually mangled as per the C++ rules.
@@ -150,7 +150,7 @@ _Z23token_obj_unseal_staticP10SKeyStructU19__sealed_capabilityPv:
 /**
  * An in-assembler implementation of
  *
- * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
+ * [[cheriot::interrupt_state(disabled)]] void *__cheri_libcall
  * token_obj_unseal_dynamic(struct SKeyStruct *, struct SObjStruct *);
  *
  * The name has been manually mangled as per the C++ rules.

@@ -12,7 +12,7 @@
  * (-ENOTENOUGHSTACK, -ENOTENOUGHTRUSTEDSTACK) if it cannot be invoked, or
  * possibly -ECOMPARTMENTFAIL if the software revoker compartment is damaged.
  */
-[[cheri::interrupt_state(disabled)]] __cheri_compartment(
+[[cheriot::interrupt_state(disabled)]] __cheri_compartment(
   "software_revoker") int revoker_tick();
 
 /**

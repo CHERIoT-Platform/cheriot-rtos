@@ -41,7 +41,7 @@ enum [[clang::flag_enum]] FutexWaitFlags
  *  - `-EINVAL` if the arguments are invalid.
  *  - `-ETIMEOUT` if the timeout expires.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   futex_timed_wait(Timeout        *ticks,
                    const uint32_t *address,
                    uint32_t        expected,
@@ -75,5 +75,5 @@ __always_inline static int futex_wait(const uint32_t *address,
  * The return value for a successful call is the number of threads that were
  * woken.  `-EINVAL` is returned for invalid arguments.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   futex_wake(uint32_t *address, uint32_t count);

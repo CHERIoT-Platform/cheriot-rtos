@@ -24,7 +24,7 @@ This is the kind of isolation that device drivers typically provide in operating
  - It provides useful interfaces to the underlying hardware that abstract over its implementation.
  - It protects the hardware interfaces from use by arbitrary software on the system.
 
-Note in addition that we've added one more attribute to the function exposed here: `[[cheri::interrupt_state(disabled)]]`.
+Note in addition that we've added one more attribute to the function exposed here: `[[cheriot::interrupt_state(disabled)]]`.
 This means that the uart compartment will write the entire string to the UART, so two different threads writing to it will not interfere.
 This is not ideal for something like a `write` function, which can take a caller-controlled amount of time to complete, because it prevents any other thread from making progress, even ones that don't touch the uart.
 

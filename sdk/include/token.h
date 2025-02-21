@@ -84,7 +84,7 @@ __cheri_compartment("allocator")
  * `token_obj_unseal_dynamic` and returning the result of the first one that
  * succeeds, or null if both fail.
  */
-[[cheri::interrupt_state(disabled)]] void *
+[[cheriot::interrupt_state(disabled)]] void *
   __cheri_libcall token_obj_unseal(SKey, CHERI_SEALED(void *));
 
 /**
@@ -97,7 +97,7 @@ __cheri_compartment("allocator")
  * Returns the unsealed object if the key and object are valid and of the
  * correct type, null otherwise.
  */
-[[cheri::interrupt_state(disabled)]] void *
+[[cheriot::interrupt_state(disabled)]] void *
   __cheri_libcall token_obj_unseal_static(SKey, CHERI_SEALED(void *));
 
 /**
@@ -111,7 +111,7 @@ __cheri_compartment("allocator")
  * Returns the unsealed object if the key and object are valid and of the
  * correct type, null otherwise.
  */
-[[cheri::interrupt_state(disabled)]] void *
+[[cheriot::interrupt_state(disabled)]] void *
   __cheri_libcall token_obj_unseal_dynamic(SKey, CHERI_SEALED(void *));
 
 /**
