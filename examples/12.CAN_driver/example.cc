@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <compartment.h>
+#include <cstdint>
 #include <debug.hh>
 #include <thread.h>
 #include <platform/sunburst/platform-gpio.hh>
@@ -183,6 +184,34 @@ eERRORRESULT configure_mcp251xfd_on_can1() {
 	return result;
 }
 
+// Transmit a message to MCP251XFD device on EXT1
+//=============================================================================
+eERRORRESULT transmit_message_from_ext1_txq()
+{
+	static uint32_t messageSeq = 0;
+	eERRORRESULT ret = ERR_OK;
+	eMCP251XFD_FIFOstatus fifoStatus = MCP251XFD_TX_FIFO_FULL;
+	ret = MCP251XFD_GetFIFOStatus(&can1, MCP251XFD_TXQ, &fifoStatus); // First get FIFO2 status
+	if (ret != ERR_OK) { 
+		return ret;
+	}
+	if ((fifoStatus & MCP251XFD_TX_FIFO_NOT_FULL) > 0) // Second check FIFO not full
+	{
+		MCP251XFD_CANMessage tansmitMessage;
+		//***** Fill the message as you want *****
+		uint8_t txPayloadData[64] = {0xde, 0xad, 0xbe, 0xef, static_cast<uint8_t>((messageSeq >> 24) & 0x0ff), static_cast<uint8_t>((messageSeq >> 16) & 0x0ff), static_cast<uint8_t>((messageSeq >> 8) & 0x0ff), static_cast<uint8_t>(messageSeq & 0x0ff)}; // In this example, the FIFO1 have 64 bytes of payload
+		tansmitMessage.MessageID = 0x0300;
+		tansmitMessage.MessageSEQ = messageSeq;
+		tansmitMessage.ControlFlags = MCP251XFD_CAN20_FRAME;
+		tansmitMessage.DLC = MCP251XFD_DLC_8BYTE;
+		tansmitMessage.PayloadData = &txPayloadData[0];
+		// Send message and flush
+		ret = MCP251XFD_TransmitMessageToFIFO(&can1, &tansmitMessage, MCP251XFD_TXQ, true);
+		messageSeq++;
+	}
+	return ret;
+}
+
 //=============================================================================
 // Receive a message from MCP251XFD device on EXT1
 //=============================================================================
@@ -227,11 +256,18 @@ void __cheri_compartment("main_comp") main_entry()
 		Debug::log("ERROR! ConfigureMCP251XFDonCAN1() failed with {}.", result);
 	}
 
+	uint8_t txCnt = 0;
 	while(true) {
 		receive_message_from_ext1_fifo(MCP251XFD_FIFO1);
 		receive_message_from_ext1_fifo(MCP251XFD_FIFO2);
 		receive_message_from_ext1_fifo(MCP251XFD_FIFO3);
 		receive_message_from_ext1_fifo(MCP251XFD_FIFO4);
 		thread_millisecond_wait(10);
+		if(txCnt > 100) {
+			transmit_message_from_ext1_txq();
+			txCnt = 0;
+		} else {
+			txCnt++;
+		}
 	}
 }

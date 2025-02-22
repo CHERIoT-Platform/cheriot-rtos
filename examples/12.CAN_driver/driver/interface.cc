@@ -25,15 +25,15 @@
 
 using Debug = ConditionalDebug<true, "Interface.cc">;
 
-eERRORRESULT GetSpiConfig(Spi_Config_t* cfg, uint8_t spi_num, SonataPinmux::PinSink cs0, SonataPinmux::PinSink cs1, SonataPinmux::PinSink cs2, SonataPinmux::PinSink sclk, SonataPinmux::PinSink copi, uint8_t cipo) {
-    if(spi_num == 1) {
+eERRORRESULT GetSpiConfig(Spi_Config_t* cfg, uint8_t spiNum, SonataPinmux::PinSink cs0, SonataPinmux::PinSink cs1, SonataPinmux::PinSink cs2, SonataPinmux::PinSink sclk, SonataPinmux::PinSink copi, uint8_t cipo) {
+    if(spiNum == 1) {
         cfg->spi = MMIO_CAPABILITY(SonataSpi::Generic<>, spi1);    // Access to the SPI1 module
-    } else if(spi_num == 2) {
+    } else if(spiNum == 2) {
         cfg->spi = MMIO_CAPABILITY(SonataSpi::Generic<>, spi2);    // Access to the SPI2 module
     } else {
         return ERR__SPI_PARAMETER_ERROR;
     }
-    if(spi_num == 1) {
+    if(spiNum == 1) {
         // SCLK
         if((sclk == SonataPinmux::PinSink::rph_g11) || (sclk == SonataPinmux::PinSink::ah_tmpio13)) {
             cfg->sclk_sel = 1;
@@ -81,7 +81,7 @@ eERRORRESULT GetSpiConfig(Spi_Config_t* cfg, uint8_t spi_num, SonataPinmux::PinS
         } else {
             return ERR__SPI_PARAMETER_ERROR;
         }
-    } else if(spi_num == 2) {
+    } else if(spiNum == 2) {
         // SCLK
         if((sclk == SonataPinmux::PinSink::rph_g21) || (sclk == SonataPinmux::PinSink::mb2)) {
             cfg->sclk_sel = 1;
@@ -136,7 +136,7 @@ eERRORRESULT GetSpiConfig(Spi_Config_t* cfg, uint8_t spi_num, SonataPinmux::PinS
     } else {
         return ERR__SPI_PARAMETER_ERROR;
     }
-    cfg->spi_num = spi_num;
+    cfg->spi_num = spiNum;
     cfg->cs0 = cs0;
     cfg->cs1 = cs1;
     cfg->sclk = sclk;
@@ -178,7 +178,7 @@ uint16_t ComputeCRC16_Sonata(const uint8_t* data, size_t size)
 //=============================================================================
 // MCP251XFD SPI driver interface configuration for the Sonata
 //=============================================================================
-eERRORRESULT MCP251XFD_InterfaceInit_Sonata(void *pIntDev, uint8_t chipSelect, const uint32_t sckFreq)
+eERRORRESULT MCP251XFD_InterfaceInit_Sonata(void *pIntDev, uint8_t chipSelect, const uint32_t SckFreq)
 {
     // Initialises the hardware interface.
     // Written - 2025-01-21
