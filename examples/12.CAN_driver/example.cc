@@ -4,12 +4,12 @@
 #include <compartment.h>
 #include <debug.hh>
 #include <thread.h>
-#include <platform-gpio.hh>
-#include <platform-pinmux.hh>
-#include <platform-spi.hh>
-#include "driver/ErrorsDef.h"
-#include "driver/Conf_MCP251XFD.h"
-#include "driver/MCP251XFD.hh"
+#include <platform/sunburst/platform-gpio.hh>
+#include <platform/sunburst/platform-pinmux.hh>
+#include <platform/sunburst/platform-spi.hh>
+#include <driver/MCP251XFD/ErrorsDef.h>
+#include <driver/MCP251XFD/Conf_MCP251XFD.h>
+#include <driver/MCP251XFD/MCP251XFD.hh>
 #include "driver/interface.hh"
 
 #define TIMESTAMP_TICK_us ( MS_PER_TICK * 1000L ) // Tickrate in us (MS_PER_TICK * 1000)
@@ -130,7 +130,7 @@ eERRORRESULT ConfigureMCP251XFDonCAN1() {
 
 	// Configure the CAN device
 	Debug::log("GetSpiConfig()");
-	result = GetSpiConfig(&cfg_can1, 1, SonataPinmux::OutputPin::rph_g8, SonataPinmux::OutputPin::ser0_tx, SonataPinmux::OutputPin::ser0_tx, SonataPinmux::OutputPin::rph_g11, SonataPinmux::OutputPin::rph_g10, 1);
+	result = GetSpiConfig(&cfg_can1, 1, SonataPinmux::PinSink::rph_g8, SonataPinmux::PinSink::ser0_tx, SonataPinmux::PinSink::ser0_tx, SonataPinmux::PinSink::rph_g11, SonataPinmux::PinSink::rph_g10, 1);
 	if(result != ERR_OK) {
 		Debug::log("ERROR! GetSpiConfig() failed with {}.", result);
 	}
