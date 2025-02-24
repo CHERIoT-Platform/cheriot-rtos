@@ -5,8 +5,20 @@ SPDX-License-Identifier: Apache-2.0
 # MCP251XFD Driver and Example
 
 This code contains an implementation of an MCP251XFD SPI to CAN driver.
-We are using
-* [Emandhal's generic driver](https://github.com/Emandhal/MCP251XFD) is fully featured and designed to run on any embedded platform. It claims to implement every feature of the MCP2518FD and MCP2517FD (including auto detection of the specific model type). There is fully documentation but we've found it diffficult to read in places. How much conversion will be required is unknown at this time. This is for little endian devices only, fortunately RISCV is little endian. This driver is alos designed to allow for multiple instances, with instance information being passed to each function as a struct.
+We are using:
+
+[Emandhal's generic MCP251XFD driver](https://github.com/Emandhal/MCP251XFD) is fully featured and designed to run on any embedded platform. It claims to implement every feature of the MCP2518FD and MCP2517FD (including auto detection of the specific model type). There is fully documentation but we've found it diffficult to read in places. This is for little endian devices only, fortunately RISCV is little endian. This driver is alos designed to allow for multiple instances, with instance information being passed to each function as a struct.
+
+## What this code Does
+This code opens the CAN interface as CAN2.0 at 500kbps. It writes message ID 300 with some dynamic data on the TXQ. It has for filters configured to receive data:
+1. FIFO 1: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x000..0x1FF.
+2. FIFO 2: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x200..0x3FF0.
+3. FIFO 3: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x400..0x5FF.
+4. FIFO 4: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x600..0x7FF.
+Since a lower ID has higher priority, you could use this to read priority data first.
+Dat read back is displayed in a simple form on the serial line using the debug output.
+
+We have configured FIFO 5 to FIFO 8 as transmit FIFOs but we are not using them in this example.
 
 ## Hardware Design
 * We will be using the [Waveshare 2-CH CAN FD HAT](https://www.waveshare.com/wiki/2-CH_CAN_FD_HAT) for the purposes of testing.
@@ -19,9 +31,9 @@ We are using
 * Our target SPI clock rate is 1Mbps.
 
 ## Notes
-* We will use the pinmux to enable the RPi ports to connect to the SPI modules and then we will activate the modules.
+* We use the pinmux to enable the RPi ports to connect to the SPI modules and then we will activate the modules.
 * SPI0 is connected to other devices. Only SPI1 and SPI2 are connected to the RPi header. So SPI1 is connected to RPi SPI0 and SPI2 is connected to RPi SPI1 (confused yet?)
-* The SPI interrupts weren't working when we wrote this so this example doesn't use them yet.
+* The SPI interrupts weren't working when we first wrote this example, although they do now work so we could update.
 
 ## SPI Pins Required
 We're going to run each CAN ona separate SPI to reduce the risk of accidental cross-talk.
@@ -80,4 +92,3 @@ data)
 same size
     * Returns an #eERRORRESULT value enum
 
-This does a lot of casting enums to ints and has required quite a bit of work to get to even compile. When it runs it fails with a TAG error immediately. Puzzling.
