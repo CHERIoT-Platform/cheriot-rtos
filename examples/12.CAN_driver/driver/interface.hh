@@ -20,6 +20,7 @@ extern "C" {
 #include <platform/sunburst/platform-spi.hh>
 #include <platform/sunburst/platform-gpio.hh>
 #include <platform/sunburst/platform-pinmux.hh>
+#include <driver/MCP251XFD/MCP251XFD.hh>
 
 struct Spi_Config {
     volatile SonataSpi::Generic<> *spi;

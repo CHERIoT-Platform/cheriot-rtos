@@ -14,8 +14,6 @@ compartment("main_comp")
     add_deps("freestanding", "debug")
     add_files("example.cc")
     add_files("driver/interface.cc")
-    add_files("../../sdk/include/driver/MCP251XFD/MCP251XFD.cc")
---    add_files("../../sdk/include/driver/MCP251XFD/crc/CRC16_CMS.cc")
 
 -- Firmware image for the example.
 firmware("mcp251xfd")

@@ -157,6 +157,7 @@ uint32_t GetCurrentms_Sonata(void)
     uint32_t msCount = static_cast<uint32_t>(cycles) * MS_PER_TICK;    // Driver is not bothered by it wrapping (apprently).
     return msCount;
 }
+
 //=============================================================================
 // MCP251XFD_X compute CRC16-CMS
 //=============================================================================
@@ -174,6 +175,7 @@ uint16_t ComputeCRC16_Sonata(const uint8_t* data, size_t size)
     // Tested - 
     return ComputeCRC16CMS(data, size);
 }
+
 //*******************************************************************************************************************
 //=============================================================================
 // MCP251XFD SPI driver interface configuration for the Sonata
