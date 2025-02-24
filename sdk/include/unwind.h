@@ -2,6 +2,7 @@
 #include <cdefs.h>
 #include <setjmp.h>
 #include <switcher.h>
+#include <thread.h>
 
 /**
  * On-stack linked list of cleanup handlers.
@@ -25,11 +26,13 @@ struct CleanupList
  */
 __always_inline static inline struct CleanupList **cleanup_list_head()
 {
-	void     *csp = __builtin_cheri_stack_get();
-	ptraddr_t top = __builtin_cheri_top_get(csp);
-	csp           = __builtin_cheri_address_set(
-	            csp, top - INVOCATION_LOCAL_UNWIND_LIST_OFFSET);
-	return (struct CleanupList **)csp;
+	static const size_t InvocationLocalUnwindListOffset =
+	  INVOCATION_LOCAL_UNWIND_LIST_OFFSET / sizeof(void *) - 1;
+	_Static_assert(InvocationLocalUnwindListOffset == 0,
+	               "unwind.h should be using invocation state slot 0");
+
+	return (struct CleanupList **)invocation_state_slot(
+	  InvocationLocalUnwindListOffset);
 }
 
 /**

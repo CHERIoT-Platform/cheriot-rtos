@@ -37,7 +37,7 @@ This attribute can also be used via the `__cheri_callback` macro, which allows i
 
 ## Interrupt state control
 
-The `cheri_interrupt_state` attribute (commonly used as a C++11 / C23 attribute spelled `cheri::interrupt_state`) is applied to functions and takes an argument that is either:
+The `cheri_interrupt_state` attribute (commonly used as a C++11 / C23 attribute spelled `cheriot::interrupt_state`) is applied to functions and takes an argument that is either:
 
  - `enabled`, to enable interrupts when calling this function.
  - `disabled`, to disable interrupts when calling this function.

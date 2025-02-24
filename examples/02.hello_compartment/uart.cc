@@ -9,7 +9,7 @@
 using Debug = ConditionalDebug<true, "UART compartment">;
 
 /// Write a message to the UART.
-[[cheri::interrupt_state(disabled)]] int write(const char *msg)
+[[cheriot::interrupt_state(disabled)]] int write(const char *msg)
 {
 	// Print the message.
 	Debug::log("{}", msg);

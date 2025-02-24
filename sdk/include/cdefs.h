@@ -141,6 +141,11 @@ using _Bool = bool;
 #	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
 #endif
 
+#if (defined(__CHERIOT__) && __CHERIOT__ < 20250113) ||                        \
+  (defined(__CHERIOT_BAREMETAL__) && __CHERIOT_BAREMETAL__ < 20250113)
+#	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
+#endif
+
 #define CHERIOT_VERSION_TRIPLE(major, minor, patch)                            \
 	((major * 10000) + (minor * 100) + (patch))
 

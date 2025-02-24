@@ -1342,7 +1342,7 @@ namespace CHERI
 	 * Invokes the passed callable object with interrupts disabled.
 	 */
 	template<typename T>
-	[[cheri::interrupt_state(disabled)]] auto with_interrupts_disabled(T &&fn)
+	[[cheriot::interrupt_state(disabled)]] auto with_interrupts_disabled(T &&fn)
 	{
 		return fn();
 	}
@@ -1407,7 +1407,7 @@ namespace CHERI
 	};
 
 	/**
-	 * Register numbers as reported in cap idx field of  `mtval` CSR when
+	 * Register numbers as reported in thee cap idx field of `mtval` CSR when
 	 * a CHERI exception is taken. Values less than 32 refer to general
 	 * purpose registers and others to SCRs (of these, only PCC can actually
 	 * cause an exception).
@@ -1448,6 +1448,7 @@ namespace CHERI
 		/**
 		 * `$c6` / `$ct1` used by the ABI as temporary register.
 		 * Not preserved across calls.
+		 * Used by cross-compartment call as target import entry.
 		 */
 		CT1 = CheriRegisterNumberCT1,
 		/**
