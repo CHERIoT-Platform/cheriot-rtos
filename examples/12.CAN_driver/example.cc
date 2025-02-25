@@ -33,7 +33,7 @@ MCP251XFD::MCP251XFD can1 = {
 	.fnComputeCRC16 = ComputeCRC16_Sonata	//!< This function will be called when a CRC16-CMS computation is needed (ie. in CRC mode or Safe Write). In normal mode, this can point to NULL
 };
 
-MCP251XFD::MCP251XFD_Config can_conf1 =
+MCP251XFD::MCP251XFD_Config can1Conf =
 {
 	//--- Controller clocks ---
 	.XtalFreq = 40000000UL, // 40Mhz                 //!< Component CLKIN Xtal/Resonator frequency (min 4MHz, max 40MHz). Set it to 0 if oscillator is used
@@ -115,12 +115,12 @@ MCP251XFD::MCP251XFD_FIFO mcP251XfdExt1FifOlist[MCP251XFD_EXT1_FIFO_COUNT] =
 };
 
 #define MCP251XFD_EXT1_FILTER_COUNT 4
-MCP251XFD::MCP251XFD_Filter MCP251XFD_Ext1_FilterList[MCP251XFD_EXT1_FILTER_COUNT] =
+MCP251XFD::MCP251XFD_Filter mcp251xfdExt1FilterList[MCP251XFD_EXT1_FILTER_COUNT] =
 {
  { .Filter = MCP251XFD::MCP251XFD_FILTER0, .EnableFilter = true, .Match = MCP251XFD::MCP251XFD_MATCH_ONLY_SID, .PointTo = MCP251XFD::MCP251XFD_FIFO1, .AcceptanceID = 0x000, .AcceptanceMask = 0x600, }, // 0x000..0x1FF
  { .Filter = MCP251XFD::MCP251XFD_FILTER1, .EnableFilter = true, .Match = MCP251XFD::MCP251XFD_MATCH_ONLY_SID, .PointTo = MCP251XFD::MCP251XFD_FIFO2, .AcceptanceID = 0x200, .AcceptanceMask = 0x600 }, // 0x200..0x3FF
  { .Filter = MCP251XFD::MCP251XFD_FILTER2, .EnableFilter = true, .Match = MCP251XFD::MCP251XFD_MATCH_ONLY_SID, .PointTo = MCP251XFD::MCP251XFD_FIFO3, .AcceptanceID = 0x400, .AcceptanceMask = 0x600 }, // 0x400..0x5FF
- { .Filter = MCP251XFD::MCP251XFD_FILTER3, .EnableFilter = true, .Match = MCP251XFD::MCP251XFD_MATCH_ONLY_SID, .PointTo = MCP251XFD::MCP251XFD_FIFO4, .AcceptanceID = 0x600, .AcceptanceMask = 0x600 }, // 0x600..0x7FF
+ { .Filter = MCP251XFD::MCP251XFD_FILTER3, .EnableFilter = true, .Match = MCP251XFD::MCP251XFD_MATCH_SID_EID, .PointTo = MCP251XFD::MCP251XFD_FIFO4, .AcceptanceID = MCP251XFD_ACCEPT_ALL_MESSAGES, .AcceptanceMask = MCP251XFD_ACCEPT_ALL_MESSAGES }, // Everything else
 };
 
 eERRORRESULT configure_mcp251xfd_on_can1() {
@@ -135,7 +135,7 @@ eERRORRESULT configure_mcp251xfd_on_can1() {
 
 	Debug::log("Init_MCP251XFD()");
 	thread_millisecond_wait(300);	// A short delay for clock to stablise (only need to be 3ms so 300ms should be more than enough)
-	result = Init_MCP251XFD(&can1, &can_conf1);
+	result = Init_MCP251XFD(&can1, &can1Conf);
 	if(result != ERR_OK) {
 		Debug::log("ERROR! Init_MCP251XFD() failed with {}.", result);
 	}
@@ -158,7 +158,7 @@ eERRORRESULT configure_mcp251xfd_on_can1() {
 	Debug::log("MCP251XFD_ConfigureFIFOList() done.");
 
 	Debug::log("MCP251XFD_ConfigureFilterList()");
-	result = MCP251XFD_ConfigureFilterList(&can1, MCP251XFD::MCP251XFD_D_NET_FILTER_DISABLE, &MCP251XFD_Ext1_FilterList[0], MCP251XFD_EXT1_FILTER_COUNT);
+	result = MCP251XFD_ConfigureFilterList(&can1, MCP251XFD::MCP251XFD_D_NET_FILTER_DISABLE, &mcp251xfdExt1FilterList[0], MCP251XFD_EXT1_FILTER_COUNT);
 	if(result != ERR_OK) {
 		Debug::log("ERROR! MCP251XFD_ConfigureFilterList() failed with {}.", result);
 	}
