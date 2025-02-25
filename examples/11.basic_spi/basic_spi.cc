@@ -8,8 +8,8 @@
 #include <platform/sunburst/platform-pinmux.hh>
 #include <platform/sunburst/platform-spi.hh>
 
-// If defined then we will also attempt to include an example using blocking_transfer(const uint8_t txData[], uint8_t rxData[], uint16_t len)
-// It hasn't been added to platform-spi.hh yet but I have it working in some test code.
+// If defined then we will also attempt to include an example using blocking_transfer()
+// else will use the blocking_write() and blocking_read().
 #define SPI_TRANSFER_TEST
 
 // The SPI clock calculation
