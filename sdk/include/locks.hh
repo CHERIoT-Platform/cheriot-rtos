@@ -170,8 +170,7 @@ class RecursiveMutex
  * A simple ticket lock.
  *
  * A ticket lock ensures that threads that arrive are serviced in order,
- * without regard for priorities.  It has no mechanism for tracking tickets
- * that are discarded and so does not implement a `try_lock` API.
+ * without regard for priorities.
  */
 class TicketLock
 {
@@ -184,6 +183,15 @@ class TicketLock
 	__always_inline void lock()
 	{
 		ticketlock_lock(&state);
+	}
+
+	/**
+	 * Try to acquire the lock, returns true if the lock was acquired, false
+	 * otherwise.
+	 */
+	__always_inline bool try_lock(Timeout *timeout)
+	{
+		return ticketlock_trylock(timeout, &state) == 0;
 	}
 
 	/**
