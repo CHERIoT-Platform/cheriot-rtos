@@ -6,7 +6,6 @@
 #include <platform/sunburst/platform-pinmux.hh>
 #include <platform/sunburst/platform-spi.hh>
 #include <driver/MCP251XFD/ErrorsDef.h>
-//#include <driver/MCP251XFD/Conf_MCP251XFD.h>
 #include <driver/MCP251XFD/crc/CRC16_CMS.hh>
 #include <driver/MCP251XFD/MCP251XFD.hh>
 #include "interface.hh"
