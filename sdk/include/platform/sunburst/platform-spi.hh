@@ -320,8 +320,8 @@ namespace SonataSpi
 
 
 		/*
-		* Sends `len` bytes from the given `data` buffer &
-		* receives `len` bytes and puts them in the `data` buffer,
+		* Sends `len` bytes from the given `txData` buffer &
+		* receives `len` bytes and puts them in the `rxData` buffer,
 		* where `len` is at most `0x7ff`.
 		*
 		* This method will block until the requested number of bytes
@@ -346,7 +346,7 @@ namespace SonataSpi
 				while(rxCnt < len)
 				{
 					// Wait for at least one byte to be available in the RX FIFO
-					if((txCnt < len) && ((status & StatusTxFifoLevel) < 8)) {
+					if((txCnt < len) && (!(status & StatusTxFifoFull))) {
 						if(txData != NULL) {
 							transmitFifo = txData[txCnt];
 						} else {
