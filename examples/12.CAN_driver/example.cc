@@ -181,11 +181,12 @@ eERRORRESULT configure_mcp251xfd_on_can1() {
 	return result;
 }
 
+static uint32_t txMessageSeq = 0;
+
 // Transmit a message to MCP251XFD device on EXT1
 //=============================================================================
 eERRORRESULT transmit_message_from_ext1_txq()
 {
-	static uint32_t messageSeq = 0;
 	eERRORRESULT ret = ERR_OK;
 	MCP251XFD::eMCP251XFD_FIFOstatus fifoStatus = MCP251XFD::MCP251XFD_TX_FIFO_FULL;
 	ret = MCP251XFD_GetFIFOStatus(&can1, MCP251XFD::MCP251XFD_TXQ, &fifoStatus); // First get FIFO2 status
@@ -196,15 +197,42 @@ eERRORRESULT transmit_message_from_ext1_txq()
 	{
 		MCP251XFD::MCP251XFD_CANMessage tansmitMessage;
 		//***** Fill the message as you want *****
-		uint8_t txPayloadData[64] = {0xde, 0xad, 0xbe, 0xef, static_cast<uint8_t>((messageSeq >> 24) & 0x0ff), static_cast<uint8_t>((messageSeq >> 16) & 0x0ff), static_cast<uint8_t>((messageSeq >> 8) & 0x0ff), static_cast<uint8_t>(messageSeq & 0x0ff)}; // In this example, the FIFO1 have 64 bytes of payload
+		uint8_t txPayloadData[64] = {0xde, 0xad, 0xbe, 0xef, static_cast<uint8_t>((txMessageSeq >> 24) & 0x0ff), static_cast<uint8_t>((txMessageSeq >> 16) & 0x0ff), static_cast<uint8_t>((txMessageSeq >> 8) & 0x0ff), static_cast<uint8_t>(txMessageSeq & 0x0ff)}; // In this example, the FIFO1 have 64 bytes of payload
 		tansmitMessage.MessageID = 0x0300;
-		tansmitMessage.MessageSEQ = messageSeq;
+		tansmitMessage.MessageSEQ = txMessageSeq;
 		tansmitMessage.ControlFlags = MCP251XFD::MCP251XFD_CAN20_FRAME;
 		tansmitMessage.DLC = MCP251XFD::MCP251XFD_DLC_8BYTE;
 		tansmitMessage.PayloadData = &txPayloadData[0];
 		// Send message and flush
 		ret = MCP251XFD_TransmitMessageToFIFO(&can1, &tansmitMessage, MCP251XFD::MCP251XFD_TXQ, true);
-		messageSeq++;
+		txMessageSeq++;
+	}
+	return ret;
+}
+
+// Transmit a message to MCP251XFD device on EXT1
+//=============================================================================
+eERRORRESULT transmit_message_from_ext1_txq2()
+{
+	eERRORRESULT ret = ERR_OK;
+	MCP251XFD::eMCP251XFD_FIFOstatus fifoStatus = MCP251XFD::MCP251XFD_TX_FIFO_FULL;
+	ret = MCP251XFD_GetFIFOStatus(&can1, MCP251XFD::MCP251XFD_TXQ, &fifoStatus); // First get FIFO2 status
+	if (ret != ERR_OK) { 
+		return ret;
+	}
+	if ((fifoStatus & MCP251XFD::MCP251XFD_TX_FIFO_NOT_FULL) > 0) // Second check FIFO not full
+	{
+		MCP251XFD::MCP251XFD_CANMessage tansmitMessage;
+		//***** Fill the message as you want *****
+		uint8_t txPayloadData[64] = {0xfe, 0xed, 0xbe, 0xef, static_cast<uint8_t>((txMessageSeq >> 24) & 0x0ff), static_cast<uint8_t>((txMessageSeq >> 16) & 0x0ff), static_cast<uint8_t>((txMessageSeq >> 8) & 0x0ff), static_cast<uint8_t>(txMessageSeq & 0x0ff)}; // In this example, the FIFO1 have 64 bytes of payload
+		tansmitMessage.MessageID = 0x150300;
+		tansmitMessage.MessageSEQ = txMessageSeq;
+		tansmitMessage.ControlFlags = MCP251XFD::MCP251XFD_EXTENDED_MESSAGE_ID;
+		tansmitMessage.DLC = MCP251XFD::MCP251XFD_DLC_8BYTE;
+		tansmitMessage.PayloadData = &txPayloadData[0];
+		// Send message and flush
+		ret = MCP251XFD_TransmitMessageToFIFO(&can1, &tansmitMessage, MCP251XFD::MCP251XFD_TXQ, true);
+		txMessageSeq++;
 	}
 	return ret;
 }
@@ -263,6 +291,9 @@ void __cheri_compartment("main_comp") main_entry()
 		if(txCnt > 100) {
 			transmit_message_from_ext1_txq();
 			txCnt = 0;
+		} else if(txCnt == 50) {
+			transmit_message_from_ext1_txq2();
+			txCnt++;
 		} else {
 			txCnt++;
 		}
