@@ -1,7 +1,3 @@
-<!--
-Copyright lowRISC Contributors.
-SPDX-License-Identifier: Apache-2.0
--->
 # Basic SPI Tests
 
 This will set up two SPI ports on the RPi header to query 2 MCP2518FD CAN controllers. This code won't fully drive them, instead it will just read one of the registers.
