@@ -191,7 +191,8 @@ namespace
 	                                 uint32_t                   epoch,
 	                                 LockGuard<decltype(lock)> &g,
 	                                 T                         &r = revoker)
-	    requires(Revocation::SupportsInterruptNotification<T>)
+	    requires(Revocation::SupportsInterruptNotification<T> &&
+	             Revocation::Revoker::IsAsynchronous)
 	{
 		// Release the lock before sleeping
 		g.unlock();
@@ -216,7 +217,8 @@ namespace
 	                                 uint32_t                   epoch,
 	                                 LockGuard<decltype(lock)> &g,
 	                                 T                         &r = revoker)
-	    requires(!Revocation::SupportsInterruptNotification<T>)
+	    requires(!Revocation::SupportsInterruptNotification<T> &&
+	             Revocation::Revoker::IsAsynchronous)
 	{
 		// Yield while until a revocation pass has finished.
 		while (!revoker.has_revocation_finished_for_epoch(epoch))
@@ -224,12 +226,35 @@ namespace
 			// Release the lock before sleeping
 			g.unlock();
 			Timeout smallSleep{1};
-			if (thread_sleep(&smallSleep) < 0)
+			if ((thread_sleep(&smallSleep) < 0) ||
+			    !reacquire_lock(timeout, g, smallSleep.elapsed))
 			{
 				return false;
 			}
-			if (!reacquire_lock(timeout, g, smallSleep.elapsed))
+		}
+		return true;
+	}
+
+	template<typename T = Revocation::Revoker>
+	bool wait_for_background_revoker(Timeout                   *timeout,
+	                                 uint32_t                   epoch,
+	                                 LockGuard<decltype(lock)> &g,
+	                                 T                         &r = revoker)
+	    requires(!Revocation::Revoker::IsAsynchronous)
+	{
+		// Keep kicking the revoker until we've done a complete epoch.
+		// With a synchronous revoker, we need to avoid monopolising the
+		// lock, so drop it and yield after each kick.
+		while (!revoker.has_revocation_finished_for_epoch(epoch))
+		{
+			// Drop and reacquire the lock while yielding.
+			// Sleep for a single tick.
+			g.unlock();
+			Timeout smallSleep{1};
+			if ((thread_sleep(&smallSleep) < 0) ||
+			    !reacquire_lock(timeout, g, smallSleep.elapsed))
 			{
+				/* Unable to sleep; bail out */
 				return false;
 			}
 		}
@@ -305,26 +330,10 @@ namespace
 
 					revoker.system_bg_revoker_kick();
 
-					if constexpr (Revocation::Revoker::IsAsynchronous)
+					if (!wait_for_background_revoker(
+					      timeout, needsRevocation->waitingEpoch, g))
 					{
-						wait_for_background_revoker(
-						  timeout, needsRevocation->waitingEpoch, g);
-					}
-					else
-					{
-						// Drop and reacquire the lock while yielding.
-						// Sleep for a single tick.
-						g.unlock();
-						Timeout smallSleep{1};
-						if (thread_sleep(&smallSleep) < 0)
-						{
-							/* Unable to sleep; bail out */
-							return nullptr;
-						}
-						if (!reacquire_lock(timeout, g, smallSleep.elapsed))
-						{
-							return nullptr;
-						}
+						return nullptr;
 					}
 				}
 				continue;
@@ -863,22 +872,53 @@ __cheriot_minimum_stack(0x90) ssize_t
 	return cap->quota;
 }
 
-__cheriot_minimum_stack(0xd0) int heap_quarantine_empty()
+__cheriot_minimum_stack(0xe0) int heap_quarantine_flush(Timeout *timeout)
 {
-	STACK_CHECK(0xd0);
-	LockGuard g{lock};
-	while (gm->heapQuarantineSize > 0)
+	STACK_CHECK(0xe0);
+
+	if (!check_timeout_pointer(timeout))
 	{
-		if (!gm->quarantine_dequeue())
+		return -EINVAL;
+	}
+
+	if (LockGuard g{lock, timeout})
+	{
+		auto epoch = revoker.system_epoch_get();
+		// Round the epoch up.  Odd epoch numbers indicate in-progress epochs.
+		epoch = (epoch + 1) & ~1U;
+		// If we're using an asynchronous revoker, kick it now.  We'll
+		// probably want to kick it later anyway, so we don't lose anything
+		// by starting it early.
+		if constexpr (Revocation::Revoker::IsAsynchronous)
 		{
 			revoker.system_bg_revoker_kick();
 		}
-		g.unlock();
-		yield();
-		g.lock();
+		// Try removing items from quarantine until we've popped all that
+		// we can.  There may still be quarantine things from the previous
+		// epoch.
+		while (gm->quarantine_dequeue()) {}
+		// If we've emptied the quarantine, stop and report success.
+		if (gm->heapQuarantineSize == 0)
+		{
+			return 0;
+		}
+		// If this is a synchronous revoker, start it running now.
+		if constexpr (!Revocation::Revoker::IsAsynchronous)
+		{
+			revoker.system_bg_revoker_kick();
+		}
+		// Wait for the revocation epoch to expire.
+		if (!wait_for_background_revoker(timeout, epoch, g))
+		{
+			return -ETIMEDOUT;
+		}
+		// Remove everything that was freed with the previous revocation.
+		while (gm->quarantine_dequeue()) {}
+		Debug::log("{} bytes left in quarantine", gm->heapQuarantineSize);
+		return 0;
 	}
 
-	return 0;
+	return -ETIMEDOUT;
 }
 
 __cheriot_minimum_stack(0x220) void *heap_allocate(
