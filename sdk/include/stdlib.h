@@ -291,17 +291,42 @@ ssize_t __cheri_compartment("allocator")
   heap_quota_remaining(AllocatorCapability heapCapability);
 
 /**
- * Block until the quarantine is empty.
+ * Try to empty the quarantine and defragment the heap.
  *
- * This should be used only in testing, to place the system in a quiesced
- * state.  It can block indefinitely if another thread is allocating and
- * freeing memory while this runs.
+ * This will start a revocation sweep and then try to empty the quarantine.  In
+ * normal operation, the allocator will remove a small number of allocations
+ * from quarantine on each allocation.  Allocations are not coalesced until
+ * they are moved from quarantine, so this can cause fragmentation.  If you
+ * have just freed a lot of memory (for example, after resetting a compartment
+ * and calling `heap_free_all`), especially if you have freed a lot of small
+ * allocations, then calling this function will likely reduce fragmentation.
+ *
+ * Calling this function will ensure that all objects freed before the call are
+ * out of quarantine (unless a timeout occurs).  Objects freed concurrently (by
+ * another thread) may remain in quarantine, so this does not guarantee that
+ * the quarantine is empty, only that everything freed by this thread is
+ * removed from quarantine.
  *
  * Returns 0 on success, a compartment invocation failure indication
- * (-ENOTENOUGHSTACK, -ENOTENOUGHTRUSTEDSTACK) if it cannot be invoked, or
- * possibly -ECOMPARTMENTFAIL if the allocator compartment is damaged.
+ * (`-ENOTENOUGHSTACK`, `-ENOTENOUGHTRUSTEDSTACK`) if it cannot be invoked, or
+ * possibly `-ECOMPARTMENTFAIL` if the allocator compartment is damaged.
+ *
+ * Returns `-ETIMEDOUT` if the timeout expires or `-EINVAL` if the timeout is
+ * not valid.
  */
-int __cheri_compartment("allocator") heap_quarantine_empty(void);
+__attribute__((overloadable)) int __cheri_compartment("allocator")
+  heap_quarantine_flush(Timeout *timeout);
+
+/**
+ * Compatibility implementation of `heap_quarantine_empty`.  This should be
+ * used only in debugging and testing because it is not guaranteed to terminate
+ * if another thread is allocating memory.
+ */
+static int heap_quarantine_empty(void)
+{
+	Timeout t = {0, UnlimitedTimeout};
+	return heap_quarantine_flush(&t);
+}
 
 /**
  * Returns true if `object` points to a valid heap address, false otherwise.
