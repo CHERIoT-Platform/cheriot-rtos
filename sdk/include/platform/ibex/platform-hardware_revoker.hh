@@ -194,6 +194,8 @@ namespace Ibex
 				{
 					return true;
 				}
+				// Make sure that the revoker is running.
+				system_bg_revoker_kick();
 				// If the epoch hasn't finished, wait for an interrupt to fire
 				// and retry.
 			} while (
