@@ -3,6 +3,7 @@
 
 #include <compartment.h>
 #include <cstdint>
+#include <cstring>
 #include <debug.hh>
 #include <thread.h>
 #include <platform/sunburst/platform-gpio.hh>
@@ -435,60 +436,6 @@ eERRORRESULT configure_mcp251xfd_on_can1() {
 
 static uint32_t txMessageSeq = 0;
 
-// Transmit a message to MCP251XFD device on EXT1
-//=============================================================================
-eERRORRESULT transmit_message_from_ext1_txq()
-{
-	eERRORRESULT ret = ERR_OK;
-	MCP251XFD::eMCP251XFD_FIFOstatus fifoStatus = MCP251XFD::MCP251XFD_TX_FIFO_FULL;
-	ret = MCP251XFD_GetFIFOStatus(&can1, MCP251XFD::MCP251XFD_TXQ, &fifoStatus); // First get FIFO2 status
-	if (ret != ERR_OK) { 
-		return ret;
-	}
-	if ((fifoStatus & MCP251XFD::MCP251XFD_TX_FIFO_NOT_FULL) > 0) // Second check FIFO not full
-	{
-		MCP251XFD::MCP251XFD_CANMessage tansmitMessage;
-		//***** Fill the message as you want *****
-		uint8_t txPayloadData[64] = {0xde, 0xad, 0xbe, 0xef, static_cast<uint8_t>((txMessageSeq >> 24) & 0x0ff), static_cast<uint8_t>((txMessageSeq >> 16) & 0x0ff), static_cast<uint8_t>((txMessageSeq >> 8) & 0x0ff), static_cast<uint8_t>(txMessageSeq & 0x0ff)}; // In this example, the FIFO1 have 64 bytes of payload
-		tansmitMessage.MessageID = 0x0300;
-		tansmitMessage.MessageSEQ = txMessageSeq;
-		tansmitMessage.ControlFlags = MCP251XFD::MCP251XFD_CAN20_FRAME;
-		tansmitMessage.DLC = MCP251XFD::MCP251XFD_DLC_8BYTE;
-		tansmitMessage.PayloadData = &txPayloadData[0];
-		// Send message and flush
-		ret = MCP251XFD_TransmitMessageToFIFO(&can1, &tansmitMessage, MCP251XFD::MCP251XFD_TXQ, true);
-		txMessageSeq++;
-	}
-	return ret;
-}
-
-// Transmit a message to MCP251XFD device on EXT1
-//=============================================================================
-eERRORRESULT transmit_message_from_ext1_txq2()
-{
-	eERRORRESULT ret = ERR_OK;
-	MCP251XFD::eMCP251XFD_FIFOstatus fifoStatus = MCP251XFD::MCP251XFD_TX_FIFO_FULL;
-	ret = MCP251XFD_GetFIFOStatus(&can1, MCP251XFD::MCP251XFD_TXQ, &fifoStatus); // First get FIFO2 status
-	if (ret != ERR_OK) { 
-		return ret;
-	}
-	if ((fifoStatus & MCP251XFD::MCP251XFD_TX_FIFO_NOT_FULL) > 0) // Second check FIFO not full
-	{
-		MCP251XFD::MCP251XFD_CANMessage tansmitMessage;
-		//***** Fill the message as you want *****
-		uint8_t txPayloadData[64] = {0xfe, 0xed, 0xbe, 0xef, static_cast<uint8_t>((txMessageSeq >> 24) & 0x0ff), static_cast<uint8_t>((txMessageSeq >> 16) & 0x0ff), static_cast<uint8_t>((txMessageSeq >> 8) & 0x0ff), static_cast<uint8_t>(txMessageSeq & 0x0ff)}; // In this example, the FIFO1 have 64 bytes of payload
-		tansmitMessage.MessageID = 0x150300;
-		tansmitMessage.MessageSEQ = txMessageSeq;
-		tansmitMessage.ControlFlags = MCP251XFD::MCP251XFD_EXTENDED_MESSAGE_ID;
-		tansmitMessage.DLC = MCP251XFD::MCP251XFD_DLC_8BYTE;
-		tansmitMessage.PayloadData = &txPayloadData[0];
-		// Send message and flush
-		ret = MCP251XFD_TransmitMessageToFIFO(&can1, &tansmitMessage, MCP251XFD::MCP251XFD_TXQ, true);
-		txMessageSeq++;
-	}
-	return ret;
-}
-
 bool are_we_driving() {
 	for(auto & __capability event : events) {
 		if((event.typ == CAN_EVENT_DRIVE_ON_ONLY) && (event.active == true)) {
@@ -560,6 +507,42 @@ void interpret_can_message(MCP251XFD::MCP251XFD_CANMessage *mess) {
 	}
 }
 
+uint8_t mess366[MCP251XFD::MCP251XFD_DLC_8BYTE];
+
+// Transmit a message to MCP251XFD device on EXT1
+//=============================================================================
+eERRORRESULT transmit_indication(SonataGpioBoard::JoystickDirection direction)
+{
+	eERRORRESULT ret = ERR_OK;
+	if(direction == SonataGpioBoard::JoystickDirection::Left) {
+		mess366[3] = 0x08;
+	} else if(direction == SonataGpioBoard::JoystickDirection::Right) {
+		mess366[3] = 0x10;
+	} else if(direction == SonataGpioBoard::JoystickDirection::Pressed) {
+		mess366[3] = 0x18;
+	}
+	MCP251XFD::eMCP251XFD_FIFOstatus fifoStatus = MCP251XFD::MCP251XFD_TX_FIFO_FULL;
+	ret = MCP251XFD_GetFIFOStatus(&can1, MCP251XFD::MCP251XFD_TXQ, &fifoStatus); // First get FIFO2 status
+	if (ret != ERR_OK) { 
+		return ret;
+	}
+	if ((fifoStatus & MCP251XFD::MCP251XFD_TX_FIFO_NOT_FULL) > 0) // Second check FIFO not full
+	{
+		MCP251XFD::MCP251XFD_CANMessage tansmitMessage;
+		//***** Fill the message as you want *****
+		tansmitMessage.MessageID = 0x366;
+		tansmitMessage.MessageSEQ = txMessageSeq;
+		tansmitMessage.ControlFlags = MCP251XFD::MCP251XFD_STANDARD_MESSAGE_ID;
+		tansmitMessage.DLC = MCP251XFD::MCP251XFD_DLC_8BYTE;
+		tansmitMessage.PayloadData = &mess366[0];
+		// Send message and flush
+		ret = MCP251XFD_TransmitMessageToFIFO(&can1, &tansmitMessage, MCP251XFD::MCP251XFD_TXQ, true);
+		txMessageSeq++;
+	}
+	return ret;
+}
+
+
 //=============================================================================
 // Receive a message from MCP251XFD device on EXT1
 //=============================================================================
@@ -583,18 +566,26 @@ eERRORRESULT receive_message_from_ext1_fifo(MCP251XFD::eMCP251XFD_FIFO fifo)
 		&messageTimeStamp, fifo);
 		if (ret == ERR_OK)
 		{
-			//***** Do what you want with the message *****
 			// Debug::log("Rx: ID: {}, FIFO: {}, dlc: {}, flg: {}, data: {} {} {} {} {} {} {} {} ", receivedMessage.MessageID, static_cast<int16_t>(fifo), receivedMessage.DLC, receivedMessage.ControlFlags, receivedMessage.PayloadData[0], receivedMessage.PayloadData[1], receivedMessage.PayloadData[2], receivedMessage.PayloadData[3], receivedMessage.PayloadData[4], receivedMessage.PayloadData[5], receivedMessage.PayloadData[6], receivedMessage.PayloadData[7]);
-			interpret_can_message(&receivedMessage);
+			if((receivedMessage.MessageID == 366) && (receivedMessage.DLC == MCP251XFD::MCP251XFD_DLC_8BYTE)) {
+				// We keep a copy of this to use to sent the indicators message.
+				memcpy(mess366, receivedMessage.PayloadData, MCP251XFD::MCP251XFD_DLC_8BYTE);
+			} else {
+				interpret_can_message(&receivedMessage);
+			}
 		}
 	}
 	return ret;
 }
 
+#define INDICATION_MAX_PERIOD	1000	// in ms the fastest that we can send a message.
+
 /// Thread entry point.
 void __cheri_compartment("main_comp") main_entry()
 {
 	eERRORRESULT result = ERR__NO_DEVICE_DETECTED;
+
+	auto gpioBoard = MMIO_CAPABILITY(SonataGpioBoard, gpio_board);
 
 	// Print welcome, along with the compartment's name to the default UART.
 	Debug::log("Sonata VW Audi CAN Example");
@@ -606,20 +597,28 @@ void __cheri_compartment("main_comp") main_entry()
 	}
 
 	uint8_t txCnt = 0;
+	volatile uint32_t time;
+	volatile uint32_t nextIndication = 0;
 	while(true) {
+		time = GetCurrentms_Sonata();
 		// receive_message_from_ext1_fifo(MCP251XFD::MCP251XFD_FIFO1);
 		receive_message_from_ext1_fifo(MCP251XFD::MCP251XFD_FIFO2);
 		receive_message_from_ext1_fifo(MCP251XFD::MCP251XFD_FIFO3);
 		// receive_message_from_ext1_fifo(MCP251XFD::MCP251XFD_FIFO4);
-		//thread_millisecond_wait(10);
-		// if(txCnt > 100) {
-		// 	transmit_message_from_ext1_txq();
-		// 	txCnt = 0;
-		// } else if(txCnt == 50) {
-		// 	transmit_message_from_ext1_txq2();
-		// 	txCnt++;
-		// } else {
-		// 	txCnt++;
-		// }
+		
+		auto jsv = gpioBoard->read_joystick();
+		if(jsv.is_left() && (time >= nextIndication)) {
+			Debug::log("Indicate Left");
+			transmit_indication(SonataGpioBoard::JoystickDirection::Left);
+			nextIndication = time + INDICATION_MAX_PERIOD;
+		} else if(jsv.is_right() && (time >= nextIndication)) {
+			Debug::log("Indicate Right");
+			transmit_indication(SonataGpioBoard::JoystickDirection::Right);
+			nextIndication = time + INDICATION_MAX_PERIOD;
+		} else if(jsv.is_pressed() && (time >= nextIndication)) {
+			Debug::log("Indicate Left & Right");
+			transmit_indication(SonataGpioBoard::JoystickDirection::Pressed);
+			nextIndication = time + INDICATION_MAX_PERIOD;
+		}
 	}
 }

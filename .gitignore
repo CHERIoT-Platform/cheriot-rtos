@@ -358,4 +358,5 @@ compile_commands.json
 *.orig
 *.rej
 *.out
+*.*:Zone.Identifier
 build
