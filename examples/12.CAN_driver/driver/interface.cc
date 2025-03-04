@@ -6,7 +6,7 @@
 #include <platform/sunburst/platform-pinmux.hh>
 #include <platform/sunburst/platform-spi.hh>
 #include <driver/MCP251XFD/ErrorsDef.h>
-#include <driver/MCP251XFD/crc/CRC16_CMS.hh>
+#include <driver/MCP251XFD/crc/CRC16.hh>
 #include <driver/MCP251XFD/MCP251XFD.hh>
 #include "interface.hh"
 
@@ -172,7 +172,7 @@ uint16_t ComputeCRC16_Sonata(const uint8_t* data, size_t size)
     // 
     // Written - 2025-02-03
     // Tested - 
-    return ComputeCRC16CMS(data, size);
+    return crc16_compute(Crc16CmsTable, 0xffff, 0x0000, data, size);
 }
 
 //*******************************************************************************************************************
