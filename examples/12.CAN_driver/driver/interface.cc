@@ -152,8 +152,9 @@ uint32_t GetCurrentms_Sonata(void)
     // Sonata
     // Written - 2025-01-10
     // Tested - 
+    static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
     uint64_t cycles = rdcycle64();  // Hidden in riscvreg.h and included through thread.h
-    uint32_t msCount = static_cast<uint32_t>(cycles) * MS_PER_TICK;    // Driver is not bothered by it wrapping (apprently).
+    uint32_t msCount = static_cast<uint32_t>(cycles / CyclesPerMillisecond);    // Driver is not bothered by it wrapping (apprently).
     return msCount;
 }
 
