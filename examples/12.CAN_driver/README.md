@@ -35,12 +35,12 @@ We have configured FIFO 5 to FIFO 8 as transmit FIFOs but we are not using them 
 We're going to run each CAN ona separate SPI to reduce the risk of accidental cross-talk.
 |  RPi Name | I/O | Header # | RPi GPIO | Pinmux Name                          | Pinmux Option  | Waveshare Name | Notes |
 | --------- | --- | -------- | -------- | ------------------------------------ | -------------- | -------------- | --- |
-| SPI0_CE_0 |  O  |    24    |     8    | SonataPinmux::OutputPin::rph_g8      | 1 (spi_1_cs_0) | CS_0           | Drive manually for now. |
+| SPI0_CE_0 |  O  |    24    |     8    | SonataPinmux::OutputPin::rph_g8      | 1 (spi_1_cs_0) | CS_0           |     |
 | SPI0_COPI |  O  |    19    |    10    | SonataPinmux::OutputPin::rph_g10     | 1 (spi_1_copi) | MOSI_0         |     |
 | SPI0_CIPO |  I  |    21    |     9    | SonataPinmux::BlockInput::spi_1_cipo | 1 (rph_g9)     | MISO_0         |     |
 | SPI0_SCLK |  O  |    23    |    11    | SonataPinmux::OutputPin::rph_g11     | 1 (spi_1_sclk) | SCK_0          |     |
 |           |  I  |    22    |    25    |                                      |                | INT_0          |     |
-| SPI1_CE_0 |  O  |    12    |    18    | SonataPinmux::OutputPin::rph_g18     | 1 (spi_2_cs_0) | CS_1           | Drive manually for now. |
+| SPI1_CE_0 |  O  |    12    |    18    | SonataPinmux::OutputPin::rph_g18     | 1 (spi_2_cs_0) | CS_1           |     |
 | SPI1_COPI |  O  |    38    |    20    | SonataPinmux::OutputPin::rph_g20     | 1 (spi_2_copi) | MOSI_1         |     |
 | SPI1_CIPO |  I  |    35    |    19    | SonataPinmux::BlockInput::spi_2_cipo | 1 (rph_g19)    | MISO_1         |     |
 | SPI1_SCLK |  O  |    40    |    21    | SonataPinmux::OutputPin::rph_g21     | 1 (spi_1_sclk) | SCK_1          |     |
