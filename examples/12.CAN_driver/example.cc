@@ -10,7 +10,7 @@
 #include <platform/sunburst/platform-spi.hh>
 #include "driver/interface.hh"
 
-#define TIMESTAMP_TICK_us ( MS_PER_TICK * 1000L ) // Tickrate in us (MS_PER_TICK * 1000)
+#define TIMESTAMP_TICK_us ( 25 ) // Tickstamp tick is 25us
 #define TIMESTAMP_TICK(sysclk) ( ((sysclk) / 1000000) * TIMESTAMP_TICK_us )
 
 /// Expose debugging features unconditionally for this compartment.
@@ -141,14 +141,14 @@ eERRORRESULT configure_mcp251xfd_on_can1() {
 	}
 	Debug::log("Init_MCP251XFD() done.");
 
-	//Debug::log("MCP251XFD_ConfigureTimeStamp()");
-	//Debug::log("SYSCLK_Ext1 = {}", SYSCLK_Ext1);
-	//Debug::log("TIMESTAMP_TICK(SYSCLK_Ext1) = {}", TIMESTAMP_TICK(SYSCLK_Ext1));
-	//result = MCP251XFD_ConfigureTimeStamp(&can1, true, MCP251XFD_TS_CAN20_SOF_CANFD_SOF, TIMESTAMP_TICK(SYSCLK_Ext1), false);
-	//if(result != ERR_OK) {
-	//	Debug::log("ERROR! MCP251XFD_ConfigureTimeStamp() failed with {}.", result);
-	//}
-	//Debug::log("MCP251XFD_ConfigureTimeStamp() done.");
+	Debug::log("MCP251XFD_ConfigureTimeStamp()");
+	Debug::log("can1SclkResult = {}", can1SclkResult);
+	Debug::log("TIMESTAMP_TICK(can1SclkResult) = {}", TIMESTAMP_TICK(can1SclkResult));
+	result = MCP251XFD_ConfigureTimeStamp(&can1, true, MCP251XFD::MCP251XFD_TS_CAN20_SOF_CANFD_SOF, TIMESTAMP_TICK(can1SclkResult), false);
+	if(result != ERR_OK) {
+		Debug::log("ERROR! MCP251XFD_ConfigureTimeStamp() failed with {}.", result);
+	}
+	Debug::log("MCP251XFD_ConfigureTimeStamp() done.");
 
 	Debug::log("MCP251XFD_ConfigureFIFOList()");
 	result = MCP251XFD_ConfigureFIFOList(&can1, mcP251XfdExt1FifOlist, MCP251XFD_EXT1_FIFO_COUNT);
