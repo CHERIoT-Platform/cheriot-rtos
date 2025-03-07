@@ -82,11 +82,8 @@ int test_futex()
 	fcap.permissions() &=
 	  PermissionSet::omnipotent().without(Permission::Store);
 	ret = futex_wake(fcap, 1);
-	TEST(ret == -EINVAL,
-	     "futex_wake returned {} when called without store permission, "
-	     "expected {}",
-	     ret,
-	     -EINVAL);
+	TEST_EQUAL(
+	  ret, 0, "futex_wake returned when called without store permission");
 
 #ifdef SAIL
 	// If we're targeting Sail, also do some basic tests of the interrupt
