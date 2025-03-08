@@ -310,8 +310,8 @@
 		__asm(".ifndef __import.sealed_object." #name "\n"                     \
 		      "  .type     __import.sealed_object." #name ",@object\n"         \
 		      "  .section  .compartment_imports." #name                        \
-		      ",\"awG\",@progbits," #name ",comdat\n"                          \
-		      "  .globl    __import.sealed_object." #name "\n"                 \
+		      ",\"awG\",@progbits," #name "\n"                                 \
+		      "  .weak    __import.sealed_object." #name "\n"                  \
 		      "  .p2align  3\n"                                                \
 		      "__import.sealed_object." #name ":\n"                            \
 		      "  .word " #name "\n"                                            \

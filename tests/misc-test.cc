@@ -280,7 +280,12 @@ namespace
 		TEST(__builtin_cheri_equal_exact(p, invocation_state<int>()),
 		     "CILS failed to store stack pointer");
 	}
+
+	const char *testString = "Hello world";
+
 } // namespace
+
+volatile decltype(testString) *volatileString = &testString;
 
 void check_sealed_scoping()
 {
@@ -363,5 +368,12 @@ int test_misc()
 	                    4,
 	                    {Permission::Global, Permission::Load});
 	check_odd_memcmp();
+	TEST_EQUAL(strnlen(*volatileString, 3),
+	           3,
+	           "Incorrect length from strnlen with length shorter than string");
+	TEST_EQUAL(
+	  strnlen(*volatileString, SIZE_MAX),
+	  11,
+	  "Incorrect length from strnlen with length longer than the string");
 	return 0;
 }
