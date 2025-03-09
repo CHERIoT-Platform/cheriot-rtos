@@ -192,38 +192,38 @@ eERRORRESULT MCP251XFD_InterfaceInit_Sonata(void *pIntDev, uint8_t chipSelect, c
     // Get our data.
     Spi_Config_t* cfg = static_cast<Spi_Config_t*>(pIntDev);
     // Configure the IO the chosen SPI
-    auto pinSinks = SonataPinmux::PinSinks();
-	auto blockSinks = SonataPinmux::BlockSinks();
+    auto pinSinks = MMIO_CAPABILITY(SonataPinmux::PinSinks, pinmux_pins_sinks);
+	auto blockSinks = MMIO_CAPABILITY(SonataPinmux::BlockSinks, pinmux_block_sinks);
 
     uint8_t sel = 0;
     // SLCK
-    if(false == pinSinks.get(cfg->sclk).select(cfg->sclk_sel)) {
+    if(false == pinSinks->get(cfg->sclk).select(cfg->sclk_sel)) {
             return ERR__SPI_PARAMETER_ERROR;
     }
     // COPI
-    if(false == pinSinks.get(cfg->copi).select(cfg->copi_sel)) {
+    if(false == pinSinks->get(cfg->copi).select(cfg->copi_sel)) {
         return ERR__SPI_PARAMETER_ERROR;
     }
     // CS0
     if(cfg->cs0_sel > 0) {
-        if(false == pinSinks.get(cfg->cs0).select(cfg->cs0_sel)) {
+        if(false == pinSinks->get(cfg->cs0).select(cfg->cs0_sel)) {
             return ERR__SPI_PARAMETER_ERROR;
         }
     }
     // CS1
     if(cfg->cs1_sel > 0) {
-        if(false == pinSinks.get(cfg->cs1).select(cfg->cs1_sel)) {
+        if(false == pinSinks->get(cfg->cs1).select(cfg->cs1_sel)) {
             return ERR__SPI_PARAMETER_ERROR;
         }
     }
     // CS2
     if(cfg->cs2_sel > 0) {
-        if(false == pinSinks.get(cfg->cs2).select(cfg->cs2_sel)) {
+        if(false == pinSinks->get(cfg->cs2).select(cfg->cs2_sel)) {
             return ERR__SPI_PARAMETER_ERROR;
         }
     }
     // CIPO
-    if(false == blockSinks.get(cfg->cipo_sel).select(cfg->cipo)) {
+    if(false == blockSinks->get(cfg->cipo_sel).select(cfg->cipo)) {
         return ERR__SPI_PARAMETER_ERROR;
 	}
         

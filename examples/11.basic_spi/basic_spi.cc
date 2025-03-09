@@ -75,30 +75,30 @@ void __cheri_compartment("main_comp") main_entry()
 	Debug::log("SPI_CLOCK_SPEED_SETTING: {}", SPI_CLOCK_SPEED_SETTING);
 
 	// Setting up the pinmux.
-	auto pinSinks = SonataPinmux::PinSinks();
-	auto blockSinks = SonataPinmux::BlockSinks();
+	auto pinSinks = MMIO_CAPABILITY(SonataPinmux::PinSinks, pinmux_pins_sinks);
+	auto blockSinks = MMIO_CAPABILITY(SonataPinmux::BlockSinks, pinmux_block_sinks);
 
 	// SPI1 - COPI
-	if(true == pinSinks.get(SonataPinmux::PinSink::rph_g10).select(1)) {
+	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g10).select(1)) {
 			Debug::log("Success! Set RPi GPIO10 to SPI1_COPI");
 	} else {
 		Debug::log("ERROR! Failed to set RPi GPIO10 to SPI1_COPI");
 	}
 	// SPI1 - SCLK
-	if(true == pinSinks.get(SonataPinmux::PinSink::rph_g11).select(1)) {
+	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g11).select(1)) {
 		Debug::log("Success! Set RPi GPIO11 to SPI1_SCLK");
 	} else {
 		Debug::log("ERROR! Failed to set RPi GPIO11 to SPI1_SCLK");
 	}
 	// SPI1 - CIPO
-	if(true == blockSinks.get(SonataPinmux::BlockSink::spi_1_cipo).select(1)) {
+	if(true == blockSinks->get(SonataPinmux::BlockSink::spi_1_cipo).select(1)) {
 		Debug::log("Success! Set SPI1_CIPO to RPi GPIO09");
 	} else {
 		Debug::log("ERROR! Failed to set SPI1_CIPO to RPi GPIO09");
 	}
 	Debug::log("Letting SPI module drive RPi GPIO8 for SPI1_CE0");
 	// SPI1 - CE0 (using SPI module to drive the CE0 pin)
-	if(true == pinSinks.get(SonataPinmux::PinSink::rph_g8).select(1)) {
+	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g8).select(1)) {
 		Debug::log("Success! Set RPi GPIO8 to SPI1_CE0");
 	} else {
 		Debug::log("ERROR! Failed to set RPi GPIO8 to SPI1_CE0");
@@ -114,26 +114,26 @@ void __cheri_compartment("main_comp") main_entry()
 	Debug::log("SPI1: Configured.");
 
 	// SPI2 - COPI
-	if(true == pinSinks.get(SonataPinmux::PinSink::rph_g20).select(1)) {
+	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g20).select(1)) {
 		Debug::log("Success! Set RPi GPIO20 to SPI2_COPI");
 	} else {
 		Debug::log("ERROR! Failed to set RPi GPIO20 to SPI2_COPI");
 	}
 	// SPI2 - SCLK
-	if(true == pinSinks.get(SonataPinmux::PinSink::rph_g21).select(1)) {
+	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g21).select(1)) {
 		Debug::log("Success! Set RPi GPIO21 to SPI2_SCLK");
 	} else {
 		Debug::log("ERROR! Failed to set RPi GPIO21 to SPI2_SCLK");
 	}
 	// SPI2 - CIPO
-	if(true == blockSinks.get(SonataPinmux::BlockSink::spi_2_cipo).select(1)) {
+	if(true == blockSinks->get(SonataPinmux::BlockSink::spi_2_cipo).select(1)) {
 			Debug::log("Success! Set SPI1_CIPO to RPi GPIO19");
 	} else {
 		Debug::log("ERROR! Failed to set SPI1_CIPO to RPi GPIO19");
 	}
 	Debug::log("Letting SPI module drive RPi GPI18 for SPI2_CE0");
 	// SPI2 - CE0 (using SPI module to drive the CE0 pin)
-	if(true == pinSinks.get(SonataPinmux::PinSink::rph_g18).select(1)) {
+	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g18).select(1)) {
 		Debug::log("Success! Set RPi GPI18 to SPI2_CE0");
 	} else {
 		Debug::log("ERROR! Failed to set RPi GPIO8 to SPI2_CE0");
