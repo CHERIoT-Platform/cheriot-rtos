@@ -318,6 +318,54 @@ namespace SonataSpi
 			}
 		}
 
+
+		/*
+		* Sends `len` bytes from the given `txData` buffer &
+		* receives `len` bytes and puts them in the `rxData` buffer,
+		* where `len` is at most `0x7ff`.
+		*
+		* This method will block until the requested number of bytes
+		* has been received. There is currently no timeout.
+		*/
+		void blocking_transfer(const uint8_t txData[], uint8_t rxData[], uint16_t len) volatile
+		{
+			Debug::Assert(len <= 0x7ff,
+						"You can't receive more than 0x7ff bytes at a time.");
+			len &= StartByteCountMask;
+			wait_idle();
+			// Do not attempt a zero-byte transfer; not supported by the controller.
+			if (len)
+			{
+				control = ControlReceiveEnable | ControlTransmitEnable;
+				start   = len;
+	
+				uint32_t transmitAvailable = 0;
+				uint16_t txCnt = 0;
+				uint16_t rxCnt = 0;
+				uint8_t dummy;
+				while(rxCnt < len)
+				{
+					// Wait for at least one byte to be available in the RX FIFO
+					if((txCnt < len) && (!(status & StatusTxFifoFull))) {
+						if(txData != NULL) {
+							transmitFifo = txData[txCnt];
+						} else {
+							transmitFifo = 0xff;
+						}
+						txCnt++;
+					}
+					if((status & StatusRxFifoLevel) > 0) {
+						if(rxData != NULL) {
+							rxData[rxCnt] = static_cast<uint8_t>(receiveFifo);
+						} else {
+							dummy = static_cast<uint8_t>(receiveFifo);
+						}
+						rxCnt++;
+					}
+				}
+			}
+		}
+
 		/**
 		 * Asserts/de-asserts a given chip select.
 		 *
@@ -328,19 +376,42 @@ namespace SonataSpi
 		 * @tparam DeassertOthers Whether to de-assert all other chip selects.
 		 * @param Assert Whether to assert (true) or de-assert (false).
 		 */
-		template<uint8_t Index, bool DeassertOthers = true>
-		inline void chip_select_assert(const bool Assert = true) volatile
-		{
-			static_assert(Index < NumChipSelects,
-			              "SPI chip select index out of bounds");
+		 template<uint8_t Index, bool DeassertOthers = true>
+		 inline void chip_select_assert(const bool Assert = true) volatile
+		 {
+			 static_assert(Index < NumChipSelects,
+						   "SPI chip select index out of bounds");
+ 
+			 const uint32_t State =
+			   DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
+ 
+			 const uint32_t Bit = (1 << Index);
+			 chipSelects        = Assert ? State & ~Bit : State | Bit;
+		 }
 
-			const uint32_t State =
-			  DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
+		/**
+		 * Asserts/de-asserts a given chip select.
+		 *
+		 * Note, SPI chip selects are active low signals, so the register bit is
+		 * zero when asserted and one when de-asserted.
+		 *
+		 * @tparam DeassertOthers Whether to de-assert all other chip selects.
+		 * @param Index The index of the chip select to be set.
+		 * @param Assert Whether to assert (true) or de-assert (false).
+		 */
+		 template<bool DeassertOthers = true>
+		 inline void chip_select_assert(uint8_t index, const bool Assert = true) volatile
+		 {
+			 Debug::Assert(index < NumChipSelects,
+				"SPI chip select index out of bounds");
 
-			const uint32_t Bit = (1 << Index);
-			chipSelects        = Assert ? State & ~Bit : State | Bit;
-		}
-	};
+			 const uint32_t State =
+			   DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
+ 
+			 const uint32_t Bit = (1 << index);
+			 chipSelects        = Assert ? State & ~Bit : State | Bit;
+		 }
+	  };
 
 	/// A specialised driver for the SPI device connected to the Ethernet MAC.
 	class EthernetMac : public Generic<2>
