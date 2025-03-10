@@ -92,35 +92,31 @@ namespace loader
 		 * architectural sealing root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::Seal> = ISAType::Seal;
+		constexpr ISAType ArchitecturalRoot<Type::Seal> = ISAType::Seal;
 		/**
 		 * The software-defined trusted-stack root corresponds directly to the
 		 * architectural read-write root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::TrustedStack> =
-		  ISAType::RW;
+		constexpr ISAType ArchitecturalRoot<Type::TrustedStack> = ISAType::RW;
 		/**
 		 * The software-defined read-write global root is derived from the
 		 * architectural rear-write root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::RWGlobal> =
-		  ISAType::RW;
+		constexpr ISAType ArchitecturalRoot<Type::RWGlobal> = ISAType::RW;
 		/**
 		 * The software-defined store-local root is derived from the
 		 * architectural rear-write root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::RWStoreL> =
-		  ISAType::RW;
+		constexpr ISAType ArchitecturalRoot<Type::RWStoreL> = ISAType::RW;
 		/**
 		 * The software-defined executable root corresponds directly to the
 		 * architectural executable root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::Execute> =
-		  ISAType::Execute;
+		constexpr ISAType ArchitecturalRoot<Type::Execute> = ISAType::Execute;
 
 		/**
 		 * Mapping from architectural type to permissions.  Generic case is a
@@ -133,16 +129,16 @@ namespace loader
 		 * The permissions held by the sealing root.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet
-		  ArchitecturalPermissions<ISAType::Seal> = {CHERI::Permission::Global,
-		                                             CHERI::Permission::Seal,
-		                                             CHERI::Permission::Unseal,
-		                                             CHERI::Permission::User0};
+		constexpr CHERI::PermissionSet ArchitecturalPermissions<ISAType::Seal> =
+		  {CHERI::Permission::Global,
+		   CHERI::Permission::Seal,
+		   CHERI::Permission::Unseal,
+		   CHERI::Permission::User0};
 		/**
 		 * The permissions held by the execute root.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet
+		constexpr CHERI::PermissionSet
 		  ArchitecturalPermissions<ISAType::Execute> = {
 		    CHERI::Permission::Global,
 		    CHERI::Permission::Execute,
@@ -155,15 +151,14 @@ namespace loader
 		 * The permissions held by the store root.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet
-		  ArchitecturalPermissions<ISAType::RW> = {
-		    CHERI::Permission::Global,
-		    CHERI::Permission::Load,
-		    CHERI::Permission::Store,
-		    CHERI::Permission::StoreLocal,
-		    CHERI::Permission::LoadStoreCapability,
-		    CHERI::Permission::LoadMutable,
-		    CHERI::Permission::LoadGlobal};
+		constexpr CHERI::PermissionSet ArchitecturalPermissions<ISAType::RW> = {
+		  CHERI::Permission::Global,
+		  CHERI::Permission::Load,
+		  CHERI::Permission::Store,
+		  CHERI::Permission::StoreLocal,
+		  CHERI::Permission::LoadStoreCapability,
+		  CHERI::Permission::LoadMutable,
+		  CHERI::Permission::LoadGlobal};
 
 		/**
 		 * Permissions for this (software-defined) root.  By default, these are
@@ -179,7 +174,7 @@ namespace loader
 		 * storing.  The global root has global permission but not store local.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet Permissions<Type::RWGlobal> =
+		constexpr CHERI::PermissionSet Permissions<Type::RWGlobal> =
 		  ArchitecturalPermissions<ISAType::RW>.without(
 		    CHERI::Permission::StoreLocal);
 		/**
@@ -190,7 +185,7 @@ namespace loader
 		 * global.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet Permissions<Type::RWStoreL> =
+		constexpr CHERI::PermissionSet Permissions<Type::RWStoreL> =
 		  ArchitecturalPermissions<ISAType::RW>.without(
 		    CHERI::Permission::Global);
 
