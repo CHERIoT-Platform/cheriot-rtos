@@ -262,7 +262,7 @@
 	__attribute__((section(".sealed_objects"), used)) __if_cxx(                \
 	  inline) struct __##name##_type                                           \
 	  name = /* NOLINT(bugprone-macro-parentheses) */                          \
-	  {(uint32_t) & __sealing_key_##compartment##_##keyName,                   \
+	  {(uint32_t)&__sealing_key_##compartment##_##keyName,                     \
 	   0,                                                                      \
 	   {initialiser, ##__VA_ARGS__}}
 
