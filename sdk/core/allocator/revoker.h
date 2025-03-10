@@ -236,8 +236,7 @@ namespace Revocation
 
 	template<typename WordT,
 	         size_t TCMBaseAddr,
-	         template<typename, size_t>
-	         typename Revoker>
+	         template<typename, size_t> typename Revoker>
 	    requires IsHardwareRevokerDevice<Revoker<WordT, TCMBaseAddr>>
 	class HardwareAccelerator : public Bitmap<WordT, TCMBaseAddr>,
 	                            public Revoker<WordT, TCMBaseAddr>
