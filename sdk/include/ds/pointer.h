@@ -9,6 +9,7 @@
 
 #include <cheri.hh>
 #include <concepts>
+#include <functional>
 
 namespace ds::pointer
 {
@@ -79,7 +80,7 @@ namespace ds::pointer
 		template<typename T>
 		class Pointer
 		{
-			T *&ref;
+			std::reference_wrapper<T *> ref;
 
 			public:
 			using Type = T;
@@ -102,11 +103,7 @@ namespace ds::pointer
 				return *this;
 			}
 
-			__always_inline Pointer<T> &operator=(Pointer const &p)
-			{
-				ref = p.ref;
-				return *this;
-			}
+			__always_inline Pointer<T> &operator=(Pointer const &p) = default;
 
 			__always_inline bool operator==(Pointer &p)
 			{
