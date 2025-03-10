@@ -840,11 +840,7 @@ namespace CHERI
 		/**
 		 * Replace the pointer that this capability wraps with another.
 		 */
-		Capability &operator=(const Capability &other)
-		{
-			ptr = other.ptr;
-			return *this;
-		}
+		Capability &operator=(const Capability &other) = default;
 
 		/**
 		 * Transfer the pointer that this capability wraps from .
