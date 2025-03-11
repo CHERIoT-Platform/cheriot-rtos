@@ -840,11 +840,7 @@ namespace CHERI
 		/**
 		 * Replace the pointer that this capability wraps with another.
 		 */
-		Capability &operator=(const Capability &other)
-		{
-			ptr = other.ptr;
-			return *this;
-		}
+		Capability &operator=(const Capability &other) = default;
 
 		/**
 		 * Transfer the pointer that this capability wraps from .
@@ -1249,9 +1245,7 @@ namespace CHERI
 	 */
 	template<typename T>
 	concept IsSmartPointerLike = requires(T b) {
-		{
-			b.get()
-		} -> IsPointer;
+		{ b.get() } -> IsPointer;
 	} && requires(T b) { b = b.get(); };
 
 	/**
@@ -1270,7 +1264,12 @@ namespace CHERI
 	 * If `EnforceStrictPermissions` is set to `true`, this will also set
 	 * the permissions of passed capability reference to `Permissions`, and
 	 * its bounds to `space`. This is useful for detecting cases where
-	 * compartments ask for less permissions than they actually require.
+	 * compartments ask for less permissions than they actually require and
+	 * callers happen to provide the required permissions.  Similarly, if you
+	 * are calling `check_pointer` in a function that wraps untrusted code such
+	 * as a third-party library, this lets you detect cases where your callers
+	 * are failing to remove permissions that the untrusted code should not
+	 * have.
 	 *
 	 * This function is provided as a wrapper for the `::check_pointer` C
 	 * API. It is always inlined. For each call site, it materialises the
@@ -1337,7 +1336,7 @@ namespace CHERI
 	 * Invokes the passed callable object with interrupts disabled.
 	 */
 	template<typename T>
-	[[cheri::interrupt_state(disabled)]] auto with_interrupts_disabled(T &&fn)
+	[[cheriot::interrupt_state(disabled)]] auto with_interrupts_disabled(T &&fn)
 	{
 		return fn();
 	}
@@ -1402,7 +1401,7 @@ namespace CHERI
 	};
 
 	/**
-	 * Register numbers as reported in cap idx field of  `mtval` CSR when
+	 * Register numbers as reported in thee cap idx field of `mtval` CSR when
 	 * a CHERI exception is taken. Values less than 32 refer to general
 	 * purpose registers and others to SCRs (of these, only PCC can actually
 	 * cause an exception).
@@ -1443,6 +1442,7 @@ namespace CHERI
 		/**
 		 * `$c6` / `$ct1` used by the ABI as temporary register.
 		 * Not preserved across calls.
+		 * Used by cross-compartment call as target import entry.
 		 */
 		CT1 = CheriRegisterNumberCT1,
 		/**

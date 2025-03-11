@@ -282,12 +282,8 @@ namespace loader
 	 */
 	template<typename T>
 	concept RawAddressRange = requires(T range) {
-		{
-			range.size()
-		} -> IsAddress;
-		{
-			range.start()
-		} -> IsAddress;
+		{ range.size() } -> IsAddress;
+		{ range.start() } -> IsAddress;
 	};
 
 	/**
@@ -451,13 +447,12 @@ namespace loader
 			AddressRange data;
 
 			/**
-			 * The distance from the start of the code region to the end of the
-			 * import table.
+			 * The import table for the compartment.
 			 */
 			AddressRange importTable;
 
 			/**
-			 * The export table for the scheduler.
+			 * The export table for the compartment.
 			 */
 			AddressRange exportTable;
 

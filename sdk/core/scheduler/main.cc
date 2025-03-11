@@ -297,7 +297,7 @@ namespace
 
 } // namespace
 
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   scheduler_entry(const ThreadLoaderInfo *info)
 {
 	Debug::Invariant(Capability{info}.length() ==
@@ -322,7 +322,7 @@ namespace
 	return 0;
 }
 
-[[cheri::interrupt_state(disabled)]] CHERI_SEALED(TrustedStack *)
+[[cheriot::interrupt_state(disabled)]] CHERI_SEALED(TrustedStack *)
   __cheri_compartment("scheduler")
     exception_entry(CHERI_SEALED(TrustedStack *) sealedTStack,
                     size_t mcause,
@@ -539,7 +539,12 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(Timeout        *timeout,
 __cheriot_minimum_stack(0xa0) int futex_wake(uint32_t *address, uint32_t count)
 {
 	STACK_CHECK(0xa0);
-	if (!check_pointer<PermissionSet{Permission::Store}>(address))
+	// Futex wake requires you to have a valid pointer, but doesn't require any
+	// permissions.  This allows some things to trigger spurious wakes, but
+	// ensures that the scheduler never needs a writeable capability to a
+	// futex.  This means that the worst a malicious scheduler can do is
+	// trigger spurious wakes, which the API permits and callers must handle.
+	if (!check_pointer<PermissionSet{}>(address))
 	{
 		return -EINVAL;
 	}
@@ -715,7 +720,7 @@ namespace
 	};
 } // namespace
 
-[[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
+[[cheriot::interrupt_state(disabled)]] __cheriot_minimum_stack(
   0x30) const uint32_t *interrupt_futex_get(InterruptCapability sealed)
 {
 	STACK_CHECK(0x30);
@@ -736,7 +741,7 @@ namespace
 	return result;
 }
 
-[[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
+[[cheriot::interrupt_state(disabled)]] __cheriot_minimum_stack(
   0x20) int interrupt_complete(InterruptCapability sealed)
 {
 	STACK_CHECK(0x20);
@@ -757,12 +762,12 @@ uint16_t thread_count()
 }
 
 #ifdef SCHEDULER_ACCOUNTING
-[[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
+[[cheriot::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
 {
 	return Thread::idleThreadCycles;
 }
 
-[[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_current()
+[[cheriot::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_current()
 {
 	// Calculate the number of cycles not yet reported to the current thread.
 	uint64_t currentCycles = rdcycle64();

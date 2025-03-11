@@ -26,7 +26,7 @@ __attribute__((section(".sealing_key1"))) void *allocatorSealingKey;
  * The root for the software sealing key.
  */
 __attribute__((section(".sealing_key2"))) Capability<SKeyStruct>
-  softwareSealingKey;
+                                          softwareSealingKey;
 
 using namespace CHERI;
 
@@ -1302,7 +1302,7 @@ size_t heap_available()
 	return gm->heapFreeSize;
 }
 
-[[cheri::interrupt_state(disabled)]] int heap_render()
+[[cheriot::interrupt_state(disabled)]] int heap_render()
 {
 #if HEAP_RENDER
 	gm->render();

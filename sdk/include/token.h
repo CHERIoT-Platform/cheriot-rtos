@@ -84,7 +84,7 @@ __cheri_compartment("allocator")
  * `token_obj_unseal_dynamic` and returning the result of the first one that
  * succeeds, or null if both fail.
  */
-[[cheri::interrupt_state(disabled)]] void *
+[[cheriot::interrupt_state(disabled)]] void *
   __cheri_libcall token_obj_unseal(SKey, CHERI_SEALED(void *));
 
 /**
@@ -97,7 +97,7 @@ __cheri_compartment("allocator")
  * Returns the unsealed object if the key and object are valid and of the
  * correct type, null otherwise.
  */
-[[cheri::interrupt_state(disabled)]] void *
+[[cheriot::interrupt_state(disabled)]] void *
   __cheri_libcall token_obj_unseal_static(SKey, CHERI_SEALED(void *));
 
 /**
@@ -111,7 +111,7 @@ __cheri_compartment("allocator")
  * Returns the unsealed object if the key and object are valid and of the
  * correct type, null otherwise.
  */
-[[cheri::interrupt_state(disabled)]] void *
+[[cheriot::interrupt_state(disabled)]] void *
   __cheri_libcall token_obj_unseal_dynamic(SKey, CHERI_SEALED(void *));
 
 /**
@@ -218,17 +218,12 @@ token_allocate(Timeout *timeout, AllocatorCapability heapCapability, SKey key)
 	CHERI_SEALED(void *)
 	sealed = token_sealed_unsealed_alloc(
 	  timeout, heapCapability, key, sizeof(T), &unsealed);
-	return
-	{
-		static_cast<T *>(unsealed),
+	return {static_cast<T *>(unsealed),
 #	if __has_extension(cheri_sealed_pointers) &&                              \
 	  !defined(CHERIOT_NO_SEALED_POINTERS)
-		  static_cast<CHERI_SEALED(T *)>(sealed)
+	        static_cast<CHERI_SEALED(T *)>(sealed)
 #	else
-		  Sealed<T>
-		{
-			sealed
-		}
+	        Sealed<T>{sealed}
 #	endif
 	};
 }
@@ -238,4 +233,18 @@ __always_inline T *token_unseal(SKey key, Sealed<T> sealed)
 {
 	return static_cast<T *>(token_obj_unseal(key, sealed));
 }
+
 #endif // __cplusplus
+
+#if __has_extension(cheri_sealed_pointers)
+#	ifdef __cplusplus
+template<typename T>
+__always_inline T *token_unseal(SKey key, T *__sealed_capability sealed)
+{
+	return static_cast<T *>(token_obj_unseal(key, sealed));
+}
+#	else
+#		define token_unseal(key, sealed) /*NOLINT*/                           \
+			((__typeof__(*(sealed)) *)token_obj_unseal(key, sealed))
+#	endif
+#endif

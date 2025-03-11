@@ -27,7 +27,8 @@ using namespace CHERI;
 		  "" instructions "\n"                                                 \
 		  "cjalr ct2\n"                                                        \
 		  : /* no outputs; we're jumping and probably not coming back */       \
-		  : "C"(rfn), "r"(additional_input));                                  \
+		  : "C"(rfn), "r"(additional_input)                                    \
+		  : "ct2");                                                            \
                                                                                \
 		TEST(false, "Should be unreachable");                                  \
 	})
@@ -144,7 +145,7 @@ int set_csp_permissions_on_fault(PermissionSet newPermissions)
 	return -EINVAL;
 }
 
-int set_csp_permissions_on_call(PermissionSet        newPermissions,
+int set_csp_permissions_on_call(PermissionSet newPermissions,
                                 __cheri_callback int (*fn)())
 {
 	CALL_CHERI_CALLBACK(fn, "candperm csp, csp, %1\n", newPermissions.as_raw());
@@ -180,7 +181,7 @@ int self_recursion(__cheri_callback int (*fn)())
 }
 
 int exhaust_trusted_stack(__cheri_callback int (*fn)(),
-                          bool                *outLeakedSwitcherCapability)
+                          bool *outLeakedSwitcherCapability)
 {
 	return self_recursion(fn);
 }

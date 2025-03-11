@@ -30,15 +30,18 @@ enum [[clang::flag_enum]] FutexWaitFlags
  * address.
  *
  * The `flags` argument contains flags that may control the behaviour of the
- * call.
+ * call.  This is either `FutexNone` (zero) for the default behaviour or
+ * `FutexPriorityInheritance` if the low 16 bits should be treated as a thread
+ * ID for priority inheritance.
  *
  * This returns:
+ *
  *  - 0 on success: either `*address` and `expected` differ or a wake is
  *    received.
  *  - `-EINVAL` if the arguments are invalid.
  *  - `-ETIMEOUT` if the timeout expires.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   futex_timed_wait(Timeout        *ticks,
                    const uint32_t *address,
                    uint32_t        expected,
@@ -64,13 +67,17 @@ __always_inline static int futex_wait(const uint32_t *address,
  * Wakes up to `count` threads that are sleeping with `futex[_timed]_wait` on
  * `address`.
  *
- * The `address` argument must permit storing four bytes of data after the
- * address. This call does not store to the address but requiring store
- * permission prevents a thread from waking up a futex that it cannot possibly
- * have moved to a different state.
+ * The `address` argument must be a valid, unsealed, pointer with a length of at
+ * least four after the address but the scheduler does not require any explicit
+ * permissions.  The scheduler never needs store access to the futex word.
+ * Removing store permission means that a compromised scheduler can cause
+ * spurious wakes but cannot tamper with the futex word.  If, for example, the
+ * futex word is a lock then the scheduler can wake threads that are blocked on
+ * the lock but cannot release the lock and so cannot make two threads believe
+ * that they have simultaneously acquired the same lock.
  *
  * The return value for a successful call is the number of threads that were
  * woken.  `-EINVAL` is returned for invalid arguments.
  */
-[[cheri::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   futex_wake(uint32_t *address, uint32_t count);

@@ -23,7 +23,7 @@
 		__asm(".ifndef " mangledName "\n"                                      \
 		      "  .type     " mangledName ",@object\n"                          \
 		      "  .section  .compartment_imports." #name                        \
-		      ",\"awG\",@progbits," #name ",comdat\n"                          \
+		      ",\"awG\",@progbits," mangledName ",comdat\n"                    \
 		      "  .globl    " mangledName "\n"                                  \
 		      "  .p2align  3\n" mangledName ":\n"                              \
 		      "  .word " #prefix #name "\n"                                    \
@@ -259,8 +259,8 @@
   type, compartment, keyName, name, initialiser, ...)                          \
 	extern __if_cxx("C") int __sealing_key_##compartment##_##keyName __asm(    \
 	  "__export.sealing_type." #compartment "." #keyName);                     \
-	__attribute__((section(".sealed_objects"), used))                          \
-	__if_cxx(inline) struct __##name##_type                                    \
+	__attribute__((section(".sealed_objects"), used)) __if_cxx(                \
+	  inline) struct __##name##_type                                           \
 	  name = /* NOLINT(bugprone-macro-parentheses) */                          \
 	  {(uint32_t) & __sealing_key_##compartment##_##keyName,                   \
 	   0,                                                                      \
@@ -310,8 +310,8 @@
 		__asm(".ifndef __import.sealed_object." #name "\n"                     \
 		      "  .type     __import.sealed_object." #name ",@object\n"         \
 		      "  .section  .compartment_imports." #name                        \
-		      ",\"awG\",@progbits," #name ",comdat\n"                          \
-		      "  .globl    __import.sealed_object." #name "\n"                 \
+		      ",\"awG\",@progbits," #name "\n"                                 \
+		      "  .weak    __import.sealed_object." #name "\n"                  \
 		      "  .p2align  3\n"                                                \
 		      "__import.sealed_object." #name ":\n"                            \
 		      "  .word " #name "\n"                                            \

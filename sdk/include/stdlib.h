@@ -89,12 +89,12 @@ DECLARE_ALLOCATOR_CAPABILITY(__default_malloc_capability)
  */
 DEFINE_ALLOCATOR_CAPABILITY(__default_malloc_capability, MALLOC_QUOTA)
 #	endif
-#endif
 
 /**
  * Helper macro to look up the default malloc capability.
  */
-#define MALLOC_CAPABILITY STATIC_SEALED_VALUE(__default_malloc_capability)
+#	define MALLOC_CAPABILITY STATIC_SEALED_VALUE(__default_malloc_capability)
+#endif
 
 #ifndef MALLOC_WAIT_TICKS
 /**
@@ -224,8 +224,8 @@ ssize_t __cheri_compartment("allocator")
   heap_claim(AllocatorCapability heapCapability, void *pointer);
 
 /**
- * Interface to the fast claims mechanism.  This claims two pointers using the
- * hazard-pointer-inspired lightweight claims mechanism.  If this function
+ * Interface to the ephemeral claims mechanism.  This claims two pointers using
+ * the hazard-pointer-inspired lightweight claims mechanism.  If this function
  * returns zero then the heap pointers are guaranteed not to become invalid
  * until either the next cross-compartment call or the next call to this
  * function.

@@ -26,9 +26,7 @@ namespace DebugConcepts
 	/// Concept for something that can be lazily called to produce a bool.
 	template<typename T>
 	concept LazyAssertion = requires(T v) {
-		{
-			v()
-		} -> IsBool;
+		{ v() } -> IsBool;
 	};
 
 	template<typename T>
@@ -388,7 +386,7 @@ struct DebugFormatArgumentAdaptor<T>
 	__always_inline static DebugFormatArgument construct(T value)
 	{
 		return {reinterpret_cast<uintptr_t>(
-		          static_cast<const volatile void *>(value)),
+		          reinterpret_cast<const volatile void *>(value)),
 		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };

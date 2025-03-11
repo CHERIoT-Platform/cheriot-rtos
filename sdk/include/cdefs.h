@@ -73,8 +73,15 @@ using _Bool = bool;
 // define away the compartment name and pretend everything is local for now.
 #if defined(CLANG_TIDY) || defined(__CHERIOT_BAREMETAL__)
 #	define __cheri_compartment(x)
+#	define __cheriot_compartment(x)
 #else
-#	define __cheri_compartment(x) __attribute__((cheri_compartment(x)))
+#	if __has_attribute(cheriot_compartment)
+#		define __cheri_compartment(x) __attribute__((cheriot_compartment(x)))
+#		define __cheriot_compartment(x) __attribute__((cheriot_compartment(x)))
+#	else
+#		define __cheri_compartment(x) __attribute__((cheri_compartment(x)))
+#		define __cheriot_compartment(x) __attribute__((cheri_compartment(x)))
+#	endif
 #endif
 
 // Define the CHERIoT calling-convention attributes macros to nothing if we're
@@ -82,10 +89,24 @@ using _Bool = bool;
 // RTOS.
 #ifdef __CHERIOT_BAREMETAL__
 #	define __cheri_libcall
+#	define __cheriot_libcall
 #	define __cheri_callback
+#	define __cheriot_callback
 #else
-#	define __cheri_libcall __attribute__((cheri_libcall))
-#	define __cheri_callback __attribute__((cheri_ccallback))
+#	if __has_attribute(cheriot_libcall)
+#		define __cheri_libcall __attribute__((cheriot_libcall))
+#		define __cheriot_libcall __attribute__((cheriot_libcall))
+#	else
+#		define __cheri_libcall __attribute__((cheri_libcall))
+#		define __cheriot_libcall __attribute__((cheri_libcall))
+#	endif
+#	if __has_attribute(cheriot_libcall)
+#		define __cheri_callback __attribute__((cheriot_ccallback))
+#		define __cheriot_callback __attribute__((cheriot_ccallback))
+#	else
+#		define __cheri_callback __attribute__((cheri_ccallback))
+#		define __cheriot_callback __attribute__((cheri_ccallback))
+#	endif
 #endif
 
 #define offsetof(a, b) __builtin_offsetof(a, b)
@@ -117,6 +138,11 @@ using _Bool = bool;
 #endif
 
 #if !defined(CLANG_TIDY) && !__has_builtin(__builtin_cheri_top_get)
+#	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
+#endif
+
+#if (defined(__CHERIOT__) && __CHERIOT__ < 20250113) ||                        \
+  (defined(__CHERIOT_BAREMETAL__) && __CHERIOT_BAREMETAL__ < 20250113)
 #	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
 #endif
 

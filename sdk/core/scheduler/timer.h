@@ -18,15 +18,9 @@ namespace
 	 */
 	template<typename T>
 	concept IsTimer = requires(uint32_t cycles) {
-		{
-			T::init()
-		};
-		{
-			T::setnext(cycles)
-		};
-		{
-			T::next()
-		} -> std::same_as<uint64_t>;
+		{ T::init() };
+		{ T::setnext(cycles) };
+		{ T::next() } -> std::same_as<uint64_t>;
 	};
 
 	static_assert(

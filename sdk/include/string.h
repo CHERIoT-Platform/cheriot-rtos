@@ -30,6 +30,10 @@ CHERIOT_DECLARE_STANDARD_LIBCALL(memmove,
 CHERIOT_DECLARE_STANDARD_LIBCALL(memchr, void *, const void *, int, size_t)
 CHERIOT_DECLARE_STANDARD_LIBCALL(memrchr, void *, const void *, int, size_t)
 CHERIOT_DECLARE_STANDARD_LIBCALL(strlen, size_t, const char *str)
+CHERIOT_DECLARE_STANDARD_LIBCALL(strnlen,
+                                 size_t,
+                                 const char *str,
+                                 size_t      maxlen)
 CHERIOT_DECLARE_STANDARD_LIBCALL(strncmp,
                                  int,
                                  const char *s1,
