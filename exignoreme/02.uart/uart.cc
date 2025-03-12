@@ -71,10 +71,11 @@ void __cheri_compartment("uart") uart_entry()
 	tasks_set_initialise_modem();
 	Debug::log("Begin the processing here");
 	tasks_process();
-	while(true)
+	auto irqCount = *uart1InterruptFutex;
+	do
     {
-        Timeout t {MS_TO_TICKS(60000)};
-        auto irqCount = *uart1InterruptFutex;
+        // Timeout t {MS_TO_TICKS(60000)};
+        irqCount = *uart1InterruptFutex;
 
 		//Debug::log("UART status {}, IRQ count {}", uart1->status, irqCount);
 
@@ -105,12 +106,13 @@ void __cheri_compartment("uart") uart_entry()
 				outputBufferOffset = 0;
 			} else {
 				while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
-					// Debug::log("2 outputBufferOffset = {}", outputBufferOffset);
+					// Debug::log("2 outputBufferOffset[{}/{}] = {}", outputBufferOffset, outputBufferLength, outputBuffer[outputBufferOffset]);
 					uart1->writeData = outputBuffer[outputBufferOffset];
 					outputBufferOffset++;
 					if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
 						outputBufferLength = 0;
 						outputBufferOffset = 0;
+						break;
 					}
 				}
 			}
@@ -118,7 +120,8 @@ void __cheri_compartment("uart") uart_entry()
 
 		interrupt_complete(STATIC_SEALED_VALUE(uart1InterruptCap));
 
-        auto waitRes = futex_timed_wait(&t, uart1InterruptFutex, irqCount);
+        //auto waitRes = futex_timed_wait(&t, uart1InterruptFutex, irqCount);
         // Debug::log("futex_timed_wait return {}", waitRes);
-	}
+	} while((irqCount != *uart1InterruptFutex) || (futex_wait(uart1InterruptFutex, irqCount) == 0));
+	Debug::log("ERROR! You've exited the main loop! This should not be possible!");
 }
