@@ -15,10 +15,17 @@
 #include "modem.hh"
 
 
+/*
+* Await some (hardware-specified) number of bytes in the UART's RX FIFO before
+* waking the core.  Set to Level1 to echo byte by byte.
+*/
+constexpr auto RXFifoLevel = OpenTitanUart::ReceiveWatermark::Level1;
+
 /// Expose debugging features unconditionally for this compartment.
 using Debug = ConditionalDebug<true, "uart">;
 
-// DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(uart1InterruptCap, Uart1Interrupt, true, true);
+DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(uart1InterruptCap, Uart1Interrupt, true, true);
+
 #define BUFF_OUTPUT_SIZE	(200)
 #define BUFF_INPUT_SIZE		(40)
 
@@ -55,17 +62,27 @@ void __cheri_compartment("uart") uart_entry()
 	auto uart1 = MMIO_CAPABILITY(OpenTitanUart, uart1);
 	uart1->init(115200);
 
+	uart1->receive_watermark(RXFifoLevel);
+    uart1->interrupt_enable(OpenTitanUart::InterruptReceiveWatermark);
+
+	auto uart1InterruptFutex = interrupt_futex_get(STATIC_SEALED_VALUE(uart1InterruptCap));
+
 	Debug::log("Initialise modem");
 	tasks_set_initialise_modem();
 	Debug::log("Begin the processing here");
 	tasks_process();
 	while(true)
     {
+        Timeout t {MS_TO_TICKS(60000)};
+        auto irqCount = *uart1InterruptFutex;
+
+		//Debug::log("UART status {}, IRQ count {}", uart1->status, irqCount);
+
 		// Is there anything to read.
 		if(uart1->status & OpenTitanUart::StatusReceiveFull) {
 			Debug::log("Rx buffer full!");
 		}
-		if(uart1->can_read()) {
+		while((uart1->status & OpenTitanUart::StatusReceiveEmpty) == 0) {
 			char c = uart1->readData;
 			inputBuffer[inputBufferOffset] = c;
 			inputBufferOffset++;
@@ -86,16 +103,22 @@ void __cheri_compartment("uart") uart_entry()
 				Debug::log("outputBufferOffset = {}", outputBufferOffset);
 				outputBufferLength = 0;
 				outputBufferOffset = 0;
-			} else if(uart1->can_write()) {
-				// Debug::log("2 outputBufferOffset = {}", outputBufferOffset);
-				uart1->writeData = outputBuffer[outputBufferOffset];
-				outputBufferOffset++;
-				if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
-					outputBufferLength = 0;
-					outputBufferOffset = 0;
+			} else {
+				while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
+					// Debug::log("2 outputBufferOffset = {}", outputBufferOffset);
+					uart1->writeData = outputBuffer[outputBufferOffset];
+					outputBufferOffset++;
+					if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
+						outputBufferLength = 0;
+						outputBufferOffset = 0;
+					}
 				}
 			}
 		}
 
+		interrupt_complete(STATIC_SEALED_VALUE(uart1InterruptCap));
+
+        auto waitRes = futex_timed_wait(&t, uart1InterruptFutex, irqCount);
+        // Debug::log("futex_timed_wait return {}", waitRes);
 	}
 }
