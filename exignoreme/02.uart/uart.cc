@@ -3,15 +3,17 @@
 
 #include "compartment-macros.h"
 #include "platform/sunburst/platform-pinmux.hh"
+#include <array>
 #include <compartment.h>
 #include <cstdint>
+#include <cstdlib>
 #include <debug.hh>
 #include <futex.h>
 #include <interrupt.h>
 #include <tick_macros.h>
-#include <timeout.h>
+#include <timeout.hh>
 #include <platform/sunburst/platform-uart.hh>
-#include <stdio.h>
+#include <multiwaiter.h>
 #include "modem.hh"
 
 
@@ -67,6 +69,10 @@ void __cheri_compartment("uart") uart_entry()
 
 	auto uart1InterruptFutex = interrupt_futex_get(STATIC_SEALED_VALUE(uart1InterruptCap));
 
+	Debug::log("Create the multiwaiter");
+	MultiWaiter multiwaiter;
+	blocking_forever<multiwaiter_create>(MALLOC_CAPABILITY, &multiwaiter, 2);	// Space for 2 events.
+
 	Debug::log("Initialise modem");
 	tasks_set_initialise_modem();
 	Debug::log("Begin the processing here");
@@ -74,54 +80,60 @@ void __cheri_compartment("uart") uart_entry()
 	auto irqCount = *uart1InterruptFutex;
 	do
     {
-        // Timeout t {MS_TO_TICKS(60000)};
-        irqCount = *uart1InterruptFutex;
+		std::array<EventWaiterSource, 1> events;
+		events[0].eventSource = reinterpret_cast<void *>(const_cast<uint32_t*>(uart1InterruptFutex));
+		events[0].value = irqCount;
 
+        irqCount = *uart1InterruptFutex;
 		//Debug::log("UART status {}, IRQ count {}", uart1->status, irqCount);
 
-		// Is there anything to read.
-		if(uart1->status & OpenTitanUart::StatusReceiveFull) {
-			Debug::log("Rx buffer full!");
-		}
-		while((uart1->status & OpenTitanUart::StatusReceiveEmpty) == 0) {
-			char c = uart1->readData;
-			inputBuffer[inputBufferOffset] = c;
-			inputBufferOffset++;
-			inputBuffer[inputBufferOffset] = 0;	// Ensure termination
-			// if((inputBufferOffset >= BUFF_INPUT_SIZE) || (c == '\r') || (c == '\n')) {
-			if((inputBufferOffset >= BUFF_INPUT_SIZE) || (c == '\n')) {
-				// printf("Read: %s", inputBuffer);
-				process_serial_replies(inputBuffer, inputBufferOffset);
-				inputBufferOffset = 0;
-				inputBuffer[inputBufferOffset] = 0;	// Empty the string.
+		do {
+			if(uart1->status & OpenTitanUart::StatusReceiveFull) {
+				Debug::log("Rx buffer full!");
 			}
-		}
-		if(outputBufferLength > 0) {
-			// Debug::log("1 outputBufferLength = {}", outputBufferLength);
-			if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
-				Debug::log("ERROR Tx Offset exceeded Length! Impossible?");
-				Debug::log("outputBufferLength = {}", outputBufferLength);
-				Debug::log("outputBufferOffset = {}", outputBufferOffset);
-				outputBufferLength = 0;
-				outputBufferOffset = 0;
-			} else {
-				while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
-					// Debug::log("2 outputBufferOffset[{}/{}] = {}", outputBufferOffset, outputBufferLength, outputBuffer[outputBufferOffset]);
-					uart1->writeData = outputBuffer[outputBufferOffset];
-					outputBufferOffset++;
-					if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
-						outputBufferLength = 0;
-						outputBufferOffset = 0;
-						break;
+			// Is there anything to read?
+			while((uart1->status & OpenTitanUart::StatusReceiveEmpty) == 0) {
+				char c = uart1->readData;
+				inputBuffer[inputBufferOffset] = c;
+				inputBufferOffset++;
+				inputBuffer[inputBufferOffset] = 0;	// Ensure termination
+				// if((inputBufferOffset >= BUFF_INPUT_SIZE) || (c == '\r') || (c == '\n')) {
+				if((inputBufferOffset >= BUFF_INPUT_SIZE) || (c == '\n')) {
+					// printf("Read: %s", inputBuffer);
+					process_serial_replies(inputBuffer, inputBufferOffset);
+					inputBufferOffset = 0;
+					inputBuffer[inputBufferOffset] = 0;	// Empty the string.
+				}
+			}
+			if(outputBufferLength > 0) {
+				// Debug::log("1 outputBufferLength = {}", outputBufferLength);
+				if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
+					Debug::log("ERROR Tx Offset exceeded Length! Impossible?");
+					Debug::log("outputBufferLength = {}", outputBufferLength);
+					Debug::log("outputBufferOffset = {}", outputBufferOffset);
+					outputBufferLength = 0;
+					outputBufferOffset = 0;
+				} else {
+					while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
+						// Debug::log("2 outputBufferOffset[{}/{}] = {}", outputBufferOffset, outputBufferLength, outputBuffer[outputBufferOffset]);
+						uart1->writeData = outputBuffer[outputBufferOffset];
+						outputBufferOffset++;
+						if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
+							outputBufferLength = 0;
+							outputBufferOffset = 0;
+							break;
+						}
 					}
 				}
 			}
-		}
 
-		interrupt_complete(STATIC_SEALED_VALUE(uart1InterruptCap));
+			interrupt_complete(STATIC_SEALED_VALUE(uart1InterruptCap));
+		} while(irqCount != *uart1InterruptFutex);
 
-        //auto waitRes = futex_timed_wait(&t, uart1InterruptFutex, irqCount);
-        // Debug::log("futex_timed_wait return {}", waitRes);
-	} while((irqCount != *uart1InterruptFutex) || (futex_wait(uart1InterruptFutex, irqCount) == 0));
+		int ret = blocking_forever<multiwaiter_wait>(multiwaiter, events.data(), events.size());
+		Debug::Assert(ret == 0, "Multiwaiter failed: {}", ret);
+
+	} while(true);
+	// } while((irqCount != *uart1InterruptFutex) || (futex_wait(uart1InterruptFutex, irqCount) == 0));
 	Debug::log("ERROR! You've exited the main loop! This should not be possible!");
 }
