@@ -14,7 +14,9 @@
 #include <timeout.hh>
 #include <platform/sunburst/platform-uart.hh>
 #include <multiwaiter.h>
+#include <queue.h>
 #include "modem.hh"
+#include "token.h"
 
 
 /*
@@ -37,6 +39,29 @@ uint16_t outputBufferLength = 0;
 
 char inputBuffer[BUFF_INPUT_SIZE + 1];
 uint16_t inputBufferOffset = 0;
+
+// The queue that we will wait on.
+CHERI_SEALED(MessageQueue *) queue;
+
+/**
+ * Set the queue that the thread in this compartment will
+ * use.
+ */
+void __cheriot_compartment("uart") set_queue(CHERI_SEALED(MessageQueue *) newQueue)
+{
+	// set_queue#begin
+	// Check that this is a valid queue
+	size_t items;
+	if (queue_items_remaining_sealed(newQueue, &items) != 0)
+	{
+		return;
+	}
+	// Set it in the global and allow the thread to start.
+	queue = newQueue;
+	Debug::log("Queue set to {}", queue);
+	futex_wake(reinterpret_cast<uint32_t *>(&queue), 1);
+	// set_queue#end
+}
 
 uint16_t append_to_tx_buffer(char* msg, uint16_t len)
 {
@@ -73,6 +98,14 @@ void __cheri_compartment("uart") uart_entry()
 	MultiWaiter multiwaiter;
 	blocking_forever<multiwaiter_create>(MALLOC_CAPABILITY, &multiwaiter, 2);	// Space for 2 events.
 
+	// Wait for the other thread to start!
+	Debug::log("Wait for producer thread to start.");
+	// Use the queue pointer as a futex.  It is initialised to
+	// 0, if the other thread has stored a valid pointer here
+	// then it will not be zero and so futex_wait will return
+	// immediately.
+	futex_wait(reinterpret_cast<uint32_t *>(&queue), 0);
+
 	Debug::log("Initialise modem");
 	tasks_set_initialise_modem();
 	Debug::log("Begin the processing here");
@@ -80,14 +113,13 @@ void __cheri_compartment("uart") uart_entry()
 	auto irqCount = *uart1InterruptFutex;
 	do
     {
-		std::array<EventWaiterSource, 1> events;
+		std::array<EventWaiterSource, 2> events;
 		events[0].eventSource = reinterpret_cast<void *>(const_cast<uint32_t*>(uart1InterruptFutex));
 		events[0].value = irqCount;
-
-        irqCount = *uart1InterruptFutex;
-		//Debug::log("UART status {}, IRQ count {}", uart1->status, irqCount);
+		multiwaiter_queue_receive_init_sealed(&events[1], queue);
 
 		do {
+			irqCount = *uart1InterruptFutex;
 			if(uart1->status & OpenTitanUart::StatusReceiveFull) {
 				Debug::log("Rx buffer full!");
 			}
@@ -133,6 +165,13 @@ void __cheri_compartment("uart") uart_entry()
 		int ret = blocking_forever<multiwaiter_wait>(multiwaiter, events.data(), events.size());
 		Debug::Assert(ret == 0, "Multiwaiter failed: {}", ret);
 
+		// Has there been a message for us to read?
+		uint32_t val = 0;
+		if(events[1].value) {
+			ret = non_blocking<queue_receive_sealed>(queue, &val);
+			Debug::Assert(ret == 0, "Failed to receive message from queue: {}", ret);
+			Debug::log("Received {} on queue", val);
+		}
 	} while(true);
 	// } while((irqCount != *uart1InterruptFutex) || (futex_wait(uart1InterruptFutex, irqCount) == 0));
 	Debug::log("ERROR! You've exited the main loop! This should not be possible!");
