@@ -398,18 +398,18 @@ namespace SonataSpi
 		 * @tparam DeassertOthers Whether to de-assert all other chip selects.
 		 * @param Assert Whether to assert (true) or de-assert (false).
 		 */
-		 template<uint8_t Index, bool DeassertOthers = true>
-		 inline void chip_select_assert(const bool Assert = true) volatile
-		 {
-			 static_assert(Index < NumChipSelects,
-						   "SPI chip select index out of bounds");
- 
-			 const uint32_t State =
-			   DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
- 
-			 const uint32_t Bit = (1 << Index);
-			 chipSelects        = Assert ? State & ~Bit : State | Bit;
-		 }
+		template<uint8_t Index, bool DeassertOthers = true>
+		inline void chip_select_assert(const bool Assert = true) volatile
+		{
+			static_assert(Index < NumChipSelects,
+						"SPI chip select index out of bounds");
+
+			const uint32_t State =
+			DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
+
+			const uint32_t Bit = (1 << Index);
+			chipSelects        = Assert ? State & ~Bit : State | Bit;
+		}
 
 		/**
 		 * Asserts/de-asserts a given chip select.
@@ -420,19 +420,19 @@ namespace SonataSpi
 		 * @tparam DeassertOthers Whether to de-assert all other chip selects.
 		 * @param Index The index of the chip select to be set.
 		 * @param Assert Whether to assert (true) or de-assert (false).
-		 */
-		 template<bool DeassertOthers = true>
-		 inline void chip_select_assert(uint8_t index, const bool Assert = true) volatile
-		 {
-			 Debug::Assert(index < NumChipSelects,
-				"SPI chip select index out of bounds");
+		*/
+		template<bool DeassertOthers = true>
+		inline void chip_select_assert(uint8_t index, const bool Assert = true) volatile
+		{
+			Debug::Assert(index < NumChipSelects,
+			"SPI chip select index out of bounds");
 
-			 const uint32_t State =
-			   DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
- 
-			 const uint32_t Bit = (1 << index);
-			 chipSelects        = Assert ? State & ~Bit : State | Bit;
-		 }
+			const uint32_t State =
+			DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
+
+			const uint32_t Bit = (1 << index);
+			chipSelects        = Assert ? State & ~Bit : State | Bit;
+		}
 	  };
 
 	/// A specialised driver for the SPI device connected to the Ethernet MAC.
