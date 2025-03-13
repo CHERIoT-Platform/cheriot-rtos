@@ -320,6 +320,28 @@ namespace SonataSpi
 
 
 		/*
+		* Sets the level transmit watermark.
+		*
+		* When the number of bytes in the transmit FIFO reach this level,
+		* the transmit watermark interrupt will fire.
+		*/
+		void transmit_watermark(uint32_t level) volatile
+		{
+			control = ((level << 4) & ControlTransmitWatermarkMask) | (control & ~ControlTransmitWatermarkMask);
+		}
+	
+		/**
+		* Sets the level receive watermark.
+		*
+		* When the number of bytes in the receive FIFO reach this level,
+		* the receive watermark interrupt will fire.
+		*/
+		void receive_watermark(uint32_t level) volatile
+		{
+			control = ((level << 8) & ControlReceiveWatermarkMask) | (control & ~ControlReceiveWatermarkMask);
+		}
+
+		/*
 		* Sends `len` bytes from the given `txData` buffer &
 		* receives `len` bytes and puts them in the `rxData` buffer,
 		* where `len` is at most `0x7ff`.
@@ -329,7 +351,7 @@ namespace SonataSpi
 		*/
 		void blocking_transfer(const uint8_t txData[], uint8_t rxData[], uint16_t len) volatile
 		{
-			Debug::Assert(len <= 0x7ff,
+			Debug::Assert(len <= StartByteCountMask,
 						"You can't receive more than 0x7ff bytes at a time.");
 			len &= StartByteCountMask;
 			wait_idle();
@@ -339,13 +361,12 @@ namespace SonataSpi
 				control = ControlReceiveEnable | ControlTransmitEnable;
 				start   = len;
 	
-				uint32_t transmitAvailable = 0;
 				uint16_t txCnt = 0;
 				uint16_t rxCnt = 0;
 				uint8_t dummy;
 				while(rxCnt < len)
 				{
-					// Wait for at least one byte to be available in the RX FIFO
+					// Check if any space available in the TX FIFO
 					if((txCnt < len) && (!(status & StatusTxFifoFull))) {
 						if(txData != NULL) {
 							transmitFifo = txData[txCnt];
@@ -354,6 +375,7 @@ namespace SonataSpi
 						}
 						txCnt++;
 					}
+					// Check if any data available in the RX FIFO
 					if((status & StatusRxFifoLevel) > 0) {
 						if(rxData != NULL) {
 							rxData[rxCnt] = static_cast<uint8_t>(receiveFifo);
