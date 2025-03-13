@@ -16,7 +16,7 @@
 #include <multiwaiter.h>
 #include <queue.h>
 #include "modem.hh"
-#include "token.h"
+#include "uart2.hh"
 
 
 /*
@@ -166,11 +166,11 @@ void __cheri_compartment("uart") uart_entry()
 		Debug::Assert(ret == 0, "Multiwaiter failed: {}", ret);
 
 		// Has there been a message for us to read?
-		uint32_t val = 0;
+		QueueMessage val = {0,0};
 		if(events[1].value) {
 			ret = non_blocking<queue_receive_sealed>(queue, &val);
 			Debug::Assert(ret == 0, "Failed to receive message from queue: {}", ret);
-			Debug::log("Received {} on queue", val);
+			Debug::log("Received message type {}, data {}", val.messType, val.messData);
 		}
 	} while(true);
 	// } while((irqCount != *uart1InterruptFutex) || (futex_wait(uart1InterruptFutex, irqCount) == 0));

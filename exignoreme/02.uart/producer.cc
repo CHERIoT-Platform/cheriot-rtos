@@ -20,12 +20,12 @@ void __cheri_compartment("producer") main_entry()
 	Debug::log("Generate Messages for Queue");
 	// Allocate the queue
 	CHERI_SEALED(MessageQueue *) queue;
-	non_blocking<queue_create_sealed>(MALLOC_CAPABILITY, &queue, sizeof(int), 16);
+	non_blocking<queue_create_sealed>(MALLOC_CAPABILITY, &queue, sizeof(QueueMessage), 16);
 	// Pass the queue handle to the consumer.
 	set_queue(queue);
 
 	Debug::log("Start producer loop");
-	uint32_t message = 0;
+	QueueMessage message = {0,0};
 	while(true) {
 		thread_millisecond_wait(60000);	// sleep for 1 minute
 		int ret = blocking_forever<queue_send_sealed>(queue, &message);
@@ -33,7 +33,7 @@ void __cheri_compartment("producer") main_entry()
 		if(ret != 0) {
 			Debug::log("Queue send failed {}", ret);
 		} else {
-			message++;	// Only increment if it worked.
+			message.messData++;	// Only increment if it worked.
 		}
 	}
 }
