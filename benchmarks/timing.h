@@ -5,6 +5,16 @@ namespace
 	/**
 	 * Read the cycle counter.
 	 */
+	int rdinstret()
+	{
+		int res;
+		__asm__ volatile("csrr %0, minstret" : "=r"(res));
+		return res;
+	}
+
+	/**
+	 * Read the cycle counter.
+	 */
 	int rdcycle()
 	{
 		int cycles;
