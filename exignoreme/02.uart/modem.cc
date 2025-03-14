@@ -28,6 +28,9 @@ using Debug = ConditionalDebug<true, "Modem.cc">;
 #define TASK_PING (5)     // Ping an address
 #define TASK_URL (6)      // Opens a URL
 #define TASK_POST (7)     // Posts to the opened URL
+#define TASK_CONTEXT_ID (8)	// Set the HTTP Context ID
+#define TASK_QUERY_CONTEXT (9)	// Query the HTTP Context state
+#define TASK_ACTIVATE_CONTEXT (10)	// Activate the HTTP Context
 
 volatile OpenTitanUart *uartInterface = NULL;
 
@@ -46,6 +49,9 @@ char *tasksCmds[] = {
   "at+qping",
   "at+qhttpurl",
   "at+qhttppost",
+  "at+qhttpcfg=\"contextid\",1",
+  "at+qiact?",
+  "at+qiact=1"
 };
 
 uint8_t *tasks       = NULL;
@@ -93,11 +99,13 @@ void modem_init()
 
 char post[] = "\r\n\r\n";
 // This is a very old IP that we don't have anymore. Feel free to chaneg it to something useful to you.
-#define FORMAT_URL "http://35.178.111.83:3100/trk/%s/?%s"
+// #define FORMAT_URL "http://35.178.111.83:3100/trk/%s/?%s"
+#define FORMAT_URL "http://18.175.136.129:3100/trk/%s/?%s"
 char *url       = NULL;
 char *modemImsi = NULL;
 char *modemImei = NULL;
 char *modemCcid = NULL;
+char *contextData = NULL;
 
 void tasks_process() {
 	char *tx;
@@ -112,22 +120,31 @@ void tasks_process() {
 			free(tasks);
 			tasks = NULL;
 			break;
-		case TASK_GET_IMSI:
-		case TASK_GET_IMEI:
-		case TASK_GET_CCID:
-			// modem_serial_send(tasksCmds[tasks[currentTask]],
-			//                   strlen(tasksCmds[tasks[currentTask]]));
-			// modem_serial_send("\r\n", 2);
+		case TASK_GET_IMSI:	// Get the IMSI
+		case TASK_GET_IMEI:	// Get the IMEI
+		case TASK_GET_CCID:	// Get the CCID
+		case TASK_CONTEXT_ID:	// Set the HTTP Context ID
+		case TASK_QUERY_CONTEXT:	// Query the HTTP Context state
 			append_to_tx_buffer(tasksCmds[tasks[currentTask]],
 				strlen(tasksCmds[tasks[currentTask]]));
 			append_to_tx_buffer("\r\n", 2);
+			break;
+		case TASK_ACTIVATE_CONTEXT:	// Activate the HTTP Context
+			if(contextData == NULL) {
+				append_to_tx_buffer(tasksCmds[tasks[currentTask]],
+					strlen(tasksCmds[tasks[currentTask]]));
+				append_to_tx_buffer("\r\n", 2);
+			} else {
+				Debug::log("Context already active.");
+				currentTask++;
+				tasks_process();
+			}
 			break;
 		case TASK_SET_APN: // Set the APN
 			tx = static_cast<char *>(calloc(1, strlen(tasksCmds[tasks[currentTask]]) + 21 + 1));
 			sprintf(tx,
 			        "%s=1,\"IP\",\"gigsky-02\"\r\n",
 			        tasksCmds[tasks[currentTask]]);
-			// modem_serial_send(tx, strlen(tx));
 			append_to_tx_buffer(tx, strlen(tx));
 			
 			free(tx);
@@ -137,7 +154,6 @@ void tasks_process() {
 			  calloc(1, strlen(tasksCmds[tasks[currentTask]]) + 21 + 1));
 			sprintf(
 			  tx, "%s=1,\"www.google.com\"\r\n", tasksCmds[tasks[currentTask]]);
-			// modem_serial_send(tx, strlen(tx));
 			append_to_tx_buffer(tx, strlen(tx));
 			free(tx);
 			break;
@@ -146,9 +162,7 @@ void tasks_process() {
 			  calloc(1, strlen(tasksCmds[tasks[currentTask]]) + 100 + 1));
 			sprintf(
 			  tx, "%s=%lu,80\r\n", tasksCmds[tasks[currentTask]], strlen(url));
-			printf("Modem ");
-			printf(" OUT (serial): %s", tx);
-			// modem_serial_send(tx, strlen(tx));
+			printf("Modem: OUT (serial): %s", tx);
 			append_to_tx_buffer(tx, strlen(tx));
 			free(tx);
 			break;
@@ -159,9 +173,7 @@ void tasks_process() {
 			        "%s=%lu,80,80\r\n",
 			        tasksCmds[tasks[currentTask]],
 			        strlen(post));
-			printf("Modem ");
-			printf(" OUT (serial): %s", tx);
-			//modem_serial_send(tx, strlen(tx));
+			printf("Modem: OUT (serial): %s", tx);
 			append_to_tx_buffer(tx, strlen(tx));
 			free(tx);
 			break;
@@ -177,17 +189,21 @@ void tasks_process() {
 // 	printf("\n");
 // }
 
-void process_serial_replies(char *buffer, size_t len)
+bool process_serial_replies(char *buffer, size_t len)
 {
-	// printf("Serial In (%lu): %.*s", len, (int)len, buffer);
+	bool ret = false;
+	// printf("Serial In (%lu): %.*s", len, len, buffer);
 	// printf("  Command (%lu): %.*s\r\n",
-	// strlen(tasks_cmds[tasks[currentTask]]),
-	// (int)strlen(tasks_cmds[tasks[currentTask]]),
-	// tasks_cmds[tasks[currentTask]]); printf("Serial In (%lu): ", len);
+	// strlen(tasksCmds[tasks[currentTask]]),
+	// strlen(tasksCmds[tasks[currentTask]]),
+	// tasksCmds[tasks[currentTask]]); printf("Serial In (%lu): ", len);
 	// printInHex(buffer);
-	// printf("  Command (%lu): ", strlen(tasks_cmds[tasks[currentTask]]));
-	// printInHex(tasks_cmds[tasks[currentTask]]);
+	// printf("  Command (%lu): ", strlen(tasksCmds[tasks[currentTask]]));
+	// printInHex(tasksCmds[tasks[currentTask]]);
 
+	// if((tasks != NULL) && (tasks[currentTask] == TASK_URL)) {
+	// 	printf("process_serial_replies(): %.*s", len, buffer);
+	// }
 	if (tasks == NULL)
 	{
 		// printf("Modem ");
@@ -199,19 +215,14 @@ void process_serial_replies(char *buffer, size_t len)
 	else if (0 == strncmp("OK\r\n", buffer, len))
 	{
 		printf("Modem ");
-		// print_time_now();
 		printf(" AT Command: Message successfully processed!\n");
-		// fflush(stdout);
-		// Start the next task (if there is one)
 		currentTask++;
 		tasks_process();
 	}
 	else if (0 == strncmp("ERROR", buffer, 5))
 	{
 		printf("Modem ");
-		// print_time_now();
 		printf(" ERROR! Retry the command.\n");
-		// fflush(stdout);
 		tasks_process();
 	}
 	else if (0 == strncmp("\r\n", buffer, 2))
@@ -252,57 +263,61 @@ void process_serial_replies(char *buffer, size_t len)
 		switch (tasks[currentTask])
 		{
 			case TASK_GET_IMSI:
+				if(contextData != NULL) {
+					free(modemImsi);
+				}
 				modemImsi = static_cast<char *>(calloc(1, eol + 1));
 				strncpy(modemImsi, buffer, eol);
 				printf("Modem ");
-				//   print_time_now();
 				printf(" IMSI: %s\n", modemImsi);
-				//   fflush(stdout);
 				break;
 			case TASK_GET_IMEI:
+				if(contextData != NULL) {
+					free(modemImei);
+				}
 				modemImei = static_cast<char *>(calloc(1, eol + 1));
 				strncpy(modemImei, buffer, eol);
 				printf("Modem ");
-				//   print_time_now();
 				printf(" IMEI: %s\n", modemImei);
-				//   fflush(stdout);
 				break;
 			case TASK_GET_CCID:
+				if(contextData != NULL) {
+					free(modemCcid);
+				}
 				modemCcid = static_cast<char *>(calloc(1, eol + 1));
 				strncpy(modemCcid, buffer, eol);
 				printf("Modem ");
-				//   print_time_now();
 				printf(" CCID: %s\n", modemCcid);
-				//   fflush(stdout);
+				break;
+			case TASK_QUERY_CONTEXT:
+				if(contextData != NULL) {
+					free(contextData);
+				}
+				contextData = static_cast<char *>(calloc(1, eol + 1));
+				strncpy(contextData, buffer, eol);
+				printf("context: %s\n", contextData);
 				break;
 			case TASK_URL:
 				if (0 == strncmp("CONNECT", buffer, 7))
 				{
 					printf("Modem ");
-					// print_time_now();
 					printf(" OUT (serial): %s\n", url);
-					// fflush(stdout);
-					// printf("%s %u: Sending: %s\n", __FILE__, __LINE__, url);
-					// modem_serial_send(url, strlen(url));
 					append_to_tx_buffer(url, strlen(url));
-
+					ret = true;
 				}
 				break;
 			case TASK_POST:
 				if (0 == strncmp("CONNECT", buffer, 7))
 				{
 					printf("Modem ");
-					// print_time_now();
 					printf(" OUT (serial): Sending: body\n");
-					// fflush(stdout);
-					// printf("%s %u: Sending: body\n", __FILE__, __LINE__);
-					// printf("%s %u: Sending: %s\n", __FILE__, __LINE__, post);
-					// modem_serial_send(post, strlen(post));
 					append_to_tx_buffer(post, strlen(post));
+					ret = true;
 				}
 				break;
 		}
 	}
+	return ret;
 }
 
 void tasks_set_initialise_modem()
@@ -314,12 +329,18 @@ void tasks_set_initialise_modem()
 		currentTask = 0;
 	}
 
-	tasks    = static_cast<uint8_t *>(calloc(1, 5));
+	tasks    = static_cast<uint8_t *>(calloc(1, 9));
 	tasks[0] = TASK_GET_IMSI;
 	tasks[1] = TASK_GET_IMEI;
 	tasks[2] = TASK_GET_CCID;
 	tasks[3] = TASK_SET_APN;
-	tasks[4] = TASK_NONE;
+	tasks[4] = TASK_CONTEXT_ID;
+	tasks[5] = TASK_QUERY_CONTEXT;
+	tasks[6] = TASK_ACTIVATE_CONTEXT;
+	tasks[7] = TASK_QUERY_CONTEXT;
+	// tasks[8] = TASK_PING;
+	// tasks[9] = TASK_NONE;
+	tasks[8] = TASK_NONE;
 }
 
 void tasks_send_message(char *msg)
@@ -340,13 +361,15 @@ void tasks_send_message(char *msg)
 	{
 		printf("%s %u: msg is null!\n", __FILE__, __LINE__);
 	}
+	// printf("%s %u: msg: %s\n", __FILE__, __LINE__, msg);
 	int urllen = snprintf(NULL, 0, FORMAT_URL, modemImei, msg);
-	url        = static_cast<char *>(calloc(1, urllen + 1));
-	snprintf(url, urllen, FORMAT_URL, modemImei, msg);
-	// printf("%s %u: url = %s\n", __FILE__, __LINE__, url);
-	printf("Modem ");
+	// printf("%s %u: urllen: %i\n", __FILE__, __LINE__, urllen);
+	url        = static_cast<char *>(calloc(1, urllen + 2));
+	snprintf(url, urllen+1, FORMAT_URL, modemImei, msg);
+	printf("%s %u: url[%i] = %s\n", __FILE__, __LINE__, urllen, url);
+	// printf("Modem ");
 	//   print_time_now();
-	printf(" OUT: url = %s\n", url);
+	// printf(" OUT: url = %s\n", url);
 	//   fflush(stdout);
 
 	tasks    = static_cast<uint8_t *>(calloc(1, 3));

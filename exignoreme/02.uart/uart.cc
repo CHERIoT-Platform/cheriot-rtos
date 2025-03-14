@@ -34,8 +34,8 @@ DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(uart1InterruptCap, Uart1Interrupt, true,
 #define BUFF_INPUT_SIZE		(40)
 
 char outputBuffer[BUFF_OUTPUT_SIZE + 1];
-uint16_t outputBufferOffset = 0;
-uint16_t outputBufferLength = 0;
+volatile uint16_t outputBufferOffset = 0;
+volatile uint16_t outputBufferLength = 0;
 
 char inputBuffer[BUFF_INPUT_SIZE + 1];
 uint16_t inputBufferOffset = 0;
@@ -72,7 +72,7 @@ uint16_t append_to_tx_buffer(char* msg, uint16_t len)
 	memcpy(&outputBuffer[outputBufferLength], msg, len);
 	outputBufferLength += len;
 	outputBuffer[outputBufferLength] = 0;
-	// printf("tx_buffer: %s", outputBuffer);
+	printf("%s(): tx_buffer: %s\r\n", __FUNCTION__, outputBuffer);
 	return len;
 }
 
@@ -110,6 +110,7 @@ void __cheri_compartment("uart") uart_entry()
 	tasks_set_initialise_modem();
 	Debug::log("Begin the processing here");
 	tasks_process();
+	Debug::log("After tasks_process();");
 	auto irqCount = *uart1InterruptFutex;
 	do
     {
@@ -132,9 +133,27 @@ void __cheri_compartment("uart") uart_entry()
 				// if((inputBufferOffset >= BUFF_INPUT_SIZE) || (c == '\r') || (c == '\n')) {
 				if((inputBufferOffset >= BUFF_INPUT_SIZE) || (c == '\n')) {
 					// printf("Read: %s", inputBuffer);
-					process_serial_replies(inputBuffer, inputBufferOffset);
+					bool reply = process_serial_replies(inputBuffer, inputBufferOffset);
 					inputBufferOffset = 0;
 					inputBuffer[inputBufferOffset] = 0;	// Empty the string.
+					if(reply) {
+						// printf("%s(%i): outputBufferLength = %i, outputBufferOffset = %i\r\n", __FUNCTION__, __LINE__, outputBufferLength, outputBufferOffset);
+						// printf("%s(%i): outputBuffer = %s\r\n", __FUNCTION__, __LINE__, outputBuffer);
+						// Force the transmission here - it's the only way it works & I can't work out why the tx code below this doesn't do it for us.
+						while(outputBufferLength > 0){
+							while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
+								uart1->writeData = outputBuffer[outputBufferOffset];
+								outputBufferOffset++;
+								if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
+									outputBufferLength = 0;
+									outputBufferOffset = 0;
+									outputBuffer[0] = 0;
+									break;
+								}
+							}
+						}
+						// break;
+					}
 				}
 			}
 			if(outputBufferLength > 0) {
@@ -145,14 +164,15 @@ void __cheri_compartment("uart") uart_entry()
 					Debug::log("outputBufferOffset = {}", outputBufferOffset);
 					outputBufferLength = 0;
 					outputBufferOffset = 0;
+					outputBuffer[0] = 0;
 				} else {
 					while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
-						// Debug::log("2 outputBufferOffset[{}/{}] = {}", outputBufferOffset, outputBufferLength, outputBuffer[outputBufferOffset]);
 						uart1->writeData = outputBuffer[outputBufferOffset];
 						outputBufferOffset++;
 						if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
 							outputBufferLength = 0;
 							outputBufferOffset = 0;
+							outputBuffer[0] = 0;
 							break;
 						}
 					}
@@ -170,7 +190,28 @@ void __cheri_compartment("uart") uart_entry()
 		if(events[1].value) {
 			ret = non_blocking<queue_receive_sealed>(queue, &val);
 			Debug::Assert(ret == 0, "Failed to receive message from queue: {}", ret);
-			Debug::log("Received message type {}, data {}", val.messType, val.messData);
+			// Debug::log("Received message type {}, data {}", val.messType, val.messData);
+			char msg[100];
+			snprintf(msg, 99, "t=%i&v=%i", val.messType, val.messData);
+			// printf("%s %u: msg: %s\n", __FILE__, __LINE__, msg);
+			tasks_send_message(msg);
+			tasks_process();	// Begin the processing now.
+			// printf("%s(%u): Off = %i, len = %i: %s", __FUNCTION__, __LINE__, outputBufferOffset, outputBufferLength, outputBuffer);
+			// Is there anything new to write to the serial?
+			if((outputBufferLength > 0) && (outputBufferOffset < outputBufferLength)) {
+				printf("%s(%u): Off = %i, len = %i: %s",__FUNCTION__, __LINE__, outputBufferOffset, outputBufferLength, outputBuffer);
+				while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
+					// Debug::log("2 outputBufferOffset[{}/{}] = {}", outputBufferOffset, outputBufferLength, outputBuffer[outputBufferOffset]);
+					uart1->writeData = outputBuffer[outputBufferOffset];
+					outputBufferOffset++;
+					if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
+						outputBufferLength = 0;
+						outputBufferOffset = 0;
+						outputBuffer[0] = 0;
+						break;
+					}
+				}
+			}
 		}
 	} while(true);
 	// } while((irqCount != *uart1InterruptFutex) || (futex_wait(uart1InterruptFutex, irqCount) == 0));
