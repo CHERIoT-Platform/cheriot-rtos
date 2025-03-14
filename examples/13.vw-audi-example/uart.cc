@@ -47,20 +47,22 @@ CHERI_SEALED(MessageQueue *) queue;
  * Set the queue that the thread in this compartment will
  * use.
  */
-void __cheriot_compartment("uart") set_queue(CHERI_SEALED(MessageQueue *) newQueue)
+// int __cheriot_compartment("uart") set_queue(CHERI_SEALED(MessageQueue *) newQueue)
+int set_queue(CHERI_SEALED(MessageQueue *) newQueue)
 {
 	// set_queue#begin
 	// Check that this is a valid queue
 	size_t items;
 	if (queue_items_remaining_sealed(newQueue, &items) != 0)
 	{
-		return;
+		return -1;
 	}
 	// Set it in the global and allow the thread to start.
 	queue = newQueue;
 	Debug::log("Queue set to {}", queue);
 	futex_wake(reinterpret_cast<uint32_t *>(&queue), 1);
 	// set_queue#end
+	return 0;
 }
 
 uint16_t append_to_tx_buffer(char* msg, uint16_t len)
@@ -100,8 +102,10 @@ void __cheri_compartment("uart") uart_entry()
 
 	// Wait for the other thread to start!
 	Debug::log("Wait for producer thread to start.");
-	// Use the queue pointer as a futex.  It is initialised to 0, if the other thread has stored a valid pointer here
-	// then it will not be zero and so futex_wait will return immediately.
+	// Use the queue pointer as a futex.  It is initialised to
+	// 0, if the other thread has stored a valid pointer here
+	// then it will not be zero and so futex_wait will return
+	// immediately.
 	futex_wait(reinterpret_cast<uint32_t *>(&queue), 0);
 
 	Debug::log("Initialise modem");
@@ -141,7 +145,7 @@ void __cheri_compartment("uart") uart_entry()
 						while(outputBufferLength > 0){
 							while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
 								uart1->writeData = outputBuffer[outputBufferOffset];
-								outputBufferOffset++;
+								outputBufferOffset += 1;
 								if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
 									outputBufferLength = 0;
 									outputBufferOffset = 0;
@@ -166,7 +170,7 @@ void __cheri_compartment("uart") uart_entry()
 				} else {
 					while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
 						uart1->writeData = outputBuffer[outputBufferOffset];
-						outputBufferOffset++;
+						outputBufferOffset += 1;
 						if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
 							outputBufferLength = 0;
 							outputBufferOffset = 0;
@@ -201,7 +205,7 @@ void __cheri_compartment("uart") uart_entry()
 				while((uart1->status & OpenTitanUart::StatusTransmitFull) == 0) {
 					// Debug::log("2 outputBufferOffset[{}/{}] = {}", outputBufferOffset, outputBufferLength, outputBuffer[outputBufferOffset]);
 					uart1->writeData = outputBuffer[outputBufferOffset];
-					outputBufferOffset++;
+					outputBufferOffset += 1;
 					if((outputBufferOffset >= outputBufferLength) || (outputBufferOffset > BUFF_OUTPUT_SIZE)) { // Sanity check
 						outputBufferLength = 0;
 						outputBufferOffset = 0;

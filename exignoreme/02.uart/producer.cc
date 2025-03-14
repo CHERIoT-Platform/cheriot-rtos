@@ -38,12 +38,12 @@ void __cheri_compartment("producer") main_entry()
 
 	while(true) {
 		thread_millisecond_wait(60000);	// sleep for 1 minute
-		// int ret = blocking_forever<queue_send_sealed>(queue, &message);
-		// // Abort if the queue send errors.
-		// if(ret != 0) {
-		// 	Debug::log("Queue send failed {}", ret);
-		// } else {
-		// 	message.messData++;	// Only increment if it worked.
-		// }
+		int ret = blocking_forever<queue_send_sealed>(queue, &message);
+		// Abort if the queue send errors.
+		if(ret != 0) {
+			Debug::log("Queue send failed {}", ret);
+		} else {
+			message.messData++;	// Only increment if it worked.
+		}
 	}
 }

@@ -11,6 +11,9 @@
 #include <platform/sunburst/platform-spi.hh>
 #include "driver/MCP251XFD/ErrorsDef.h"
 #include "driver/interface.hh"
+#include "queue.h"
+#include "timeout.hh"
+#include "uart2.hh"
 
 #define TIMESTAMP_TICK_us ( 25 ) // Tickstamp tick is 25us
 #define TIMESTAMP_TICK(sysclk) ( ((sysclk) / 1000000) * TIMESTAMP_TICK_us )
@@ -436,6 +439,8 @@ eERRORRESULT configure_mcp251xfd_on_can1() {
 
 static uint32_t txMessageSeq = 0;
 
+CHERI_SEALED(MessageQueue *) queue;
+
 bool are_we_driving() {
 	for(auto & __capability event : events) {
 		if((event.typ == CAN_EVENT_DRIVE_ON_ONLY) && (event.active == true)) {
@@ -453,8 +458,26 @@ void set_not_driving() {
 	}
 }
 
+void notify_changes(uint32_t t, uint32_t v) {
+	QueueMessage message = {t,v};
+	int ret = blocking_forever<queue_send_sealed>(queue, &message);
+	// Abort if the queue send errors.
+	if(ret != 0) {
+		Debug::log("Queue send failed {}", ret);
+	}
+}
+
+void react_to_button(uint32_t v) {
+	uint32_t t = 0;
+	if(are_we_driving()) {
+		t = 1;
+	}
+	notify_changes(t, v);
+}
+
 void interpret_can_message(MCP251XFD::MCP251XFD_CANMessage *mess) {
 	// Go through each event and look for a match
+	uint32_t id = 0;
 	for(auto & __capability event : events) {
 		// Check ID and DLC
 		// Debug::log("event.messageId = {}, mess->MessageID == {}", event.messageId, mess->MessageID);
@@ -476,6 +499,7 @@ void interpret_can_message(MCP251XFD::MCP251XFD_CANMessage *mess) {
 				if((test == true) && (event.active == false)) {
 					event.active = true;
 					Debug::log("Event: {} ON", event.name);
+					react_to_button(id);
 				}
 			}
 			// Are we OFF?
@@ -494,16 +518,19 @@ void interpret_can_message(MCP251XFD::MCP251XFD_CANMessage *mess) {
 						if(are_we_driving()) {
 							Debug::log("Event: {} OFF", event.name);
 							set_not_driving();	// Ensure that we are not driving.
+							react_to_button(id);
 						}
 					}
 				} else {
 					if((test == true) && (event.active == true)) {
 						event.active = false;
 						Debug::log("Event: {} OFF", event.name);
+						react_to_button(id);
 					}
 				}
 			} 
 		}
+		id++;
 	}
 }
 
@@ -590,12 +617,28 @@ void __cheri_compartment("main_comp") main_entry()
 	// Print welcome, along with the compartment's name to the default UART.
 	Debug::log("Sonata VW Audi CAN Example");
 
+	thread_millisecond_wait(3000);	// Wait a minute for the modem to finish it's set up routine (which doesn't take that long but I'm being cautious)
+	Debug::log("Pass the queue to the modem driver.");
+	// Allocate the queue for the UART
+	int res = non_blocking<queue_create_sealed>(MALLOC_CAPABILITY, &queue, sizeof(QueueMessage), 16);
+	if(res != 0) {
+		Debug::log("ERROR! queue_create_sealed() failed! {}", res);
+	}
+	// Pass the queue handle to the consumer.
+	res = set_queue(queue);	// The UART thread won't continue until this has been called.
+	if(res != 0) {
+		Debug::log("ERROR! set_queue() failed!");
+	}
+	Debug::log("Done.");
+	thread_millisecond_wait(3000);	// Wait a minute for the modem to finish it's set up routine (which doesn't take that long but I'm being cautious)
+
 	Debug::log("Configure MCP251XFD on CAN1");
 	result = configure_mcp251xfd_on_can1();
 	if(result != ERR_OK) {
 		Debug::log("ERROR! ConfigureMCP251XFDonCAN1() failed with {}.", result);
 	}
 
+	Debug::log("Starting main loop.");
 	uint8_t txCnt = 0;
 	volatile uint32_t time;
 	volatile uint32_t nextIndication = 0;
