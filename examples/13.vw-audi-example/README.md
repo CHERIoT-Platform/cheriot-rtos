@@ -1,5 +1,5 @@
 # VW Audi CAN Example Example
-This is a simple example of interfacing to a vehicle with CAN. It is designed to work on the VAG MQB and MLB platforms.
+This is a simple example of interfacing to a vehicle with CAN. It is designed to work on the VAG MQB and MLB platforms. You don't need a VW Audi vehicle to use it. You can generate the button presses with any CAN device capable of CAN2.0 at 500kbps.
 
 This code uses the MCP251XFD SPI to CAN driver based on [Emandhal's generic MCP251XFD driver](https://github.com/Emandhal/MCP251XFD). We have more examples of this CAN driver in other examples.
 
@@ -17,33 +17,41 @@ We also read the joystick on the Sonata device and do the following:
 Note: The indicators/blinkers do not flash outside the vehicle - only on the dash. However, on some vehciles, you may see the daylight running lamps flicker.
 
 ### CAN Events Detected
-* Steering Wheel Signals
-  * Mute
-  * Volume Up (push button volume controls found on VW)
-  * Volume Down (push button volume controls found on VW)
-  * Scrolls Volume + (volume scroll wheel as found on Audi)
-  * Scrolls Volume - (volume scroll wheel as found on Audi)
-  * Previous (Previous track/station)
-  * Next (Next track/station)
-  * Voice
-  * View
-  * Star
-  * Up (left of steering on VW)
-  * Down (left of steering on VW)
-  * Scroll Up (scroll on left of steering on Audi)
-  * Scroll Down (scroll on left of steering on Audi)
-  * Right (page right on left of steering)
-  * Left (page left on left of steering)
-  * Phone
-  * OK
-  * Nav (not on all vehicles)
-  * Back
-* Driving Signals
-  * DriveOn! (The engine has been started)
-  * Drive3 (The engine has been started)
-  * DriveOff (The electronics are off - normally occurs after the engine has been switched off and the driver's door opened).
+Note: The code generates one signal when a button is pressed (e.g. Mute) and the same signal again when it is released (e.g. Mute).
 
-## How Can We Try This?
+| Signal Detected | CAN ID | Mask | Data |
+| --------------- | ------ | ---- | ---- |
+| **Steering Wheel Signals** |  |     |      |
+| No Buttons Pushed | 5BF | FF 00 0F 00 | 00 00 00 00 |
+| Mute | 5BF | FF 00 00 00 | 20 00 00 00 |
+| Volume Up (push button volume controls found on VW) | 5BF | FF 00 00 00 | 10 00 00 00 |
+| Volume Down (push button volume controls found on VW) | 5BF | FF 00 00 00 | 11 00 00 00 |
+| Scrolls Volume + (volume scroll wheel as found on Audi) | 5BF | FF 00 0F 00 | 12 00 01 00 |
+| Scrolls Volume - (volume scroll wheel as found on Audi) | 5BF | FF 00 0F 00 | 12 00 0F 00 |
+| Previous (Previous track/station) | 5BF | FF 00 00 00 | 16 00 00 00 |
+| Next (Next track/station) | 5BF | FF 00 00 00 | 15 00 00 00 |
+| Voice | 5BF | FF 00 00 00 | 19 00 00 00 |
+| View | 5BF | FF 00 00 00 | 23 00 00 00 |
+| Star | 5BF | FF 00 00 00 | 21 00 00 00 |
+| Up (left of steering on VW) | 5BF | FF 00 00 00 | 04 00 00 00 |
+| Down (left of steering on VW) | 5BF | FF 00 00 00 | 05 00 00 00 |
+| Scroll Up (scroll on left of steering on Audi) | 5BF | FF 00 0F 00 | 06 00 01 00 |
+| Scroll Down (scroll on left of steering on Audi) | 5BF | FF 00 0F 00 | 06 00 0F 00 |
+| Right (page right on left of steering) | 5BF | FF 00 00 00 | 02 00 00 00 |
+| Left (page left on left of steering) | 5BF | FF 00 00 00 | 03 00 00 00 |
+| Phone | 5BF | FF 00 00 00 | 1C 00 00 00 |
+| OK | 5BF | FF 00 00 00 | 07 00 00 00 |
+| Nav (not on all vehicles) | 5BF | FF 00 00 00 | 1B 00 00 00 |
+| Back | 5BF | FF 00 00 00 | 08 00 00 00 |
+| **Driving Signals** |  |     |      |
+| DriveOn! (The engine has been started. On Only) | 3BE | 00 00 08 00 00 00 00 00 | 00 00 08 00 00 00 00 00 |
+| Drive3 (The engine has been started. On Only) | 3BE | 00 00 04 00 FF 00 00 00 | 00 00 04 00 C0 00 00 00 |
+| DriveOff (The electronics are off - normally occurs after the engine has been switched off and the driver's door opened. Off Only). | 3C0 | 00 00 01 00 | 00 00 00 00 |
+
+## How Can We Try This Without A Vehicle?
+Use a CAN device using CAN2.0 at 500kbps to generate the messages shown in the table above.
+
+## How Can We Try This With A Vehicle?
 You need a vehicle that uses the Volkswagen Audi Group (VAG) MQB or MLB platform.  If you have one of these vehicles, check that the steering featiures some of the listed buttons for it to work.
 
 You need to find the Comfort CAN. A good place to look would be in one of the large vertical wiring looms found in the footwell on boith sides of the vehicle. This loom will have a branch that goes into the doors, so you may be able to find the CAN wires in the doors.
@@ -53,17 +61,17 @@ You need to find the Comfort CAN. A good place to look would be in one of the la
 | CAN Low    | Orange/Brown | Plain Orange             |
 Note: Orange/Green means an Orange wire with a Green tracer (stripe).
 
-## Vehicles Supported
+### Vehicles Supported
 This is tested on a 2020 Audi A3 with a Manual Transmission but below is a list of other vehicles that use the same platform. The VAG MQB and MLB platforms are also used by other manaufacturers such as Skoda and Porsche but the further you get from VW and Audi and more they alter the codes so they may not work fully.
 Vehicles that this should work on include:
-### Audi
+#### Audi
 * A1/S1 2018 onwards
 * A3/S3/RS3 2013 onwards
 * A4/S4/RS4 2016 onwards
 * A5/S5/RS5 2016 onwards
 * A6/S6/RS6 2018 onwards
 
-### Volkswagen
+#### Volkswagen
 * Caddy 2019 
 * Crafter 2017 onwards
 * Golf 2014 to 2024
