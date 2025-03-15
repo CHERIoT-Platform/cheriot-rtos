@@ -3,6 +3,8 @@ This is a simple example of interfacing to a vehicle with CAN. It is designed to
 
 This code uses the MCP251XFD SPI to CAN driver based on [Emandhal's generic MCP251XFD driver](https://github.com/Emandhal/MCP251XFD). We have more examples of this CAN driver in other examples.
 
+Mobile communications is achieved using a Quectel BG95 modem. We have written a very simple (and not terribly fault tolerant) AT interface to drive the modem.
+
 ## What this code Does
 This code opens the CAN interface as CAN2.0 at 500kbps. We look for sepcific CAN messages to extract certain events that we are interested in. We can also write to the CAN to flash the indicators/blinkers.
 
@@ -19,34 +21,34 @@ Note: The indicators/blinkers do not flash outside the vehicle - only on the das
 ### CAN Events Detected
 Note: The code generates one signal when a button is pressed (e.g. Mute) and the same signal again when it is released (e.g. Mute).
 
-| Signal Detected | CAN ID | Mask | Data |
-| --------------- | ------ | ---- | ---- |
-| **Steering Wheel Signals** |  |     |      |
-| No Buttons Pushed | 5BF | FF 00 0F 00 | 00 00 00 00 |
-| Mute | 5BF | FF 00 00 00 | 20 00 00 00 |
-| Volume Up (push button volume controls found on VW) | 5BF | FF 00 00 00 | 10 00 00 00 |
-| Volume Down (push button volume controls found on VW) | 5BF | FF 00 00 00 | 11 00 00 00 |
-| Scrolls Volume + (volume scroll wheel as found on Audi) | 5BF | FF 00 0F 00 | 12 00 01 00 |
-| Scrolls Volume - (volume scroll wheel as found on Audi) | 5BF | FF 00 0F 00 | 12 00 0F 00 |
-| Previous (Previous track/station) | 5BF | FF 00 00 00 | 16 00 00 00 |
-| Next (Next track/station) | 5BF | FF 00 00 00 | 15 00 00 00 |
-| Voice | 5BF | FF 00 00 00 | 19 00 00 00 |
-| View | 5BF | FF 00 00 00 | 23 00 00 00 |
-| Star | 5BF | FF 00 00 00 | 21 00 00 00 |
-| Up (left of steering on VW) | 5BF | FF 00 00 00 | 04 00 00 00 |
-| Down (left of steering on VW) | 5BF | FF 00 00 00 | 05 00 00 00 |
-| Scroll Up (scroll on left of steering on Audi) | 5BF | FF 00 0F 00 | 06 00 01 00 |
-| Scroll Down (scroll on left of steering on Audi) | 5BF | FF 00 0F 00 | 06 00 0F 00 |
-| Right (page right on left of steering) | 5BF | FF 00 00 00 | 02 00 00 00 |
-| Left (page left on left of steering) | 5BF | FF 00 00 00 | 03 00 00 00 |
-| Phone | 5BF | FF 00 00 00 | 1C 00 00 00 |
-| OK | 5BF | FF 00 00 00 | 07 00 00 00 |
-| Nav (not on all vehicles) | 5BF | FF 00 00 00 | 1B 00 00 00 |
-| Back | 5BF | FF 00 00 00 | 08 00 00 00 |
-| **Driving Signals** |  |     |      |
-| DriveOn! (The engine has been started. On Only) | 3BE | 00 00 08 00 00 00 00 00 | 00 00 08 00 00 00 00 00 |
-| Drive3 (The engine has been started. On Only) | 3BE | 00 00 04 00 FF 00 00 00 | 00 00 04 00 C0 00 00 00 |
-| DriveOff (The electronics are off - normally occurs after the engine has been switched off and the driver's door opened. Off Only). | 3C0 | 00 00 01 00 | 00 00 00 00 |
+| Event ID | Signal Detected | CAN ID | Mask | Data |
+| -------- | --------------- | ------ | ---- | ---- |
+| **Steering Wheel Signals** |  |     |      |  |   
+|  - | No Buttons Pushed | 5BF | FF 00 0F 00 | 00 00 00 00 |
+|  0 | Mute | 5BF | FF 00 00 00 | 20 00 00 00 |
+|  1 | Volume Up (push button volume controls found on VW) | 5BF | FF 00 00 00 | 10 00 00 00 |
+|  2 | Volume Down (push button volume controls found on VW) | 5BF | FF 00 00 00 | 11 00 00 00 |
+|  3 | Scrolls Volume + (volume scroll wheel as found on Audi) | 5BF | FF 00 0F 00 | 12 00 01 00 |
+|  4 | Scrolls Volume - (volume scroll wheel as found on Audi) | 5BF | FF 00 0F 00 | 12 00 0F 00 |
+|  5 | Previous (Previous track/station) | 5BF | FF 00 00 00 | 16 00 00 00 |
+|  6 | Next (Next track/station) | 5BF | FF 00 00 00 | 15 00 00 00 |
+|  7 | Voice | 5BF | FF 00 00 00 | 19 00 00 00 |
+|  8 | View | 5BF | FF 00 00 00 | 23 00 00 00 |
+|  9 | Star | 5BF | FF 00 00 00 | 21 00 00 00 |
+| 17 | Up (left of steering on VW) | 5BF | FF 00 00 00 | 04 00 00 00 |
+| 16 | Down (left of steering on VW) | 5BF | FF 00 00 00 | 05 00 00 00 |
+| 10 | Scroll Up (scroll on left of steering on Audi) | 5BF | FF 00 0F 00 | 06 00 01 00 |
+| 11 | Scroll Down (scroll on left of steering on Audi) | 5BF | FF 00 0F 00 | 06 00 0F 00 |
+| 12 | Right (page right on left of steering) | 5BF | FF 00 00 00 | 02 00 00 00 |
+| 19 | Left (page left on left of steering) | 5BF | FF 00 00 00 | 03 00 00 00 |
+| 13 | Phone | 5BF | FF 00 00 00 | 1C 00 00 00 |
+| 14 | OK | 5BF | FF 00 00 00 | 07 00 00 00 |
+| 15 | Nav (not on all vehicles) | 5BF | FF 00 00 00 | 1B 00 00 00 |
+| 18 | Back | 5BF | FF 00 00 00 | 08 00 00 00 |
+| **Driving Signals** |  |     |      |  |   
+| 21 | DriveOn! (The engine has been started. On Only) | 3BE | 00 00 08 00 00 00 00 00 | 00 00 08 00 00 00 00 00 |
+| 20 | Drive3 (The engine has been started. On Only) | 3BE | 00 00 04 00 FF 00 00 00 | 00 00 04 00 C0 00 00 00 |
+| 22 | DriveOff (The electronics are off - normally occurs after the engine has been switched off and the driver's door opened. Off Only). | 3C0 | 00 00 01 00 | 00 00 00 00 |
 
 ## How Can We Try This Without A Vehicle?
 Use a CAN device using CAN2.0 at 500kbps to generate the messages shown in the table above.
@@ -105,3 +107,21 @@ We're going to run each CAN on a separate SPI to reduce the risk of accidental c
 | SPI0_CIPO |  I  |    21    |     9    | SonataPinmux::BlockInput::spi_1_cipo | 1 (rph_g9)     | MISO_0         |     |
 | SPI0_SCLK |  O  |    23    |    11    | SonataPinmux::OutputPin::rph_g11     | 1 (spi_1_sclk) | SCK_0          |     |
 |           |  I  |    22    |    25    |                                      |                | INT_0          |     |
+ 
+
+## Modem Interface
+
+Communication is via the UART at 115200bps. We don't, currently, support any kind of flow control.
+The AT command set used is specific to this device but easily modified. If you have one of these, or a compatible, module and wish to use it you will need to alter some settings in `modem.cc`:
+1. `FORMAT_URL` needs changing to point at your own server (the address shown is a temporary IP that will be gone by the time you read this). The test code that we've written uses port 3100, but feel free to change that.
+```
+#define FORMAT_URL "http://18.175.136.129:3100/trk/%s/?%s"
+```
+2. The APM information will need changing. This can be found in `tasks_process()` in the switch statement under `case TASK_SET_APN: // Set the APN`. Change this to your own APN.
+
+### HTTP Message Format
+This is a simple HTTP POST. We pass two queries:
+1. `t`: This is intended as an message type. In this example:
+  * 0 = Not driving.
+  * 1 = Driving
+2. `v`: This returns the ID of the event signal that has been detected (see the events table for details).
