@@ -98,8 +98,7 @@ void modem_init()
 }
 
 char post[] = "\r\n\r\n";
-// This is a very old IP that we don't have anymore. Feel free to chaneg it to something useful to you.
-// #define FORMAT_URL "http://35.178.111.83:3100/trk/%s/?%s"
+// This is a very old IP that we don't have anymore. Feel free to change it to something useful to you.
 #define FORMAT_URL "http://18.175.136.129:3100/trk/%s/?%s"
 char *url       = NULL;
 char *modemImsi = NULL;
@@ -180,37 +179,12 @@ void tasks_process() {
 	}
 }
 
-// void print_in_hex(char *buffer)
-// {
-// 	for (int i = 0; i < strlen(buffer); i++)
-// 	{
-// 		printf("0x%02x ", buffer[i]);
-// 	}
-// 	printf("\n");
-// }
-
 bool process_serial_replies(char *buffer, size_t len)
 {
 	bool ret = false;
-	// printf("Serial In (%lu): %.*s", len, len, buffer);
-	// printf("  Command (%lu): %.*s\r\n",
-	// strlen(tasksCmds[tasks[currentTask]]),
-	// strlen(tasksCmds[tasks[currentTask]]),
-	// tasksCmds[tasks[currentTask]]); printf("Serial In (%lu): ", len);
-	// printInHex(buffer);
-	// printf("  Command (%lu): ", strlen(tasksCmds[tasks[currentTask]]));
-	// printInHex(tasksCmds[tasks[currentTask]]);
-
-	// if((tasks != NULL) && (tasks[currentTask] == TASK_URL)) {
-	// 	printf("process_serial_replies(): %.*s", len, buffer);
-	// }
 	if (tasks == NULL)
 	{
-		// printf("Modem ");
-		// print_time_now();
-		// printf(" IN (serial A): buffer = %s\n", buffer);
 		// printf("%s %u: There are no tasks active!\n", __FILE__, __LINE__);
-		// printf("%s %u: buffer = %s\n", __FILE__, __LINE__, buffer);
 	}
 	else if (0 == strncmp("OK\r\n", buffer, len))
 	{
@@ -254,12 +228,6 @@ bool process_serial_replies(char *buffer, size_t len)
 		{
 			eol = eol3 - buffer;
 		}
-		// printf("%s", buffer);
-		// for(int i = 0; i < eol; i++)
-		//   printf(" ");
-		// printf("^\r\n");
-		// printf("eol = %i\n", eol);
-		// printf("%.*s***\n", eol, buffer);
 		switch (tasks[currentTask])
 		{
 			case TASK_GET_IMSI:
@@ -338,8 +306,6 @@ void tasks_set_initialise_modem()
 	tasks[5] = TASK_QUERY_CONTEXT;
 	tasks[6] = TASK_ACTIVATE_CONTEXT;
 	tasks[7] = TASK_QUERY_CONTEXT;
-	// tasks[8] = TASK_PING;
-	// tasks[9] = TASK_NONE;
 	tasks[8] = TASK_NONE;
 }
 
@@ -361,134 +327,13 @@ void tasks_send_message(char *msg)
 	{
 		printf("%s %u: msg is null!\n", __FILE__, __LINE__);
 	}
-	// printf("%s %u: msg: %s\n", __FILE__, __LINE__, msg);
 	int urllen = snprintf(NULL, 0, FORMAT_URL, modemImei, msg);
-	// printf("%s %u: urllen: %i\n", __FILE__, __LINE__, urllen);
 	url        = static_cast<char *>(calloc(1, urllen + 2));
 	snprintf(url, urllen+1, FORMAT_URL, modemImei, msg);
 	printf("%s %u: url[%i] = %s\n", __FILE__, __LINE__, urllen, url);
-	// printf("Modem ");
-	//   print_time_now();
-	// printf(" OUT: url = %s\n", url);
-	//   fflush(stdout);
 
 	tasks    = static_cast<uint8_t *>(calloc(1, 3));
 	tasks[0] = TASK_URL;
 	tasks[1] = TASK_POST;
 	tasks[2] = TASK_NONE;
 }
-
-// // Process the serial data here
-// size_t modem_process_serial()
-// {
-// 	uint16_t toRead = uartInterface->receive_fifo_level();
-// 	Debug::log("toRead = {}", toRead);
-
-// 	// static char buffer[255]; // input buffer
-// 	char *buffer = static_cast<char *>(calloc(1, toRead + 1)); // Always have a terminating null.
-// 	if(buffer == NULL) {
-// 		Debug::log("Error! calloc returned NULL!");
-// 		return 0;
-// 	}
-// 	char  *pbuffer = buffer;  // current place in buffer
-// 	int    nbytes;            // bytes read so far
-// 	size_t size = 0;
-
-// 	Debug::log("buffer: {}", buffer);
-// 	Debug::log("pbuffer: {}", pbuffer);
-
-// 	while ((nbytes = modem_serial_read(pbuffer, toRead - (pbuffer - buffer))) > 0)
-// 	{
-// 		Debug::log("We read {} bytes this time.", nbytes);
-// 		pbuffer += nbytes;
-// 		if ((pbuffer[-1] == '\n') || (pbuffer[-1] == '\r'))
-// 		{
-// 			*pbuffer = '\0';
-// 			// printf("pbuffer[-2] = 0x%02x\n", pbuffer[-2]);
-// 			// printf("pbuffer[-1] = 0x%02x\n", pbuffer[-1]);
-// 			// printf("pbuffer[0] = 0x%02x\n", pbuffer[0]);
-
-// 			printf("buffer: %.*s\n", strnlen(buffer, sizeof(buffer) - 1), buffer);
-// 			// if(strnlen(buffer, sizeof(buffer) - 1) > 1)
-// 			// printf("buffer: %.*s\n", (int)strnlen(buffer, toRead), buffer);
-// 			if (strnlen(buffer, toRead) > 1)
-// 			{
-// 				// printf("buffer: %s", buffer);
-
-// 				printf("Modem ");
-// 				// print_time_now();
-// 				printf(" IN (serial): buffer = %s\n", buffer);
-// 				// fflush(stdout);
-
-// 				size = strnlen(buffer, toRead);
-// 				process_serial_replies(buffer, size);
-// 			}
-// 			pbuffer = buffer; // Reset line pointer
-// 			                  // break;
-// 		}
-// 	}
-// 	if (nbytes == 0)
-// 	{
-// 		if ((pbuffer - buffer) >= toRead - 1)
-// 		{
-// 			pbuffer = buffer; // Discard the excess bytes here.
-// 		}
-// 		else
-// 		{
-// 			printf("Waste! nbytes = %i\n", nbytes);
-// 		}
-// 	}
-// 	free(buffer);
-// 	return size;
-// }
-
-// // serial_read
-// // Blocking function. Reads len bytes from the serial input. You should
-// // check the fifo size to see how many bytes there are to read before
-// // calling this function.
-// // Param 1: out: buffer to write to
-// // Param 2: in: number of bytes to write to
-// // returns bytes read.
-// int modem_serial_read(char *msg, size_t len)
-// {
-// 	size_t idx = 0;
-// 	if (uartInterface == NULL)
-// 	{
-// 		return -1;
-// 	}
-// 	while (idx < len)
-// 	{
-// 		while (uartInterface->can_read() == false)
-// 		{
-// 			// Block until there is something to read.
-// 			// You should check the fifo size before reading to avoid this!
-// 		}
-// 		msg[idx] = uartInterface->blocking_read();
-// 		idx++;
-// 	}
-// 	return idx;
-// }
-
-// uint16_t modem_rx_buff_len()
-// {
-// 	return uartInterface->receive_fifo_level();
-// }
-
-// // serial_send
-// // Blocking function. Sends len bytes from the buffer pointed to by msg.
-// // Param 1: in: Buffer with data to send.
-// // Param 2: in: length of data to send.
-// // returns bytes written to the serial.
-// int modem_serial_send(const char *msg, size_t len)
-// {
-// 	if (uartInterface == NULL)
-// 	{
-// 		return -1;
-// 	}
-// 	for (size_t i = 0; i < len; i++)
-// 	{
-// 		uartInterface->blocking_write(msg[i]);
-// 	}
-// 	return len;
-// }
-
