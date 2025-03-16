@@ -23,3 +23,14 @@ The AT command set used is specific to this device but easily modified. If you h
 This is a simple HTTP POST. We pass two queries:
 1. `t`: An integer. We called the `t` for `type`, to give a clue to the server what sort of information is in the query.
 2. `v`: This is `v` for `value`. In this example we are merely passing the number from the `producer` compartment.
+
+## To Build
+From the folder execute:
+```
+xmake config --sdk=/cheriot-tools --board=sonata-1.1
+xmake
+xmake run
+```
+
+## nodejs server
+There is a simple nodeJS server here. Place it on VM connected to the web and run `node trak5.js` and you will have a server to talk to. It will dispaly the messages received on the screen. It has been configured to show the vehicle button names associated with the buttons from example 14.

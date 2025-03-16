@@ -125,3 +125,15 @@ This is a simple HTTP POST. We pass two queries:
   * 0 = Not driving.
   * 1 = Driving
 2. `v`: This returns the ID of the event signal that has been detected (see the events table for details).
+
+
+## To Build
+From the folder execute:
+```
+xmake config --sdk=/cheriot-tools --board=sonata-1.1
+xmake
+xmake run
+```
+
+## nodejs server
+There is a simple nodeJS server here. Place it on VM connected to the web and run `node trak5.js` and you will have a server to talk to. It will dispaly the messages received on the screen. It has been configured to show the vehicle button names, if it know them.
