@@ -889,10 +889,10 @@ namespace
 				__builtin_unreachable();
 			};
 			const auto &compartment = findCompartment();
+			auto        entry       = build<ExportEntry>(config.entryPoint);
 			Debug::log("Creating thread in compartment {}", &compartment);
 			auto pcc = build_pcc(compartment);
-			pcc.address() +=
-			  build<ExportEntry>(config.entryPoint)->functionStart;
+			pcc.address() += entry->functionStart;
 			Debug::log("New thread's pcc will be {}", pcc);
 			void *cgp = build_cgp(compartment);
 			Debug::log("New thread's cgp will be {}", cgp);
@@ -958,6 +958,13 @@ namespace
 			threadTStack->mstatus =
 			  (priv::MSTATUS_MPIE |
 			   (priv::MSTATUS_PRV_M << priv::MSTATUS_MPP_SHIFT));
+			// If this entry point is interrupt disabled, clear the previous
+			// interrupt-enabled bit (after mret, interrupts will not be
+			// enabled)
+			if (entry->interrupt_status() == InterruptStatus::Disabled)
+			{
+				threadTStack->mstatus &= ~MSTATUS_MPIE;
+			}
 #ifdef CONFIG_MSHWM
 			threadTStack->mshwm  = stack.top();
 			threadTStack->mshwmb = stack.base();
