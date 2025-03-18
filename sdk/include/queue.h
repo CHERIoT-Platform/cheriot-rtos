@@ -105,8 +105,8 @@ int __cheri_libcall queue_create(Timeout              *timeout,
  * Returns 0 on success. This can fail only if deallocation would fail and will,
  * in these cases, return the same error codes as `heap_free`.
  *
- * This function will check the heap capability first and so will avoid
- * upgrading the locks if freeing the queue would fail.
+ * This function will check the heap capability first and will avoid upgrading
+ * the locks if freeing the queue would fail.
  */
 int __cheri_libcall queue_destroy(AllocatorCapability  heapCapability,
                                   struct MessageQueue *handle);
@@ -120,7 +120,7 @@ int __cheri_libcall queue_destroy(AllocatorCapability  heapCapability,
  * exhausted, `-EINVAL` on invalid arguments.
  *
  * This expected to be called with a valid queue handle.  It does not validate
- * that this is correct.  It uses `safe_memcpy` and so will check the buffer.
+ * that this is correct.
  */
 int __cheri_libcall queue_send(Timeout             *timeout,
                                struct MessageQueue *handle,

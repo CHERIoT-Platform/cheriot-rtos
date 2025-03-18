@@ -64,7 +64,7 @@ __always_inline static int futex_wait(const uint32_t *address,
 }
 
 /**
- * Wakes up to `count` threads that are sleeping with `futex[_timed]_wait` on
+ * Wakes up to `count` threads that are sleeping with `futex_timed_wait` on
  * `address`.
  *
  * The `address` argument must be a valid, unsealed, pointer with a length of at
