@@ -41,9 +41,9 @@ enum ThreadSleepFlags : uint32_t
  * higher-priority thread may prevent it from actually being scheduled.  The
  * return value is a saturating count of the number of ticks that have elapsed.
  *
- * A call of `thread_sleep` is with a timeout of zero is equivalent to `yield`,
- * but reports the time spent sleeping.  This requires a cross-domain call and
- * return in addition to the overheads of `yield` and so `yield` should be
+ * A call of `thread_sleep` with a timeout of zero is equivalent to `yield`,
+ * but reports the time spent sleeping.  This requires a cross-compartment call
+ * and return in addition to the overheads of `yield` and so `yield` should be
  * preferred in contexts where the elapsed time is not required.
  *
  * The `flags` parameter is a bitwise OR of `ThreadSleepFlags`.
@@ -70,9 +70,9 @@ enum ThreadSleepFlags : uint32_t
  *
  * User threads (that is, those defined in the xmake firmware configuration)
  * are 1-indexed, with 0 indicating primordial idle and scheduling contexts.
- * Those contexts are very restricted in what it can do, so almost surely
- * subtract one from the returned ID if it's being used as an index into an
- * array.
+ * User code never runs in these contexts and so anything using this result to
+ * index into a per-thread array may wish to subtract one and avoid allocating
+ * an array element for the idle thread.
  *
  * This is implemented in the switcher.
  */

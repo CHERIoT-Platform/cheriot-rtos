@@ -48,7 +48,7 @@ int __cheri_libcall eventgroup_create(struct Timeout     *timeout,
  *
  * Note: `waitForAll` requires all bits to be set *at the same time*.  This
  * makes it trivial to introduce race conditions if used with multiple waiters
- * and `clearOnExit`, or if different threads clear bits different bits in the
+ * and `clearOnExit`, or if different threads clear different bits in the
  * waited set.
  *
  * If `clearOnExit` is true and this returns successfully then the bits in
