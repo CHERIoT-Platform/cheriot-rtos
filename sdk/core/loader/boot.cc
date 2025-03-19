@@ -186,7 +186,7 @@ namespace
 	constexpr auto StoreLPerm = Root::Permissions<Root::Type::RWStoreL>;
 	/// PCC permissions for the switcher.
 	constexpr auto SwitcherPccPermissions =
-	  Root::Permissions<Root::Type::Execute>;
+	  Root::Permissions<Root::Type::Execute>.without(Permission::Global);
 	/// PCC permissions for unprivileged compartments
 	constexpr auto UserPccPermissions =
 	  Root::Permissions<Root::Type::Execute>.without(
