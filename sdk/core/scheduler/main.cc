@@ -37,6 +37,26 @@ int scheduler_simulation_exit(uint32_t code)
 }
 #endif
 
+template<typename T>
+concept IsInterruptController =
+  std::is_integral_v<typename T::SourceID> && requires(T v, T::SourceID s) {
+	  { T::master_init() } -> std::same_as<void>;
+
+	  { T::master() } -> std::same_as<T &>;
+
+	  {
+		  v.futex_word_for_source(s)
+	  } -> std::same_as<utils::OptionalReference<uint32_t>>;
+
+	  {
+		  v.do_external_interrupt()
+	  } -> std::same_as<utils::OptionalReference<uint32_t>>;
+
+	  { v.interrupt_complete(s) } -> std::same_as<void>;
+  };
+
+static_assert(IsInterruptController<InterruptController>);
+
 /**
  * The value of the cycle counter at the last scheduling event.
  */
