@@ -77,11 +77,26 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 	return ErrorRecoveryBehaviour::InstallContext;
 }
 
+__attribute__((noinline, weak)) void *pcc_as_sentry()
+{
+	return __builtin_return_address(0);
+}
+
 /**
  * Test suite entry point.  Runs all of the tests that we have defined.
  */
+[[cheriot::interrupt_state(disabled)]]
 int __cheri_compartment("test_runner") run_tests()
 {
+	// This is started as an interrupts-disabled thread, make sure that it
+	// really is!  This should always be CheriSealTypeReturnSentryDisabling,
+	// but older ISA versions didn't have separate forward and backwards
+	// sentries and so allow any kind of interrupt-disabled sentry.
+	Capability sealedPCC = pcc_as_sentry();
+	TEST((sealedPCC.type() == CheriSealTypeReturnSentryDisabling) ||
+	       (sealedPCC.type() == CheriSealTypeSentryDisabling),
+	     "Entry point does not run with interrupts disabled: {}",
+	     sealedPCC);
 	// magic_enum is a pretty powerful stress-test of various bits of linkage.
 	// In generating `enum_values`, it generates constant strings and pointers
 	// to them in COMDAT sections.  These require merging across compilation

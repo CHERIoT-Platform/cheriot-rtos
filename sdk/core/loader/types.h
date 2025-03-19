@@ -80,6 +80,15 @@ namespace loader
 			RWStoreL
 		};
 
+// clang-18 requires `static` on explicit specializations of
+// static member variable templates, while clang-19 warns if the `static`
+// is present.
+#if __clang_major__ > 18
+#	define CONSTEXPR_STATIC_SPECIALIZATION constexpr
+#else
+#	define CONSTEXPR_STATIC_SPECIALIZATION static constexpr
+#endif
+
 		/**
 		 * The architectural root for each type.  Template generic case
 		 * evaluates to a null pointer so that it will give a type error if
@@ -92,48 +101,49 @@ namespace loader
 		 * architectural sealing root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::Seal> = ISAType::Seal;
+		CONSTEXPR_STATIC_SPECIALIZATION ISAType ArchitecturalRoot<Type::Seal> =
+		  ISAType::Seal;
 		/**
 		 * The software-defined trusted-stack root corresponds directly to the
 		 * architectural read-write root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::TrustedStack> =
-		  ISAType::RW;
+		CONSTEXPR_STATIC_SPECIALIZATION ISAType
+		  ArchitecturalRoot<Type::TrustedStack> = ISAType::RW;
 		/**
 		 * The software-defined read-write global root is derived from the
 		 * architectural rear-write root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::RWGlobal> =
-		  ISAType::RW;
+		CONSTEXPR_STATIC_SPECIALIZATION ISAType
+		  ArchitecturalRoot<Type::RWGlobal> = ISAType::RW;
 		/**
 		 * The software-defined store-local root is derived from the
 		 * architectural rear-write root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::RWStoreL> =
-		  ISAType::RW;
+		CONSTEXPR_STATIC_SPECIALIZATION ISAType
+		  ArchitecturalRoot<Type::RWStoreL> = ISAType::RW;
 		/**
 		 * The software-defined executable root corresponds directly to the
 		 * architectural executable root.
 		 */
 		template<>
-		constexpr static ISAType ArchitecturalRoot<Type::Execute> =
-		  ISAType::Execute;
+		CONSTEXPR_STATIC_SPECIALIZATION ISAType
+		  ArchitecturalRoot<Type::Execute> = ISAType::Execute;
 
 		/**
 		 * Mapping from architectural type to permissions.  Generic case is a
 		 * null pointer to give type errors if ever used with an invalid value.
 		 */
 		template<ISAType>
-		constexpr static std::nullptr_t ArchitecturalPermissions = nullptr;
+		static constexpr std::nullptr_t ArchitecturalPermissions = nullptr;
 
 		/**
 		 * The permissions held by the sealing root.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet
+		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
 		  ArchitecturalPermissions<ISAType::Seal> = {CHERI::Permission::Global,
 		                                             CHERI::Permission::Seal,
 		                                             CHERI::Permission::Unseal,
@@ -142,7 +152,7 @@ namespace loader
 		 * The permissions held by the execute root.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet
+		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
 		  ArchitecturalPermissions<ISAType::Execute> = {
 		    CHERI::Permission::Global,
 		    CHERI::Permission::Execute,
@@ -155,7 +165,7 @@ namespace loader
 		 * The permissions held by the store root.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet
+		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
 		  ArchitecturalPermissions<ISAType::RW> = {
 		    CHERI::Permission::Global,
 		    CHERI::Permission::Load,
@@ -179,9 +189,10 @@ namespace loader
 		 * storing.  The global root has global permission but not store local.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet Permissions<Type::RWGlobal> =
-		  ArchitecturalPermissions<ISAType::RW>.without(
-		    CHERI::Permission::StoreLocal);
+		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
+		                                Permissions<Type::RWGlobal> =
+		    ArchitecturalPermissions<ISAType::RW>.without(
+		      CHERI::Permission::StoreLocal);
 		/**
 		 * The permissions held by the store-local (software-defined) root.  In
 		 * software, we ensure that nothing has both global and store-local
@@ -190,9 +201,12 @@ namespace loader
 		 * global.
 		 */
 		template<>
-		constexpr static CHERI::PermissionSet Permissions<Type::RWStoreL> =
-		  ArchitecturalPermissions<ISAType::RW>.without(
-		    CHERI::Permission::Global);
+		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
+		                                Permissions<Type::RWStoreL> =
+		    ArchitecturalPermissions<ISAType::RW>.without(
+		      CHERI::Permission::Global);
+
+#undef CONSTEXPR_STATIC_SPECIALIZATION
 
 		/**
 		 * Install a root corresponding to an architectural root type.

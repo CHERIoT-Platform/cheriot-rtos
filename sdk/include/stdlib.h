@@ -165,7 +165,7 @@ enum [[clang::flag_enum]] AllocateWaitFlags
  * immediately, or `nullptr` otherwise.
  *
  * The blocking modes may return `nullptr` if the condition to wait is not
- * fulfiled, if the timeout has expired, or if the allocation cannot be
+ * fulfilled, if the timeout has expired, or if the allocation cannot be
  * satisfied under any circumstances (for example if `size` is larger than the
  * total heap size).
  *
@@ -176,7 +176,7 @@ enum [[clang::flag_enum]] AllocateWaitFlags
  * In both blocking and non-blocking cases, `-ENOTENOUGHSTACK` may be returned
  * if the stack is insufficiently large to safely run the function. This means
  * that the return value of `heap_allocate` should be checked for the validity
- * of the tag bit *and not* nullptr.
+ * of the tag bit *and not* simply compared against `nullptr`.
  *
  * Memory returned from this interface is guaranteed to be zeroed.
  */
@@ -238,7 +238,7 @@ ssize_t __cheri_compartment("allocator")
  *
  * In the case of failure, neither pointer will have been claimed.
  *
- * This function is provided by the compartment_helpers library, which must be
+ * This function is provided by the `compartment_helpers` library, which must be
  * linked for it to be available.
  */
 int __cheri_libcall heap_claim_ephemeral(Timeout         *timeout,
