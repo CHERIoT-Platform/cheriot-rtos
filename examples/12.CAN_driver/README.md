@@ -18,7 +18,7 @@ We have configured FIFO 5 to FIFO 8 as transmit FIFOs but we are not using them 
 
 ## Hardware Design
 * We will be using the [Waveshare 2-CH CAN FD HAT](https://www.waveshare.com/wiki/2-CH_CAN_FD_HAT) for the purposes of testing.
-* The Waveshare board uses a 40MHz crystal, which we need to know to cofigure the device.
+* The Waveshare board uses a 40MHz crystal, which we need to know to configure the device.
 * This device has two MCP2518FD SPI to CAN ICs.
 * Each device is on a separate SPI bus.
 * You can also use the, on-board, links (soldering required) to place them both onto one SPI bus with different CS lines.
