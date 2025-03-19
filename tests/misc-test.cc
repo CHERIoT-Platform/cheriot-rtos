@@ -334,6 +334,16 @@ void check_sealed_scoping()
 
 int test_misc()
 {
+	{
+		// Inspect the return sentry the switcher gave us.  Unlike the one given
+		// to run_tests() (over in the "test_runner" compartment), this one is
+		// not a thread entry vector, and so is computed by cjalr in
+		// compartment_switcher_entry.
+		Capability switcherReturnSentry{__builtin_return_address(0)};
+		TEST(!switcherReturnSentry.permissions().contains(Permission::Global),
+		     "Switcher return sentry should be local");
+	}
+
 	check_timeouts();
 	check_memchr();
 	check_memrchr();

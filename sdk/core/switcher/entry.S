@@ -93,10 +93,16 @@
 /*
  * Multiple points in the switcher are exposed to callers via sentries (either
  * forward-arc sentries manufactured elsewhere or backwards-arc sentries
- * manufactured by CJALRs herein.  Sentries can have their GL(obal) permission
- * cleared by the bearer, but nothing here relies on PCC being GL(obal): we
+ * manufactured by CJALRs herein.  All of these will be local (that is, they
+ * will have their GL(obal) permission cleared by the loader -- see
+ * loader/boot.cc's construction of SwitcherPccPermissions -- or will inherit
+ * the clear GL(obal) from PCC.  Nothing here relies on PCC being GL(obal): we
  * never store anything derived from our PCC to memory, much less through an
- * authority not bearing SL permission.
+ * authority not bearing SL permission.  Our callers and callees should not
+ * attempt to store their sentries to us in non-stack memory: the sentries to
+ * __Z26compartment_switcher_entryz are fetched from import tables into
+ * registers as part of the compiler's lowering, and return sentries should be
+ * generally confined to the stack.
  *
  * Similarly, the switcher communicates with the outside world by means of
  * sealed data capabilities (to TrustedStacks and compartment export tables).
