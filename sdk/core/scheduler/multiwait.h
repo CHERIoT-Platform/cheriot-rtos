@@ -279,6 +279,7 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 			newEvents[i].value = events[i].readyEvents;
 			found |= (events[i].readyEvents != 0);
 		}
+		usedLength = 0;
 		return found;
 	}
 
