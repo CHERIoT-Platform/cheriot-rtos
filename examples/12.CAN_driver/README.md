@@ -8,7 +8,7 @@ We are using:
 ## What this code Does
 This code opens the CAN interface as CAN2.0 at 500kbps. It writes message ID 300 with some dynamic data on the TXQ. It has for filters configured to receive data:
 1. FIFO 1: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x000..0x1FF.
-2. FIFO 2: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x200..0x3FF0.
+2. FIFO 2: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x200..0x3FF.
 3. FIFO 3: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x400..0x5FF.
 4. FIFO 4: Read all other CAN2.0 packets with Standard or Extended IDs.
 Since a lower ID has higher priority, you could use this to read priority data first.
