@@ -12,7 +12,7 @@ This code opens the CAN interface as CAN2.0 at 500kbps. It writes message ID 300
 3. FIFO 3: Read CAN2.0 packets with Standard ID (11-bit) in the range 0x400..0x5FF.
 4. FIFO 4: Read all other CAN2.0 packets with Standard or Extended IDs.
 Since a lower ID has higher priority, you could use this to read priority data first.
-Dat read back is displayed in a simple form on the serial line using the debug output.
+Data read back is displayed in a simple form on the serial line using the debug output.
 
 We have configured FIFO 5 to FIFO 8 as transmit FIFOs but we are not using them in this example.
 
