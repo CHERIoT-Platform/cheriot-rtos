@@ -664,6 +664,11 @@ __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
 		{
 			return -EINVAL;
 		}
+		if (mw.size() > 0)
+		{
+			Debug::log("Attempting wait on busy multiwaiter");
+			return -EBUSY;
+		}
 		switch (mw.set_events(events, newEventsCount))
 		{
 			case MultiWaiterInternal::EventOperationResult::Error:
