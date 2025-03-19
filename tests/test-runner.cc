@@ -88,28 +88,33 @@ __attribute__((noinline, weak)) void *pcc_as_sentry()
 [[cheriot::interrupt_state(disabled)]]
 int __cheri_compartment("test_runner") run_tests()
 {
-	// Inspect the return sentry the switcher gave us.
-	// Since the switcher does not need Global on PCC it runs with a local one,
-	// meaning the return sentry we receive should also be local, which is fine
-	// as we have no reason to store it anywhere except the stack.
-	Capability switcher_return_sentry{__builtin_return_address(0)};
-	TEST(!switcher_return_sentry.permissions().contains(Permission::Global),
-	     "Switcher return sentry should be local");
+	{
+		// Inspect the return sentry the switcher gave us.
+		// Since the switcher does not need Global on PCC it runs with a local
+		// one, meaning the return sentry we receive should also be local, which
+		// is fine as we have no reason to store it anywhere except the stack.
+		Capability switcherReturnSentry{__builtin_return_address(0)};
+		TEST(!switcherReturnSentry.permissions().contains(Permission::Global),
+		     "Switcher return sentry should be local");
+	}
 
-	void *switcher_cross_call_raw;
-	// The 0th import table entry is a sentry to the switcher's
-	// compartment_switcher_entry().  Despite being in global memory, it should
-	// be a local capability.
-	__asm__ volatile(
-	  "1:\n"
-	  "auipcc %0, %%cheriot_compartment_hi(.compartment_switcher)\n"
-	  "clc %0, %%cheriot_compartment_lo_i(1b)(%0)\n"
-	  : "=C"(switcher_cross_call_raw));
-	Capability switcher_cross_call{switcher_cross_call_raw};
-	TEST(!switcher_cross_call.permissions().contains(Permission::Global),
-	     "Switcher cross-call sentry should be local");
-	TEST((switcher_cross_call.type() == CheriSealTypeSentryDisabling),
-	     "Switcher cross-call sentry should be IRQ-disabling forward sentry");
+	{
+		// The 0th import table entry is a sentry to the switcher's
+		// compartment_switcher_entry().  Despite being in global memory, it
+		// should be a local capability.
+		void *switcherCrossCallRaw;
+		__asm__ volatile(
+		  "1:\n"
+		  "auipcc %0, %%cheriot_compartment_hi(.compartment_switcher)\n"
+		  "clc %0, %%cheriot_compartment_lo_i(1b)(%0)\n"
+		  : "=C"(switcherCrossCallRaw));
+		Capability switcherCrossCall{switcherCrossCallRaw};
+		TEST(!switcherCrossCall.permissions().contains(Permission::Global),
+		     "Switcher cross-call sentry should be local");
+		TEST(
+		  switcherCrossCall.type() == CheriSealTypeSentryDisabling,
+		  "Switcher cross-call sentry should be IRQ-disabling forward sentry");
+	}
 
 	// This is started as an interrupts-disabled thread, make sure that it
 	// really is!  This should always be CheriSealTypeReturnSentryDisabling,
