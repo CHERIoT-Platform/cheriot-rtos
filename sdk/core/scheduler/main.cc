@@ -3,11 +3,18 @@
 
 #define CHERIOT_NO_AMBIENT_MALLOC
 #define CHERIOT_NO_NEW_DELETE
+#include "common.h"
+
+#include "interrupt_configuration.hh"
+#if __has_include(<platform-scheduler_interrupt_controller.hh>)
+#	include <platform-scheduler_interrupt_controller.hh>
+#else
+#	include "interrupt_controller.hh"
+#endif
+
 #include "../switcher/tstack.h"
-#include "interrupt_controller.hh"
 #include "multiwait.h"
 #include "thread.h"
-#include "timer.h"
 #include <cdefs.h>
 #include <cheri.hh>
 #include <compartment.h>
@@ -21,6 +28,10 @@
 #include <stdlib.h>
 #include <thread.h>
 #include <token.h>
+
+// Timer might come to depend on PLIC on some platforms, though so far it has
+// always used the CLINT.
+#include "timer.h"
 
 using namespace CHERI;
 
@@ -397,6 +408,13 @@ namespace
 			schedNeeded = false;
 			InterruptController::master().do_external_interrupt().and_then(
 			  [&](uint32_t &word) {
+#ifdef PLATFORM_INTERRUPT_CONTROLLER_EXTERNAL_HOOK
+				  if (InterruptController::external_hook(
+				        word, schedNeeded, tick))
+				  {
+					  return;
+				  }
+#endif
 				  // Wake anyone sleeping on this futex.  Interrupt futexes
 				  // are not priority inheriting.
 				  int woke;

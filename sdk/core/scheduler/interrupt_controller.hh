@@ -4,7 +4,6 @@
 #pragma once
 
 #include "common.h"
-#include "interrupt_configuration.hh"
 #include <compartment.h>
 #include <optional>
 #include <platform-plic.hh>
@@ -13,6 +12,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <utils.hh>
+
+/*
+ * This include is redundant with the one in ./main.cc but it placates
+ * clang-tidy and doesn't result in extra work due to the "#pragma once" within.
+ */
+#include "interrupt_configuration.hh"
 
 namespace
 {
