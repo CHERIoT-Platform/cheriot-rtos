@@ -291,7 +291,6 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	template<typename T>
 	static uint32_t
 	wake_waiters(T        source,
-	             uint32_t info     = 0,
 	             uint32_t maxWakes = std::numeric_limits<uint32_t>::max())
 	{
 		// Look at any threads that are waiting on multiwaiters.  This
