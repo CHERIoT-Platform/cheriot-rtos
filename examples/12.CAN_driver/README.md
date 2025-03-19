@@ -3,7 +3,10 @@
 This code contains an implementation of an MCP251XFD SPI to CAN driver.
 We are using:
 
-[Emandhal's generic MCP251XFD driver](https://github.com/Emandhal/MCP251XFD) is fully featured and designed to run on any embedded platform. It claims to implement every feature of the MCP2518FD and MCP2517FD (including auto detection of the specific model type). There is fully documentation but we've found it diffficult to read in places. This is for little endian devices only, fortunately RISCV is little endian. This driver is alos designed to allow for multiple instances, with instance information being passed to each function as a struct.
+[Emandhal's generic MCP251XFD driver](https://github.com/Emandhal/MCP251XFD) is fully featured and designed to run on any (little-endian) embedded platform.
+It claims to implement every feature of the MCP2518FD and MCP2517FD (including auto detection of the specific model type).
+There is full documentation, but we've found it difficult to read in places.
+This driver is also designed to allow for multiple instances, with instance information being passed to each function as a struct.
 
 ## What this code Does
 This code opens the CAN interface as CAN2.0 at 500kbps. It writes message ID 300 with some dynamic data on the TXQ. It has for filters configured to receive data:
