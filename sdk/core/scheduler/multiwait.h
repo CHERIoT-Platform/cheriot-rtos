@@ -252,7 +252,8 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	 */
 	~MultiWaiterInternal()
 	{
-		// If this is on any threads that it's waiting on.
+		// If any thread is waiting on us, unregister and mark the thread as
+		// ready instead.
 		Thread::walk_thread_list(threads, [&](Thread *thread) {
 			if (thread->multiWaiter == this)
 			{
