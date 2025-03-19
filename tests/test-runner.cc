@@ -96,6 +96,21 @@ int __cheri_compartment("test_runner") run_tests()
 	TEST(!switcher_return_sentry.permissions().contains(Permission::Global),
 	     "Switcher return sentry should be local");
 
+	void *switcher_cross_call_raw;
+	// The 0th import table entry is a sentry to the switcher's
+	// compartment_switcher_entry().  Despite being in global memory, it should
+	// be a local capability.
+	__asm__ volatile(
+	  "1:\n"
+	  "auipcc %0, %%cheriot_compartment_hi(.compartment_switcher)\n"
+	  "clc %0, %%cheriot_compartment_lo_i(1b)(%0)\n"
+	  : "=C"(switcher_cross_call_raw));
+	Capability switcher_cross_call{switcher_cross_call_raw};
+	TEST(!switcher_cross_call.permissions().contains(Permission::Global),
+	     "Switcher cross-call sentry should be local");
+	TEST((switcher_cross_call.type() == CheriSealTypeSentryDisabling),
+	     "Switcher cross-call sentry should be IRQ-disabling forward sentry");
+
 	// This is started as an interrupts-disabled thread, make sure that it
 	// really is!  This should always be CheriSealTypeReturnSentryDisabling,
 	// but older ISA versions didn't have separate forward and backwards
