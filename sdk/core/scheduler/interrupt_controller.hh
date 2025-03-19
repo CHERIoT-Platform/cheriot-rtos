@@ -16,9 +16,6 @@
 
 namespace
 {
-	using Priority = uint32_t;
-	using SourceID = uint32_t;
-
 	template<typename T, size_t MaxIntrID, typename SourceID, typename Priority>
 	concept IsPlic = requires(T v, SourceID id, Priority p) {
 		{ v.interrupt_enable(id) };
@@ -41,6 +38,11 @@ namespace
 	 */
 	class InterruptController final : private InterruptConfiguration
 	{
+		public:
+		using Priority = uint32_t;
+		using SourceID = uint32_t;
+
+		private:
 		using PlicType = Plic<LargestInterruptNumber, SourceID, Priority>;
 
 		static_assert(
