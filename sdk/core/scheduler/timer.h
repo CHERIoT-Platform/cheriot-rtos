@@ -4,7 +4,6 @@
 #pragma once
 
 #include "common.h"
-#include "plic.h"
 #include "thread.h"
 #include <libdivide/libdivide.h>
 #include <platform-timer.hh>

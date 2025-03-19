@@ -4,6 +4,7 @@
 #pragma once
 
 #include "common.h"
+#include "interrupt_configuration.hh"
 #include <compartment.h>
 #include <optional>
 #include <platform-plic.hh>
@@ -13,11 +14,6 @@
 #include <string.h>
 #include <utils.hh>
 
-/*
- * Platform specific low-level implementations of the interrupt controller. Not
- * to be used directly. These should be inherited by the interrupt controller
- * wrapper class.
- */
 namespace
 {
 	using Priority = uint32_t;
@@ -37,65 +33,14 @@ namespace
 	 * it does just like other builds to let things compile. We need tons of
 	 * #ifdefs or a big rewrite to make the entire external interrupt path
 	 * optional.
-	 *
-	 * FIXME: Here should only be platform-agnostic code but we still hardcode
-	 * an Ethernet handler. We should be generic and auto-generate event
-	 * channels and intr_complete() functions here.
 	 */
 
 	/**
-	 * The PLIC class that wraps platform-specific implementations and
-	 * provides higher-level abstractions.
+	 * Wraps the underlying platform-specific implementations and provides our
+	 * futex-based, higher-level abstractions.
 	 */
-	class InterruptController final
+	class InterruptController final : private InterruptConfiguration
 	{
-		/**
-		 * Structure representing the configuration for an interrupt.
-		 */
-		struct Interrupt
-		{
-			/**
-			 * The interrupt number.
-			 */
-			uint32_t number;
-			/**
-			 * The priority for this interrupt.
-			 */
-			uint32_t priority;
-			/**
-			 * True if this interrupt is edge triggered, false otherwise.  Edge
-			 * triggered interrupts are automatically acknowledged, level
-			 * triggered interrupts must be explicitly acknowledged.
-			 */
-			bool isEdgeTriggered;
-		};
-
-		/**
-		 * The array of interrupts that are configured.
-		 */
-		static constexpr Interrupt ConfiguredInterrupts[] = {
-#ifdef CHERIOT_INTERRUPT_CONFIGURATION
-		  CHERIOT_INTERRUPT_CONFIGURATION
-#endif
-		};
-
-		/**
-		 * The number of interrupts that are configured.
-		 *
-		 * We only allocate state for configured interrupts.
-		 */
-		static constexpr size_t NumberOfInterrupts =
-		  std::extent_v<decltype(ConfiguredInterrupts)>;
-
-		static constexpr uint32_t LargestInterruptNumber = []() {
-			uint32_t max = 0;
-			for (auto i : ConfiguredInterrupts)
-			{
-				max = std::max(max, i.number);
-			}
-			return max;
-		}();
-
 		using PlicType = Plic<LargestInterruptNumber, SourceID, Priority>;
 
 		static_assert(
