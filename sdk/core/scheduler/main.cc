@@ -4,8 +4,8 @@
 #define CHERIOT_NO_AMBIENT_MALLOC
 #define CHERIOT_NO_NEW_DELETE
 #include "../switcher/tstack.h"
+#include "interrupt_controller.hh"
 #include "multiwait.h"
-#include "plic.h"
 #include "thread.h"
 #include "timer.h"
 #include <cdefs.h>
