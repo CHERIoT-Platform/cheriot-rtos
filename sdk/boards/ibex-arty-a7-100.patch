@@ -11,7 +11,7 @@
     },
     {
       "op": "add",
-      "path": "/kunyan_ethernet",
+      "path": "/devices/kunyan_ethernet",
       "value": {
         "start": 0x14004000,
         "end": 0x14008000
