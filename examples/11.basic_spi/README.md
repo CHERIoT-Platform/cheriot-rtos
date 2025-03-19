@@ -37,4 +37,4 @@ There are multiple names for the SPI signals and the documentation uses both in 
 |           |  I  |    18    |    24    |                                      |                | INT_1          |     |
 Notes:
 * It's interesting that the pinmux has entries for the Chip Enables but the SPI block doesn't seem capable of driving them yet.
-* The interupts may not be needed but I've included them anyway, just in case.
+* The interupt signals from the MCP251X chips may not be needed, but I've included them anyway, just in case.
