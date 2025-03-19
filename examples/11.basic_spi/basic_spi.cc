@@ -79,30 +79,17 @@ void __cheri_compartment("main_comp") main_entry()
 	auto blockSinks = MMIO_CAPABILITY(SonataPinmux::BlockSinks, pinmux_block_sinks);
 
 	// SPI1 - COPI
-	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g10).select(1)) {
-			Debug::log("Success! Set RPi GPIO10 to SPI1_COPI");
-	} else {
-		Debug::log("ERROR! Failed to set RPi GPIO10 to SPI1_COPI");
-	}
+	auto pinCOPI1 = pinSinks->get(SonataPinmux::PinSink::rph_g10).select(1);  
+    Debug::Invariant(pinCOPI1, "ERROR! Failed to set RPi GPIO10 to SPI1_COPI");
 	// SPI1 - SCLK
-	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g11).select(1)) {
-		Debug::log("Success! Set RPi GPIO11 to SPI1_SCLK");
-	} else {
-		Debug::log("ERROR! Failed to set RPi GPIO11 to SPI1_SCLK");
-	}
+	auto pinSCLK1 = pinSinks->get(SonataPinmux::PinSink::rph_g11).select(1);  
+    Debug::Invariant(pinSCLK1, "ERROR! Failed to set RPi GPIO11 to SPI1_SCLK");
 	// SPI1 - CIPO
-	if(true == blockSinks->get(SonataPinmux::BlockSink::spi_1_cipo).select(1)) {
-		Debug::log("Success! Set SPI1_CIPO to RPi GPIO09");
-	} else {
-		Debug::log("ERROR! Failed to set SPI1_CIPO to RPi GPIO09");
-	}
-	Debug::log("Letting SPI module drive RPi GPIO8 for SPI1_CE0");
+	auto pinCIPO1 = blockSinks->get(SonataPinmux::BlockSink::spi_1_cipo).select(1);  
+    Debug::Invariant(pinCIPO1, "ERROR! Failed to set RPi GPIO09 to SPI1_CIPO");
 	// SPI1 - CE0 (using SPI module to drive the CE0 pin)
-	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g8).select(1)) {
-		Debug::log("Success! Set RPi GPIO8 to SPI1_CE0");
-	} else {
-		Debug::log("ERROR! Failed to set RPi GPIO8 to SPI1_CE0");
-	}
+	auto pinCE01 = pinSinks->get(SonataPinmux::PinSink::rph_g8).select(1);  
+    Debug::Invariant(pinCE01, "ERROR! Failed to set RPi GPIO8 to SPI1_CE0");
 	// Set up the SPI1 module
 	spi_mod1()->init(
 		false,	// Clock Polarity = 0
@@ -114,17 +101,11 @@ void __cheri_compartment("main_comp") main_entry()
 	Debug::log("SPI1: Configured.");
 
 	// SPI2 - COPI
-	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g20).select(1)) {
-		Debug::log("Success! Set RPi GPIO20 to SPI2_COPI");
-	} else {
-		Debug::log("ERROR! Failed to set RPi GPIO20 to SPI2_COPI");
-	}
+	auto pinCOPI2 = pinSinks->get(SonataPinmux::PinSink::rph_g20).select(1);  
+    Debug::Invariant(pinCOPI2, "ERROR! Failed to set RPi GPIO20 to SPI2_COPI");
 	// SPI2 - SCLK
-	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g21).select(1)) {
-		Debug::log("Success! Set RPi GPIO21 to SPI2_SCLK");
-	} else {
-		Debug::log("ERROR! Failed to set RPi GPIO21 to SPI2_SCLK");
-	}
+	auto pinSCLK2 = pinSinks->get(SonataPinmux::PinSink::rph_g21).select(1);  
+    Debug::Invariant(pinSCLK2, "ERROR! Failed to set RPi GPIO21 to SPI2_SCLK");
 	// SPI2 - CIPO
 	if(true == blockSinks->get(SonataPinmux::BlockSink::spi_2_cipo).select(1)) {
 			Debug::log("Success! Set SPI1_CIPO to RPi GPIO19");
@@ -133,38 +114,30 @@ void __cheri_compartment("main_comp") main_entry()
 	}
 	Debug::log("Letting SPI module drive RPi GPI18 for SPI2_CE0");
 	// SPI2 - CE0 (using SPI module to drive the CE0 pin)
-	if(true == pinSinks->get(SonataPinmux::PinSink::rph_g18).select(1)) {
-		Debug::log("Success! Set RPi GPI18 to SPI2_CE0");
-	} else {
-		Debug::log("ERROR! Failed to set RPi GPIO8 to SPI2_CE0");
-	}
+	auto pinCE02 = pinSinks->get(SonataPinmux::PinSink::rph_g18).select(1);  
+    Debug::Invariant(pinCE02, "ERROR! Failed to set RPi GPIO8 to SPI2_CE0");
 	spi_mod2()->init(
 		false,	// Clock Polarity = 0
 	    false,	// Clock Phasse = 0
 	    true,	// MSB first = true
 	    SPI_CLOCK_SPEED_SETTING);	// The settings is the length of a half period of the SPI clock, measured in system clock cycles reduced by 1.
-	// SET_BIT(spi_mod1()->cs, 0);
 	spi_mod2()->chip_select_assert<SPI2_CS, false>(false);
 	Debug::log("SPI2: Configured.");
 
 	// SPI1: RESET the MCP2518FD
 	uint8_t data_reset = MCP_CMD_RESET;
 	Debug::log("SPI1: MCP 2518FD RESET: {}", data_reset);
-	// CLEAR_BIT(spi_mod1()->cs, 0);
 	spi_mod1()->chip_select_assert<SPI1_CS, false>(true);
 	spi_mod1()->blocking_write(&data_reset, 1);		// Only sending CLK, no COPI, CIPO or CE
 	spi_mod1()->wait_idle();	// Wait for the Tx to finish.
-	// SET_BIT(spi_mod1()->cs, 0);
 	spi_mod1()->chip_select_assert<SPI1_CS, false>(false);
 	Debug::log("SPI1: Reset sent.");
 
 	// SPI2: RESET the MCP2518FD
 	Debug::log("SPI2: MCP 2518FD RESET: {}", data_reset);
-	// CLEAR_BIT(spi_mod2()->cs, 0);
 	spi_mod2()->chip_select_assert<SPI2_CS, false>(true);
 	spi_mod2()->blocking_write(&data_reset, 1);		// Only sending CLK, no COPI, CIPO or CE
 	spi_mod2()->wait_idle();	// Wait for the Tx to finish.
-	// SET_BIT(spi_mod2()->cs, 0);
 	spi_mod2()->chip_select_assert<SPI2_CS, false>(false);
 	Debug::log("SPI2: Reset sent.");
 
@@ -190,11 +163,9 @@ void __cheri_compartment("main_comp") main_entry()
 		Debug::log("SPI1: Tx 3: {}", data_tx[3]);
 		Debug::log("SPI1: Tx 4: {}", data_tx[4]);
 		Debug::log("SPI1: Tx 5: {}", data_tx[5]);
-		// CLEAR_BIT(spi_mod1()->cs, 0);
 		spi_mod1()->chip_select_assert<SPI1_CS, false>(true);
 		spi_mod1()->blocking_transfer(data_tx, data_rx, 6);	// Writes and reads simultaneously.
 		spi_mod1()->wait_idle();	// Wait for the Rx to finish.
-		// SET_BIT(spi_mod1()->cs, 0);
 		spi_mod1()->chip_select_assert<SPI1_CS, false>(false);
 		Debug::log("SPI1: Data sent.");
 		Debug::log("SPI1: Rx 0: {}", data_rx[0]);
@@ -215,11 +186,9 @@ void __cheri_compartment("main_comp") main_entry()
 		Debug::log("SPI2: Tx 3: {}", data_tx[3]);
 		Debug::log("SPI2: Tx 4: {}", data_tx[4]);
 		Debug::log("SPI2: Tx 5: {}", data_tx[5]);
-		// CLEAR_BIT(spi_mod2()->cs, 0);
 		spi_mod2()->chip_select_assert<SPI2_CS, false>(true);
 		spi_mod2()->blocking_transfer(data_tx, data_rx, 6);	// Writes and reads simultaneously.
 		spi_mod2()->wait_idle();	// Wait for the Rx to finish.
-		// SET_BIT(spi_mod2()->cs, 0);
 		spi_mod2()->chip_select_assert<SPI2_CS, false>(false);
 		Debug::log("SPI2: Data sent.");
 		Debug::log("SPI2: Rx 0: {}", data_rx[0]);
@@ -238,13 +207,11 @@ void __cheri_compartment("main_comp") main_entry()
 		Debug::log("SPI1: Reading addr 0x0E03...");
 		Debug::log("SPI1: Tx 0: {}", data_tx[0]);
 		Debug::log("SPI1: Tx 1: {}", data_tx[1]);
-		// CLEAR_BIT(spi_mod1()->cs, 0);
 		spi_mod1()->chip_select_assert<SPI1_CS, false>(true);
 		spi_mod1()->blocking_write(data_tx, 2);	// Write the command bytes
 		spi_mod1()->wait_idle();	// Wait for the Tx to finish.
 		spi_mod1()->blocking_read(data_rx, 4);	// Read the data bytes.
 		spi_mod1()->wait_idle();	// Wait for the Rx to finish.
-		// SET_BIT(spi_mod1()->cs, 0);
 		spi_mod1()->chip_select_assert<SPI1_CS, false>(false);
 		Debug::log("SPI1: Data sent.");
 		Debug::log("SPI1: Rx 0: {}", data_rx[0]);
@@ -261,13 +228,11 @@ void __cheri_compartment("main_comp") main_entry()
 		Debug::log("SPI2: Reading addr 0x0E03...");
 		Debug::log("SPI2: Tx 0: {}", data_tx[0]);
 		Debug::log("SPI2: Tx 1: {}", data_tx[1]);
-		// CLEAR_BIT(spi_mod2()->cs, 0);
 		spi_mod2()->chip_select_assert<SPI2_CS, false>(true);
 		spi_mod2()->blocking_write(data_tx, 2);	// Write the command bytes
 		spi_mod2()->wait_idle();	// Wait for the Tx to finish.
 		spi_mod2()->blocking_read(data_rx, 4);	// Read the data bytes.
 		spi_mod2()->wait_idle();	// Wait for the Rx to finish.
-		// SET_BIT(spi_mod2()->cs, 0);
 		spi_mod2()->chip_select_assert<SPI2_CS, false>(false);
 		Debug::log("SPI2: Data sent.");
 		Debug::log("SPI2: Rx 0: {}", data_rx[0]);
