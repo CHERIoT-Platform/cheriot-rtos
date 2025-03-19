@@ -130,11 +130,6 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	uint8_t usedLength = 0;
 
 	/**
-	 * Multiwaiters are added to a list in between being triggered
-	 */
-	MultiWaiterInternal *next = nullptr;
-
-	/**
 	 * The array of events that we're waiting for.  This is variable sized
 	 * and must be the last field of the structure.
 	 */
@@ -257,8 +252,6 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	 */
 	~MultiWaiterInternal()
 	{
-		// Remove from the pending-wake list
-		remove_from_pending_wake_list();
 		// If this is on any threads that it's waiting on.
 		Thread::walk_thread_list(threads, [&](Thread *thread) {
 			if (thread->multiWaiter == this)
@@ -277,8 +270,6 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	 */
 	bool get_results(EventWaiterSource *newEvents, size_t count)
 	{
-		// Remove ourself from the list of waiters.
-		remove_from_pending_wake_list();
 		// Collect all events that have fired.
 		Debug::Assert(count <= Length, "Invalid length {} > {}", count, Length);
 		bool found = false;
@@ -303,12 +294,6 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	             uint32_t info     = 0,
 	             uint32_t maxWakes = std::numeric_limits<uint32_t>::max())
 	{
-		// Trigger any multiwaiters whose threads have been woken but which
-		// have not yet been scheduled.
-		for (auto *mw = wokenMultiwaiters; mw != nullptr; mw = mw->next)
-		{
-			mw->trigger(source);
-		}
 		// Look at any threads that are waiting on multiwaiters.  This
 		// should happen after waking the multiwaiters so that we don't
 		// visit multiwaiters twice
@@ -320,8 +305,6 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 			  {
 				  thread->ready(Thread::WakeReason::MultiWaiter);
 				  woken++;
-				  thread->multiWaiter->next = wokenMultiwaiters;
-				  wokenMultiwaiters         = thread->multiWaiter;
 			  }
 		  },
 		  [&]() { return woken >= maxWakes; });
@@ -341,24 +324,6 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	}
 
 	private:
-	/**
-	 * Helper to remove this object from the list maintained for
-	 * multiwaiters that have been triggered but whose threads have not yet
-	 * been scheduled.
-	 */
-	void remove_from_pending_wake_list()
-	{
-		MultiWaiterInternal **prev = &wokenMultiwaiters;
-		while ((prev != nullptr) && (*prev != nullptr) && ((*prev) != this))
-		{
-			prev = &((*prev)->next);
-		}
-		if (prev != nullptr)
-		{
-			*prev = next;
-		}
-		next = nullptr;
-	}
 	/**
 	 * Deliver an event from the source to all possible waiting events in
 	 * this set.  This returns true if any of the event sources matches
@@ -385,9 +350,4 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	 * multiwaiter.
 	 */
 	static inline Thread *threads;
-
-	/**
-	 * List of multiwaiters whose threads have been woken but not yet run.
-	 */
-	static inline MultiWaiterInternal *wokenMultiwaiters = nullptr;
 };
