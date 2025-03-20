@@ -77,31 +77,21 @@ namespace
 		 * If the template parameter is true then this completes the interrupt
 		 * if it is edge triggered.
 		 */
-		template<bool CompleteInterruptIfEdgeTriggered = false>
 		utils::OptionalReference<uint32_t>
 		futex_word_for_source(SourceID source)
 		{
-			for (size_t i = 0; i < NumberOfInterrupts; i++)
-			{
-				if (ConfiguredInterrupts[i].number ==
-				    static_cast<uint32_t>(source))
-				{
-					if constexpr (CompleteInterruptIfEdgeTriggered)
-					{
-						if (ConfiguredInterrupts[i].isEdgeTriggered)
-						{
-							master().interrupt_complete(source);
-						}
-					}
+			auto i = index_of_source(static_cast<uint32_t>(source));
 
-					// The returned pointer (reference) will have bounds of the
-					// entire futexWords array.  That's likely fine within the
-					// scheduler and saves us a setbounds on the IRQ handling
-					// path, but it does mean that interrupt_futex_get needs to
-					// do the bounding.
-					return {futexWords[i]};
-				}
+			if (i.has_value())
+			{
+				// The returned pointer (reference) will have bounds of the
+				// entire futexWords array.  That's likely fine within the
+				// scheduler and saves us a setbounds on the IRQ handling path,
+				// but it does mean that interrupt_futex_get needs to do the
+				// bounding.
+				return {futexWords[*i]};
 			}
+
 			return nullptr;
 		}
 
@@ -147,8 +137,18 @@ namespace
 				return nullptr;
 			}
 
-			return futex_word_for_source<
-			  /*Complete edge triggered interrupt*/ true>(*src);
+			auto i = index_of_source(static_cast<uint32_t>(*src));
+
+			if (!i)
+			{
+				return nullptr;
+			}
+
+			if (ConfiguredInterrupts[*i].isEdgeTriggered)
+			{
+				master().interrupt_complete(*src);
+			}
+			return {futexWords[*i]};
 		}
 
 		void interrupt_complete(SourceID id)
