@@ -9,7 +9,8 @@
 // #include <fail-simulator-on-error.h>
 
 /// Expose debugging features unconditionally for this compartment.
-using Debug = ConditionalDebug<true, "Hello compartment">;
+/// Set the debugging level such that these will not log.
+using Debug = ConditionalDebug<DebugLevel::Error, "Hello compartment">;
 
 /// Thread entry point.
 int __cheri_compartment("hello") entry()
