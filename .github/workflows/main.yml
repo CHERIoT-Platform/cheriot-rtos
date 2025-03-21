@@ -1,5 +1,15 @@
 name: CHERIoT RTOS Tests
 
+# The following should ensure that the workflow only runs a single set of actions
+# for each PR. But it will not apply this to pushes to the main branch.
+#
+# Shamelessly stolen from https://github.com/microsoft/snmalloc/pull/760 with
+# the addition of ${{ github.workflow }} to the group name; for details, see
+# https://docs.github.com/en/enterprise-cloud@latest/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 on:
   push:
     branches: [ main ]
