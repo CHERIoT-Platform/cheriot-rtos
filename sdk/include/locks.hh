@@ -361,6 +361,24 @@ class LockGuard
 	{
 		return isOwned;
 	}
+
+	/**
+	 * Drop and reacquire the lock around a yield
+	 */
+	int yield(Timeout *t, uint32_t ticks = 1)
+	{
+		unlock();
+
+		Timeout smallSleep{ticks};
+		if (int sleepRes = thread_sleep(&smallSleep); sleepRes < 0)
+		{
+			return sleepRes;
+		}
+
+		t->elapse(smallSleep.elapsed);
+
+		return try_lock(t);
+	}
 };
 
 __clang_ignored_warning_pop();
