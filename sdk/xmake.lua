@@ -1009,7 +1009,7 @@ function firmware(name)
 	-- Build the scheduler.  The firmware rule will set the flags required for
 	-- this to create threads.
 	target(name .. ".scheduler")
-		add_rules("cheriot.privileged-compartment", "cheriot.component-debug")
+		add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks")
 		add_deps("locks", "crt", "atomic1")
 		add_deps("compartment_helpers")
 		on_load(function (target)
