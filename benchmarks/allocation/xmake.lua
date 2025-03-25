@@ -28,7 +28,7 @@ firmware("allocator-benchmark")
                 compartment = "allocbench",
                 priority = 1,
                 entry_point = "run",
-                stack_size = 0x300,
+                stack_size = 0x400,
                 trusted_stack_frames = 4
             },
         }, {expand = false})
