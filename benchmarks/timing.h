@@ -32,6 +32,24 @@ namespace
 		return cycles;
 	}
 
+#ifdef IBEX
+
+	static int rd_lsu_stalls()
+	{
+		int res;
+		__asm__ volatile("csrr %0, mhpmcounter3" : "=r"(res));
+		return res;
+	}
+
+	static int rd_ifetch_stalls()
+	{
+		int res;
+		__asm__ volatile("csrr %0, mhpmcounter4" : "=r"(res));
+		return res;
+	}
+
+#endif
+
 	/**
 	 * Utility function to return the size of the current stack based on the
 	 * length of csp capability register. If used in a thread entry point this
