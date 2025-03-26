@@ -536,9 +536,9 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(Timeout        *timeout,
 	return 0;
 }
 
-__cheriot_minimum_stack(0xa0) int futex_wake(uint32_t *address, uint32_t count)
+__cheriot_minimum_stack(0xc0) int futex_wake(uint32_t *address, uint32_t count)
 {
-	STACK_CHECK(0xa0);
+	STACK_CHECK(0xc0);
 	// Futex wake requires you to have a valid pointer, but doesn't require any
 	// permissions.  This allows some things to trigger spurious wakes, but
 	// ensures that the scheduler never needs a writeable capability to a
@@ -630,11 +630,11 @@ __cheriot_minimum_stack(0x60) int multiwaiter_create(
 	return 0;
 }
 
-__cheriot_minimum_stack(0x70) int multiwaiter_delete(
+__cheriot_minimum_stack(0x90) int multiwaiter_delete(
   AllocatorCapability heapCapability,
   MultiWaiter         mw)
 {
-	STACK_CHECK(0x70);
+	STACK_CHECK(0x90);
 	return deallocate<MultiWaiterInternal>(heapCapability, mw);
 }
 
@@ -747,9 +747,9 @@ namespace
 }
 
 [[cheriot::interrupt_state(disabled)]] __cheriot_minimum_stack(
-  0x20) int interrupt_complete(InterruptCapability sealed)
+  0x30) int interrupt_complete(InterruptCapability sealed)
 {
-	STACK_CHECK(0x20);
+	STACK_CHECK(0x30);
 	auto *interruptCapability =
 	  InterruptCapabilityWrapper::unseal<InterruptCapabilityWrapper>(sealed);
 	if (interruptCapability && interruptCapability->state.mayComplete)
