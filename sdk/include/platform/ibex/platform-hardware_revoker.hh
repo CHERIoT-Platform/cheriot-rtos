@@ -204,6 +204,31 @@ namespace Ibex
 			// timeout parameter, we fail either way.
 			return false;
 		}
+
+		/**
+		 * Reveal the interrupt futex word.
+		 *
+		 * This is deliberately not part of the core/allocator/revoker.h
+		 * IsHardwareRevokerDevice concept and should be used only in testing
+		 * and other extenuating circumstances.
+		 */
+		const uint32_t *interrupt_futex()
+		{
+			return interruptFutex;
+		}
+
+		/**
+		 * Request the delivery of an IRQ when the revoker finishes its current
+		 * scan.
+		 *
+		 * This is deliberately not part of the core/allocator/revoker.h
+		 * IsHardwareRevokerDevice concept and should be used only in testing
+		 * and other extenuating circumstances.
+		 */
+		void request_interrupt()
+		{
+			revoker_device().interruptRequested = 1;
+		}
 	};
 } // namespace Ibex
 
