@@ -44,6 +44,8 @@ static uint64_t cyclesAtLastSchedulingEvent;
 
 namespace
 {
+	constexpr bool UseMultiwaiters = SCHEDULER_MULTIWAITER;
+
 	/**
 	 * Priority-sorted list of threads waiting for a futex.
 	 */
@@ -176,14 +178,17 @@ namespace
 		  },
 		  [&]() { return count == 0; });
 
-		if (count > 0)
+		if constexpr (UseMultiwaiters)
 		{
-			auto multiwaitersWoken =
-			  MultiWaiterInternal::wake_waiters(key, count);
-			count -= multiwaitersWoken;
-			woke += multiwaitersWoken;
+			if (count > 0)
+			{
+				auto multiwaitersWoken =
+				  MultiWaiterInternal::wake_waiters(key, count);
+				count -= multiwaitersWoken;
+				woke += multiwaitersWoken;
+			}
+			Debug::log("futex_wake on {} woke {} waiters", key, woke);
 		}
-		Debug::log("futex_wake on {} woke {} waiters", key, woke);
 
 		return {shouldRecalculatePriorityBoost, woke};
 	}
@@ -605,6 +610,8 @@ __cheriot_minimum_stack(0xc0) int futex_wake(uint32_t *address, uint32_t count)
 	return woke;
 }
 
+#if SCHEDULER_MULTIWAITER != false
+
 __cheriot_minimum_stack(0x60) int multiwaiter_create(
   Timeout            *timeout,
   AllocatorCapability heapCapability,
@@ -702,6 +709,8 @@ __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
 		return 0;
 	});
 }
+
+#endif // SCHEDULER_MULTIWAITER
 
 namespace
 {

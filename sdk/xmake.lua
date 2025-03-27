@@ -25,6 +25,12 @@ option("scheduler-accounting")
 	set_description("Track per-thread cycle counts in the scheduler");
 	set_showmenu(true)
 
+option("scheduler-multiwaiter")
+	set_default(true)
+	set_description("Enable multiwaiter support in the scheduler.  Disabling this can reduce code size if multiwaiters are not used.");
+	set_showmenu(true)
+
+
 option("allocator-rendering")
 	set_default(false)
 	set_description("Include heap_render() functionality in the allocator")
@@ -1016,6 +1022,7 @@ function firmware(name)
 			target:set("cheriot.compartment", "scheduler")
 			target:set('cheriot.debug-name', "scheduler")
 			target:add('defines', "SCHEDULER_ACCOUNTING=" .. tostring(get_config("scheduler-accounting")))
+			target:add('defines', "SCHEDULER_MULTIWAITER=" .. tostring(get_config("scheduler-multiwaiter")))
 		end)
 		add_files(path.join(coredir, "scheduler/main.cc"))
 
