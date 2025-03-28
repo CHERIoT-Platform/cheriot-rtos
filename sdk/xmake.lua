@@ -528,7 +528,7 @@ rule("firmware")
 		visit_all_dependencies(function (target)
 			local targetBoardFile = target:get("cheriot.board_file")
 			local targetBoardDir = target:get("cheriot.board_dir")
-			if not targetBoard then
+			if not targetBoardFile and not targetBoardDir then
 				target:set("cheriot.board_file", boardfile)
 				target:set("cheriot.board_dir", boarddir)
 			else
