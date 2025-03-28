@@ -1,0 +1,16 @@
+[
+  {
+    "op": "remove",
+    "path": "/data_memory"
+  },
+  {
+    "op": "replace",
+    "path": "/instruction_memory/start",
+    "value": 0x00101000
+  },
+  {
+    "op": "replace",
+    "path": "/instruction_memory/end",
+    "value": 0x00120000
+  }
+]
