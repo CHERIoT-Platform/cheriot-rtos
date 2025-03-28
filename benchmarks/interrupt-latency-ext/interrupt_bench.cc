@@ -192,7 +192,7 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 
 	while (true)
 	{
-		Timeout t{MS_TO_TICKS(1000)};
+		Timeout t{MS_TO_TICKS(2000)};
 
 		auto irqCount = *interruptFutex;
 		source.go();
@@ -210,6 +210,11 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 
 		source.done();
 
+		/*
+		 * If this reports ETIMEDOUT, check that `t` is actually allowing enough
+		 * time to lapse.  SAFE's Ibex revoker, for example, takes over a
+		 * simulated second to run.
+		 */
 		Debug::Invariant(
 		  waitRes == 0, "Unexpected result from futex_timed_wait: {}", waitRes);
 
@@ -224,6 +229,8 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		                 lastIrqCount);
 		lastIrqCount = irqCount;
 
+		// Rate limit us to make the output easier to observe
+		t = MS_TO_TICKS(250);
 		thread_sleep(&t, ThreadSleepNoEarlyWake);
 	}
 }
