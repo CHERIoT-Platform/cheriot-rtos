@@ -322,49 +322,8 @@ local function board_file_for_target(target)
 	return board_file_for_name(boardName)
 end
 
--- Helper to load a board file.  This must be passed the json object provided
--- by import("core.base.json") because import does not work in helper
--- functions at the top level.
-local function load_board_file(json, boardFile)
-	if path.extension(boardFile) == ".json" then
-		return json.loadfile(boardFile)
-	end
-	if path.extension(boardFile) ~= ".patch" then
-		print("unknown extension for board file: " .. boardFile)
-		return nil
-	end
-	local patch = json.loadfile(boardFile)
-	if not patch.base then
-		print("Board file " .. boardFile .. " does not specify a base")
-		return nil
-	end
-	local _, baseFile = board_file_for_name(patch.base)
-	local base = load_board_file(json, baseFile)
-
-	-- If a string value is a number, return it as number, otherwise return it
-	-- in its original form.
-	function asNumberIfNumber(value)
-		if tostring(tonumber(value)) == value then
-			return tonumber(value)
-		end
-		return value
-	end
-
-	-- Heuristic to tell a Lua table is probably an array in Lua
-	-- This is O(n), but n is usually very small, and this happens once per
-	-- build so this doesn't really matter.
-	function isarray(t)
-		local i = 1
-		for k, v in pairs(t) do
-			if k ~= i then
-				return false
-			end
-			i = i+1
-		end
-		return true
-	end
-
-	for _, p in ipairs(patch.patch) do
+local function patch_board(json, base, patches)
+	for _, p in ipairs(patches) do
 		if not p.op then
 			print("missing op in "..json.encode(p))
 			return nil
@@ -425,6 +384,52 @@ local function load_board_file(json, boardFile)
 			return nil
 		end
 	end
+end
+
+-- Helper to load a board file.  This must be passed the json object provided
+-- by import("core.base.json") because import does not work in helper
+-- functions at the top level.
+local function load_board_file(json, boardFile)
+	if path.extension(boardFile) == ".json" then
+		return json.loadfile(boardFile)
+	end
+	if path.extension(boardFile) ~= ".patch" then
+		print("unknown extension for board file: " .. boardFile)
+		return nil
+	end
+	local patch = json.loadfile(boardFile)
+	if not patch.base then
+		print("Board file " .. boardFile .. " does not specify a base")
+		return nil
+	end
+	local _, baseFile = board_file_for_name(patch.base)
+	local base = load_board_file_inner(json, baseFile)
+
+	-- If a string value is a number, return it as number, otherwise return it
+	-- in its original form.
+	function asNumberIfNumber(value)
+		if tostring(tonumber(value)) == value then
+			return tonumber(value)
+		end
+		return value
+	end
+
+	-- Heuristic to tell a Lua table is probably an array in Lua
+	-- This is O(n), but n is usually very small, and this happens once per
+	-- build so this doesn't really matter.
+	function isarray(t)
+		local i = 1
+		for k, v in pairs(t) do
+			if k ~= i then
+				return false
+			end
+			i = i+1
+		end
+		return true
+	end
+
+	patch_board(json, base, patch.patch)
+
 	return base
 end
 
