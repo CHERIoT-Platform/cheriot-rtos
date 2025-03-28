@@ -20,6 +20,11 @@ if is_mode("release") then
     add_defines("NDEBUG", {force = true})
 end
 
+option("board-mixins")
+	set_default("")
+	set_description("Comma separated list of board mixin patch files");
+	set_showmenu(true)
+
 option("scheduler-accounting")
 	set_default(false)
 	set_description("Track per-thread cycle counts in the scheduler");
@@ -389,7 +394,7 @@ end
 -- Helper to load a board file.  This must be passed the json object provided
 -- by import("core.base.json") because import does not work in helper
 -- functions at the top level.
-local function load_board_file(json, boardFile)
+local function load_board_file_inner(json, boardFile)
 	if path.extension(boardFile) == ".json" then
 		return json.loadfile(boardFile)
 	end
@@ -433,6 +438,33 @@ local function load_board_file(json, boardFile)
 	return base
 end
 
+-- Load a board (patch) file (recursively) and then apply the configuration's
+-- mixins as well.
+local function load_board_file(json, boardFile, xmakeConfig)
+	local base = load_board_file_inner(json, boardFile)
+
+	local mixinString = xmakeConfig.get("board-mixins")
+	if not mixinString or mixinString == "" then
+		return base
+	end
+
+	for mixinName in mixinString:gmatch("([^,]*),?") do
+		local _, mixinFile = board_file_for_name(mixinName)
+
+		-- XXX this *ought* to return nil, error on error, but it just throws.
+		local mixinTree, err = json.loadfile(mixinFile)
+		if not mixinTree then
+			error ("Could not process mixin %q: %s"):format(mixinName, err)
+		end
+
+		print(("Patching board with %q"):format(mixinFile))
+
+		patch_board(json, base, mixinTree)
+	end
+
+	return base
+end
+
 -- Helper to visit all dependencies of a specified target exactly once and call
 -- a callback.
 local function visit_all_dependencies_of(target, callback)
@@ -455,7 +487,7 @@ rule("firmware")
 		import("core.base.json")
 		import("core.project.config")
 		local boarddir, boardfile = board_file_for_target(target)
-		local board = load_board_file(json, boardfile)
+		local board = load_board_file(json, boardfile, config)
 		if (not board.run_command) and (not board.simulator) then
 			raise("board description " .. boardfile .. " does not define a run command")
 		end
@@ -495,7 +527,7 @@ rule("firmware")
 		end
 
 		local boarddir, boardfile = board_file_for_target(target);
-		local board = load_board_file(json, boardfile)
+		local board = load_board_file(json, boardfile, config)
 		print("Board file saved as ", target:targetfile()..".board.json")
 		json.savefile(target:targetfile()..".board.json", board)
 
