@@ -20,6 +20,11 @@ if is_mode("release") then
     add_defines("NDEBUG", {force = true})
 end
 
+option("board-mixins")
+	set_default("")
+	set_description("Comma separated list of board mixin patch files");
+	set_showmenu(true)
+
 option("scheduler-accounting")
 	set_default(false)
 	set_description("Track per-thread cycle counts in the scheduler");
@@ -316,49 +321,8 @@ local function board_file_for_target(target)
 	return board_file_for_name(boardName)
 end
 
--- Helper to load a board file.  This must be passed the json object provided
--- by import("core.base.json") because import does not work in helper
--- functions at the top level.
-local function load_board_file(json, boardFile)
-	if path.extension(boardFile) == ".json" then
-		return json.loadfile(boardFile)
-	end
-	if path.extension(boardFile) ~= ".patch" then
-		print("unknown extension for board file: " .. boardFile)
-		return nil
-	end
-	local patch = json.loadfile(boardFile)
-	if not patch.base then
-		print("Board file " .. boardFile .. " does not specify a base")
-		return nil
-	end
-	local _, baseFile = board_file_for_name(patch.base)
-	local base = load_board_file(json, baseFile)
-
-	-- If a string value is a number, return it as number, otherwise return it
-	-- in its original form.
-	function asNumberIfNumber(value)
-		if tostring(tonumber(value)) == value then
-			return tonumber(value)
-		end
-		return value
-	end
-
-	-- Heuristic to tell a Lua table is probably an array in Lua
-	-- This is O(n), but n is usually very small, and this happens once per
-	-- build so this doesn't really matter.
-	function isarray(t)
-		local i = 1
-		for k, v in pairs(t) do
-			if k ~= i then
-				return false
-			end
-			i = i+1
-		end
-		return true
-	end
-
-	for _, p in ipairs(patch.patch) do
+local function patch_board(json, base, patches)
+	for _, p in ipairs(patches) do
 		if not p.op then
 			print("missing op in "..json.encode(p))
 			return nil
@@ -419,6 +383,79 @@ local function load_board_file(json, boardFile)
 			return nil
 		end
 	end
+end
+
+-- Helper to load a board file.  This must be passed the json object provided
+-- by import("core.base.json") because import does not work in helper
+-- functions at the top level.
+local function load_board_file_inner(json, boardFile)
+	if path.extension(boardFile) == ".json" then
+		return json.loadfile(boardFile)
+	end
+	if path.extension(boardFile) ~= ".patch" then
+		print("unknown extension for board file: " .. boardFile)
+		return nil
+	end
+	local patch = json.loadfile(boardFile)
+	if not patch.base then
+		print("Board file " .. boardFile .. " does not specify a base")
+		return nil
+	end
+	local _, baseFile = board_file_for_name(patch.base)
+	local base = load_board_file_inner(json, baseFile)
+
+	-- If a string value is a number, return it as number, otherwise return it
+	-- in its original form.
+	function asNumberIfNumber(value)
+		if tostring(tonumber(value)) == value then
+			return tonumber(value)
+		end
+		return value
+	end
+
+	-- Heuristic to tell a Lua table is probably an array in Lua
+	-- This is O(n), but n is usually very small, and this happens once per
+	-- build so this doesn't really matter.
+	function isarray(t)
+		local i = 1
+		for k, v in pairs(t) do
+			if k ~= i then
+				return false
+			end
+			i = i+1
+		end
+		return true
+	end
+
+	patch_board(json, base, patch.patch)
+
+	return base
+end
+
+-- Load a board (patch) file (recursively) and then apply the configuration's
+-- mixins as well.
+local function load_board_file(json, boardFile, xmakeConfig)
+	local base = load_board_file_inner(json, boardFile)
+
+	local mixinString = xmakeConfig.get("board-mixins")
+	if not mixinString or mixinString == "" then
+		return base
+	end
+
+	for mixinName in mixinString:gmatch("([^,]*),?") do
+		local _, mixinFile = board_file_for_name(mixinName)
+
+		-- XXX this *ought* to return nil, error on error, but it just throws.
+		local mixinTree, err = json.loadfile(mixinFile)
+		if not mixinTree then
+			error ("Could not process mixin %q: %s"):format(mixinName, err)
+		end
+
+		print(("Patching board with %q"):format(mixinFile))
+
+		patch_board(json, base, mixinTree)
+	end
+
 	return base
 end
 
@@ -444,7 +481,7 @@ rule("firmware")
 		import("core.base.json")
 		import("core.project.config")
 		local boarddir, boardfile = board_file_for_target(target)
-		local board = load_board_file(json, boardfile)
+		local board = load_board_file(json, boardfile, config)
 		if (not board.run_command) and (not board.simulator) then
 			raise("board description " .. boardfile .. " does not define a run command")
 		end
@@ -484,7 +521,7 @@ rule("firmware")
 		end
 
 		local boarddir, boardfile = board_file_for_target(target);
-		local board = load_board_file(json, boardfile)
+		local board = load_board_file(json, boardfile, config)
 		print("Board file saved as ", target:targetfile()..".board.json")
 		json.savefile(target:targetfile()..".board.json", board)
 
@@ -517,7 +554,7 @@ rule("firmware")
 		visit_all_dependencies(function (target)
 			local targetBoardFile = target:get("cheriot.board_file")
 			local targetBoardDir = target:get("cheriot.board_dir")
-			if not targetBoard then
+			if not targetBoardFile and not targetBoardDir then
 				target:set("cheriot.board_file", boardfile)
 				target:set("cheriot.board_dir", boarddir)
 			else
