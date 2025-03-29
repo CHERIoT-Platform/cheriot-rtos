@@ -104,7 +104,7 @@ namespace ds::pointer
 
 			__always_inline Pointer<T> &operator=(Pointer const &p)
 			{
-				ref = p.ref;
+				ref = static_cast<T *>(p.ref);
 				return *this;
 			}
 
