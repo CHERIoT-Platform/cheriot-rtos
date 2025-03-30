@@ -13,7 +13,7 @@
 #include <thread.h>
 #include <type_traits>
 
-DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(EthernetInterruptCapability,
+DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(ethernetInterruptCapability,
                                         InterruptName::EthernetInterrupt,
                                         true,
                                         true);
@@ -504,7 +504,7 @@ class Ksz8851Ethernet
 		// Clear the interrupt status
 		register_write(RegisterOffset::InterruptStatus, 0xFFFF);
 		receiveInterruptFutex =
-		  interrupt_futex_get(STATIC_SEALED_VALUE(EthernetInterruptCapability));
+		  interrupt_futex_get(STATIC_SEALED_VALUE(ethernetInterruptCapability));
 		// Enable Receive interrupt
 		register_write(RegisterOffset::InterruptEnable, ReceiveInterrupt);
 
@@ -563,7 +563,7 @@ class Ksz8851Ethernet
 		// it will trigger again immediately after we acknowledge it.
 
 		// Acknowledge the interrupt in the scheduler.
-		interrupt_complete(STATIC_SEALED_VALUE(EthernetInterruptCapability));
+		interrupt_complete(STATIC_SEALED_VALUE(ethernetInterruptCapability));
 		if (*receiveInterruptFutex == lastInterruptValue)
 		{
 			Debug::log("Acknowledged interrupt, sleeping on futex {}",
