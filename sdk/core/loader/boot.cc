@@ -260,8 +260,9 @@ namespace
 	 * Build a capability to an object of type `T` from a range (start and size
 	 * address).
 	 */
-	template<typename T                = void,
-	         Root::Type    Type        = Root::Type::RWGlobal,
+	template<typename T      = void,
+	         Root::Type Type = Root::Type::RWGlobal,
+	         // NOLINTNEXTLINE(google-readability-casting)
 	         PermissionSet Permissions = Root::Permissions<Type>>
 	Capability<T> build(auto &&range, ptraddr_t address)
 	    requires(RawAddressRange<decltype(range)>)

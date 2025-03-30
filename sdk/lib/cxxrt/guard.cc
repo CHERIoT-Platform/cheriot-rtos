@@ -17,9 +17,11 @@ using Debug = ConditionalDebug<DEBUG_CXXRT, "cxxrt">;
 	[[cheriot::interrupt_state(disabled)]] __cheri_libcall ret name(           \
 	  __VA_ARGS__) asm(#name);
 
+// NOLINTBEGIN(readability-identifier-naming)
 DECLARE_ATOMIC_LIBCALL(__cxa_guard_acquire, int, uint64_t *)
 DECLARE_ATOMIC_LIBCALL(__cxa_guard_release, void, uint64_t *)
 DECLARE_ATOMIC_LIBCALL(__cxa_atexit, int, void (*)(void *), void *, void *)
+// NOLINTEND(readability-identifier-naming)
 
 namespace
 {
@@ -99,7 +101,6 @@ namespace
  * then it has acquired the lock, which must be released with
  * `__cxa_guard_release`.
  */
-// NOLINTNEXT(readability-identifier-naming)
 int __cxa_guard_acquire(uint64_t *guard)
 {
 	auto *g = reinterpret_cast<GuardWord *>(guard);
@@ -114,7 +115,6 @@ int __cxa_guard_acquire(uint64_t *guard)
 /**
  * Release a guard word and mark the variable as initialised.
  */
-// NOLINTNEXT(readability-identifier-naming)
 void __cxa_guard_release(uint64_t *guard)
 {
 	auto *g = reinterpret_cast<GuardWord *>(guard);
@@ -128,7 +128,6 @@ void __cxa_guard_release(uint64_t *guard)
  * Register a global destructor.  We have no notion of program end and so this
  * does nothing.
  */
-// NOLINTNEXT(readability-identifier-naming)
 int __cxa_atexit(void (*)(void *), void *, void *)
 {
 	return 0;

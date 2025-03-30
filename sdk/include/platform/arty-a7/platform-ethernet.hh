@@ -11,7 +11,7 @@
 #include <thread.h>
 #include <type_traits>
 
-DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(EthernetReceive,
+DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(ethernetReceive,
                                         EthernetReceiveInterrupt,
                                         true,
                                         true);
@@ -469,7 +469,7 @@ class KunyanEthernet
 		filter_mode_update(FilterMode::AllowIPv4Multicast, false);
 		filter_mode_update(FilterMode::AllowIPv6Multicast, false);
 		receiveInterruptFutex =
-		  interrupt_futex_get(STATIC_SEALED_VALUE(EthernetReceive));
+		  interrupt_futex_get(STATIC_SEALED_VALUE(ethernetReceive));
 		// Enable receive interrupts
 		mmio_register<RegisterOffset::GlobalInterruptEnable>() = 0b10;
 		// Clear pending receive interrupts.
@@ -526,7 +526,7 @@ class KunyanEthernet
 			return 0;
 		}
 		// Acknowledge the interrupt in the scheduler.
-		interrupt_complete(STATIC_SEALED_VALUE(EthernetReceive));
+		interrupt_complete(STATIC_SEALED_VALUE(ethernetReceive));
 		if (*receiveInterruptFutex == lastInterruptValue)
 		{
 			Debug::log("Acknowledged interrupt, sleeping on futex {}",
