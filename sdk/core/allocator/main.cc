@@ -848,10 +848,10 @@ namespace
 
 } // namespace
 
-__cheriot_minimum_stack(0x90) ssize_t
+__cheriot_minimum_stack(0xa0) ssize_t
   heap_quota_remaining(AllocatorCapability heapCapability)
 {
-	STACK_CHECK(0x90);
+	STACK_CHECK(0xa0);
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
