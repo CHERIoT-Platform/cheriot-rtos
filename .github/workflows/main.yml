@@ -85,6 +85,25 @@ jobs:
           xmake
         done
 
+  sonata-sram-hello:
+    name: Check Sonata SRAM-only Hello World
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cheriot-platform/devcontainer:latest
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build and run hello world
+      run: |
+        set -e
+        cd $PWD/examples/03.hello_safe_compartment/
+        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --board-mixins=sonata-1.x-sram-mixin
+        xmake
+        env SONATA_SIMULATOR_BOOT_STUB=/cheriot-tools/elf/sonata_simulator_sram_boot_stub xmake run
+
   check-format:
     name: Check coding conventions
     runs-on: ubuntu-latest
