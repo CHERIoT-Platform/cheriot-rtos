@@ -2,6 +2,7 @@
 #include <cdefs.h>
 #include <debug.hh>
 #include <stdint.h>
+#include <utils.hh>
 
 /**
  * Driver for the OpenTitan's I2C block.
@@ -9,7 +10,7 @@
  * Documentation source can be found at:
  * https://github.com/lowRISC/opentitan/tree/4fe1b8dd1a09af9dbc242434481ae031955dfd85/hw/ip/i2c
  */
-struct OpenTitanI2c
+struct OpenTitanI2c : private utils::NoCopyNoMove
 {
 	/// Interrupt State Register
 	uint32_t interruptState;

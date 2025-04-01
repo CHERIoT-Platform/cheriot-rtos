@@ -8,6 +8,8 @@
 #	define DEFAULT_UART_BAUD_RATE 921'600
 #endif
 
+#include <utils.hh>
+
 /**
  * OpenTitan UART
  *
@@ -17,7 +19,7 @@
  * Rendered register documentation is served at:
  * https://opentitan.org/book/hw/ip/uart/doc/registers.html
  */
-struct OpenTitanUart
+struct OpenTitanUart : private utils::NoCopyNoMove
 {
 	/**
 	 * Interrupt State Register.
