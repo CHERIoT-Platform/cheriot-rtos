@@ -7,7 +7,7 @@ DEV_CONTAINER_BIN="/cheriot-tools/bin/"
 #             `llvm-objdump`, `llvm-objcopy`)
 find_llvm_tool() {
 	TOOL_NAME=$1
-	LLVM_TOOL=${TOOL_NAME}
+	LLVM_TOOL=$(command -v ${TOOL_NAME})
 	if ! type ${LLVM_TOOL} >/dev/null 2>&1 ; then
 		FROM_DEV_CONTAINER="${DEV_CONTAINER_BIN}/${TOOL_NAME}"
 		if [ -x "${FROM_DEV_CONTAINER}" ] ; then
