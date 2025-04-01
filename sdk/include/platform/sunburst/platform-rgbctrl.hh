@@ -1,6 +1,7 @@
 #pragma once
 #include <cdefs.h>
 #include <stdint.h>
+#include <utils.hh>
 
 /**
  * An enum representing each of the Sonata's RGB LEDs.
@@ -14,7 +15,7 @@ enum class SonataRgbLed
 /**
  * A driver for the Sonata's RGB LED Controller
  */
-struct SonataRgbLedController
+struct SonataRgbLedController : private utils::NoCopyNoMove
 {
 	/**
 	 * Registers for setting the 8-bit red, green, and blue values
