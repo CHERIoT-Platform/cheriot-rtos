@@ -4,7 +4,7 @@
 #include <cstdint>
 
 /**
- * Concept for an Ethernet adaptor.
+ * Concept for an Entropy source.
  */
 template<typename T>
 concept IsEntropySource = requires(T source) {

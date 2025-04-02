@@ -167,8 +167,8 @@ namespace displacement_proxy
 	};
 
 	/**
-	 * Equipped with a context for bounds, a reference to a displacement can be
-	 * a proxy for a pointer.
+	 * Equipped with a context for bounds and a base address, a reference to a
+	 * (coded) displacement relative to that base can be a proxy for a pointer.
 	 */
 	template<typename T, typename D, bool Positive, auto Decode, auto Encode>
 	    requires Decoder<Decode, D> && Encoder<Encode, D>
