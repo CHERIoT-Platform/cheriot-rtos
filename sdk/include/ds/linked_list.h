@@ -400,6 +400,11 @@ namespace ds::linked_list
 			linked_list::insert_before(elem, &sentinel);
 		}
 
+		__always_inline void prepend_emplace(Cell *elem)
+		{
+			linked_list::emplace_after(&sentinel, elem);
+		}
+
 		__always_inline Cell *first()
 		{
 			return sentinel.cell_next();
