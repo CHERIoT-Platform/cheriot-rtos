@@ -40,7 +40,15 @@ namespace
 			  reinterpret_cast<uintptr_t>(c) -
 			  offsetof(struct LinkedObject, ring));
 		}
+		/**
+		 *
+		 */
+		__always_inline ObjectRing *to_ring()
+		{
+			return &this->ring;
+		}
 	};
+
 } // namespace
 
 /**
@@ -62,7 +70,11 @@ namespace
  * it would lead some list nodes to hold a pointer to a stack value, i.e., to
  * an invalid capability. This would manifest as a crash while using the list.
  */
-ds::linked_list::Sentinel<LinkedObject::ObjectRing> objects = {};
+ds::linked_list::TypedSentinel<LinkedObject,
+                               LinkedObject::ObjectRing,
+                               &LinkedObject::to_ring,
+                               LinkedObject::from_ring>
+  objects = {};
 
 int test_list()
 {
@@ -86,8 +98,6 @@ int test_list()
 
 		// Use the object integer as an index.
 		o->data = i;
-		// The list node has not yet been initialized.
-		o->ring.cell_reset();
 
 		// Test that we can retrieve the object from the link node and
 		// that this results in a capability which is identical to what
@@ -98,41 +108,41 @@ int test_list()
 		     "Capability retrieved from `from_ring` is invalid");
 
 		// Add the new object to the list through the sentinel node.
-		objects.append(&(o->ring));
+		objects.append_emplace(o);
 	}
 
 	TEST(!objects.is_empty(), "The list is empty after adding objects");
 
 	// Test that the sentinel can be used to retrieve the first and last
 	// elements of the list as expected.
-	TEST(LinkedObject::from_ring(objects.last())->data ==
-	       NumberOfListElements - 1,
+	TEST(objects.last()->data == NumberOfListElements - 1,
 	     "Last element of the list is incorrect, expected {}, got {}",
 	     NumberOfListElements - 1,
-	     LinkedObject::from_ring(objects.last())->data);
-	TEST(objects.last()->cell_next() == &objects.sentinel,
+	     objects.last()->data);
+	TEST(objects.last()->ring.cell_next() == &objects.untyped.sentinel,
 	     "Last element in not followed by the sentinel");
-	TEST(objects.last() == objects.sentinel.cell_prev(),
+	TEST(&objects.last()->ring == objects.untyped.sentinel.cell_prev(),
 	     "Sentinel is not preceeded by the last element");
 
-	TEST(LinkedObject::from_ring(objects.first())->data == 0,
+	TEST(objects.first()->data == 0,
 	     "First element of the list is incorrect, expected {}, got {}",
 	     0,
-	     LinkedObject::from_ring(objects.last())->data);
-	TEST(objects.first()->cell_prev() == &objects.sentinel,
+	     objects.last()->data);
+	TEST(objects.first()->ring.cell_prev() == &objects.untyped.sentinel,
 	     "First element in not preceeded by the sentinel");
-	TEST(objects.first() == objects.sentinel.cell_next(),
+	TEST(&objects.first()->ring == objects.untyped.sentinel.cell_next(),
 	     "Sentinel is not followed by the first element");
 
 	// Test that we can go through the list by following `cell_next`
-	// pointers as expected.
+	// pointers as expected.  This peers through some of the abstractions the
+	// (Typed)Sentinel provides.
 	int counter = 0;
 	// While at it, retrieve a pointer to the middle element which we will
 	// use to cleave the list later.
 	LinkedObject::ObjectRing *middle = nullptr;
 	// We reach the sentinel when we have gone through all elements of the
 	// list.
-	for (auto *cell = objects.first(); cell != &objects.sentinel;
+	for (auto *cell = &objects.first()->ring; cell != &objects.untyped.sentinel;
 	     cell       = cell->cell_next())
 	{
 		struct LinkedObject *o = LinkedObject::from_ring(cell);
@@ -150,55 +160,77 @@ int test_list()
 
 	TEST(middle != nullptr, "Could not find middle element of the list");
 
+	// Do that again with the convenience affordances of TypedSentinel
+	auto middleAgain = objects.search(
+	  [](LinkedObject *o) { return o->data == NumberOfListElements / 2; });
+
+	TEST(middleAgain && &middleAgain.value()->ring == middle,
+	     "Failed to find the middle again");
+
 	// Cut the list in the middle. `middle` is now a handle to the (valid)
 	// collection of objects [middle, last] that have become detached from
 	// the sentinel.
-	ds::linked_list::remove(middle, objects.last());
+	ds::linked_list::remove(middle, &objects.last()->ring);
 
 	// This should leave us with a list of size `NumberOfListElements / 2`.
+	// Use the untyped search interface, for slightly better experience.
 	counter = 0;
-	for (auto *cell = objects.first(); cell != &objects.sentinel;
-	     cell       = cell->cell_next())
-	{
+	objects.untyped.search([&counter](LinkedObject::ObjectRing *) {
 		counter++;
-	}
+		return false;
+	});
 	TEST(counter == NumberOfListElements / 2,
 	     "Cleaving didn't leave a list with the right number of elements");
 
 	// Now remove (and free) a single element from the list.
-	TEST(LinkedObject::from_ring(objects.first())->data == 0,
+	TEST(objects.first()->data == 0,
 	     "First element of the list is incorrect, expected {}, got {}",
 	     0,
-	     LinkedObject::from_ring(objects.first())->data);
+	     objects.first()->data);
+
 	// We must keep a reference to the removed object to free it, as
 	// `remove` returns a pointer to the residual list (return value which
 	// we do not use here), not to the removed element.
-	LinkedObject::ObjectRing *removedCell = objects.first();
-	ds::linked_list::remove(objects.first());
-	TEST_EQUAL(
-	  heap_free(MALLOC_CAPABILITY, LinkedObject::from_ring(removedCell)),
-	  0,
-	  "Failed to free removed cell");
-	TEST(LinkedObject::from_ring(objects.first())->data == 1,
+	auto *removedNode = objects.first();
+	ds::linked_list::remove(&removedNode->ring);
+
+	TEST_EQUAL(heap_free(MALLOC_CAPABILITY, removedNode),
+	           0,
+	           "Failed to free removed cell");
+	TEST(objects.first()->data == 1,
 	     "First element of the list is incorrect after removing the first "
 	     "element, expected {}, got {}",
 	     1,
-	     LinkedObject::from_ring(objects.first())->data);
-	TEST(objects.first()->cell_prev() == &objects.sentinel,
+	     objects.first()->data);
+	TEST(objects.first()->ring.cell_prev() == &objects.untyped.sentinel,
 	     "First element in not preceeded by the sentinel after removing the "
 	     "first object");
 
-	// We are done with the list, free it.
-	counter                        = 0;
-	LinkedObject::ObjectRing *cell = objects.first();
-	while (cell != &objects.sentinel)
-	{
-		struct LinkedObject *o = LinkedObject::from_ring(cell);
-		cell                   = cell->cell_next();
-		TEST_EQUAL(
-		  heap_free(MALLOC_CAPABILITY, o), 0, "Failed to free list object");
+	// We are done with the list, free the first two using the unsafe sentinel
+	// complete with update of the iterator and then the rest of it using the
+	// more ergonomic TypedSentinel::search_safe.
+	counter = 0;
+	objects.untyped.search_safe([&counter](LinkedObject::ObjectRing *cell) {
+		auto *toFree = LinkedObject::from_ring(cell);
+
+		ds::linked_list::unsafe_remove(cell);
+
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, toFree),
+		           0,
+		           "Failed to free list object");
 		counter++;
-	}
+
+		return counter > 2;
+	});
+
+	objects.search_safe([&counter](LinkedObject *object) {
+		ds::linked_list::unsafe_remove(&object->ring);
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, object),
+		           0,
+		           "Failed to free list object");
+		counter++;
+		return false;
+	});
 
 	TEST(counter == (NumberOfListElements / 2) - 1,
 	     "Incorrect number of elements freed, expected {}, got {}",
@@ -211,7 +243,7 @@ int test_list()
 	TEST(objects.is_empty(), "Reset-ed list is not empty");
 
 	// We must also free the span of the list which we removed earlier.
-	// This time use the `::search` method to go through the collection.
+	// This time use the raw `::search` method to go through that collection.
 	ds::linked_list::search(
 	  middle, [&counter](LinkedObject::ObjectRing *&cell) {
 		  // `unsafe_remove` does not update the node pointers of the
