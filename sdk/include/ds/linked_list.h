@@ -523,6 +523,98 @@ namespace ds::linked_list
 		}
 	};
 
+	/**
+	 * Convenience wrapper for a sentinel cons cell, encapsulating some common
+	 * patterns and communicating in terms of objects that contain a cell rather
+	 * than the cell itself.
+	 */
+	template<typename Object,
+	         typename Cell,
+	         Cell *(Object::*ObjectCellF)(),
+	         Object *(*CellObjectF)(Cell *)>
+	struct TypedSentinel
+	{
+		ds::linked_list::Sentinel<Cell> untyped;
+
+		__always_inline void reset()
+		{
+			untyped.reset();
+		}
+
+		__always_inline bool is_empty()
+		{
+			return untyped.is_empty();
+		}
+
+		__always_inline void append(Object *elem)
+		{
+			untyped.append((elem->*ObjectCellF)());
+		}
+
+		__always_inline void append_emplace(Object *elem)
+		{
+			untyped.append_emplace((elem->*ObjectCellF)());
+		}
+
+		__always_inline void prepend(Object *elem)
+		{
+			untyped.prepend((elem->*ObjectCellF)());
+		}
+
+		__always_inline void prepend_emplace(Object *elem)
+		{
+			untyped.prepend_emplace((elem->*ObjectCellF)());
+		}
+
+		__always_inline Object *first()
+		{
+			return CellObjectF(untyped.first());
+		}
+
+		__always_inline Object *last()
+		{
+			return CellObjectF(untyped.last());
+		}
+
+		__always_inline Object *unsafe_take_first()
+		{
+			return CellObjectF(untyped.unsafe_take_first());
+		}
+
+		__always_inline Object *take_all()
+		{
+			return CellObjectF(untyped.take_all());
+		}
+
+		/**
+		 * Like the (untyped) Sentinel::search, this applies the callback to
+		 * each object on the ring, stopping early with a pointer to the
+		 * indicated object if the callback returns true.  It also has the same
+		 * limitation on callback behavior: even if the object pointer is taken
+		 * by reference, updates will be ignored.
+		 */
+		template<bool Reverse = false, typename F>
+		__always_inline auto search(F f)
+		{
+			auto vCell = untyped.template search<Reverse>(
+			  [f](Cell *c) { return f(CellObjectF(c)); });
+
+			// vCell.transform() once we have it
+			if (vCell.has_value())
+			{
+				return std::optional{CellObjectF(vCell.value())};
+			}
+			return std::optional<Object *>{};
+		}
+
+		template<bool Reverse = false, typename F>
+		__always_inline auto search_safe(F f)
+		{
+			return untyped.template search_safe<Reverse>(
+			  [f](Cell *c) { return f(CellObjectF(c)); });
+		}
+	};
+
 	namespace cell
 	{
 
