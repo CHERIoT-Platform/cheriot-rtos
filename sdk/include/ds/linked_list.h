@@ -12,6 +12,7 @@
 
 #include <concepts>
 #include <ds/pointer.h>
+#include <optional>
 
 namespace ds::linked_list
 {
@@ -324,22 +325,29 @@ namespace ds::linked_list
 	/**
 	 * Search through a span of a ring, inclusively from `from` through
 	 * exclusively to `to`, applying `f` to each cons cell in turn.  If `f`
-	 * returns `true`, the search stops early and returns `true`; otherwise,
-	 * search returns `false`.  To (side-effectfully) visit every node in the
+	 * returns `true`, the search stops early and returns an optional carrying a
+	 * pointer to the Cell just scrutinized; otherwise, search returns an empty
+	 * option.  To (side-effectfully) visit every node in the
 	 * span, have `f` always return false.
+	 *
+	 * The callback may take the Cell pointer by reference and so
+	 * side-effectfully influence iteration by updating that reference and
+	 * returning false.  The callback may also update that reference when
+	 * returning true, which will impact the return value of this call, but that
+	 * is unlikely to be the intended outcome.
 	 */
 	template<cell::HasCellOperations Cell, typename F>
-	__always_inline bool search(Cell *from, Cell *to, F f)
+	__always_inline std::optional<Cell *> search(Cell *from, Cell *to, F f)
 	{
 		Cell *elem;
 		for (elem = from; elem != to; elem = elem->cell_next())
 		{
 			if (f(elem))
 			{
-				return true;
+				return {elem};
 			}
 		}
-		return false;
+		return {};
 	}
 
 	/**
@@ -348,7 +356,7 @@ namespace ds::linked_list
 	 * non-sentinel members of the ring.
 	 */
 	template<cell::HasCellOperations Cell, typename F>
-	__always_inline bool search(Cell *elem, F f)
+	__always_inline auto search(Cell *elem, F f)
 	{
 		return search(static_cast<Cell *>(elem->cell_next()), elem, f);
 	}
@@ -430,7 +438,7 @@ namespace ds::linked_list
 		}
 
 		template<typename F>
-		__always_inline bool search(F f)
+		__always_inline auto search(F f)
 		{
 			return linked_list::search(&sentinel, f);
 		}
