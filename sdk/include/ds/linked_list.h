@@ -11,6 +11,7 @@
 #pragma once
 
 #include <concepts>
+#include <ds/concepts.h>
 #include <ds/pointer.h>
 #include <optional>
 
@@ -486,6 +487,109 @@ namespace ds::linked_list
 		__always_inline auto search_safe(F f)
 		{
 			return linked_list::search_safe(&sentinel, f);
+		}
+	};
+
+	/**
+	 * Convenience wrapper for a sentinel cons cell, encapsulating some common
+	 * patterns and communicating in terms of objects that contain a cell rather
+	 * than the cell itself.
+	 */
+	template<typename Object,
+	         typename Cell,
+	         Cell *(Object::*ObjectCellF)(),
+	         Object *(*CellObjectF)(Cell *)>
+	struct TypedSentinel
+	{
+		ds::linked_list::Sentinel<Cell> untyped;
+
+		__always_inline void reset()
+		{
+			untyped.reset();
+		}
+
+		__always_inline bool is_empty()
+		{
+			return untyped.is_empty();
+		}
+
+		__always_inline void append(Object *elem)
+		{
+			untyped.append((elem->*ObjectCellF)());
+		}
+
+		__always_inline void append_emplace(Object *elem)
+		{
+			untyped.append_emplace((elem->*ObjectCellF)());
+		}
+
+		__always_inline void prepend(Object *elem)
+		{
+			untyped.prepend((elem->*ObjectCellF)());
+		}
+
+		__always_inline void prepend_emplace(Object *elem)
+		{
+			untyped.prepend_emplace((elem->*ObjectCellF)());
+		}
+
+		__always_inline Object *first()
+		{
+			return CellObjectF(untyped.first());
+		}
+
+		__always_inline Object *last()
+		{
+			return CellObjectF(untyped.last());
+		}
+
+		__always_inline Object *unsafe_take_first()
+		{
+			return CellObjectF(untyped.unsafe_take_first());
+		}
+
+		__always_inline Object *take_all()
+		{
+			return CellObjectF(untyped.take_all());
+		}
+
+		/**
+		 * Like the (untyped) Sentinel::search, this applies the callback to
+		 * each object on the ring, stopping early with a pointer to the
+		 * indicated object if the callback returns true.
+		 *
+		 * However, unlike Sentinel::search, the callback may not change the
+		 * object pointer it is given (that is, even if it takes the pointer by
+		 * reference, updates will be ignored).  This is done to discourage
+		 * accidentally treating the sentinel's Cell as within an Object, which
+		 * it emphatically is not.  Most such cases were for destructive
+		 * traversal and reset the cursor to the previous Cell; as such, these
+		 * can use search_safe() instead.  If fancier manipulations are
+		 * required, the untyped Sentinel or raw Cell interfaces are probably
+		 * better choices!
+		 */
+		template<typename F>
+		__always_inline auto search(F f)
+		{
+			auto vCell =
+			  untyped.search([f](Cell *c) { return f(CellObjectF(c)); });
+
+			// vCell.transform() once we have it
+			if (vCell.has_value())
+			{
+				return std::optional{CellObjectF(vCell.value())};
+			}
+			else
+			{
+				return std::optional<Object *>{};
+			}
+		}
+
+		template<typename F>
+		__always_inline auto search_safe(F f)
+		{
+			return untyped.search_safe(
+			  [f](Cell *c) { return f(CellObjectF(c)); });
 		}
 	};
 
