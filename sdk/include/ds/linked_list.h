@@ -372,6 +372,53 @@ namespace ds::linked_list
 	}
 
 	/**
+	 * Like `search`, but this form caches the next pointer across the callback
+	 * invocation, making it safe to modify the linkages of, or even free, the
+	 * element provided to the callback.
+	 *
+	 * While the callback could, like search, take the Cell pointer by
+	 * reference, because this form caches the next pointer, updating that
+	 * reference would serve no purpose.
+	 *
+	 * Because this form is useful for elementwise destruction, unlike `search`,
+	 * it simply returns a boolean indicating whether the search was successful.
+	 *
+	 * In order to guarantee termination, `to` must always remain reachable from
+	 * the iterator.  This is usually trivially satisfied, but matters if `from`
+	 * and `to are the same element.
+	 */
+	template<bool Reverse = false, cell::HasCellOperations Cell, typename F>
+	__always_inline bool search_safe(Cell *from, Cell *to, F f)
+	{
+		Cell *elem = from;
+		Cell *next;
+		for (elem = from; elem != to; elem = next)
+		{
+			next = Reverse ? elem->cell_prev() : elem->cell_next();
+			if (f(elem))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * search_safe through all elements of a ring *except* `elem`.  If `elem` is
+	 * the sentinel of a ring, then this is, as one expects, a `search` over all
+	 * non-sentinel members of the ring.
+	 *
+	 * In order to guarantee termination, `elem` must always remain reachable
+	 * from the iterator.
+	 */
+	template<bool Reverse = false, cell::HasCellOperations Cell, typename F>
+	__always_inline auto search_safe(Cell *elem, F f)
+	{
+		return search_safe<Reverse>(
+		  static_cast<Cell *>(elem->cell_next()), elem, f);
+	}
+
+	/**
 	 * Convenience wrapper for a sentinel cons cell, encapsulating some common
 	 * patterns.
 	 */
@@ -451,6 +498,13 @@ namespace ds::linked_list
 		__always_inline auto search(F f)
 		{
 			return linked_list::search<Reverse>(&sentinel, f);
+		}
+
+		template<bool Reverse = false, typename F>
+		__always_inline auto search_safe(F f)
+		{
+			return linked_list::search_safe<Reverse>(
+			  &sentinel, [f](Cell *c) { return f(c); });
 		}
 	};
 
