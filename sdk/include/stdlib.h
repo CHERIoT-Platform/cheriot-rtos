@@ -333,12 +333,12 @@ static int heap_quarantine_empty(void)
 /**
  * Returns true if `object` points to a valid heap address, false otherwise.
  * Note that this does *not* check that this is a valid pointer.  This should
- * be used in conjunction with check_pointer to check validity.  The principle
- * use of this function is checking whether an object needs to be claimed.  If
- * this returns false but the pointer has global permission, it must be a
- * global and so does not need to be claimed.  If the pointer lacks global
- * permission then it cannot be claimed, but if this function returns false
- * then it is guaranteed not to go away for the duration of the call.
+ * be used in conjunction with `check_pointer` to check validity.  The
+ * principle use of this function is checking whether an object needs to be
+ * claimed.  If this returns false but the pointer has global permission, it
+ * must be a global and so does not need to be claimed.  If the pointer lacks
+ * global permission then it cannot be claimed, but if this function returns
+ * false then it is guaranteed not to go away for the duration of the call.
  */
 __if_c(static) inline _Bool heap_address_is_valid(const void *object)
 {

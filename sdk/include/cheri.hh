@@ -1250,7 +1250,7 @@ namespace CHERI
 
 	/**
 	 * Checks that `ptr` is valid, unsealed, has at least `Permissions`,
-	 * and has at least `Space` bytes after the current offset.
+	 * and has at least `space` bytes after the current offset.
 	 *
 	 * `ptr` can be a pointer, or a smart pointer, i.e., any class that
 	 * supports a `get` method returning a pointer, and `operator=`. This
@@ -1262,9 +1262,9 @@ namespace CHERI
 	 * library) by passing `false` for `CheckStack`.
 	 *
 	 * If `EnforceStrictPermissions` is set to `true`, this will also set
-	 * the permissions of passed capability reference to `Permissions`, and
+	 * the permissions of the passed capability reference to `Permissions`, and
 	 * its bounds to `space`. This is useful for detecting cases where
-	 * compartments ask for less permissions than they actually require and
+	 * compartments ask for fewer permissions than they actually require and
 	 * callers happen to provide the required permissions.  Similarly, if you
 	 * are calling `check_pointer` in a function that wraps untrusted code such
 	 * as a third-party library, this lets you detect cases where your callers
