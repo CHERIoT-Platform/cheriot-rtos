@@ -527,19 +527,20 @@ namespace ds::linked_list
 	{
 
 		/** Cons cell using two pointers */
-		class Pointer
+		template<typename Type>
+		class PointerF
 		{
-			Pointer *prev, *next;
+			Type *prev, *next;
 
 			public:
-			Pointer()
+			PointerF()
 			{
 				this->cell_reset();
 			}
 
 			__always_inline void cell_reset()
 			{
-				prev = next = this;
+				prev = next = static_cast<Type *>(this);
 			}
 
 			__always_inline auto cell_next()
@@ -552,6 +553,10 @@ namespace ds::linked_list
 				return ds::pointer::proxy::Pointer(prev);
 			}
 		};
+
+		struct Pointer : public PointerF<Pointer>
+		{
+		};
 		static_assert(HasCellOperationsReset<Pointer>);
 
 		/**
@@ -559,12 +564,18 @@ namespace ds::linked_list
 		 * interface in terms of pointers).  CHERI bounds on the returned
 		 * pointers are inherited from the pointer to `this` cons cell.
 		 */
-		class __cheri_no_subobject_bounds PtrAddr
+		template<typename Type>
+		class __cheri_no_subobject_bounds PtrAddrF
 		{
 			ptraddr_t prev, next;
 
+			__always_inline Type *self()
+			{
+				return static_cast<Type *>(this);
+			}
+
 			public:
-			PtrAddr()
+			PtrAddrF()
 			{
 				this->cell_reset();
 			}
@@ -572,17 +583,17 @@ namespace ds::linked_list
 
 			__always_inline void cell_reset()
 			{
-				prev = next = CHERI::Capability{this}.address();
+				prev = next = CHERI::Capability{self()}.address();
 			}
 
 			__always_inline auto cell_next()
 			{
-				return ds::pointer::proxy::PtrAddr(this, next);
+				return ds::pointer::proxy::PtrAddr(self(), next);
 			}
 
 			__always_inline auto cell_prev()
 			{
-				return ds::pointer::proxy::PtrAddr(this, prev);
+				return ds::pointer::proxy::PtrAddr(self(), prev);
 			}
 
 			/*
@@ -592,13 +603,16 @@ namespace ds::linked_list
 
 			__always_inline bool cell_is_singleton()
 			{
-				return prev == CHERI::Capability{this}.address();
+				return prev == CHERI::Capability{self()}.address();
 			}
 
 			__always_inline bool cell_is_doubleton()
 			{
 				return prev == next;
 			}
+		};
+		struct PtrAddr : public PtrAddrF<PtrAddr>
+		{
 		};
 		static_assert(HasCellOperationsReset<PtrAddr>);
 		static_assert(HasIsSingleton<PtrAddr>);
@@ -609,13 +623,18 @@ namespace ds::linked_list
 		 * interface in terms of pointers).  CHERI bounds on the returned
 		 * pointers are inherited from the pointer to `this` cons cell.
 		 */
-		template<ptrdiff_t Offset>
-		class OffsetPtrAddr
+		template<typename Type, ptrdiff_t Offset>
+		class OffsetPtrAddrF
 		{
 			ptraddr_t prev, next;
 
+			__always_inline Type *self()
+			{
+				return static_cast<Type *>(this);
+			}
+
 			public:
-			OffsetPtrAddr()
+			OffsetPtrAddrF()
 			{
 				this->cell_reset();
 			}
@@ -624,19 +643,19 @@ namespace ds::linked_list
 
 			__always_inline void cell_reset()
 			{
-				prev = next = CHERI::Capability{this}.address() - Offset;
+				prev = next = CHERI::Capability{self()}.address() - Offset;
 			}
 
 			__always_inline auto cell_next()
 			{
-				return ds::pointer::proxy::OffsetPtrAddr<Offset, OffsetPtrAddr>(
-				  this, next);
+				return ds::pointer::proxy::OffsetPtrAddr<Offset, Type>(self(),
+				                                                       next);
 			}
 
 			__always_inline auto cell_prev()
 			{
-				return ds::pointer::proxy::OffsetPtrAddr<Offset, OffsetPtrAddr>(
-				  this, prev);
+				return ds::pointer::proxy::OffsetPtrAddr<Offset, Type>(self(),
+				                                                       prev);
 			}
 
 			/*
@@ -646,13 +665,18 @@ namespace ds::linked_list
 
 			__always_inline bool cell_is_singleton()
 			{
-				return prev == CHERI::Capability{this}.address() - Offset;
+				return prev == CHERI::Capability{self()}.address() - Offset;
 			}
 
 			__always_inline bool cell_is_doubleton()
 			{
 				return prev == next;
 			}
+		};
+		template<ptrdiff_t Offset>
+		struct OffsetPtrAddr
+		  : public OffsetPtrAddrF<OffsetPtrAddr<Offset>, Offset>
+		{
 		};
 		static_assert(HasCellOperationsReset<OffsetPtrAddr<0>>);
 		static_assert(HasIsSingleton<OffsetPtrAddr<0>>);
