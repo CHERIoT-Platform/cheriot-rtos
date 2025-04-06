@@ -13,6 +13,7 @@ __cheri_compartment("futex_test") int test_futex();
 __cheri_compartment("queue_test") int test_queue();
 __cheri_compartment("locks_test") int test_locks();
 __cheri_compartment("list_test") int test_list();
+__cheri_compartment("list_test") int test_non_standard_layout_list();
 __cheri_compartment("crash_recovery_test") int test_crash_recovery();
 __cheri_compartment("multiwaiter_test") int test_multiwaiter();
 __cheri_compartment("stack_test") int test_stack();
