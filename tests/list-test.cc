@@ -282,3 +282,151 @@ int test_list()
 	debug_log("Done testing the list.");
 	return 0;
 }
+
+namespace
+{
+	/**
+	 * \defgroup TypedLinkedObject Non-Standard-Layout Intrusive Lists
+	 *
+	 * We can also use C++'s inheritance system for non-standard-layout classes.
+	 * This requires a bit more work up front, but doesn't rely on `offsetof`.
+	 *
+	 * See `test_non_standard_layout_lists()`
+	 *
+	 * @{
+	 */
+
+	/**
+	 * Linkage cell 1 for TypedLinkedObject
+	 */
+	struct BaseCell1 : public ds::linked_list::cell::functor::Pointer<BaseCell1>
+	{
+	};
+	static_assert(ds::linked_list::cell::HasCellOperationsReset<BaseCell1>);
+
+	/**
+	 * Linkage cell 2 for TypedLinkedObject
+	 */
+	struct BaseCell2 : public ds::linked_list::cell::functor::Pointer<BaseCell2>
+	{
+	};
+	static_assert(ds::linked_list::cell::HasCellOperationsReset<BaseCell2>);
+
+	struct DerivedObject : public BaseCell1, public BaseCell2
+	{
+		int data;
+
+		__always_inline struct BaseCell1 *to_cell1()
+		{
+			return static_cast<BaseCell1 *>(this);
+		}
+
+		__always_inline static struct DerivedObject *from_cell1(BaseCell1 *c)
+		{
+			return static_cast<DerivedObject *>(c);
+		}
+
+		/**
+		 * We can even define TypedSentinel "containers" within the derived
+		 * object itself, which is handy if we want this type to maintain things
+		 * like "collections of all instances" or "all instances such that ...".
+		 */
+		static inline ds::linked_list::TypedSentinel<DerivedObject,
+		                                             BaseCell1,
+		                                             &DerivedObject::to_cell1,
+		                                             DerivedObject::from_cell1>
+		  sentinel1 = {};
+
+		__always_inline struct BaseCell2 *to_cell2()
+		{
+			return static_cast<BaseCell2 *>(this);
+		}
+
+		__always_inline static struct DerivedObject *from_cell2(BaseCell2 *c)
+		{
+			return static_cast<DerivedObject *>(c);
+		}
+
+		DerivedObject(int d) : data(d)
+		{
+			sentinel1.append(this);
+		}
+
+		~DerivedObject()
+		{
+			ds::linked_list::unsafe_remove(to_cell1());
+		}
+	};
+
+	/*
+	 * This is emphatically not a standard layout class, since we have two base
+	 * types with members as well as a member in the derived class itself.
+	 */
+	static_assert(!std::is_standard_layout_v<DerivedObject>);
+
+	/**
+	 * @}
+	 */
+
+} // namespace
+
+ds::linked_list::TypedSentinel<DerivedObject,
+                               BaseCell2,
+                               &DerivedObject::to_cell2,
+                               DerivedObject::from_cell2>
+  typedSentinel2 = {};
+
+int test_non_standard_layout_list()
+{
+	debug_log("Testing the non-standard layout list implementation.");
+
+	// Number of elements we will add to the list in the test.
+	static constexpr int NumberOfListElements = 10;
+
+	auto heapAtStart = heap_quota_remaining(MALLOC_CAPABILITY);
+
+	for (int i = 0; i < 10; i++)
+	{
+		auto *d = new DerivedObject(i);
+
+		// Thread half the objects onto one list; the constructor threads
+		// everything onto the other
+		if (i & 1)
+		{
+			// new runs constructors, so linkages are initialized and we need
+			// not use the emplace variant.
+			typedSentinel2.prepend(d);
+		}
+	}
+
+	// Free all the objects on the typedSentinel2 ring.
+	typedSentinel2.search_safe([](DerivedObject *d) {
+		ds::linked_list::unsafe_remove(d->to_cell2());
+
+		// The destructor will manage unlinking us from DerivedObject::sentinel1
+		delete d;
+
+		return false;
+	});
+
+	DerivedObject::sentinel1.search_safe([](DerivedObject *d) {
+		// Nodes still on the list were never part of the typedSentinel2 ring,
+		// so they should have singleton BaseCell2 linkages.
+		TEST(ds::linked_list::is_singleton(d->to_cell2()),
+		     "Object has bad Cell2 linkages");
+
+		delete d;
+		return false;
+	});
+
+	// Check that we didn't leak anything in the process
+	auto heapAtEnd = heap_quota_remaining(MALLOC_CAPABILITY);
+	TEST(heapAtStart == heapAtEnd,
+	     "The list leaked {} bytes ({} vs. {})",
+	     heapAtEnd - heapAtStart,
+	     heapAtStart,
+	     heapAtEnd);
+
+	debug_log("Done testing the non-standard layout list.");
+	return 0;
+}
