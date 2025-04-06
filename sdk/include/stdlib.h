@@ -232,7 +232,7 @@ ssize_t __cheri_compartment("allocator")
  *
  * A null pointer can be used as a not-present value.  This function will treat
  * operations on null pointers as unconditionally successful.  It returns
- * `-ETIMEDOUT` if it failed to claim before the timeout expired, or `EINVAL`
+ * `-ETIMEDOUT` if it failed to claim before the timeout expired, or `-EINVAL`
  * if one or more of the arguments is neither null nor a valid pointer at the
  * end.
  *

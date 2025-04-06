@@ -84,7 +84,7 @@ ssize_t __cheri_libcall queue_allocation_size(size_t elementSize,
  * Allocates space for a queue using `heapCapability` and stores a handle to it
  * via `outQueue`.
  *
- * The queue is has space for `elementCount` entries.  Each entry is a fixed
+ * The queue has space for `elementCount` entries.  Each entry is a fixed
  * size, `elementSize` bytes.
  *
  * Returns 0 on success, `-ENOMEM` on allocation failure, and `-EINVAL` if the
@@ -119,7 +119,7 @@ int __cheri_libcall queue_destroy(AllocatorCapability  heapCapability,
  * Returns 0 on success.  On failure, returns `-ETIMEOUT` if the timeout was
  * exhausted, `-EINVAL` on invalid arguments.
  *
- * This expected to be called with a valid queue handle.  It does not validate
+ * This expects to be called with a valid queue handle.  It does not validate
  * that this is correct.
  */
 int __cheri_libcall queue_send(Timeout             *timeout,

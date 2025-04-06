@@ -102,7 +102,7 @@ __cheri_compartment("scheduler") uint64_t thread_elapsed_cycles_current(void);
  * be called then it will return -1.  Callers that have not probed the trusted
  * stack should check for this value.
  *
- * The result of this is safe to cache: it will never change over time.
+ * The result of this is safe to cache because it will never change over time.
  */
 __cheri_compartment("scheduler") uint16_t thread_count();
 

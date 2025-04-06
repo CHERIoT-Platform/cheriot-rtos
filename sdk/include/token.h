@@ -115,12 +115,12 @@ __cheri_compartment("allocator")
   __cheri_libcall token_obj_unseal_dynamic(SKey, CHERI_SEALED(void *));
 
 /**
- * Destroy the obj given its key, freeing memory.
+ * Destroy the object given its key, freeing memory.
  *
  * The key must have the permit-unseal permission.
  *
- * @return 0 if no errors. -EINVAL if key or obj not valid, or they don't
- * match, or double destroy.
+ * Returns 0 on success. `-EINVAL` if `key` or `obj` are not valid, or they
+ * don't match, or if `obj` has already been destroyed.
  */
 int __cheri_compartment("allocator")
   token_obj_destroy(AllocatorCapability heapCapability,
