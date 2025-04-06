@@ -526,133 +526,168 @@ namespace ds::linked_list
 	namespace cell
 	{
 
-		/** Cons cell using two pointers */
-		class Pointer
+		namespace functor
 		{
-			Pointer *prev, *next;
 
-			public:
-			Pointer()
+			/** Cons cell using two pointers */
+			template<typename Type>
+			class Pointer
 			{
-				this->cell_reset();
-			}
+				Type *prev, *next;
 
-			__always_inline void cell_reset()
-			{
-				prev = next = this;
-			}
+				public:
+				Pointer()
+				{
+					this->cell_reset();
+				}
 
-			__always_inline auto cell_next()
-			{
-				return ds::pointer::proxy::Pointer(next);
-			}
+				__always_inline void cell_reset()
+				{
+					prev = next = static_cast<Type *>(this);
+				}
 
-			__always_inline auto cell_prev()
+				__always_inline auto cell_next()
+				{
+					return ds::pointer::proxy::Pointer(next);
+				}
+
+				__always_inline auto cell_prev()
+				{
+					return ds::pointer::proxy::Pointer(prev);
+				}
+			};
+
+			/**
+			 * Encode a linked list cons cell as a pair of addresses (but
+			 * present an interface in terms of pointers).  CHERI bounds on the
+			 * returned pointers are inherited from the pointer to `this` cons
+			 * cell.
+			 */
+			template<typename Type>
+			class __cheri_no_subobject_bounds PtrAddr
 			{
-				return ds::pointer::proxy::Pointer(prev);
-			}
+				ptraddr_t prev, next;
+
+				__always_inline Type *self()
+				{
+					return static_cast<Type *>(this);
+				}
+
+				public:
+				PtrAddr()
+				{
+					this->cell_reset();
+				}
+				/* Primops */
+
+				__always_inline void cell_reset()
+				{
+					prev = next = CHERI::Capability{self()}.address();
+				}
+
+				__always_inline auto cell_next()
+				{
+					return ds::pointer::proxy::PtrAddr(self(), next);
+				}
+
+				__always_inline auto cell_prev()
+				{
+					return ds::pointer::proxy::PtrAddr(self(), prev);
+				}
+
+				/*
+				 * Specialized implementations that may be slightly fewer
+				 * instructions than the generic approaches in terms of the
+				 * primops.
+				 */
+
+				__always_inline bool cell_is_singleton()
+				{
+					return prev == CHERI::Capability{self()}.address();
+				}
+
+				__always_inline bool cell_is_doubleton()
+				{
+					return prev == next;
+				}
+			};
+
+			/**
+			 * Encode a linked list cons cell as a pair of addresses (but
+			 * present an interface in terms of pointers).  CHERI bounds on the
+			 * returned pointers are inherited from the pointer to `this` cons
+			 * cell.
+			 */
+			template<typename Type, ptrdiff_t Offset>
+			class OffsetPtrAddr
+			{
+				ptraddr_t prev, next;
+
+				__always_inline Type *self()
+				{
+					return static_cast<Type *>(this);
+				}
+
+				public:
+				OffsetPtrAddr()
+				{
+					this->cell_reset();
+				}
+
+				/* Primops */
+
+				__always_inline void cell_reset()
+				{
+					prev = next = CHERI::Capability{self()}.address() - Offset;
+				}
+
+				__always_inline auto cell_next()
+				{
+					return ds::pointer::proxy::OffsetPtrAddr<Offset, Type>(
+					  self(), next);
+				}
+
+				__always_inline auto cell_prev()
+				{
+					return ds::pointer::proxy::OffsetPtrAddr<Offset, Type>(
+					  self(), prev);
+				}
+
+				/*
+				 * Specialized implementations that may be slightly fewer
+				 * instructions than the generic approaches in terms of the
+				 * primops.
+				 */
+
+				__always_inline bool cell_is_singleton()
+				{
+					return prev == CHERI::Capability{self()}.address() - Offset;
+				}
+
+				__always_inline bool cell_is_doubleton()
+				{
+					return prev == next;
+				}
+			};
+
+		} // namespace functor
+
+		struct Pointer : public functor::Pointer<Pointer>
+		{
 		};
 		static_assert(HasCellOperationsReset<Pointer>);
 
-		/**
-		 * Encode a linked list cons cell as a pair of addresses (but present an
-		 * interface in terms of pointers).  CHERI bounds on the returned
-		 * pointers are inherited from the pointer to `this` cons cell.
-		 */
-		class __cheri_no_subobject_bounds PtrAddr
+		struct PtrAddr : public functor::PtrAddr<PtrAddr>
 		{
-			ptraddr_t prev, next;
-
-			public:
-			PtrAddr()
-			{
-				this->cell_reset();
-			}
-			/* Primops */
-
-			__always_inline void cell_reset()
-			{
-				prev = next = CHERI::Capability{this}.address();
-			}
-
-			__always_inline auto cell_next()
-			{
-				return ds::pointer::proxy::PtrAddr(this, next);
-			}
-
-			__always_inline auto cell_prev()
-			{
-				return ds::pointer::proxy::PtrAddr(this, prev);
-			}
-
-			/*
-			 * Specialized implementations that may be slightly fewer
-			 * instructions than the generic approaches in terms of the primops.
-			 */
-
-			__always_inline bool cell_is_singleton()
-			{
-				return prev == CHERI::Capability{this}.address();
-			}
-
-			__always_inline bool cell_is_doubleton()
-			{
-				return prev == next;
-			}
 		};
 		static_assert(HasCellOperationsReset<PtrAddr>);
 		static_assert(HasIsSingleton<PtrAddr>);
 		static_assert(HasIsDoubleton<PtrAddr>);
 
-		/**
-		 * Encode a linked list cons cell as a pair of addresses (but present an
-		 * interface in terms of pointers).  CHERI bounds on the returned
-		 * pointers are inherited from the pointer to `this` cons cell.
-		 */
 		template<ptrdiff_t Offset>
-		class OffsetPtrAddr
+		struct OffsetPtrAddr
+		  : public functor::OffsetPtrAddr<OffsetPtrAddr<Offset>, Offset>
 		{
-			ptraddr_t prev, next;
-
-			public:
-			OffsetPtrAddr()
-			{
-				this->cell_reset();
-			}
-
-			/* Primops */
-
-			__always_inline void cell_reset()
-			{
-				prev = next = CHERI::Capability{this}.address() - Offset;
-			}
-
-			__always_inline auto cell_next()
-			{
-				return ds::pointer::proxy::OffsetPtrAddr<Offset, OffsetPtrAddr>(
-				  this, next);
-			}
-
-			__always_inline auto cell_prev()
-			{
-				return ds::pointer::proxy::OffsetPtrAddr<Offset, OffsetPtrAddr>(
-				  this, prev);
-			}
-
-			/*
-			 * Specialized implementations that may be slightly fewer
-			 * instructions than the generic approaches in terms of the primops.
-			 */
-
-			__always_inline bool cell_is_singleton()
-			{
-				return prev == CHERI::Capability{this}.address() - Offset;
-			}
-
-			__always_inline bool cell_is_doubleton()
-			{
-				return prev == next;
-			}
 		};
 		static_assert(HasCellOperationsReset<OffsetPtrAddr<0>>);
 		static_assert(HasIsSingleton<OffsetPtrAddr<0>>);
