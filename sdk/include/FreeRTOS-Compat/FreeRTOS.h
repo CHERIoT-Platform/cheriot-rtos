@@ -154,13 +154,14 @@ typedef uint64_t TimeOut_t;
 // Some things include this file expecting to get other FreeRTOS headers,
 // others include those files directly.
 #include "event_groups.h"
-#include "task.h"
 #include "queue.h"
+#include "stream_buffer.h"
+#include "task.h"
 
 // Some things expect this to include list.h.  This is an incredibly complex
 // data structure that it is not worth reimplementing, so include it if it
 // exists and allow components to copy it from FreeRTOS if they want it (it's
 // MIT licensed).
 #if __has_include(<list.h>)
-#include <list.h>
+#	include <list.h>
 #endif

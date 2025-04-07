@@ -120,6 +120,19 @@ int queue_send_sealed(Timeout *timeout,
 	return queue_send(timeout, queue, src);
 }
 
+int queue_send_multiple_sealed(Timeout *timeout,
+                               CHERI_SEALED(MessageQueue *) handle,
+                               const void *src,
+                               size_t      count)
+{
+	MessageQueue *queue = unseal(send_key(), handle);
+	if (!queue || !check_timeout_pointer(timeout))
+	{
+		return -EINVAL;
+	}
+	return queue_send_multiple(timeout, queue, src, count);
+}
+
 int queue_receive_sealed(Timeout *timeout,
                          CHERI_SEALED(MessageQueue *) handle,
                          void *dst)
@@ -130,6 +143,19 @@ int queue_receive_sealed(Timeout *timeout,
 		return -EINVAL;
 	}
 	return queue_receive(timeout, queue, dst);
+}
+
+int queue_receive_multiple_sealed(Timeout *timeout,
+                                  CHERI_SEALED(MessageQueue *) handle,
+                                  void  *dst,
+                                  size_t count)
+{
+	MessageQueue *queue = unseal(receive_key(), handle);
+	if (!queue || !check_timeout_pointer(timeout))
+	{
+		return -EINVAL;
+	}
+	return queue_receive_multiple(timeout, queue, dst, count);
 }
 
 int multiwaiter_queue_receive_init_sealed(struct EventWaiterSource *source,
