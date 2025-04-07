@@ -26,6 +26,56 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }
 
+void test_queue_multiple()
+{
+	static MessageQueue *queue;
+	Timeout              timeout{0};
+	const size_t         QueueSize  = 9;
+	const size_t         BufferSize = 4;
+	int rv = queue_create(&timeout, MALLOC_CAPABILITY, &queue, 1, QueueSize);
+	TEST(rv == 0, "MessageQueue creation failed with {}", rv);
+	char next       = 0;
+	auto fillBuffer = [&](char *buffer) {
+		for (int i = 0; i < BufferSize; i++)
+		{
+			buffer[i] = next++;
+		}
+	};
+	auto checkReceived = [](char *expected, char *received) {
+		for (int i = 0; i < BufferSize; i++)
+		{
+			TEST(expected[i] == received[i],
+			     "{} != {} in byte {}",
+			     static_cast<int>(expected[i]),
+			     static_cast<int>(received[i]),
+			     i);
+		}
+	};
+	for (int i = 0; i < 10; i++)
+	{
+		char buffer1[BufferSize];
+		char buffer2[BufferSize];
+		char receiveBuffer[BufferSize];
+		fillBuffer(buffer1);
+		fillBuffer(buffer2);
+
+		int sent = queue_send_multiple(&timeout, queue, buffer1, BufferSize);
+		TEST_EQUAL(sent, BufferSize, " failed to send (first time)");
+		sent = queue_send_multiple(&timeout, queue, buffer2, BufferSize);
+		TEST_EQUAL(sent, BufferSize, " failed to send (second time)");
+
+		int received =
+		  queue_receive_multiple(&timeout, queue, receiveBuffer, BufferSize);
+		TEST_EQUAL(received, BufferSize, " failed to receive");
+		checkReceived(buffer1, receiveBuffer);
+
+		received =
+		  queue_receive_multiple(&timeout, queue, receiveBuffer, BufferSize);
+		TEST_EQUAL(received, BufferSize, " failed to receive (second time)");
+		checkReceived(buffer2, receiveBuffer);
+	}
+}
+
 void test_queue_unsealed()
 {
 	char                 bytes[ItemSize];
@@ -198,6 +248,7 @@ void test_queue_freertos()
 int test_queue()
 {
 	test_queue_unsealed();
+	test_queue_multiple();
 	test_queue_sealed();
 	test_queue_freertos();
 	debug_log("All queue tests successful");
