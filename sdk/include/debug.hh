@@ -577,7 +577,7 @@ namespace
 	/**
 	 * Debug level.
 	 */
-	enum DebugLevel
+	enum class DebugLevel
 	{
 		/**
 		 * This is informative and may be helpful for debugging.

@@ -21,7 +21,7 @@ riscv32-unknown-unknown
 -Isdk/include/platform/generic-riscv
 -Isdk/include
 -DDEBUG_LOADER=true
--DDEBUG_ALLOCATOR=true
+-DDEBUG_ALLOCATOR=DebugLevel::Information
 -DDEBUG_SCHEDULER=true
 -DDEBUG_CXXRT=true
 -DSAIL
