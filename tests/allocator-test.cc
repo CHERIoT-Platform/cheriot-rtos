@@ -834,6 +834,23 @@ int test_allocator()
 	debug_log("Heap size is {} bytes", HeapSize);
 
 	test_preflight();
+
+	// Make sure that free() accepts delegated (non-global) pointers.
+	{
+		Timeout t{UnlimitedTimeout};
+		void *volatile p = heap_allocate(&t, MALLOC_CAPABILITY, 32);
+		TEST(Capability{p}.is_valid(),
+		     "Could not perform an early allocation: {}",
+		     p);
+
+		Capability q = {p};
+		q.without_permissions(CHERI::Permission::Global);
+
+		TEST_SUCCESS(heap_free(MALLOC_CAPABILITY, q));
+		TEST(!Capability{p}.is_valid(),
+		     "Free of non-global pointer failed to revoke");
+	}
+
 	test_token();
 	test_hazards();
 
