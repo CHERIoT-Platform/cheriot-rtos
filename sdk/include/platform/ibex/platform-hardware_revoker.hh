@@ -109,6 +109,23 @@ namespace Ibex
 			// Get a pointer to the futex that we use to wait for interrupts.
 			interruptFutex = interrupt_futex_get(
 			  STATIC_SEALED_VALUE(revokerInterruptCapability));
+
+#ifndef CLANG_TIDY
+			{
+				using namespace CHERI;
+
+				auto cap = Capability{interruptFutex};
+
+				Debug::Assert(cap.bounds() == sizeof(uint32_t),
+				              "Interrupt futexes are not properly bounded: {}",
+				              cap);
+				Debug::Assert(
+				  cap.permissions() ==
+				    PermissionSet{Permission::Global, Permission::Load},
+				  "Interrupt futexes are not properly permissioned: {}",
+				  cap);
+			}
+#endif
 		}
 
 		/**
