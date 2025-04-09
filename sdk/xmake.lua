@@ -1070,7 +1070,9 @@ rule("cheriot.component-debug")
 	after_load(function (target)
 		local name = target:get("cheriot.debug-name") or target:name()
 		local value = get_config("debug-"..name)
-		if type(value) == "boolean" then
+		if type(value) == "nil" then
+			error ("No debug configuration for %q; missing xmake debugOption()?"):format(name)
+		elseif type(value) == "boolean" then
 			value = tostring(value)
 		else
 			-- Initial capital
