@@ -187,8 +187,9 @@ namespace
 				count -= multiwaitersWoken;
 				woke += multiwaitersWoken;
 			}
-			Debug::log("futex_wake on {} woke {} waiters", key, woke);
 		}
+
+		Debug::log("futex_wake on {} woke {} waiters", key, woke);
 
 		return {shouldRecalculatePriorityBoost, woke};
 	}
