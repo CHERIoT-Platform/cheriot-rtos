@@ -149,6 +149,12 @@ namespace
 							master().interrupt_complete(source);
 						}
 					}
+
+					// The returned pointer (reference) will have bounds of the
+					// entire futexWords array.  That's likely fine within the
+					// scheduler and saves us a setbounds on the IRQ handling
+					// path, but it does mean that interrupt_futex_get needs to
+					// do the bounding.
 					return {futexWords[i]};
 				}
 			}

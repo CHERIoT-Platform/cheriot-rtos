@@ -747,6 +747,7 @@ namespace
 		  .futex_word_for_source(interruptCapability->state.interruptNumber)
 		  .and_then([&](uint32_t &word) {
 			  Capability capability{&word};
+			  capability.bounds() = sizeof(uint32_t);
 			  capability.permissions() &=
 			    {Permission::Load, Permission::Global};
 			  result = capability.get();
