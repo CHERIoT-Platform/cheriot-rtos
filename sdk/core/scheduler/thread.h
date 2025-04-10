@@ -17,9 +17,6 @@ class MultiWaiterInternal;
 
 namespace
 {
-	/// The total number of thread priorities.
-	constexpr ThreadPriority ThreadPrioNum = 32U;
-
 	uint64_t expiry_time_for_timeout(uint32_t timeout);
 
 	template<size_t NPrios>
@@ -648,7 +645,7 @@ namespace
 					static_assert(NPrios <= 32);
 					uint_fast16_t topZeroes = clz(priorityMap);
 
-					highestPriority = NPrios - 1 - topZeroes;
+					highestPriority = 31 - topZeroes;
 				}
 			}
 		}
@@ -680,6 +677,6 @@ namespace
 		bool isYielding : 1 {false};
 	};
 
-	using Thread = ThreadImpl<ThreadPrioNum>;
+	using Thread = ThreadImpl<(CONFIG_THREAD_MAX_PRIORITY) + 1>;
 
 } // namespace
