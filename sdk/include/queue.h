@@ -127,6 +127,22 @@ int __cheri_libcall queue_send(Timeout             *timeout,
                                const void          *src);
 
 /**
+ * Send multiple messages to the queue specified by `handle`.  This expects to
+ * be able to copy `count` times the number of bytes specified by `elementSize`
+ * when the queue was created from `src`.
+ *
+ * Returns the number of elements sent on success.  On failure, returns
+ * `-ETIMEOUT` if the timeout was exhausted, `-EINVAL` on invalid arguments.
+ *
+ * This expected to be called with a valid queue handle.  It does not validate
+ * that this is correct.
+ */
+int __cheri_libcall queue_send_multiple(Timeout             *timeout,
+                                        struct MessageQueue *handle,
+                                        const void          *src,
+                                        size_t               count);
+
+/**
  * Receive a message over a queue specified by `handle`.  This expects to be
  * able to copy the number of bytes specified by `elementSize`.  The message is
  * copied to `dst`, which must have sufficient permissions and space to hold
@@ -138,6 +154,22 @@ int __cheri_libcall queue_send(Timeout             *timeout,
 int __cheri_libcall queue_receive(Timeout             *timeout,
                                   struct MessageQueue *handle,
                                   void                *dst);
+
+/**
+ * Receive multiple messages to the queue specified by `handle`.  This expects
+ * to be able to copy `count` times the number of bytes specified by
+ * `elementSize` when the queue was created to `dst`.
+ *
+ * Returns the number of elements sent on success.  On failure, returns
+ * `-ETIMEOUT` if the timeout was exhausted, `-EINVAL` on invalid arguments.
+ *
+ * This expected to be called with a valid queue handle.  It does not validate
+ * that this is correct.
+ */
+int __cheri_libcall queue_receive_multiple(Timeout             *timeout,
+                                           struct MessageQueue *handle,
+                                           void                *dst,
+                                           size_t               count);
 
 /**
  * Returns the number of items in the queue specified by `handle` via `items`.
@@ -167,6 +199,14 @@ int __cheri_compartment("message_queue")
                       size_t elementCount);
 
 /**
+ * Reset a queue to its initial state.
+ *
+ * Returns 0 on success, `-ETIMEDOUT` if this cannot be done in the available
+ * timeout.
+ */
+int __cheri_libcall queue_reset(Timeout *timeout, struct MessageQueue *queue);
+
+/**
  * Destroy a queue handle.  If this is called on a restricted endpoint
  * (returned from `queue_receive_handle_create_sealed` or
  * `queue_send_handle_create_sealed`), this frees only the handle.  If called
@@ -190,6 +230,18 @@ int __cheri_compartment("message_queue")
                     const void *src);
 
 /**
+ * Send multiple messages via a sealed queue endpoint.  This behaves in the
+ * same way as `queue_send_multiple`, except that it will return `-EINVAL` if
+ * the endpoint is not a valid sending endpoint and may return
+ * `-ECOMPARTMENTFAIL` if the queue is destroyed during the call.
+ */
+int __cheri_compartment("message_queue")
+  queue_send_multiple_sealed(Timeout *timeout,
+                             CHERI_SEALED(struct MessageQueue *) handle,
+                             const void *src,
+                             size_t      count);
+
+/**
  * Receive a message via a sealed queue endpoint.  This behaves in the same way
  * as `queue_receive`, except that it will return `-EINVAL` if the endpoint is
  * not a valid receiving endpoint and may return `-ECOMPARTMENTFAIL` if the
@@ -199,6 +251,18 @@ int __cheri_compartment("message_queue")
   queue_receive_sealed(Timeout *timeout,
                        CHERI_SEALED(struct MessageQueue *) handle,
                        void *dst);
+
+/**
+ * Receive multiple messages via a sealed queue endpoint.  This behaves in the
+ * same way as `queue_receive_multiple`, except that it will return `-EINVAL` if
+ * the endpoint is not a valid receiving endpoint and may return
+ * `-ECOMPARTMENTFAIL` if the queue is destroyed during the call.
+ */
+int __cheri_compartment("message_queue")
+  queue_receive_multiple_sealed(Timeout *timeout,
+                                CHERI_SEALED(struct MessageQueue *) handle,
+                                void  *dst,
+                                size_t count);
 
 /**
  * Returns, via `items`, the number of items in the queue specified by `handle`.
