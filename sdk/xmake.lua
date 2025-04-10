@@ -532,7 +532,7 @@ rule("firmware")
 		json.savefile(target:targetfile()..".board.json", board)
 
 		-- Add defines to all dependencies.
-		local add_defines = function (defines)
+		local add_defines_each_dependency = function (defines)
 			visit_all_dependencies(function (target)
 				target:add('defines', defines)
 			end)
@@ -553,7 +553,7 @@ rule("firmware")
 				software_revoker = true
 				target:add('deps', "cheriot.software_revoker")
 			end
-			add_defines(temporal_defines)
+			add_defines_each_dependency(temporal_defines)
 		end
 
 		-- Check that all dependences have a single board that they're targeting.
@@ -586,25 +586,27 @@ rule("firmware")
 
 		-- If this board defines any macros, add them to all targets
 		if board.defines then
-			add_defines(board.defines)
+			add_defines_each_dependency(board.defines)
 		end
+
+		local scheduler = target:deps()[target:name() .. ".scheduler"]
 
 		-- If this board defines any cxflags, add them to all targets
 		if board.cxflags then
 			add_cxflags(board.cxflags)
 		end
 
-		add_defines("CPU_TIMER_HZ=" .. math.floor(board.timer_hz))
-		add_defines("TICK_RATE_HZ=" .. math.floor(board.tickrate_hz))
+		add_defines_each_dependency("CPU_TIMER_HZ=" .. math.floor(board.timer_hz))
+		add_defines_each_dependency("TICK_RATE_HZ=" .. math.floor(board.tickrate_hz))
 
 		if board.simulation then
-			add_defines("SIMULATION")
+			add_defines_each_dependency("SIMULATION")
 		end
 
 		local loader = target:deps()['cheriot.loader'];
 
 		if board.stack_high_water_mark then
-			add_defines("CONFIG_MSHWM")
+			add_defines_each_dependency("CONFIG_MSHWM")
 		else
 			-- If we don't have the stack high watermark, the trusted stack is smaller.
 			loader:set('loader_trusted_stack_size', 176)
@@ -624,7 +626,7 @@ rule("firmware")
 				end
 				stop = start + range.length
 			end
-			add_defines("DEVICE_EXISTS_" .. name)
+			add_defines_each_dependency("DEVICE_EXISTS_" .. name)
 			mmio_start = math.min(mmio_start, start)
 			mmio_end = math.max(mmio_end, stop)
 			mmio = format("%s__export_mem_%s = 0x%x;\n__export_mem_%s_end = 0x%x;\n",
@@ -658,7 +660,7 @@ rule("firmware")
 		if board.revokable_memory_start then
 			revokable_memory_start = format("0x%x", board.revokable_memory_start);
 		end
-		add_defines("REVOKABLE_MEMORY_START=" .. revokable_memory_start);
+		add_defines_each_dependency("REVOKABLE_MEMORY_START=" .. revokable_memory_start);
 
 		local heap_start = '.'
 		if board.heap.start then
@@ -678,8 +680,8 @@ rule("firmware")
 					.. (interrupt.edge_triggered and "true" or "false")
 					.. "},"
 			end
-			add_defines(interruptNames)
-			target:deps()[target:name() .. ".scheduler"]:add('defines', interruptConfiguration)
+			add_defines_each_dependency(interruptNames)
+			scheduler:add('defines', interruptConfiguration)
 		end
 
 		local loader_stack_size = loader:get('loader_stack_size')
@@ -755,10 +757,7 @@ rule("firmware")
 			thread_headers = thread_headers .. string.gsub(thread_template, "${([_%w]*)}", thread)
 
 		end
-		local add_defines = function(compartment, option_name)
-			target:deps()[compartment]:add('defines', "CONFIG_THREADS_NUM=" .. #(threads))
-		end
-		add_defines(target:name() .. ".scheduler", "scheduler")
+		scheduler:add('defines', "CONFIG_THREADS_NUM=" .. #(threads))
 
 		-- Next set up the substitutions for the linker scripts.
 
