@@ -419,6 +419,7 @@ target("cheriot.allocator")
 		if board.revoker and board.revoker ~= "software" then
 			target:add("deps", "cheriot.board.interrupts")
 		end
+		target:add("defines", board.rtos_defines and board.rtos_defines.allocator)
 	end)
 
 -- Add the allocator to the firmware image if enabled.
@@ -1441,7 +1442,10 @@ target("cheriot.loader")
 	-- FIXME: We should be setting this based on a board config file.
 	add_files(path.join(coredir, "loader/boot.S"), path.join(coredir, "loader/boot.cc"),  {force = {cxflags = "-O1"}})
 	add_defines("CHERIOT_AVOID_CAPRELOCS")
-	on_load(function (target)
+
+	add_deps("cheriot.board")
+
+	after_load(function (target)
 		target:set('cheriot.debug-name', "loader")
 		local config = {
 			-- Size in bytes of the trusted stack.
@@ -1455,6 +1459,9 @@ target("cheriot.loader")
 		for k, v in pairs(config) do
 			target:set(k, v)
 		end
+
+		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+		target:add("defines", board.rtos_defines and board.rtos_defines.loader)
 	end)
 
 -- Helper function to define firmware.  Used as `target`.
@@ -1466,6 +1473,7 @@ function firmware(name)
 		add_deps("locks", "crt", "atomic1")
 		add_deps("compartment_helpers")
 		add_deps("cheriot.board.interrupts")
+		add_deps("cheriot.board")
 		on_load(function (target)
 			target:set("cheriot.compartment", "scheduler")
 			target:set('cheriot.debug-name', "scheduler")
@@ -1474,6 +1482,7 @@ function firmware(name)
 		end)
 		after_load(function (target)
 			local board = target:dep("cheriot.board"):get("cheriot.board_info")
+			target:add("defines", board.rtos_defines and board.rtos_defines.scheduler)
 
 			if board.interrupts then
 				-- Define the macro that's used to initialise the scheduler's interrupt configuration.
