@@ -18,7 +18,7 @@ class MultiWaiterInternal;
 namespace
 {
 	/// The total number of thread priorities.
-	constexpr uint16_t ThreadPrioNum = 32U;
+	constexpr ThreadPriority ThreadPrioNum = 32U;
 
 	uint64_t expiry_time_for_timeout(uint32_t timeout);
 
@@ -35,6 +35,8 @@ namespace
 
 		static_assert(CONFIG_THREADS_NUM <
 		              std::numeric_limits<decltype(threadCount)>::max());
+
+		static_assert(NPrios <= std::numeric_limits<ThreadPriority>::max());
 
 		public:
 		enum class ThreadState : uint8_t
@@ -193,8 +195,8 @@ namespace
 		static inline CHERI_SEALED(TrustedStack *) schedTStack;
 
 		ThreadImpl(CHERI_SEALED(TrustedStack *) tstack,
-		           uint16_t threadid,
-		           uint16_t priority)
+		           uint16_t       threadid,
+		           ThreadPriority priority)
 		  : threadId(threadid),
 		    priority(priority),
 		    OriginalPriority(priority),
@@ -204,8 +206,6 @@ namespace
 		    sleepQueue(nullptr),
 		    tStackPtr(tstack)
 		{
-			static_assert(NPrios <
-			              std::numeric_limits<decltype(priority)>::max());
 			// All threads are created in blocked state.
 			timer_list_insert(&waitingList);
 		}
@@ -313,7 +313,7 @@ namespace
 		 * Boost the thread's thread to `newPriority` if that is larger than
 		 * the original priority or reset to the original priority if not.
 		 */
-		void priority_boost(uint8_t newPriority)
+		void priority_boost(ThreadPriority newPriority)
 		{
 			newPriority = std::max(newPriority, OriginalPriority);
 			if (newPriority == priority)
@@ -519,7 +519,7 @@ namespace
 			return threadId;
 		}
 
-		uint8_t priority_get()
+		ThreadPriority priority_get()
 		{
 			return priority;
 		}
@@ -668,10 +668,10 @@ namespace
 		 * The current priority level for this thread.  This may be influenced
 		 * by priority inheritance.
 		 */
-		uint8_t priority;
+		ThreadPriority priority;
 		/// The original priority level for this thread.  This never changes.
-		const uint8_t OriginalPriority;
-		ThreadState   state : 2;
+		const ThreadPriority OriginalPriority;
+		ThreadState          state : 2;
 		/**
 		 * If the thread is yielding, it may be scheduled before its timeout
 		 * expires, as long as no other threads are runnable or sleeping with
