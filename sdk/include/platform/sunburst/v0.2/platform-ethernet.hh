@@ -149,7 +149,7 @@ class Ksz8851Ethernet
 	  FlushTransmitQueue             = 1 << 4,
 	  TransmitChecksumGenerationIp   = 1 << 5,
 	  TransmitChecksumGenerationTcp  = 1 << 6,
-	  TransmitChecksumGenerationIcmp = 1 << 9,
+	  TransmitChecksumGenerationIcmp = 1 << 8,
 	};
 
 	/**
