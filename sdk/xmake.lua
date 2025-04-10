@@ -719,8 +719,47 @@ rule("firmware")
 				"\n\t\tSHORT(.thread_${thread_id}_trusted_stack_end - .thread_${thread_id}_trusted_stack_start);" ..
 				"\n\n"
 
-		--Pass the declared threads as macros when building the loader and the
-		--scheduler.
+		-- Stacks must be less than this size or truncating them in compartment
+		-- switch may encounter precision errors.
+		local stack_size_limit = 8176
+
+		-- Initial pass through thread sequence to derive values within each
+		local thread_priorities = {}
+		for i, thread in ipairs(threads) do
+			thread.mangled_entry_point = string.format("__export_%s__Z%d%sv", thread.compartment, string.len(thread.entry_point), thread.entry_point)
+			thread.thread_id = i
+			-- Trusted stack frame is 24 bytes.  If this size is too small, the
+			-- loader will fail.  If it is too big, we waste space.
+			thread.trusted_stack_size = loader_trusted_stack_size + (24 * thread.trusted_stack_frames)
+
+			if thread.stack_size > stack_size_limit then
+				raise("thread " .. i .. " requested a " .. thread.stack_size ..
+				" stack.  Stacks over " .. stack_size_limit ..
+				" are not yet supported in the compartment switcher.")
+			end
+
+			if type(thread.priority) ~= "number" or thread.priority < 0 then
+				raise(("thread %d has malformed priority %q"):format(i, thread.priority))
+			end
+			table.insert(thread_priorities, thread.priority)
+		end
+
+		-- Repack thread priorities into a contiguous span starting at 0.
+		table.sort(thread_priorities)
+		local thread_priority_remap = {}
+		for ix, v in ipairs(thread_priorities) do
+			thread_priority_remap[v] = math.min(thread_priority_remap[v] or math.maxinteger, ix - 1)
+		end
+		for i, thread in ipairs(threads) do
+			if thread.priority ~= thread_priority_remap[thread.priority] then
+				print(("Remapping priority of thread %d from %d to %d"):format(
+					i, thread.priority, thread_priority_remap[thread.priority]
+				))
+				thread.priority = thread_priority_remap[thread.priority]
+			end
+		end
+
+		-- Second pass through thread sequence, generating linker directives
 		local thread_headers = ""
 		local thread_trusted_stacks =
 			"\n\t. = ALIGN(8);" ..
@@ -736,26 +775,10 @@ rule("firmware")
 			"\n\t\tbootStack = .;" ..
 			"\n\t\t. += " .. loader_stack_size .. ";" ..
 			"\n\t}\n"
-		-- Stacks must be less than this size or truncating them in compartment
-		-- switch may encounter precision errors.
-		local stack_size_limit = 8176
 		for i, thread in ipairs(threads) do
-			thread.mangled_entry_point = string.format("__export_%s__Z%d%sv", thread.compartment, string.len(thread.entry_point), thread.entry_point)
-			thread.thread_id = i
-			-- Trusted stack frame is 24 bytes.  If this size is too small, the
-			-- loader will fail.  If it is too big, we waste space.
-			thread.trusted_stack_size = loader_trusted_stack_size + (24 * thread.trusted_stack_frames)
-
-			if thread.stack_size > stack_size_limit then
-				raise("thread " .. i .. " requested a " .. thread.stack_size ..
-				" stack.  Stacks over " .. stack_size_limit ..
-				" are not yet supported in the compartment switcher.")
-			end
-
 			thread_stacks = thread_stacks .. string.gsub(thread_stack_template, "${([_%w]*)}", thread)
 			thread_trusted_stacks = thread_trusted_stacks .. string.gsub(thread_trusted_stack_template, "${([_%w]*)}", thread)
 			thread_headers = thread_headers .. string.gsub(thread_template, "${([_%w]*)}", thread)
-
 		end
 		scheduler:add('defines', "CONFIG_THREADS_NUM=" .. #(threads))
 
