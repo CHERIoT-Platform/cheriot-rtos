@@ -208,7 +208,7 @@ int __cheri_libcall queue_reset(Timeout *timeout, struct MessageQueue *queue);
 
 /**
  * Destroy a queue handle.  If this is called on a restricted endpoint
- * (returned from `queue_receive_handle_create_sealed` or
+ * (returned either from `queue_receive_handle_create_sealed` or from
  * `queue_send_handle_create_sealed`), this frees only the handle.  If called
  * with the queue handle returned from `queue_create_sealed`, this will destroy
  * the queue.
