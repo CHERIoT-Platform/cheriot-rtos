@@ -198,6 +198,7 @@ int __cheri_compartment("test_runner") run_tests()
 		run_timed("Futex", test_futex);
 		run_timed("Locks", test_locks);
 		run_timed("List", test_list);
+		run_timed("List (non-standard-layout)", test_non_standard_layout_list);
 		run_timed("Event groups", test_eventgroup);
 		run_timed("Multiwaiter", test_multiwaiter);
 		run_timed("Allocator", test_allocator);
