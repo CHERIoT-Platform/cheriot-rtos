@@ -9,6 +9,8 @@
 
 using Debug = ConditionalDebug<DEBUG_ALLOCATOR, "Allocator">;
 
+constexpr bool AllocatorDebugEnabled = DEBUG_ALLOCATOR != DebugLevel::None;
+
 #define ABORT()                                                                \
 	Debug::Invariant(false, "Unrecoverable allocator corruption detected")
 
