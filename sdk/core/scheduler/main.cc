@@ -383,7 +383,8 @@ namespace
 				  // Wake anyone sleeping on this futex.  Interrupt futexes
 				  // are not priority inheriting.
 				  int woke;
-				  Debug::log("Waking waiters on interrupt futex {}", &word);
+				  Debug::log("Waking waiters on interrupt futex {}",
+				             Capability{&word}.address());
 				  std::tie(std::ignore, woke) =
 				    futex_wake(Capability{&word}.address());
 				  schedNeeded |= (woke > 0);
@@ -474,13 +475,13 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(
 		Debug::log("futex_timed_wait: skip wait {} != {}", *address, expected);
 		return 0;
 	}
-	Thread *currentThread = Thread::current_get();
+	Thread   *currentThread = Thread::current_get();
+	ptraddr_t key           = Capability{address}.address();
 	Debug::log("Thread {} waiting on futex {} for {} ticks",
 	           currentThread->id_get(),
-	           address,
+	           key,
 	           timeout->remaining);
-	bool      isPriorityInheriting         = flags & FutexPriorityInheritance;
-	ptraddr_t key                          = Capability{address}.address();
+	bool isPriorityInheriting              = flags & FutexPriorityInheritance;
 	currentThread->futexWaitAddress        = key;
 	currentThread->futexPriorityInheriting = isPriorityInheriting;
 	Thread  *owningThread                  = nullptr;
@@ -537,7 +538,7 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(
 	}
 	Debug::log("Thread {} ({}) woke after waiting on futex {}",
 	           currentThread->id_get(),
-	           currentThread,
+	           Capability{currentThread}.address(),
 	           address);
 	return 0;
 }
