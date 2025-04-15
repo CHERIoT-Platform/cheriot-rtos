@@ -1203,7 +1203,7 @@ class MState
 			return AllocationFailureQuotaExceeded{};
 		}
 
-		if constexpr (DEBUG_ALLOCATOR != DebugLevel::None)
+		if constexpr (AllocatorDebugEnabled)
 		{
 			// Periodically sanity check the entire state for this mspace.
 			static size_t           sanityCounter        = 0;
@@ -1526,7 +1526,7 @@ class MState
 	 */
 	bool ok_address(ptraddr_t a)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return true;
 		}
@@ -1534,7 +1534,7 @@ class MState
 	}
 	bool ok_address(void *p)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return true;
 		}
@@ -1542,7 +1542,7 @@ class MState
 	}
 	void ok_any_chunk(MChunkHeader *p)
 	{
-		if constexpr (HasTemporalSafety && DEBUG_ALLOCATOR != DebugLevel::None)
+		if constexpr (HasTemporalSafety && AllocatorDebugEnabled)
 		{
 			bool thisShadowBit =
 			  revoker.shadow_bit_get(CHERI::Capability{p}.address());
@@ -1565,7 +1565,7 @@ class MState
 	// Sanity check an in-use chunk.
 	void ok_in_use_chunk(MChunkHeader *p)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1583,7 +1583,7 @@ class MState
 	// Sanity check a free chunk.
 	void ok_free_chunk(MChunkHeader *pHeader)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1641,7 +1641,7 @@ class MState
 	// Sanity check a chunk that was just malloced.
 	void ok_malloced_chunk(MChunkHeader *p, size_t s)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1677,7 +1677,7 @@ class MState
 	 */
 	void ok_tree_next(TChunk *from, TChunk *t)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1717,7 +1717,7 @@ class MState
 	 */
 	void ok_tree(TChunk *from, TChunk *t)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1817,7 +1817,7 @@ class MState
 	// Sanity check the tree at treebin[i].
 	void ok_treebin(BIndex i)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1838,7 +1838,7 @@ class MState
 	// Sanity check smallbin[i].
 	void ok_smallbin(BIndex i)
 	{
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1872,7 +1872,7 @@ class MState
 		{
 			mspace_bg_revoker_kick();
 		}
-		if constexpr (DEBUG_ALLOCATOR == DebugLevel::None)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
