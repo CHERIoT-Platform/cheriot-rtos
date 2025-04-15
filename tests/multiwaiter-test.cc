@@ -36,9 +36,13 @@ int test_multiwaiter()
 	ret       = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == -EINVAL, "multiwaiter returned {}, expected {}", ret, -EINVAL);
 
+	debug_log("Multiwaiter test using futexes {} and {}",
+	          Capability{&futex}.address(),
+	          Capability{&futex2}.address());
+
 	debug_log("Testing one futex, already ready");
 	events[0]   = {&futex, 1};
-	t.remaining = 5;
+	t.remaining = 50;
 	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 
@@ -54,7 +58,7 @@ int test_multiwaiter()
 	debug_log("Testing one futex, not yet ready");
 	setFutex(&futex, 1);
 	events[0]   = {&futex, 0};
-	t.remaining = 6;
+	t.remaining = 51;
 	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 
@@ -64,7 +68,7 @@ int test_multiwaiter()
 	setFutex(&futex2, 3);
 	events[0]   = {&futex, 0};
 	events[1]   = {&futex2, 2};
-	t.remaining = 6;
+	t.remaining = 52;
 	ret         = multiwaiter_wait(&t, mw, events, 2);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 	TEST(events[0].value == 0, "Futex reports wake but none occurred");
@@ -91,7 +95,7 @@ int test_multiwaiter()
 		debug_log("Background thread made queue ready to send");
 	});
 	multiwaiter_queue_send_init(&events[0], queue);
-	t.remaining = 6;
+	t.remaining = 53;
 	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 	TEST(events[0].value == 1, "Queue reports not ready");
@@ -119,7 +123,7 @@ int test_multiwaiter()
 	setFutex(&futex, 1);
 	multiwaiter_queue_receive_init(&events[0], queue);
 	events[1]   = {&futex, 0};
-	t.remaining = 6;
+	t.remaining = 54;
 	ret         = multiwaiter_wait(&t, mw, events, 2);
 	TEST(ret == 0, "multiwait on futex and queue returned {}", ret);
 	TEST(events[0].value == 0,
