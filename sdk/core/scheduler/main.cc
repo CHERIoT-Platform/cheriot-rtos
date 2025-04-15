@@ -377,10 +377,6 @@ namespace
 			schedNeeded = false;
 			InterruptController::master().do_external_interrupt().and_then(
 			  [&](uint32_t &word) {
-				  // Increment the futex word so that anyone preempted on
-				  // the way into the scheduler sleeping on its old value
-				  // will still see this update.
-				  word++;
 				  // Wake anyone sleeping on this futex.  Interrupt futexes
 				  // are not priority inheriting.
 				  int woke;

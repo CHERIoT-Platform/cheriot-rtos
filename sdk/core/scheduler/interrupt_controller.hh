@@ -148,6 +148,12 @@ namespace
 			{
 				master().interrupt_complete(*src);
 			}
+
+			// Increment the futex word so that anyone preempted on
+			// the way into the scheduler sleeping on its old value
+			// will still see this update.
+			futexWords[*i]++;
+
 			return {futexWords[*i]};
 		}
 
