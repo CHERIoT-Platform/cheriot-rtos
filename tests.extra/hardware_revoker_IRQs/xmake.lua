@@ -19,7 +19,7 @@ firmware("top_compartment")
                 compartment = "top",
                 priority = 1,
                 entry_point = "entry",
-                stack_size = 0x300,
+                stack_size = 0x400,
                 trusted_stack_frames = 1
             }
         }, {expand = false})
