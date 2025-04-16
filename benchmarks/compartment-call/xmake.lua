@@ -24,6 +24,13 @@ compartment("callee")
     add_files("callee.cc")
     add_defines("METRIC=" .. tostring(get_config("metric")))
 
+compartment("callee_seh")
+    add_files("callee_seh.cc")
+	add_deps("unwind_error_handler")
+
+compartment("callee_ueh")
+    add_files("callee_ueh.cc")
+
 debugOption("caller");
 compartment("caller")
     -- Allow allocating an effectively unbounded amount of memory (more than exists)
@@ -35,7 +42,7 @@ compartment("caller")
 -- Firmware image for the example.
 firmware("compartment-call-benchmark")
     add_deps("crt", "freestanding", "atomic", "stdio", "string", "debug")
-    add_deps("caller", "callee", "libcallee")
+    add_deps("caller", "callee", "libcallee", "callee_seh", "callee_ueh")
     on_load(function(target)
         target:values_set("board", "$(board)")
         target:values_set("threads", {
