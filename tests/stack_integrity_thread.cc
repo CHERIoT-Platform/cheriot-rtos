@@ -114,9 +114,9 @@ int exhaust_thread_stack_spill(__cheri_callback int (*fn)())
 	  "cmove     cs0, csp\n"
 
 	  // Shrink the available stack space
-	  "cgetbase  s1, csp\n"
-	  "addi      s1, s1, %[stackleft]\n"
-	  "csetaddr  csp, csp, s1\n"
+	  "cgetbase  t2, csp\n"
+	  "addi      t2, t2, %[stackleft]\n"
+	  "csetaddr  csp, csp, t2\n"
 
 	  // Make the call
 	  "1:\n"
@@ -127,7 +127,10 @@ int exhaust_thread_stack_spill(__cheri_callback int (*fn)())
 	  "cmove     csp, cs0\n"
 	  : /* outs */ "+C"(res)
 	  : /* ins */[stackleft] "i"(sizeof(void *))
-	  : /* clobbers */ "ct2", "cs0", "cs1");
+	  : /* clobbers */
+	  "cs0" /* scratch in asm above */,
+	  "ct2" /* scratch in asm above */,
+	  "ca1" /* implicitly by the switcher, by .Lhandle_error_in_switcher */);
 
 	*threadStackTestFailed = false;
 	TEST_EQUAL(res, -ENOTENOUGHSTACK, "Bad return value for stack exhaustion");
