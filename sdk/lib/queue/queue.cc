@@ -405,12 +405,22 @@ ssize_t queue_allocation_size(size_t elementSize, size_t elementCount)
 {
 	size_t bufferSize;
 	size_t allocSize;
-	bool   overflow =
+
+	// FIXME: clang-tidy produces a false-positive warning for this
+	// sequence because it does not understand that the overflow
+	// builtins always write to their output parameters. The NOLINT
+	// should be removed once this is fixed in clang-tidy.
+	// See https://github.com/llvm/llvm-project/issues/136812
+
+	// NOLINTBEGIN(clang-analyzer-core.CallAndMessage)
+	bool overflow =
 	  __builtin_mul_overflow(elementCount, elementSize, &bufferSize);
 	static constexpr size_t CounterSize = sizeof(uint32_t);
 	// We also need space for the header
 	overflow |=
 	  __builtin_add_overflow(sizeof(MessageQueue), bufferSize, &allocSize);
+	// NOLINTEND(clang-analyzer-core.CallAndMessage)
+
 	if (overflow)
 	{
 		return -EINVAL;
