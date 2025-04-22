@@ -22,6 +22,7 @@ int __cheri_compartment("allocate") entry()
 		free(x);
 		// Print the dangling pointer, note that it is no longer a valid pointer
 		// (v:0)
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		Debug::log("Use after free: {}", x);
 	}
 
