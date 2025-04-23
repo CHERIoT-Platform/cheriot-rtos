@@ -66,7 +66,7 @@ concept EthernetAdaptor = requires(T                      adaptor,
 	 */
 	{
 		adaptor.send_frame(
-		  buffer, length, [](const uint8_t *buffer, uint16_t length) {
+		  buffer, length, [](const uint8_t * buffer, uint16_t length) {
 			  return true;
 		  })
 	} -> std::same_as<bool>;
