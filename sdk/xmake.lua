@@ -724,7 +724,7 @@ rule("firmware")
 		local stack_size_limit = 8176
 
 		-- Initial pass through thread sequence to derive values within each
-		local thread_priorities = {}
+		local thread_priorities_set = {}
 		for i, thread in ipairs(threads) do
 			thread.mangled_entry_point = string.format("__export_%s__Z%d%sv", thread.compartment, string.len(thread.entry_point), thread.entry_point)
 			thread.thread_id = i
@@ -741,14 +741,18 @@ rule("firmware")
 			if type(thread.priority) ~= "number" or thread.priority < 0 then
 				raise(("thread %d has malformed priority %q"):format(i, thread.priority))
 			end
-			table.insert(thread_priorities, thread.priority)
+			thread_priorities_set[thread.priority] = true
 		end
 
 		-- Repack thread priorities into a contiguous span starting at 0.
+		local thread_priorities = {}
+		for p, _ in pairs(thread_priorities_set) do
+			table.insert(thread_priorities, p)
+		end
 		table.sort(thread_priorities)
 		local thread_priority_remap = {}
 		for ix, v in ipairs(thread_priorities) do
-			thread_priority_remap[v] = math.min(thread_priority_remap[v] or math.maxinteger, ix - 1)
+			thread_priority_remap[v] = ix - 1
 		end
 		for i, thread in ipairs(threads) do
 			if thread.priority ~= thread_priority_remap[thread.priority] then
