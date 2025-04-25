@@ -327,6 +327,53 @@ local function board_file_for_target(target)
 	return board_file_for_name(boardName)
 end
 
+-- If a string value is a number, return it as number, otherwise return it
+-- in its original form.
+local function asNumberIfNumber(value)
+	if tostring(tonumber(value)) == value then
+		return tonumber(value)
+	end
+	return value
+end
+
+-- Heuristic to tell a Lua table is probably an array in Lua
+-- This is O(n), but n is usually very small, and this happens once per
+-- build so this doesn't really matter.
+--
+-- The generality and minimality of Lua tables results in some subtlety.  While
+-- Lua has a notion of "borders" within the integer keys of a table t (values b
+-- s.t. "(b == 0 or t[b] ~= nil) and t[b+1] == nil"), atop which it defines a
+-- "sequence", a table with only a single border, we mean something stronger: a
+-- sequence with only positive integer keys densely packed from 1.
+local function isarray(t)
+	local border = nil
+
+	-- Iteration order is undefined, even for numeric keys.  Each visited key
+	-- has non-nil value.
+	for k, _ in pairs(t) do
+		-- A non-positive-integral key means this isn't an array
+		-- (and since lua integers are finite, exclude anything for which
+		-- successor would be ill-defined)
+		if type(k) ~= "number" or
+		   k <= 0 or
+		   k >= math.maxinteger or
+		   math.tointeger(k) ~= k then
+			return false
+		end
+
+		if t[k+1] == nil then
+			-- More than one border means this isn't a sequence
+			if border ~= nil then return false end
+			border = k
+		end
+	end
+
+	-- An empty table (in which no border will be found) is an array.
+	-- Otherwise, t is an array if all of the above and t[1] is populated.
+	return (border == nil) or (t[1] ~= nil)
+end
+
+
 local function patch_board(json, base, patches)
 	for _, p in ipairs(patches) do
 		if not p.op then
@@ -409,29 +456,6 @@ local function load_board_file_inner(json, boardFile)
 	end
 	local _, baseFile = board_file_for_name(patch.base)
 	local base = load_board_file_inner(json, baseFile)
-
-	-- If a string value is a number, return it as number, otherwise return it
-	-- in its original form.
-	function asNumberIfNumber(value)
-		if tostring(tonumber(value)) == value then
-			return tonumber(value)
-		end
-		return value
-	end
-
-	-- Heuristic to tell a Lua table is probably an array in Lua
-	-- This is O(n), but n is usually very small, and this happens once per
-	-- build so this doesn't really matter.
-	function isarray(t)
-		local i = 1
-		for k, v in pairs(t) do
-			if k ~= i then
-				return false
-			end
-			i = i+1
-		end
-		return true
-	end
 
 	patch_board(json, base, patch.patch)
 
