@@ -9,6 +9,7 @@ includes(
 	"locks",
 	"microvium",
 	"queue",
+	"softfloat",
 	"stdio",
 	"string",
 	"strtol",

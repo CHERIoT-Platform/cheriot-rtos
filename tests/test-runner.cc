@@ -185,6 +185,7 @@ int __cheri_compartment("test_runner") run_tests()
 	run_timed("All tests", []() {
 		run_timed("Debug helpers (C++)", test_debug_cxx);
 		run_timed("Debug helpers (C)", test_debug_c);
+		run_timed("Soft float", test_softfloat);
 		run_timed("MMIO", test_mmio);
 		run_timed("Unwind cleanup", test_unwind_cleanup);
 		run_timed("stdio", test_stdio);
