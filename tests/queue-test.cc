@@ -74,6 +74,10 @@ void test_queue_multiple()
 		TEST_EQUAL(received, BufferSize, " failed to receive (second time)");
 		checkReceived(buffer2, receiveBuffer);
 	}
+
+	TEST_EQUAL(queue_destroy(MALLOC_CAPABILITY, queue),
+	           0,
+	           "MessageQueue deletion failed");
 }
 
 void test_queue_unsealed()
