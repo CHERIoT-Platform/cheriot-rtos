@@ -168,6 +168,8 @@ namespace
 
 			TEST(!__builtin_cheri_tag_get_temporal(unsealedToken->pointer),
 			     "Revoker failed to sweep static sealed cap");
+#	else
+			debug_log("Skipped temporal safety advanced handling checks");
 #	endif
 
 			/* Wait for the async thread to have performed its test */
@@ -182,11 +184,42 @@ namespace
 		debug_log("Skipping temporal safety checks");
 #endif
 
-		const size_t AllocSize = HeapSize / (MaxAllocCount + 2);
-		debug_log("test_revoke using {}-byte objects", AllocSize);
+		const size_t AllocSize = HeapSize / MaxAllocCount;
 
 		/* Repeatedly cycle quarantine */
 		allocations.resize(MaxAllocCount);
+
+		/* Do one round to count how many allocations actually fit */
+		{
+			size_t i = 0;
+
+			for (auto &allocation : allocations)
+			{
+				Timeout t{AllocTimeout};
+				allocation = heap_allocate(&t, MALLOC_CAPABILITY, AllocSize);
+
+				if (!__builtin_cheri_tag_get(allocation))
+				{
+					break;
+				}
+
+				i++;
+			}
+
+			allocations.resize(i);
+
+			for (auto &allocation : allocations)
+			{
+				free(allocation);
+			}
+
+			TEST(i >= (MaxAllocCount / 2), "Heap is implausibly fragmented?");
+		}
+
+		debug_log("test_revoke using rounds of {} {}-byte objects",
+		          allocations.size(),
+		          AllocSize);
+
 		for (size_t i = 0; i < TestIterations; ++i)
 		{
 			for (auto &allocation : allocations)
