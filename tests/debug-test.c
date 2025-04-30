@@ -8,7 +8,8 @@ __cheri_compartment("debug_test") int test_debug_c()
 	CHERIOT_DEBUG_LOG(
 	  "Debug messages",
 	  "Testing C debug log: 42:{}, true:{}, hello world:{}, "
-	  "'c':{}, &x:{}, NULL:{}, short 3:{}, unsigned short 0xf:{}",
+	  "'c':{}, &x:{}, NULL:{}, short 3:{}, unsigned short 0xf:{} "
+	  "float 123.34: {}, double 456.789: {}",
 	  42,
 	  t,
 	  "hello world",
@@ -16,7 +17,9 @@ __cheri_compartment("debug_test") int test_debug_c()
 	  &x,
 	  NULL,
 	  (short)3,
-	  (unsigned short)0xf);
+	  (unsigned short)0xf,
+	  123.34f,
+	  456.789);
 	// Just test that these compile:
 	CHERIOT_INVARIANT(true, "Testing C++ invariant failure: 42:{}", 42);
 	CHERIOT_INVARIANT(true, "Testing C++ invariant failure");

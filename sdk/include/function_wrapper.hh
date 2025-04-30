@@ -80,10 +80,10 @@ class FunctionWrapper<R(Args...)>
 
 	public:
 	/**
-	 * This is a non-owning reference, delete its copy and move
-	 * constructors to avoid accidental copies.
+	 * This is a non-owning reference, its copy constructor is safe to use for
+	 * passing down the stack.
 	 */
-	FunctionWrapper(FunctionWrapper &)             = delete;
+	FunctionWrapper(FunctionWrapper &)             = default;
 	FunctionWrapper(FunctionWrapper &&)            = delete;
 	FunctionWrapper &operator=(FunctionWrapper &&) = delete;
 
@@ -92,6 +92,7 @@ class FunctionWrapper<R(Args...)>
 	 */
 	template<typename T>
 	__always_inline FunctionWrapper(T &&fn)
+	    requires(!std::is_same_v<T, FunctionWrapper>)
 	{
 		// Make sure that we got the size for the storage right!
 		static_assert(sizeof(storage) >= sizeof(ErasedFunctionWrapper<T>));

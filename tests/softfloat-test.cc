@@ -19,8 +19,8 @@ namespace
 		volatile T x = 4.5;
 		T          y = x;
 		Op<T>      op;
-		x = op(y, 2);
-		debug_log("4.5 {} 2 = {}", opname, static_cast<int>(x));
+		T          result = op(y, 2);
+		debug_log("4.5 {} 2 = {}", opname, result);
 	}
 
 	template<typename T, typename I>
