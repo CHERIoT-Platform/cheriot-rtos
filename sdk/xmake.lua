@@ -163,7 +163,7 @@ toolchain("cheriot-clang")
 		toolchain:add("cxflags", default_flags, {force = true})
 		toolchain:add("cflags", default_flags)
 		toolchain:add("cxxflags", "-std=c++20")
-		toolchain:add("cflags", "-std=c2x", {force = true})
+		toolchain:add("cflags", "-std=c23")
 		-- Assembly flags
 		toolchain:add("asflags", default_flags)
 	end)
@@ -172,7 +172,7 @@ toolchain_end()
 
 set_defaultarchs("cheriot")
 set_defaultplat("cheriot")
-set_languages("c2x", "cxx20")
+set_languages("c23", "cxx20")
 
 -- Common rules for any CHERI MCU component (library or compartment)
 rule("cheriot.component")
