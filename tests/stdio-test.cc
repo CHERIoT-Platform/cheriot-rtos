@@ -18,5 +18,8 @@ int test_stdio()
 	TEST_EQUAL(std::string_view(buffer), "-42", "snprintf(\"%d\", -42) failed");
 	sprintf(buffer, "%x", 6 * 9);
 	TEST_EQUAL(std::string_view(buffer), "36", "sprintf(\"%x\", 6 * 9) failed");
+	sprintf(buffer, "%f", 123.456);
+	TEST_EQUAL(
+	  std::string_view(buffer), "123.456", "sprintf(\"%f\", 123.456) failed");
 	return 0;
 }
