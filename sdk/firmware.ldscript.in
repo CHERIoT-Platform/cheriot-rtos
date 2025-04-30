@@ -3,11 +3,30 @@
 
 @mmio@
 
+PHDRS
+{
+	headers PT_PHDR PHDRS ;
+
+	# We define two loadable sections, for "low" and "high" material.  Depending
+	# on the board configuration, one of these holds "rocode" and the the other
+	# holds "rwdata".
+	loadlow PT_LOAD ;
+	loadhigh PT_LOAD ;
+}
+
 SECTIONS
 {
-	# We link either rwdata or rocode first depending on board config
+	# Sections inherit the most recently set program header, so we can create a
+	# stub section with no contents to set all subsequent sections to map into
+	# the right program header.  (Our included linker scripts do not assign
+	# program headers on their sections.)
+	.loadlow_pre_stub : { } :loadlow
 	INCLUDE @firmware_low_ldscript@
+	.loadlow_post_stub : ALIGN(4) { }
+
+	.loadhigh_pre_stub : { } :loadhigh
 	INCLUDE @firmware_high_ldscript@
+	.loadhigh_post_stub : ALIGN(4) { }
 }
 
 # No symbols should be exported
