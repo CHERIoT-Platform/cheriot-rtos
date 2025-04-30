@@ -136,7 +136,7 @@ toolchain("cheriot-clang")
 		-- Flags used for C/C++ and assembly
 		local default_flags = {
 			"-target",
-			"riscv32-unknown-unknown",
+			"riscv32cheriot-unknown-unknown",
 			"-mcpu=cheriot",
 			"-mabi=cheriot",
 			"-mxcheri-rvc",
