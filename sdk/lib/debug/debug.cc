@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <debug.hh>
+#include <float_to_string_helpers.hh>
 #include <thread.h>
 
 using namespace CHERI;
@@ -99,6 +100,85 @@ namespace
 			write(" p: ");
 			write(C.permissions());
 			write(')');
+		}
+
+		/**
+		 * Helper to print a floating-point value that has already been
+		 * decomposed.
+		 *
+		 * This is used on both the `float` and `double` paths and so is
+		 * factored out.
+		 */
+		void print_float_parts(FloatParts floatParts)
+		{
+			write(static_cast<int32_t>(floatParts.integral));
+			if (floatParts.decimal)
+			{
+				write('.');
+				std::array<char, 10> buf;
+				const char           Digits[] = "0123456789";
+				auto                 s        = floatParts.decimal;
+				for (int i = static_cast<int>(buf.size() - 1); i >= 0; i--)
+				{
+					buf[static_cast<size_t>(i)] = Digits[s % 10];
+					s /= 10;
+				}
+				for (size_t i = buf.size() - floatParts.decimalPlaces;
+				     i < buf.size();
+				     i++)
+				{
+					write(buf[i]);
+				}
+			}
+			if (floatParts.exponent < 0)
+			{
+				write("e-");
+				write(-floatParts.exponent);
+			}
+			else if (floatParts.exponent > 0)
+			{
+				write('e');
+				write(floatParts.exponent);
+			}
+		}
+
+		template<SupportedFloatingPointType T>
+		void print_float(T value)
+		{
+			if (__builtin_isnan(value))
+			{
+				write("NaN");
+				return;
+			}
+			if (value < 0)
+			{
+				write('-');
+				value = -value;
+			}
+			if (__builtin_isinf(value))
+			{
+				write("Infinity");
+				return;
+			}
+			print_float_parts(decompose_float(value, 8));
+		}
+
+		void write(float value) override
+		{
+#ifdef CHERIOT_NO_FLOAT_PRINTING
+			write("<float value>");
+#else
+			print_float(value);
+#endif
+		}
+
+		void write(double value) override
+		{
+#ifdef CHERIOT_NO_DOUBLE_PRINTING
+			write("<double value>");
+#else
+			print_float(value);
+#endif
 		}
 
 		/**
@@ -321,6 +401,22 @@ namespace
 								write(CHERI::PermissionSet::from_raw(
 								  argument.value));
 								break;
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentFloat:
+							{
+								float value;
+								memcpy(&value, &argument.value, sizeof(value));
+								write(value);
+								break;
+							}
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentDouble:
+							{
+								double value;
+								memcpy(&value, &argument.value, sizeof(value));
+								write(value);
+								break;
+							}
 							default:
 								write("<invalid argument kind>");
 								break;

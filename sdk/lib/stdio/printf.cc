@@ -41,8 +41,8 @@
 #include <cheri-builtins.h>
 #include <compartment.h>
 #include <cstdint>
+#include <float_to_string_helpers.hh>
 #include <function_wrapper.hh>
-#include <inttypes.h>
 #include <limits.h>
 #include <platform-uart.hh>
 #include <stdarg.h>
@@ -54,6 +54,57 @@
  */
 namespace
 {
+	__noinline int kvprintf(char const                *fmt,
+	                        FunctionWrapper<void(int)> func,
+	                        void                      *arg,
+	                        int                        radix,
+	                        va_list                    ap);
+
+	inline int kprintf(FunctionWrapper<void(int)> func, const char *fmt, ...)
+	{
+		va_list ap;
+		va_start(ap, fmt);
+		int rv = kvprintf(fmt, func, nullptr, 10, ap);
+		va_end(ap);
+		return rv;
+	}
+
+	inline void print_double(FunctionWrapper<void(int)> &&putchar, double value)
+	{
+		if (__builtin_isnan(value))
+		{
+			kprintf(putchar, "NaN");
+			return;
+		}
+		if (value < 0)
+		{
+			kprintf(putchar, "-");
+			value = -value;
+		}
+		if (__builtin_isinf(value))
+		{
+			kprintf(putchar, "inf");
+			return;
+		}
+		auto floatParts = decompose_float(value, 8);
+		kprintf(putchar, "%d", floatParts.integral);
+		if (floatParts.decimal)
+		{
+			kprintf(putchar,
+			        ".%.*d",
+			        static_cast<int>(floatParts.decimalPlaces),
+			        floatParts.decimal);
+		}
+		if (floatParts.exponent < 0)
+		{
+			kprintf(putchar, "e-%d", -static_cast<int>(floatParts.exponent));
+		}
+		else if (floatParts.exponent > 0)
+		{
+			kprintf(putchar, "e%d", static_cast<int>(floatParts.exponent));
+		}
+	}
+
 	__always_inline char toupper(char c)
 	{
 		return ((c)-0x20 * (((c) >= 'a') && ((c) <= 'z')));
@@ -443,6 +494,19 @@ namespace
 					base = 16;
 					sign = 1;
 					goto handle_sign; // NOLINT
+				case 'f':
+#ifdef CHERIOT_NO_DOUBLE_PRINTING
+					for (char c : "<float>")
+					{
+						if (c)
+							putchar(c);
+					}
+					// Silently consume the argument but otherwise do nothing.
+					va_arg(ap, double);
+#else
+					print_double(putchar, va_arg(ap, double));
+#endif
+					break;
 				case 'z':
 					zflag = 1;
 					goto reswitch; // NOLINT

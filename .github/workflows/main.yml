@@ -32,12 +32,12 @@ jobs:
         include:
           - sonata: false
           - build-type: debug
-            build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=information --allocator-rendering=y -m debug
+            build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=information --allocator-rendering=y -m debug  --print-doubles=y --print-floats=n
           - build-type: release
-            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=n --print-floats=y
           - board: sonata-simulator
             build-type: release
-            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=y --print-floats=y
             sonata: true
       fail-fast: false
     runs-on: ubuntu-latest

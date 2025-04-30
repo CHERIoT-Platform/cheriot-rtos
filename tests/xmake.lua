@@ -13,7 +13,13 @@ option("board")
 -- Helper to add a C++ test
 function test(name)
     compartment(name .. "_test")
-         add_files(name .. "-test.cc")
+        add_files(name .. "-test.cc")
+        if get_config("print-floats") then
+            add_defines("CHERIOT_PRINT_FLOATS")
+        end
+        if get_config("print-doubles") then
+            add_defines("CHERIOT_PRINT_DOUBLES")
+        end
 end
 
 -- Helper for creating the different variants of the FreeRTOS compile tests.
