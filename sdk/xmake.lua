@@ -1074,6 +1074,31 @@ rule("cheriot.component-stack-checks")
 		target:add('defines', "CHERIOT_STACK_CHECKS_" .. name:upper() .. "=" .. tostring(get_config("stack-usage-check-"..name)))
 	end)
 
+-- Rule for making RTOS git revision information available to a build target.
+--
+-- Because this value is definitionally quite volatile, we jump through some
+-- hoops to allow it to be set per file rather than per xmake target, minimizing
+-- splash damage (necessitating only recompiling the necessary files and
+-- relinking revdepwards to the firmware image).  That is, rather than using
+-- add_rules at the target scope, you can add this rule as part of add_files:
+--
+--   add_files("version.cc", {rules = {"cheriot.define-rtos-git-description"}})
+local sdk_git_description = nil
+rule("cheriot.define-rtos-git-description")
+	before_build_file(function(target, sourcefile, opt)
+		sdk_git_description = sdk_git_description or try {
+			function()
+				return os.iorunv("git", {"-C", scriptdir, "describe", "--always", "--dirty"}):gsub("[\r\n]", "")
+			end
+		}
+		sdk_git_description = sdk_git_description or "unknown"
+
+		local fileconfig = target:fileconfig(sourcefile) or {}
+		fileconfig.defines = fileconfig.defines or {}
+		table.insert(fileconfig.defines, ("CHERIOT_RTOS_GIT_DESCRIPTION=%q"):format(sdk_git_description))
+		target:fileconfig_set(sourcefile, fileconfig)
+	end)
+
 -- Build the loader.  The firmware rule will set the flags required for
 -- this to create threads.
 target("cheriot.loader")
