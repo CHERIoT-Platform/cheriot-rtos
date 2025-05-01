@@ -94,6 +94,7 @@ includes(path.join(sdkdir, "lib"))
 -- Compartment for the test entry point.
 compartment("test_runner")
     add_files("test-runner.cc", "global_constructors-test.cc")
+    add_files("test-version.cc", { rules = { "cheriot.define-rtos-git-description" } } )
 
 -- Firmware image for the test suite.
 firmware("test-suite")

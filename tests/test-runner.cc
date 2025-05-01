@@ -88,6 +88,8 @@ __attribute__((noinline, weak)) void *pcc_as_sentry()
 [[cheriot::interrupt_state(disabled)]]
 int __cheri_compartment("test_runner") run_tests()
 {
+	print_version_information();
+
 	{
 		// Inspect the return sentry the switcher gave us.
 		// Since the switcher does not need Global on PCC it runs with a local
