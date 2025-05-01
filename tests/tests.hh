@@ -25,6 +25,8 @@ __cheri_compartment("debug_test") int test_debug_cxx();
 __cheri_compartment("debug_test") int test_debug_c();
 __cheri_compartment("unwind_cleanup_test") int test_unwind_cleanup();
 
+int print_version_information();
+
 // Simple tests don't need a separate compartment.
 void test_global_constructors();
 
