@@ -262,6 +262,36 @@ class Ksz8851Ethernet
 	};
 
 	/**
+	 * Flags bits of the PowerManagementEventControl register.
+	 */
+	enum [[clang::flag_enum]] PowerManagementEventControl : uint16_t
+	{
+		PowerManagementModeNormal       = 0b00 << 0,
+		PowerManagementModeEnergyDetect = 0b01 << 0,
+		PowerManagementModeReserved     = 0b10 << 0,
+		PowerManagementModePowerSaving  = 0b11 << 0,
+		PowerManagementModeMask         = 0b11 << 0,
+
+		WakeUpEventEnergy = 0b0001 << 2,
+		WakeUpEventLinkup = 0b0010 << 2,
+		WakeUpEventMagic  = 0b0100 << 2,
+		WakeUpEventFrame  = 0b1000 << 2,
+		WakeUpEventMask   = 0b1111 << 2,
+
+		WakeUpToNormal = 1 << 6,
+		AutoWakeEnable = 1 << 7,
+
+		WakeOnLanEventPinEnergy = 0b0001 << 8,
+		WakeOnLanEventPinLinkup = 0b0010 << 8,
+		WakeOnLanEventPinMagic  = 0b0100 << 8,
+		WakeOnLanEventPinFrame  = 0b1000 << 8,
+		WakeOnLanEventPinMask   = 0b1111 << 8,
+
+		WakeOnLanEventPinPolarity = 1 << 12,
+		WakeOnLanEventPinDelay    = 1 << 14
+	};
+
+	/**
 	 * Flags bits of the Port1Control register.
 	 */
 	enum [[clang::flag_enum]] Port1Control : uint16_t
