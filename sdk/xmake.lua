@@ -750,7 +750,7 @@ rule("firmware")
 		-- Initial pass through thread sequence to derive values within each
 		local thread_priorities_set = {}
 		for i, thread in ipairs(threads) do
-			thread.mangled_entry_point = string.format("__export_%s__Z%d%sv", thread.compartment, string.len(thread.entry_point), thread.entry_point)
+			thread.mangled_entry_point = string.format("\"__export_%s__Z%d%sv\"", thread.compartment, string.len(thread.entry_point), thread.entry_point)
 			thread.thread_id = i
 			-- Trusted stack frame is 24 bytes.  If this size is too small, the
 			-- loader will fail.  If it is too big, we waste space.
@@ -815,64 +815,64 @@ rule("firmware")
 		-- Templates for parts of the linker script that are instantiated per compartment
 		local compartment_templates = {
 			compartment_headers =
-				"\n\t\tLONG(.${compartment}_code_start);" ..
+				"\n\t\tLONG(\".${compartment}_code_start\");" ..
 				"\n\t\tSHORT((SIZEOF(.${compartment}_code) + 7) / 8);" ..
-				"\n\t\tSHORT(.${compartment}_imports_end - .${compartment}_code_start);" ..
-				"\n\t\tLONG(.${compartment}_export_table);" ..
-				"\n\t\tSHORT(.${compartment}_export_table_end - .${compartment}_export_table);" ..
-				"\n\t\tLONG(.${compartment}_globals);" ..
+				"\n\t\tSHORT(\".${compartment}_imports_end\" - \".${compartment}_code_start\");" ..
+				"\n\t\tLONG(\".${compartment}_export_table\");" ..
+				"\n\t\tSHORT(\".${compartment}_export_table_end\" - \".${compartment}_export_table\");" ..
+				"\n\t\tLONG(\".${compartment}_globals\");" ..
 				"\n\t\tSHORT(SIZEOF(.${compartment}_globals));" ..
-				"\n\t\tSHORT(.${compartment}_bss_start - .${compartment}_globals);" ..
-				"\n\t\tLONG(.${compartment}_cap_relocs_start);" ..
-				"\n\t\tSHORT(.${compartment}_cap_relocs_end - .${compartment}_cap_relocs_start);" ..
-				"\n\t\tLONG(.${compartment}_sealed_objects_start);" ..
-				"\n\t\tSHORT(.${compartment}_sealed_objects_end - .${compartment}_sealed_objects_start);\n",
+				"\n\t\tSHORT(\".${compartment}_bss_start\" - \".${compartment}_globals\");" ..
+				"\n\t\tLONG(\".${compartment}_cap_relocs_start\");" ..
+				"\n\t\tSHORT(\".${compartment}_cap_relocs_end\" - \".${compartment}_cap_relocs_start\");" ..
+				"\n\t\tLONG(\".${compartment}_sealed_objects_start\");" ..
+				"\n\t\tSHORT(\".${compartment}_sealed_objects_end\" - \".${compartment}_sealed_objects_start\");\n",
 			pcc_ld =
-				"\n\t.${compartment}_code : CAPALIGN" ..
+				"\n\t\".${compartment}_code\" : CAPALIGN" ..
 				"\n\t{" ..
-				"\n\t\t.${compartment}_code_start = .;" ..
-				"\n\t\t${obj}(.compartment_import_table);" ..
-				"\n\t\t.${compartment}_imports_end = .;" ..
-				"\n\t\t${obj}(.text);" ..
-				"\n\t\t${obj}(.init_array);" ..
-				"\n\t\t${obj}(.rodata);" ..
+				"\n\t\t\".${compartment}_code_start\" = .;" ..
+				"\n\t\t\"${obj}\"(\".compartment_import_table\");" ..
+				"\n\t\t\".${compartment}_imports_end\" = .;" ..
+				"\n\t\t\"${obj}\"(.text);" ..
+				"\n\t\t\"${obj}\"(.init_array);" ..
+				"\n\t\t\"${obj}\"(.rodata);" ..
 				"\n\t\t. = ALIGN(8);" ..
 				"\n\t}\n",
 			gdc_ld =
-				"\n\t.${compartment}_globals : CAPALIGN" ..
+				"\n\t\".${compartment}_globals\" : CAPALIGN" ..
 				"\n\t{" ..
-				"\n\t\t.${compartment}_globals = .;" ..
-				"\n\t\t${obj}(.data);" ..
-				"\n\t\t.${compartment}_bss_start = .;" ..
-				"\n\t\t${obj}(.bss)" ..
+				"\n\t\t\".${compartment}_globals\" = .;" ..
+				"\n\t\t\"${obj}\"(.data);" ..
+				"\n\t\t\".${compartment}_bss_start\" = .;" ..
+				"\n\t\t\"${obj}\"(.bss)" ..
 				"\n\t}\n",
 			compartment_exports =
-				"\n\t\t.${compartment}_export_table = ALIGN(8);" ..
-				"\n\t\t${obj}(.compartment_export_table);" ..
-				"\n\t\t.${compartment}_export_table_end = .;\n",
+				"\n\t\t\".${compartment}_export_table\" = ALIGN(8);" ..
+				"\n\t\t\"${obj}\"(.compartment_export_table);" ..
+				"\n\t\t\".${compartment}_export_table_end\" = .;\n",
 			cap_relocs =
-				"\n\t\t.${compartment}_cap_relocs_start = .;" ..
-				"\n\t\t${obj}(__cap_relocs);\n\t\t.${compartment}_cap_relocs_end = .;",
+				"\n\t\t\".${compartment}_cap_relocs_start\" = .;" ..
+				"\n\t\t\"${obj}\"(__cap_relocs);\n\t\t\".${compartment}_cap_relocs_end\" = .;",
 			sealed_objects =
-				"\n\t\t.${compartment}_sealed_objects_start = .;" ..
-				"\n\t\t${obj}(.sealed_objects);\n\t\t.${compartment}_sealed_objects_end = .;"
+				"\n\t\t\".${compartment}_sealed_objects_start\" = .;" ..
+				"\n\t\t\"${obj}\"(.sealed_objects);\n\t\t\".${compartment}_sealed_objects_end\" = .;"
 		}
 		--Library headers are almost identical to compartment headers, except
 		--that they don't have any globals.
 		local library_templates = {
 			compartment_headers =
-				"\n\t\tLONG(.${compartment}_code_start);" ..
+				"\n\t\tLONG(\".${compartment}_code_start\");" ..
 				"\n\t\tSHORT((SIZEOF(.${compartment}_code) + 7) / 8);" ..
-				"\n\t\tSHORT(.${compartment}_imports_end - .${compartment}_code_start);" ..
-				"\n\t\tLONG(.${compartment}_export_table);" ..
-				"\n\t\tSHORT(.${compartment}_export_table_end - .${compartment}_export_table);" ..
+				"\n\t\tSHORT(\".${compartment}_imports_end\" - \".${compartment}_code_start\");" ..
+				"\n\t\tLONG(\".${compartment}_export_table\");" ..
+				"\n\t\tSHORT(\".${compartment}_export_table_end\" - \".${compartment}_export_table\");" ..
 				"\n\t\tLONG(0);" ..
 				"\n\t\tSHORT(0);" ..
 				"\n\t\tSHORT(0);" ..
-				"\n\t\tLONG(.${compartment}_cap_relocs_start);" ..
-				"\n\t\tSHORT(.${compartment}_cap_relocs_end - .${compartment}_cap_relocs_start);" ..
-				"\n\t\tLONG(.${compartment}_sealed_objects_start);" ..
-				"\n\t\tSHORT(.${compartment}_sealed_objects_end - .${compartment}_sealed_objects_start);\n",
+				"\n\t\tLONG(\".${compartment}_cap_relocs_start\");" ..
+				"\n\t\tSHORT(\".${compartment}_cap_relocs_end\" - \".${compartment}_cap_relocs_start\");" ..
+				"\n\t\tLONG(\".${compartment}_sealed_objects_start\");" ..
+				"\n\t\tSHORT(\".${compartment}_sealed_objects_end\" - \".${compartment}_sealed_objects_start\");\n",
 			pcc_ld = compartment_templates.pcc_ld,
 			gdc_ld = "",
 			library_exports = compartment_templates.compartment_exports,
