@@ -536,7 +536,8 @@ class Ksz8851Ethernet
 		receiveInterruptFutex =
 		  interrupt_futex_get(STATIC_SEALED_VALUE(ethernetInterruptCapability));
 		// Enable Receive interrupt
-		register_write(RegisterOffset::InterruptEnable, ReceiveInterrupt);
+		register_write(RegisterOffset::InterruptEnable,
+		               LinkupDetectInterrupt | ReceiveInterrupt);
 
 		// Enable QMU Transmit.
 		register_set(RegisterOffset::TransmitControl,
@@ -641,6 +642,14 @@ class Ksz8851Ethernet
 		if (framesToProcess == 0)
 		{
 			uint16_t isr = register_read(RegisterOffset::InterruptStatus);
+
+			if (isr & LinkupDetectInterrupt)
+			{
+				/* Acknowledge the power management event */
+				register_set(RegisterOffset::PowerManagementEventControl,
+				             PowerManagementEventControl::WakeUpEventLinkup);
+			}
+
 			if (!(isr & ReceiveInterrupt))
 			{
 				return std::nullopt;
