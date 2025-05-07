@@ -20,10 +20,35 @@ if is_mode("release") then
     add_defines("NDEBUG", {force = true})
 end
 
+local function option_disable_unless_dep(option, dep)
+	if not option:dep(dep):value() then option:enable(false) end
+end
+
+local function option_check_dep(raise, option, dep)
+	if option:value() and not option:dep(dep):value() then
+		return raise("Option " .. option:name() .. " depends on " .. dep)
+	end
+end
+
 option("board-mixins")
 	set_default("")
 	set_description("Comma separated list of board mixin patch files");
 	set_showmenu(true)
+
+option("allocator")
+	set_description("Build with the shared heap allocator compartment")
+	set_default(true)
+	set_showmenu(true)
+
+option("allocator-rendering")
+	set_default(false)
+	set_description("Include heap_render() functionality in the allocator")
+	set_showmenu(true)
+
+	add_deps("allocator")
+	after_check(function (option)
+		option_check_dep(raise, option, "allocator")
+	end)
 
 option("scheduler-accounting")
 	set_default(false)
@@ -35,11 +60,13 @@ option("scheduler-multiwaiter")
 	set_description("Enable multiwaiter support in the scheduler.  Disabling this can reduce code size if multiwaiters are not used.");
 	set_showmenu(true)
 
-
-option("allocator-rendering")
-	set_default(false)
-	set_description("Include heap_render() functionality in the allocator")
-	set_showmenu(true)
+	add_deps("allocator")
+	before_check(function (option)
+		option_disable_unless_dep(option, "allocator")
+	end)
+	after_check(function (option)
+		option_check_dep(raise, option, "allocator")
+	end)
 
 function debugOption(name)
 	option("debug-" .. name)
@@ -277,10 +304,23 @@ target("cheriot.allocator")
 	add_files(path.join(coredir, "allocator/main.cc"))
 	add_deps("locks")
 	add_deps("compartment_helpers")
+	set_default(false)
 	on_load(function (target)
 		target:set("cheriot.compartment", "allocator")
 		target:set('cheriot.debug-name', "allocator")
 		target:add('defines', "HEAP_RENDER=" .. tostring(get_config("allocator-rendering")))
+	end)
+
+-- Add the allocator to the firmware image if enabled.
+--
+-- Do this as a rule and not directly in on_load() because the actual firmware
+-- build scripts (that is, the things that indcludes() us) use the firwmare
+-- target()'s on_load() hook themselves.
+rule("cheriot.conditionally_link_allocator")
+	on_load(function (target)
+		if get_config("allocator") then
+			target:add("deps", "cheriot.allocator")
+		end
 	end)
 
 target("cheriot.token_library")
@@ -1164,8 +1204,8 @@ function firmware(name)
 	target(name)
 		set_kind("binary")
 		add_rules("cheriot.firmware")
-		-- TODO: Make linking the allocator optional.
-		add_deps(name .. ".scheduler", "cheriot.loader", "cheriot.switcher", "cheriot.allocator")
+		add_rules("cheriot.conditionally_link_allocator")
+		add_deps(name .. ".scheduler", "cheriot.loader", "cheriot.switcher")
 		add_deps("cheriot.token_library")
 		-- The firmware linker script will be populated based on the set of
 		-- compartments.
