@@ -1,5 +1,3 @@
-#data_start will either be . or some address depending on board config
-. = @data_start@;
 # Revoker scan region must be cap aligned
 . = ALIGN(8);
 __revoker_scan_start = .;

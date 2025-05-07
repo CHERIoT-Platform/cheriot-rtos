@@ -1,4 +1,3 @@
-. = @code_start@;
 _start = .;
 
 .loader_start :
