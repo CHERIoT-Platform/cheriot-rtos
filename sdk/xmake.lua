@@ -387,6 +387,7 @@ rule("cheriot.generated-source")
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
 target("cheriot.switcher")
+	set_default(false)
 	set_kind("object")
 	add_files(path.join(coredir, "switcher/entry.S"))
 
@@ -397,6 +398,7 @@ target("cheriot.switcher")
 -- having an allocator (or into providing a different allocator for a
 -- particular application)
 target("cheriot.allocator")
+	set_default(false)
 	add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks", "cheriot.subobject-bounds")
 	add_files(path.join(coredir, "allocator/main.cc"))
 	add_deps("locks")
@@ -428,6 +430,7 @@ rule("cheriot.conditionally_link_allocator")
 	end)
 
 target("cheriot.token_library")
+	set_default(false)
 	add_rules("cheriot.privileged-library", "cheriot.component-debug")
 	add_files(path.join(coredir, "token_library/token_unseal.S"))
 	on_load(function (target)
@@ -1363,6 +1366,7 @@ rule("cheriot.define-rtos-git-description")
 -- Build the loader.  The firmware rule will set the flags required for
 -- this to create threads.
 target("cheriot.loader")
+	set_default(false)
 	add_rules("cheriot.component-debug", "cheriot.baremetal-abi", "cheriot.subobject-bounds")
 	set_kind("object")
 	-- FIXME: We should be setting this based on a board config file.
