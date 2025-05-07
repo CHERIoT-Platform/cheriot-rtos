@@ -3,6 +3,7 @@ includes("../atomic")
 debugOption("locks")
 
 library("locks")
+  set_default(false)
   add_rules("cheriot.component-debug")
   add_deps("atomic4")
   add_files("locks.cc", "semaphore.cc")
