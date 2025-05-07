@@ -506,7 +506,7 @@ local function visit_all_dependencies_of(target, callback)
 end
 
 -- Rule for defining a firmware image.
-rule("firmware")
+rule("cheriot.firmware")
 	on_run(function (target)
 		import("core.base.json")
 		import("core.project.config")
@@ -1117,7 +1117,7 @@ function firmware(name)
 	-- the caller can add more rules to it.
 	target(name)
 		set_kind("binary")
-		add_rules("firmware")
+		add_rules("cheriot.firmware")
 		-- TODO: Make linking the allocator optional.
 		add_deps(name .. ".scheduler", "cheriot.loader", "cheriot.switcher", "cheriot.allocator")
 		add_deps("cheriot.token_library")
