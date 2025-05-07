@@ -870,10 +870,121 @@ rule("cheriot.board.define.revokable_memory")
 			"REVOKABLE_MEMORY_START=" .. format("0x%x", revokable_memory_start))
 	end)
 
+rule("cheriot.board.ldscript.conf")
+	on_load(function (target)
+		target:add("deps", "cheriot.board")
+	end)
+
+	after_load(function (target)
+		local board_target = target:deps()["cheriot.board"]
+		local board = board_target:get("cheriot.board_info")
+		local boarddir = board_target:get("cheriot.board_dir")
+
+		local ldscript_fragments = {}
+		do
+			local fragment = target:get("cheriot.ldfragment.rocode")
+			assert(fragment, "Target must specify cheriot.ldfragment.rocode")
+			assert(fragment.start == nil)
+			assert(fragment.start_string == nil)
+			fragment.start = board.instruction_memory.start
+			table.insert(ldscript_fragments, fragment)
+		end
+		do
+			local fragment = target:get("cheriot.ldfragment.rwdata")
+			if fragment then
+				assert(fragment.start == nil)
+				assert(fragment.start_string == nil)
+				if board.data_memory then
+					fragment.start = board.data_memory.start
+				else
+					fragment.start = ldscript_fragments[#ldscript_fragments].start + 1
+					fragment.start_string = "."
+				end
+				table.insert(ldscript_fragments, fragment)
+			end
+		end
+
+		-- Use a pairs() iterator here so that the board file can choose to
+		-- use arrays or maps.
+		for _, fragment in pairs(board.ldscript_fragments or {}) do
+			if fragment.srcpath then
+				-- Allow ${sdk} to refer to the SDK directory, like includes
+				fragment.srcpath = string.gsub(fragment.srcpath, "${(%w*)}", { sdk=scriptdir })
+				if not path.is_absolute(fragment.srcpath) then
+					fragment.srcpath = path.join(boarddir, fragment.srcpath);
+				end
+			end
+			table.insert(ldscript_fragments, fragment)
+		end
+
+		for _, fragment in ipairs(ldscript_fragments) do
+			fragment.start_string =
+				fragment.start_string or format("0x%x", fragment.start)
+		end
+
+		-- Sort the various ldscripts and work out the top-level PHDRs and SECTIONs
+		table.sort(ldscript_fragments, function(a,b) return a.start < b.start end)
+		local ldscript_top_phdrs = {}
+		local ldscript_top_sections = {}
+		local ldscript_top_phdr_template = "\n\tload${ix} PT_${phtype} ;"
+		-- Sections inherit the most recently set program header, so we can
+		-- create a stub section with no contents to set all subsequent
+		-- sections to map into the right program header.  (The included linker
+		-- scripts do not assign program headers on their sections.)
+		local ldscript_top_section_template =
+			"\n\t.load${ix}_pre_stub : { } :load${ix}" ..
+			"\n\t. = ${start_string} ;" ..
+			"\n\t${body}" ..
+			"\n\t.load${ix}_post_stub : ALIGN(4) { }"
+		for ix, v in ipairs(ldscript_fragments) do
+			v.ix = ix
+			v.phtype = v.phtype or "LOAD"
+
+			-- If this fragment is a configfile, then work out its generated
+			-- path from its name, generate the body for the top-level script,
+			-- add it to the target's configfiles and "cheriot.ldscripts" list.
+			if v.srcpath then
+				if v.genname then
+					assert(v.body == nil, "ldscript with srcpath and body")
+					local genpath = path.join(target:configdir(), v.genname)
+					v.body = format("INCLUDE %q", genpath)
+
+					target:add("cheriot.ldscripts", genpath)
+					target:add("configfiles", v.srcpath,
+						{ pattern = "@(.-)@"
+						, filename = v.genname
+						})
+				else
+					target:add("cheriot.ldscripts", v.srcpath)
+					v.body = format("INCLUDE %q", v.srcpath)
+				end
+			else
+				assert(v.body, "ldscript with neither srcpath nor body")
+				v.body = v.body:gsub("@(.-)@", v)
+			end
+
+			-- The ()s here are not superfluous: gsub returns multiple results,
+			-- and since it's the last argument here, Lua defaults to passing
+			-- all of them to the enclosing call, which isn't what we want.
+			-- (See 5.3's manual's section "3.4 – Expressions".)
+			table.insert(ldscript_top_phdrs,
+				(ldscript_top_phdr_template:gsub("${([_%w]*)}", v)))
+			table.insert(ldscript_top_sections,
+				(ldscript_top_section_template:gsub("${([_%w]*)}", v)))
+		end
+
+		-- Define configuration variables for the target's top-level ldscript.
+		target:set("configvar", "ldscript_top_phdrs", table.concat(ldscript_top_phdrs))
+		target:set("configvar", "ldscript_top_sections", table.concat(ldscript_top_sections, "\n"))
+	end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
 	add_deps("cheriot.reachability_root")
+
+	-- Firmware targets want board-driven ldscript processing
+	add_deps("cheriot.board.ldscript.conf")
 
 	add_imports("core.project.config")
 
@@ -909,7 +1020,23 @@ rule("cheriot.firmware")
 		run(simulator)
 	end)
 
-	-- Set up the thread defines and the information for the linker script.
+	-- Text and data segments are configfiles for each firmware target.  Set
+	-- those here and let the "cheriot.board.ldscript.conf" rule handle working
+	-- out the rest.  This must be done in on_load() because the bulk of that
+	-- rule's work is done in after_load().
+	on_load(function (target)
+		target:set("cheriot.ldfragment.rocode", {
+			{ srcpath = path.join(scriptdir, "firmware.rocode.ldscript.in")
+			, genname = target:name() .. "-firmware.rocode.ldscript"
+			}})
+
+		target:set("cheriot.ldfragment.rwdata", {
+			{ srcpath = path.join(scriptdir, "firmware.rwdata.ldscript.in")
+			, genname = target:name() .. "-firmware.rwdata.ldscript"
+			}})
+	end)
+
+	-- Set up the thread defines and further information for the linker script.
 	-- This must be after load so that dependencies are resolved.
 	after_load(function (target)
 
@@ -999,22 +1126,12 @@ rule("cheriot.firmware")
 			add_defines_each_dependency("DEVICE_EXISTS_" .. name)
 		end
 
-		local code_start = format("0x%x", board.instruction_memory.start);
-		-- Put the data either at the specified address if given, or directly after code
-		local data_start = board.data_memory and format("0x%x", board.data_memory.start) or '.';
-		local builddir = config.builddir and config.builddir() or config.buildir()
-		local rwdata_ldscript = path.join(builddir, target:name() .. "-firmware.rwdata.ldscript")
-		local rocode_ldscript = path.join(builddir, target:name() .. "-firmware.rocode.ldscript")
-		if not board.data_memory or (board.instruction_memory.start < board.data_memory.start) then
-			-- If we're not explicilty given a data address or it's lower than the code address
-			-- then code needs to go first in the linker script.
-			firmware_low_ldscript = rocode_ldscript
-			firmware_high_ldscript = rwdata_ldscript
-		else
-			-- Otherwise the data is at a lower address than code (e.g. Sonata with SRAM and hyperram)
-			-- so it needs to go first.
-			firmware_low_ldscript = rwdata_ldscript;
-			firmware_high_ldscript = rocode_ldscript;
+		-- Generate our top-level linker script as a configfile
+		do
+			local top_ldscript_genname = target:name() .. "-firmware.ldscript"
+			target:set("cheriot.ldscript", path.join(target:configdir(), top_ldscript_genname))
+			target:add("configfiles", path.join(scriptdir, "firmware.ldscript.in"),
+				{pattern = "@(.-)@", filename = top_ldscript_genname })
 		end
 
 		-- The heap, by default, starts immediately after globals and static shared objects
@@ -1213,11 +1330,7 @@ rule("cheriot.firmware")
 			software_revoker_globals="",
 			software_revoker_header="",
 			sealed_objects="",
-			data_start=data_start,
-			code_start=code_start,
 			heap_start=heap_start,
-			firmware_low_ldscript=firmware_low_ldscript,
-			firmware_high_ldscript=firmware_high_ldscript,
 			thread_count=#(threads),
 			thread_headers=thread_headers,
 			thread_trusted_stacks=thread_trusted_stacks,
@@ -1349,11 +1462,8 @@ rule("cheriot.firmware")
 	on_linkcmd(function (target, batchcmds, opt)
 		-- Get a specified linker script, or set the default to the compartment
 		-- linker script.
-		local builddir = config.builddir and config.builddir() or config.buildir()
-		local linkerscript1 = path.join(builddir, target:name() .. "-firmware.ldscript")
-		local linkerscript2 = path.join(builddir, target:name() .. "-firmware.rocode.ldscript")
-		local linkerscript3 = path.join(builddir, target:name() .. "-firmware.rwdata.ldscript")
 		local linkerscript_mmio = target:dep("cheriot.board.ldscript.mmio"):targetfile()
+		local linkerscript1 = target:get("cheriot.ldscript")
 		-- Link using the firmware's linker script.
 		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
 		batchcmds:mkdir(target:targetdir())
@@ -1379,7 +1489,8 @@ rule("cheriot.firmware")
 		batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
 		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
 		batchcmds:vexecv(target:tool("objdump"), {"-glxsdrS", "--demangle", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
-		batchcmds:add_depfiles(linkerscript_mmio, linkerscript1, linkerscript2, linkerscript3)
+		batchcmds:add_depfiles(linkerscript_mmio, linkerscript1)
+		batchcmds:add_depfiles(target:get("cheriot.ldscripts"))
 		batchcmds:add_depfiles(objects)
 	end)
 
@@ -1508,11 +1619,6 @@ function firmware(name)
 		add_rules("cheriot.conditionally_link_allocator")
 		add_deps(name .. ".scheduler", "cheriot.loader", "cheriot.switcher")
 		add_deps("cheriot.token_library")
-		-- The firmware linker script will be populated based on the set of
-		-- compartments.
-		add_configfiles(path.join(scriptdir, "firmware.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.ldscript"})
-		add_configfiles(path.join(scriptdir, "firmware.rocode.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.rocode.ldscript"})
-		add_configfiles(path.join(scriptdir, "firmware.rwdata.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.rwdata.ldscript"})
 end
 
 -- Helper to create a library.
