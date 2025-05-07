@@ -399,7 +399,11 @@ target("cheriot.switcher")
 -- particular application)
 target("cheriot.allocator")
 	set_default(false)
-	add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks", "cheriot.subobject-bounds")
+	add_rules("cheriot.privileged-compartment",
+		"cheriot.component-debug",
+		"cheriot.component-stack-checks",
+		"cheriot.subobject-bounds",
+		"cheriot.board.define.revokable_memory")
 	add_files(path.join(coredir, "allocator/main.cc"))
 	add_deps("locks")
 	add_deps("compartment_helpers")
@@ -792,6 +796,28 @@ target("cheriot.board.interrupts")
 
 	on_link(function (target) end)
 
+rule("cheriot.board.define.revokable_memory")
+	on_load(function (target)
+		target:add("deps", "cheriot.board")
+	end)
+
+	after_load(function (target)
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+
+		-- Set the start of memory that can be revoked.
+		-- By default, this is the start of code memory but it can be
+		-- explicitly overwritten.
+		local revokable_memory_start = board.instruction_memory.start
+		if board.data_memory then
+			revokable_memory_start = board.data_memory.start
+		end
+		if board.revokable_memory_start then
+			revokable_memory_start = board.revokable_memory_start
+		end
+		target:add("defines",
+			"REVOKABLE_MEMORY_START=" .. format("0x%x", revokable_memory_start))
+	end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
@@ -939,15 +965,7 @@ rule("cheriot.firmware")
 			firmware_high_ldscript = rocode_ldscript;
 		end
 
-		-- Set the start of memory that can be revoked.
-		-- By default, this is the start of code memory but it can be
-		-- explicitly overwritten.
-		local revokable_memory_start = code_start;
-		if board.revokable_memory_start then
-			revokable_memory_start = format("0x%x", board.revokable_memory_start);
-		end
-		add_defines_each_dependency("REVOKABLE_MEMORY_START=" .. revokable_memory_start);
-
+		-- The heap, by default, starts immediately after globals and static shared objects
 		local heap_start = '.'
 		if board.heap.start then
 			heap_start = format("0x%x", board.heap.start)
