@@ -164,6 +164,8 @@ int __cheri_compartment("test_runner") run_tests()
 	debug_log("Trying to print unsigned 32-bit integer: {}", 0x12345U);
 	debug_log("Trying to print unsigned 64-bit integer: {}",
 	          0x123456789012345ULL);
+	debug_log("Trying to print a float 123.456: {}", 123.456f);
+	debug_log("Trying to print a double 123.456: {}", 123.456);
 	debug_log("Trying to print function pointer {}", compartment_error_handler);
 	const char *testString = "Hello, world! with some trailing characters";
 	// Make sure that we don't print the trailing characters
@@ -183,6 +185,7 @@ int __cheri_compartment("test_runner") run_tests()
 	run_timed("All tests", []() {
 		run_timed("Debug helpers (C++)", test_debug_cxx);
 		run_timed("Debug helpers (C)", test_debug_c);
+		run_timed("Soft float", test_softfloat);
 		run_timed("MMIO", test_mmio);
 		run_timed("Unwind cleanup", test_unwind_cleanup);
 		run_timed("stdio", test_stdio);

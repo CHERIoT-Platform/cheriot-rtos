@@ -80,6 +80,20 @@ struct DebugWriter
 	 */
 	virtual void write_hex_byte(uint8_t) = 0;
 	/**
+	 * Write a single-precision floating-point value.
+	 *
+	 * If floating-point support is not compiled into the debug library, this
+	 * may print a placeholder.
+	 */
+	virtual void write(float) = 0;
+	/**
+	 * Write a double-precision floating-point value.
+	 *
+	 * If floating-point support is not compiled into the debug library, this
+	 * may print a placeholder.
+	 */
+	virtual void write(double) = 0;
+	/**
 	 * Write an integer as hex.
 	 */
 	template<typename T>
@@ -284,6 +298,29 @@ struct DebugFormatArgumentAdaptor<int64_t>
 		memcpy(&fudgedValue, &value, sizeof(fudgedValue));
 		return {fudgedValue,
 		        DebugFormatArgumentKind::DebugFormatArgumentSignedNumber64};
+	}
+};
+
+template<>
+struct DebugFormatArgumentAdaptor<float>
+{
+	__always_inline static DebugFormatArgument construct(float value)
+	{
+		uintptr_t fudgedValue = 0;
+		memcpy(&fudgedValue, &value, sizeof(value));
+		return {fudgedValue, DebugFormatArgumentKind::DebugFormatArgumentFloat};
+	}
+};
+
+template<>
+struct DebugFormatArgumentAdaptor<double>
+{
+	__always_inline static DebugFormatArgument construct(double value)
+	{
+		uintptr_t fudgedValue = 0;
+		memcpy(&fudgedValue, &value, sizeof(value));
+		return {fudgedValue,
+		        DebugFormatArgumentKind::DebugFormatArgumentDouble};
 	}
 };
 
