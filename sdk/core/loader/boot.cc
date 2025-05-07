@@ -10,6 +10,9 @@
 #define __cheri_libcall
 #include <string.h>
 
+#define CHERIOT_NO_AMBIENT_MALLOC
+#define CHERIOT_NO_NEW_DELETE
+
 #include "../switcher/tstack.h"
 #include "constants.h"
 #include "debug.hh"
