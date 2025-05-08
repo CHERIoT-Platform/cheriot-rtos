@@ -1322,6 +1322,7 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	}
 
 	// Set up export tables
+	Debug::log("Populating export tables' PCC/CGP");
 
 	// Helper to construct a writeable pointer to an export table.
 	auto getExportTableHeader = [](const auto &range) {
@@ -1334,6 +1335,12 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 
 	for (auto &compartment : imgHdr.privilegedCompartments)
 	{
+		if (compartment.exportTable.size() == 0)
+		{
+			Debug::log("Skipping privileged compartment without export table");
+			continue;
+		}
+
 		auto expTablePtr = getExportTableHeader(compartment.exportTable);
 		Debug::log("Error handler for compartment is {}",
 		           expTablePtr->errorHandler);
