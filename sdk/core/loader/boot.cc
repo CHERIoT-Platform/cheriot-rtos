@@ -10,6 +10,9 @@
 #define __cheri_libcall
 #include <string.h>
 
+#define CHERIOT_NO_AMBIENT_MALLOC
+#define CHERIOT_NO_NEW_DELETE
+
 #include "../switcher/tstack.h"
 #include "constants.h"
 #include "debug.hh"
@@ -700,7 +703,7 @@ namespace
 					                 "Invalid sealed object {}",
 					                 typeAddress);
 				}
-				// Seal with the allocator's sealing key
+				// Seal with the static token sealing key
 				Capability sealedObject =
 				  build(entry.address, entry.size())
 				    .seal(build<void, Root::Type::Seal>(StaticToken, 1));
@@ -1307,15 +1310,19 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	              2 * sizeof(void *),
 	              PermissionSet{Permission::Global, Permission::Unseal});
 
-	constexpr size_t DynamicSealingLength =
-	  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
-	setSealingKey(imgHdr.allocator(), Allocator);
-	setSealingKey(imgHdr.allocator(),
-	              FirstDynamicSoftware,
-	              DynamicSealingLength,
-	              sizeof(void *));
+	if (imgHdr.allocator().code.size() != 0)
+	{
+		constexpr size_t DynamicSealingLength =
+		  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
+		setSealingKey(imgHdr.allocator(), Allocator);
+		setSealingKey(imgHdr.allocator(),
+		              FirstDynamicSoftware,
+		              DynamicSealingLength,
+		              sizeof(void *));
+	}
 
 	// Set up export tables
+	Debug::log("Populating export tables' PCC/CGP");
 
 	// Helper to construct a writeable pointer to an export table.
 	auto getExportTableHeader = [](const auto &range) {
@@ -1328,6 +1335,12 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 
 	for (auto &compartment : imgHdr.privilegedCompartments)
 	{
+		if (compartment.exportTable.size() == 0)
+		{
+			Debug::log("Skipping privileged compartment without export table");
+			continue;
+		}
+
 		auto expTablePtr = getExportTableHeader(compartment.exportTable);
 		Debug::log("Error handler for compartment is {}",
 		           expTablePtr->errorHandler);
