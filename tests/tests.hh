@@ -24,6 +24,7 @@ __cheri_compartment("stdio_test") int test_stdio();
 __cheri_compartment("debug_test") int test_debug_cxx();
 __cheri_compartment("debug_test") int test_debug_c();
 __cheri_compartment("unwind_cleanup_test") int test_unwind_cleanup();
+__cheri_compartment("softfloat_test") int test_softfloat();
 
 int print_version_information();
 

@@ -54,6 +54,8 @@ test("locks")
 test("list")
 -- Test queues
 test("queue")
+-- Smoke tests for softfloat
+test("softfloat")
 -- Test minimal stdio implementation
 test("stdio")
 -- Test the debug helpers.
@@ -101,7 +103,7 @@ firmware("test-suite")
     -- Main entry points
     add_deps("test_runner", "thread_pool")
     -- Helper libraries
-    add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers", "debug")
+    add_deps("freestanding", "string", "crt", "cxxrt", "atomic_fixed", "compartment_helpers", "debug", "softfloat")
     add_deps("message_queue", "locks", "event_group")
     add_deps("stdio")
     add_deps("strtol")
@@ -123,6 +125,7 @@ firmware("test-suite")
     add_deps("check_pointer_test")
     add_deps("misc_test")
     add_deps("stdio_test")
+    add_deps("softfloat_test")
     add_deps("debug_test")
     add_deps("unwind_cleanup_test")
     -- Set the thread entry point to the test runner.
