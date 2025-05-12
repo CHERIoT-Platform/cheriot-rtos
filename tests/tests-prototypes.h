@@ -28,6 +28,6 @@ __cheri_compartment("debug_c_test") int test_debug_c();
 __cheri_compartment("unwind_cleanup_test") int test_unwind_cleanup();
 __cheri_compartment("softfloat_test") int test_softfloat();
 
-void test_global_constructors();
+int test_global_constructors();
 
 __END_DECLS
