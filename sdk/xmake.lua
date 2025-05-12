@@ -402,20 +402,34 @@ local function patch_board(json, base, patches)
 			return nil
 		end
 
+		-- JSON arrays are indexed from 0, Lua's are from 1.  If someone says
+		-- array index 0, we need to map that to 1, and so on.
+
 		-- Last path object is the name of the key we're going to modify.
 		local nodeName = table.remove(objectPath)
 		-- Walk the path to find the object that we're going to modify.
 		local nodeToModify = base
 		for _, pathComponent in ipairs(objectPath) do
+			if isarray(nodeToModify) then
+				if type(pathComponent) ~= "number" then
+					print("invalid non-numeric index into array in "..json.encode(p))
+					return nil
+				end
+				pathComponent = pathComponent + 1
+			end
 			nodeToModify = nodeToModify[pathComponent]
 		end
 
-		-- JSON arrays are indexed from 0, Lua's are from 1.  If someone says
-		-- array index 0, we need to map that to 1, and so on.
 		local isArrayOperation = false
-		if (type(nodeName) == "number") and isarray(nodeToModify) then
-			nodeName = nodeName + 1
-			isArrayOperation = true
+		if isarray(nodeToModify) then
+			if type(nodeName) == "number" then
+				nodeName = nodeName + 1
+				isArrayOperation = true
+			elseif p.op == "add" and nodeName == "-" then
+				-- The string "-" at the end of an "add"'s path means "append"
+				nodeName = #nodeToModify + 1
+				isArrayOperation = true
+			end
 		end
 
 		-- Handle the operation
