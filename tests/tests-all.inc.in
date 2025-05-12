@@ -1,0 +1,7 @@
+// Copyright Microsoft and CHERIoT Contributors.
+// SPDX-License-Identifier: MIT
+
+	run_timed("All tests", []() {
+@test_calls@
+	});
+

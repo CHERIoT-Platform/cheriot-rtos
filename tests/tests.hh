@@ -1,11 +1,15 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+#ifndef CLANG_TIDY
+#	include "tests-prototypes.h"
+#else
+// NOLINTNEXTLINE(readability-identifier-naming)
+static const int TestEnabled_preflight = 1;
+#endif
 #include <cdefs.h>
 #include <debug.hh>
 #include <thread.h>
-
-#include "tests-prototypes.h"
 
 int print_version_information();
 
