@@ -85,6 +85,25 @@ jobs:
           xmake
         done
 
+  tests-subset:
+    name: Check that we can build and run a proper subset of the test suite
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cheriot-platform/devcontainer:latest
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build and run a few tests
+      run: |
+        set -e
+        cd $PWD/tests
+        xmake f --board=sail --sdk=/cheriot-tools/ --most-tests=n --test-preflight=y --test-mmio=y
+        xmake
+        xmake run
+
   sonata-sram-hello:
     name: Check Sonata SRAM-only Hello World
     runs-on: ubuntu-latest
@@ -121,7 +140,11 @@ jobs:
       run: ./scripts/run_clang_tidy_format.sh /cheriot-tools/bin
 
   all-checks:
-    needs: [run-tests, sonata-sram-hello, check-format]
+    needs:
+      - run-tests
+      - tests-subset
+      - sonata-sram-hello
+      - check-format
     # Use a GH Action "object filter" to project the .results of each needs-ed
     # job, yielding a list of outcomes.  We can then use `jq` to filter that
     # list for results other than "success" and check that that is the empty
