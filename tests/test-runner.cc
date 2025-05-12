@@ -196,7 +196,7 @@ int __cheri_compartment("test_runner") run_tests()
 		run_timed("stdio", test_stdio);
 		run_timed("Static sealing", test_static_sealing);
 		run_timed("Crash recovery", test_crash_recovery);
-		run_timed("Compartment calls", test_compartment_call);
+		run_timed("Compartment calls", test_compartment_calls);
 		run_timed("check_pointer", test_check_pointer);
 		run_timed("Misc APIs", test_misc);
 		run_timed("Stacks exhaustion in the switcher", test_stack);

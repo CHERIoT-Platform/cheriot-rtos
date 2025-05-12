@@ -16,7 +16,7 @@ __cheri_compartment("list_test") int test_list();
 __cheri_compartment("crash_recovery_test") int test_crash_recovery();
 __cheri_compartment("multiwaiter_test") int test_multiwaiter();
 __cheri_compartment("stack_test") int test_stack();
-__cheri_compartment("compartment_calls_test") int test_compartment_call();
+__cheri_compartment("compartment_calls_test") int test_compartment_calls();
 __cheri_compartment("check_pointer_test") int test_check_pointer();
 __cheri_compartment("misc_test") int test_misc();
 __cheri_compartment("static_sealing_test") int test_static_sealing();
