@@ -1,7 +1,9 @@
 #include <compartment.h>
 #include <debug.h>
 
-__cheri_compartment("debug_test") int test_debug_c()
+#include "tests-prototypes.h"
+
+int test_debug_c()
 {
 	unsigned char x = 'c';
 	_Bool         t = true;
