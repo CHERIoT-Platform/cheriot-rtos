@@ -44,7 +44,7 @@ void test_number_of_arguments()
 	TEST(ret == 0, "compartment_call_inner returned {}", ret);
 }
 
-int test_compartment_call()
+int test_compartment_calls()
 {
 	bool outTestFailed = false;
 	int  ret           = 0;
