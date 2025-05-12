@@ -57,8 +57,9 @@ test("queue")
 -- Test minimal stdio implementation
 test("stdio")
 -- Test the debug helpers.
-test("debug")
-	add_files("debug-test.c")
+test("debug_cxx")
+compartment("debug_c_test")
+	add_files("debug_c-test.c")
 -- Test the static sealing types
 compartment("static_sealing_inner")
 	add_files("static_sealing_inner.cc")
@@ -127,7 +128,8 @@ firmware("test-suite")
     add_deps("check_pointer_test")
     add_deps("misc_test")
     add_deps("stdio_test")
-    add_deps("debug_test")
+    add_deps("debug_c_test")
+    add_deps("debug_cxx_test")
     add_deps("unwind_cleanup_test")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
