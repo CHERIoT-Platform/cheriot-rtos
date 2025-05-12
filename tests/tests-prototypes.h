@@ -29,6 +29,6 @@ __cheri_compartment("unwind_cleanup_test") int test_unwind_cleanup();
 __cheri_compartment("softfloat_test") int test_softfloat();
 __cheri_compartment("bigdata_test") void test_big_data();
 
-void test_global_constructors();
+int test_global_constructors();
 
 __END_DECLS
