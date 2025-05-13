@@ -297,6 +297,7 @@ target("cheriot.software_revoker")
 	on_load(function (target)
 		target:set("cheriot.compartment", "software_revoker")
 		target:set("cheriot.ldscript", "software_revoker.ldscript")
+		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 	end)
 
 -- Helper to find a board file given either the name of a board file or a path.
