@@ -3,6 +3,7 @@
 
 #include "tests.hh"
 #include <compartment.h>
+#include <priv/riscv.h>
 #include <simulator.h>
 #include <string>
 
@@ -69,7 +70,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 	          frame->get_register_value<RegisterNumber::CRA>());
 	auto [reg, cause] = CHERI::extract_cheri_mtval(mtval);
 	debug_log("Error {} in register {}", reg, cause);
-	if (mcause == 0x2)
+	if (mcause == priv::MCAUSE_ILLEGAL_INSTRUCTION)
 	{
 		debug_log("Test failure in test runner");
 		simulation_exit(1);
