@@ -1136,6 +1136,7 @@ target("cheriot.loader")
 			loader_stack_size = 1024
 		}
 		target:add('defines', "CHERIOT_LOADER_STACK_SIZE=" .. config.loader_stack_size)
+		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 		target:set('cheriot_loader_config', config)
 		for k, v in pairs(config) do
 			target:set(k, v)
