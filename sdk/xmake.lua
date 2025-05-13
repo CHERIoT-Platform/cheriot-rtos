@@ -220,6 +220,8 @@ rule("cheriot.library")
 		target:set("extension", ".library")
 		-- Link with the library linker script, which drops .data* sections.
 		target:set("cheriot.ldscript", "library.ldscript")
+
+		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 	end)
 
 -- CHERI MCU compartments have an explicit compartment name passed to the
@@ -254,6 +256,7 @@ rule("cheriot.privileged-library")
 	on_load(function (target)
 		target:set("cheriot.type", "privileged library")
 		target:set("cheriot.ldscript", "privileged-compartment.ldscript")
+		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 	end)
 
 -- Build the switcher as an object file that we can import into the final
