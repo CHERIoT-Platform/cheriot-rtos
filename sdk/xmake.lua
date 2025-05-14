@@ -704,6 +704,40 @@ target("cheriot.board.file")
 
 	on_link(function (target) end)
 
+target("cheriot.board.ldscript.mmio")
+	set_kind("binary")
+	set_default(false)
+	add_deps("cheriot.board")
+	set_targetdir("$(buildir)")
+	set_filename("mmio.ldscript")
+
+	add_rules("cheriot.generated-source")
+
+	on_build(function(target)
+		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+
+		-- Build the MMIO space for the board
+		local mmio = ""
+		local mmio_start = 0xffffffff
+		local mmio_end = 0
+		-- Add start and end markers for all MMIO devices.
+		for name, range in table.orderpairs(board.devices) do
+			local start = range.start
+			local stop = range["end"]
+			mmio_start = math.min(mmio_start, start)
+			mmio_end = math.max(mmio_end, stop)
+			mmio = format("%s__export_mem_%s = 0x%x;\n__export_mem_%s_end = 0x%x;\n",
+				mmio, name, start, name, stop);
+		end
+
+		-- Provide the range of the MMIO space and the heap.
+		maybe_writefile(io, try, target:targetfile(),
+			format("__mmio_region_start = 0x%x;\n%s__mmio_region_end = 0x%x;\n__export_mem_heap_end = 0x%x;\n",
+				mmio_start, mmio, mmio_end, board.heap["end"]))
+	end)
+
+	on_link(function (target) end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
@@ -750,6 +784,8 @@ rule("cheriot.firmware")
 		-- Pick up the dependency on the board information, which has been
 		-- processed already by virtue of that target being *loaded*.
 		target:add("deps", "cheriot.board")
+
+		target:add("deps", "cheriot.board.ldscript.mmio")
 
 		local function visit_all_dependencies(callback)
 			visit_all_dependencies_of(target, callback)
@@ -827,22 +863,9 @@ rule("cheriot.firmware")
 		end
 
 		-- Build the MMIO space for the board
-		local mmio = ""
-		local mmio_start = 0xffffffff
-		local mmio_end = 0
-		-- Add start and end markers for all MMIO devices.
-		for name, range in table.orderpairs(board.devices) do
-			local start = range.start
-			local stop = range["end"]
+		for name, _ in table.orderpairs(board.devices) do
 			add_defines_each_dependency("DEVICE_EXISTS_" .. name)
-			mmio_start = math.min(mmio_start, start)
-			mmio_end = math.max(mmio_end, stop)
-			mmio = format("%s__export_mem_%s = 0x%x;\n__export_mem_%s_end = 0x%x;\n",
-				mmio, name, start, name, stop);
 		end
-		-- Provide the range of the MMIO space and the heap.
-		mmio = format("__mmio_region_start = 0x%x;\n%s__mmio_region_end = 0x%x;\n__export_mem_heap_end = 0x%x;\n",
-			mmio_start, mmio, mmio_end, board.heap["end"])
 
 		local code_start = format("0x%x", board.instruction_memory.start);
 		-- Put the data either at the specified address if given, or directly after code
@@ -1083,7 +1106,6 @@ rule("cheriot.firmware")
 			software_revoker_globals="",
 			software_revoker_header="",
 			sealed_objects="",
-			mmio=mmio,
 			data_start=data_start,
 			code_start=code_start,
 			heap_start=heap_start,
@@ -1224,6 +1246,7 @@ rule("cheriot.firmware")
 		local linkerscript1 = path.join(builddir, target:name() .. "-firmware.ldscript")
 		local linkerscript2 = path.join(builddir, target:name() .. "-firmware.rocode.ldscript")
 		local linkerscript3 = path.join(builddir, target:name() .. "-firmware.rwdata.ldscript")
+		local linkerscript_mmio = target:dep("cheriot.board.ldscript.mmio"):targetfile()
 		-- Link using the firmware's linker script.
 		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
 		batchcmds:mkdir(target:targetdir())
@@ -1237,11 +1260,19 @@ rule("cheriot.firmware")
 				table.insert(objects, dep:targetfile())
 			end
 		end)
-		batchcmds:vrunv(target:tool("ld"), table.join({"-n", "--script=" .. linkerscript1, "--relax", "-o", target:targetfile(), "--compartment-report=" .. target:targetfile() .. ".json" }, objects), opt)
+		batchcmds:vrunv(target:tool("ld"),
+			table.join({
+				"-n",
+				"--script=" .. linkerscript_mmio,
+				"--script=" .. linkerscript1,
+				"--relax",
+				"-o", target:targetfile(),
+				"--compartment-report=" .. target:targetfile() .. ".json"
+			}, objects), opt)
 		batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
 		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
 		batchcmds:vexecv(target:tool("objdump"), {"-glxsdrS", "--demangle", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
-		batchcmds:add_depfiles(linkerscript1, linkerscript2, linkerscript3)
+		batchcmds:add_depfiles(linkerscript_mmio, linkerscript1, linkerscript2, linkerscript3)
 		batchcmds:add_depfiles(objects)
 	end)
 
