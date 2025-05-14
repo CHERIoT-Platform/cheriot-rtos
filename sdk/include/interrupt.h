@@ -36,17 +36,19 @@
 #include <compartment.h>
 #include <stdbool.h>
 
-/**
- * The names of interrupts.  This is populated from the interrupts array in the
- * board configuration JSON and allows code to refer to interrupt numbers by
- * symbolic values.
- */
-enum InterruptName : uint16_t
+#ifndef CLANG_TIDY
+#	include "board-interrupts.h"
+#else
+
+enum InterruptName
 {
-#ifdef CHERIOT_INTERRUPT_NAMES
-	CHERIOT_INTERRUPT_NAMES
-#endif
+	FakeInterrupt            = 4,
+	RevokerInterrupt         = 5,
+	EthernetReceiveInterrupt = 3,
+	EthernetInterrupt        = 47
 };
+
+#endif
 
 /**
  * Structure for authorising access to a specific interrupt.
