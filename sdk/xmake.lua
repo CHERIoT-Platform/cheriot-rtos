@@ -20,10 +20,16 @@ if is_mode("release") then
     add_defines("NDEBUG", {force = true})
 end
 
+option("board")
+	set_description("Board JSON description file")
+	set_showmenu(true)
+	set_category("board")
+
 option("board-mixins")
 	set_default("")
 	set_description("Comma separated list of board mixin patch files");
 	set_showmenu(true)
+	set_category("board")
 
 option("scheduler-accounting")
 	set_default(false)
@@ -372,16 +378,6 @@ local function board_file_for_name(boardName)
 	return boarddir, boardfile
 end
 
--- Helper to get the board file for a given target
-local function board_file_for_target(target)
-	local boardName = target:values("board")
-	if not boardName then
-		print("target " .. target:name() .. " does not define a board name")
-		return nil
-	end
-	return board_file_for_name(boardName)
-end
-
 -- If a string value is a number, return it as number, otherwise return it
 -- in its original form.
 local function asNumberIfNumber(value)
@@ -558,19 +554,58 @@ local function load_board_file(json, boardFile, xmakeConfig)
 	return base
 end
 
+target("cheriot.board")
+	set_kind("phony")
+	set_default(false)
+
+	on_load(function (target)
+		import("core.base.json")
+		import("core.project.config")
+
+		local boarddir, boardfile = board_file_for_name(get_config("board"))
+		local board = load_board_file(json, boardfile, config)
+
+		target:set("cheriot.board_dir", boarddir)
+		target:set("cheriot.board_file", boardfile)
+		target:set("cheriot.board_info", { board })
+	end)
+
+target("cheriot.board.file")
+	set_kind("binary")
+	set_default(false)
+	set_targetdir("$(buildir)")
+	set_filename("board.json")
+
+	add_rules("cheriot.generated-source")
+
+	add_deps("cheriot.board")
+
+	on_build(function(target)
+		import("core.base.json")
+
+		print(format("Patched board file will be saved as %q",
+			path.absolute(target:targetfile())))
+
+		maybe_writefile(io, try, target:targetfile(),
+			json.encode(target:dep("cheriot.board"):get("cheriot.board_info")))
+	end)
+
+	on_link(function (target) end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
 	add_deps("cheriot.reachability_root")
 
+	add_imports("core.project.config")
+
 	on_run(function (target)
-		import("core.base.json")
-		import("core.project.config")
-		local boarddir, boardfile = board_file_for_target(target)
-		local board = load_board_file(json, boardfile, config)
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+
 		if (not board.run_command) and (not board.simulator) then
-			raise("board description " .. boardfile .. " does not define a run command")
+			raise("board description does not define a run command")
 		end
+
 		local simulator = board.run_command or board.simulator
 		simulator = string.gsub(simulator, "${(%w*)}", { sdk=scriptdir, board=boarddir })
 		local firmware = target:targetfile()
@@ -599,17 +634,18 @@ rule("cheriot.firmware")
 	-- Set up the thread defines and the information for the linker script.
 	-- This must be after load so that dependencies are resolved.
 	after_load(function (target)
-		import("core.base.json")
-		import("core.project.config")
+
+		-- Pick up the dependency on the board information, which has been
+		-- processed already by virtue of that target being *loaded*.  (The
+		-- board file will not have been *written* yet, because we haven't
+		-- gotten to the config phase, but this will cause it to be.)
+		target:add("deps", "cheriot.board")
+
+		target:add("deps", "cheriot.board.file")
 
 		local function visit_all_dependencies(callback)
 			visit_all_dependencies_of(target, callback)
 		end
-
-		local boarddir, boardfile = board_file_for_target(target);
-		local board = load_board_file(json, boardfile, config)
-		print("Board file saved as ", target:targetfile()..".board.json")
-		json.savefile(target:targetfile()..".board.json", board)
 
 		-- Add defines to all dependencies.
 		local add_defines_each_dependency = function (defines)
@@ -624,6 +660,10 @@ rule("cheriot.firmware")
 				target:add('cxflags', cxflags, {force = true})
 			end)
 		end
+
+		local board_target = target:deps()["cheriot.board"]
+		local boarddir = board_target:get("cheriot.board_dir")
+		local board = board_target:get("cheriot.board_info")
 
 		local software_revoker = false
 		if board.revoker then
@@ -732,7 +772,7 @@ rule("cheriot.firmware")
 		if board.heap.start then
 			heap_start = format("0x%x", board.heap.start)
 		end
-		
+
 		if board.interrupts then
 			-- The macro used to provide the interrupt enumeration in the public header
 			local interruptNames = "CHERIOT_INTERRUPT_NAMES="
@@ -1067,7 +1107,6 @@ rule("cheriot.firmware")
 
 	-- Perform the final link step for a firmware image.
 	on_linkcmd(function (target, batchcmds, opt)
-		import("core.project.config")
 		-- Get a specified linker script, or set the default to the compartment
 		-- linker script.
 		local linkerscript1 = path.join(config.buildir(), target:name() .. "-firmware.ldscript")
