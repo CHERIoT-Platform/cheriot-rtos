@@ -401,11 +401,18 @@ target("cheriot.allocator")
 	add_files(path.join(coredir, "allocator/main.cc"))
 	add_deps("locks")
 	add_deps("compartment_helpers")
+	add_deps("cheriot.board")
 	set_default(false)
 	on_load(function (target)
 		target:set("cheriot.compartment", "allocator")
 		target:set('cheriot.debug-name', "allocator")
 		target:add('defines', "HEAP_RENDER=" .. tostring(get_config("allocator-rendering")))
+	end)
+	after_load(function (target)
+		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+		if board.revoker and board.revoker ~= "software" then
+			target:add("deps", "cheriot.board.interrupts")
+		end
 	end)
 
 -- Add the allocator to the firmware image if enabled.
@@ -751,6 +758,37 @@ rule("cheriot.cxflags.interface.iquote.targetdir")
 		  {force = true, interface = true})
 	end)
 
+target("cheriot.board.interrupts")
+	set_kind("binary")
+	set_default(false)
+	add_rules("cheriot.cxflags.interface.iquote.targetdir")
+	add_deps("cheriot.board")
+	set_targetdir("$(buildir)")
+	set_filename("board-interrupts.h")
+
+	add_rules("cheriot.generated-source")
+
+	on_build(function (target)
+		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+
+		local interrupt_names_numbers = {}
+		if board.interrupts then
+			for _, interrupt in ipairs(board.interrupts) do
+				table.insert(interrupt_names_numbers, interrupt.name .. "=" .. math.floor(interrupt.number))
+			end
+		else
+			-- don't generate an emtpy enum
+			table.insert(interrupt_names_numbers, "DummyInterrupt=0")
+		end
+
+		local template = io.readfile(path.join(scriptdir, "board-interrupts.h.in"))
+		maybe_writefile(io, try, target:targetfile(),
+			template:gsub("@board_interrupt_enum_body@",
+				table.concat(interrupt_names_numbers, ",\n")))
+	end)
+
+	on_link(function (target) end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
@@ -913,19 +951,15 @@ rule("cheriot.firmware")
 		end
 
 		if board.interrupts then
-			-- The macro used to provide the interrupt enumeration in the public header
-			local interruptNames = "CHERIOT_INTERRUPT_NAMES="
 			-- Define the macro that's used to initialise the scheduler's interrupt configuration.
 			local interruptConfiguration = "CHERIOT_INTERRUPT_CONFIGURATION="
 			for _, interrupt in ipairs(board.interrupts) do
-				interruptNames = interruptNames .. interrupt.name .. "=" .. math.floor(interrupt.number) .. ", "
 				interruptConfiguration = interruptConfiguration .. "{"
 					.. math.floor(interrupt.number) .. ","
 					.. math.floor(interrupt.priority) .. ","
 					.. (interrupt.edge_triggered and "true" or "false")
 					.. "},"
 			end
-			add_defines_each_dependency(interruptNames)
 			scheduler:add('defines', interruptConfiguration)
 		end
 
@@ -1371,6 +1405,7 @@ function firmware(name)
 		add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks", "cheriot.subobject-bounds")
 		add_deps("locks", "crt", "atomic1")
 		add_deps("compartment_helpers")
+		add_deps("cheriot.board.interrupts")
 		on_load(function (target)
 			target:set("cheriot.compartment", "scheduler")
 			target:set('cheriot.debug-name', "scheduler")
@@ -1405,6 +1440,14 @@ end
 function compartment(name)
 	target(name)
 		add_rules("cheriot.compartment")
+
+		-- It's a good guess that application compartments depend on the
+		-- interrupt configuration.  Let's bake that assumption in, on the
+		-- grounds that the few users that don't want to pick up that build
+		-- dependency (which is, recall, just a generated include file and
+		-- contributes no bytes to the final image if not used) can use the
+		-- compartment rule instead.
+		add_deps("cheriot.board.interrupts")
 end
 
 includes("lib/")
