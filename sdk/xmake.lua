@@ -637,6 +637,34 @@ target("cheriot.board.ldscript.mmio")
 
 	on_link(function (target) end)
 
+target("cheriot.board.interrupts")
+	set_kind("binary")
+	set_default(false)
+	add_deps("cheriot.board")
+	set_targetdir("$(buildir)")
+	set_filename("board-interrupts.h")
+
+	on_build(function(target)
+		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+
+		local interrupt_names_numbers = {}
+		if board.interrupts then
+			for _, interrupt in ipairs(board.interrupts) do
+				table.insert(interrupt_names_numbers, interrupt.name .. "=" .. math.floor(interrupt.number))
+			end
+		else
+			-- don't generate an emtpy enum
+			table.insert(interrupt_names_numbers, "DummyInterrupt=0")
+		end
+
+		local template = io.readfile(path.join(scriptdir, "board-interrupts.h.in"))
+		maybe_writefile(io, try, target:targetfile(),
+			template:gsub("@board_interrupt_enum_body@",
+				table.concat(interrupt_names_numbers, ",\n")))
+	end)
+
+	on_link(function (target) end)
+
 -- Add the target's configdir to the quoted include search path for all its
 -- reflexive, transitive dependencies.  In principle, the dependencies might
 -- have different configdirs.
@@ -652,6 +680,9 @@ rule("cheriot.cxflags.iquote_configdir")
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
 	add_deps("cheriot.reachability_root")
+
+	-- Firmware targets generate headers for use by their dependencies
+	add_deps("cheriot.cxflags.iquote_configdir")
 
 	add_imports("core.project.config")
 
@@ -699,6 +730,7 @@ rule("cheriot.firmware")
 
 		target:add("deps", "cheriot.board.file")
 		target:add("deps", "cheriot.board.ldscript.mmio")
+		target:add("deps", "cheriot.board.interrupts")
 
 		local function visit_all_dependencies(callback)
 			visit_all_dependencies_of(target, callback)
@@ -812,19 +844,15 @@ rule("cheriot.firmware")
 		end
 
 		if board.interrupts then
-			-- The macro used to provide the interrupt enumeration in the public header
-			local interruptNames = "CHERIOT_INTERRUPT_NAMES="
 			-- Define the macro that's used to initialise the scheduler's interrupt configuration.
 			local interruptConfiguration = "CHERIOT_INTERRUPT_CONFIGURATION="
 			for _, interrupt in ipairs(board.interrupts) do
-				interruptNames = interruptNames .. interrupt.name .. "=" .. math.floor(interrupt.number) .. ", "
 				interruptConfiguration = interruptConfiguration .. "{"
 					.. math.floor(interrupt.number) .. ","
 					.. math.floor(interrupt.priority) .. ","
 					.. (interrupt.edge_triggered and "true" or "false")
 					.. "},"
 			end
-			add_defines_each_dependency(interruptNames)
 			scheduler:add('defines', interruptConfiguration)
 		end
 
