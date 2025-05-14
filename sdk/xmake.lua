@@ -623,10 +623,21 @@ target("cheriot.board.ldscript.mmio")
 
 	on_link(function (target) end)
 
+-- Add the configfile path to the quoted include search path for all
+-- reflexive, transitive dependencies
+rule("cheriot.board.cxflags.iquote_configdir")
+	on_config(function (target)
+		visit_all_dependencies_of(target, function (target)
+			target:add('cxflags', format("-iquote%s", target:configdir()), {force = true})
+		end)
+	end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
 	add_deps("cheriot.reachability_root")
+
+	add_deps("cheriot.board.cxflags.iquote_configdir")
 
 	add_imports("core.project.config")
 
