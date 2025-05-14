@@ -1,0 +1,11 @@
+#pragma once
+
+/**
+ * The names of interrupts.  This is populated from the interrupts array in the
+ * board configuration JSON and allows code to refer to interrupt numbers by
+ * symbolic values.
+ */
+enum InterruptName : uint16_t
+{
+@board_interrupt_enum_body@
+};
