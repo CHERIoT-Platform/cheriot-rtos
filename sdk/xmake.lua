@@ -233,6 +233,24 @@ set_defaultarchs("cheriot")
 set_defaultplat("cheriot")
 set_languages("c23", "cxx23")
 
+
+-- Helper to visit all dependencies of a specified target exactly once and call
+-- a callback.
+local function visit_all_dependencies_of(target, callback)
+	local visited = {}
+	local function visit(target)
+		if not visited[target:name()] then
+			visited[target:name()] = true
+			callback(target)
+			for _, d in table.orderpairs(target:deps()) do
+				visit(d)
+			end
+		end
+	end
+	visit(target)
+end
+
+
 -- Common rules for any CHERI MCU component (library or compartment)
 rule("cheriot.component")
 
@@ -244,7 +262,7 @@ rule("cheriot.component")
 		target:set("prefixname", "")
 	end)
 	before_build(function (target)
-		if not target:get("cheriot.board_file") then
+		if not target:get("cheriot.reachable") then
 			raise("target " .. target:name() .. " is being built but does not " ..
 			"appear to be connected to a firmware image.  Please either use " ..
 			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
@@ -265,6 +283,18 @@ rule("cheriot.component")
 		-- This depends on all of the object files and the linker script.
 		batchcmds:add_depfiles(linkerscript)
 		batchcmds:add_depfiles(target:objectfiles())
+	end)
+
+-- Rule for marking all reflexive, transitive dependencies of a target as
+-- reachable.  See the check for "cheriot.reachable" in the "cheriot.component"
+-- rule's before_build hook, above.
+rule("cheriot.reachability_root")
+	-- Run in on_config, specifically after after_load, so that other rules
+	-- on this target get a chance to add to the dependency graph.
+	on_config(function (target)
+		visit_all_dependencies_of(target, function (target)
+			target:set("cheriot.reachable", true)
+		end)
 	end)
 
 -- CHERI MCU libraries are currently built as compartments, without a
@@ -579,24 +609,11 @@ local function load_board_file(json, boardFile, xmakeConfig)
 	return base
 end
 
--- Helper to visit all dependencies of a specified target exactly once and call
--- a callback.
-local function visit_all_dependencies_of(target, callback)
-	local visited = {}
-	local function visit(target)
-		if not visited[target:name()] then
-			visited[target:name()] = true
-			callback(target)
-			for _, d in table.orderpairs(target:deps()) do
-				visit(d)
-			end
-		end
-	end
-	visit(target)
-end
-
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
+	-- Firmwares are reachability roots.
+	add_deps("cheriot.reachability_root")
+
 	on_run(function (target)
 		import("core.base.json")
 		import("core.project.config")
@@ -669,20 +686,6 @@ rule("cheriot.firmware")
 			end
 			add_defines_each_dependency(temporal_defines)
 		end
-
-		-- Check that all dependences have a single board that they're targeting.
-		visit_all_dependencies(function (target)
-			local targetBoardFile = target:get("cheriot.board_file")
-			local targetBoardDir = target:get("cheriot.board_dir")
-			if not targetBoardFile and not targetBoardDir then
-				target:set("cheriot.board_file", boardfile)
-				target:set("cheriot.board_dir", boarddir)
-			else
-				if targetBoardFile ~= boardfile or targetBoardDir ~= boarddir then
-					raise("target " .. target:name() .. " is used in two or more firmware targets with different boards")
-				end
-			end
-		end)
 
 		if board.driver_includes then
 			for _, include_path in ipairs(board.driver_includes) do
