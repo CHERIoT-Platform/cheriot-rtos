@@ -978,6 +978,86 @@ rule("cheriot.board.ldscript.conf")
 		target:set("configvar", "ldscript_top_sections", table.concat(ldscript_top_sections, "\n"))
 	end)
 
+-- Do board-directed whole-dependency-tree configuration (defines &c)
+rule("cheriot.board.targets.conf")
+	after_load(function (target)
+		target:add("deps", "cheriot.board")
+	end)
+
+	-- Run this after all the after_load()s have completed, so we have a full
+	-- view of the dependency tree
+	on_config(function (target)
+		local function visit_all_dependencies(callback)
+			visit_all_dependencies_of(target, callback)
+		end
+
+		-- Add defines to all dependencies.
+		local add_defines_each_dependency = function (defines)
+			visit_all_dependencies(function (target)
+				target:add('defines', defines)
+			end)
+		end
+
+		-- Add cxflags to all dependencies.
+		local add_cxflags = function (cxflags)
+			visit_all_dependencies(function (target)
+				target:add('cxflags', cxflags, {force = true})
+			end)
+		end
+
+		local board_target = target:deps()["cheriot.board"]
+		local boarddir = board_target:get("cheriot.board_dir")
+		local board = board_target:get("cheriot.board_info")
+
+		if board.revoker then
+			local temporal_defines = { "TEMPORAL_SAFETY" }
+			if board.revoker == "software" then
+				temporal_defines[#temporal_defines+1] = "SOFTWARE_REVOKER"
+			end
+			add_defines_each_dependency(temporal_defines)
+		end
+
+		if board.driver_includes then
+			for _, include_path in ipairs(board.driver_includes) do
+				-- Allow ${sdk} to refer to the SDK directory, so that external
+				-- board includes can include generic platform bits.
+				include_path = string.gsub(include_path, "${(%w*)}", { sdk=scriptdir })
+				if not path.is_absolute(include_path) then
+					include_path = path.join(boarddir, include_path);
+				end
+				visit_all_dependencies(function (target)
+					target:add('includedirs', include_path)
+				end)
+			end
+		end
+
+		-- If this board defines any macros, add them to all targets
+		if board.defines then
+			add_defines_each_dependency(board.defines)
+		end
+
+		-- If this board defines any cxflags, add them to all targets
+		if board.cxflags then
+			add_cxflags(board.cxflags)
+		end
+
+		add_defines_each_dependency("CPU_TIMER_HZ=" .. math.floor(board.timer_hz))
+		add_defines_each_dependency("TICK_RATE_HZ=" .. math.floor(board.tickrate_hz))
+
+		if board.simulation then
+			add_defines_each_dependency("SIMULATION")
+		end
+
+		if board.stack_high_water_mark then
+			add_defines_each_dependency("CONFIG_MSHWM")
+		end
+
+		-- Build the MMIO space for the board
+		for name, _ in table.orderpairs(board.devices) do
+			add_defines_each_dependency("DEVICE_EXISTS_" .. name)
+		end
+	end)
+
 -- Rule for linking targets that are top-level firmware image like
 rule("cheriot.firmware.linkcmd")
 
@@ -1057,6 +1137,9 @@ rule("cheriot.firmware")
 	-- Firmware targets want board-driven ldscript processing
 	add_deps("cheriot.board.ldscript.conf")
 
+	-- Firmware targets want board-driven all-dependent-target configuration
+	add_deps("cheriot.board.targets.conf")
+
 	add_deps("cheriot.firmware.link")
 
 	add_imports("core.project.config")
@@ -1121,80 +1204,23 @@ rule("cheriot.firmware")
 			visit_all_dependencies_of(target, callback)
 		end
 
-		-- Add defines to all dependencies.
-		local add_defines_each_dependency = function (defines)
-			visit_all_dependencies(function (target)
-				target:add('defines', defines)
-			end)
-		end
-
-		-- Add cxflags to all dependencies.
-		local add_cxflags = function (cxflags)
-			visit_all_dependencies(function (target)
-				target:add('cxflags', cxflags, {force = true})
-			end)
-		end
-
-		local board_target = target:deps()["cheriot.board"]
-		local boarddir = board_target:get("cheriot.board_dir")
-		local board = board_target:get("cheriot.board_info")
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
 
 		local software_revoker = false
 		if board.revoker then
-			local temporal_defines = { "TEMPORAL_SAFETY" }
 			if board.revoker == "software" then
-				temporal_defines[#temporal_defines+1] = "SOFTWARE_REVOKER"
 				software_revoker = true
 				target:add('deps', "cheriot.software_revoker")
 			end
-			add_defines_each_dependency(temporal_defines)
-		end
-
-		if board.driver_includes then
-			for _, include_path in ipairs(board.driver_includes) do
-				-- Allow ${sdk} to refer to the SDK directory, so that external
-				-- board includes can include generic platform bits.
-				include_path = string.gsub(include_path, "${(%w*)}", { sdk=scriptdir })
-				if not path.is_absolute(include_path) then
-					include_path = path.join(boarddir, include_path);
-				end
-				visit_all_dependencies(function (target)
-					target:add('includedirs', include_path)
-				end)
-			end
-		end
-
-		-- If this board defines any macros, add them to all targets
-		if board.defines then
-			add_defines_each_dependency(board.defines)
 		end
 
 		local scheduler = target:deps()[target:name() .. ".scheduler"]
 
-		-- If this board defines any cxflags, add them to all targets
-		if board.cxflags then
-			add_cxflags(board.cxflags)
-		end
-
-		add_defines_each_dependency("CPU_TIMER_HZ=" .. math.floor(board.timer_hz))
-		add_defines_each_dependency("TICK_RATE_HZ=" .. math.floor(board.tickrate_hz))
-
-		if board.simulation then
-			add_defines_each_dependency("SIMULATION")
-		end
-
 		local loader = target:deps()['cheriot.loader'];
 
-		if board.stack_high_water_mark then
-			add_defines_each_dependency("CONFIG_MSHWM")
-		else
+		if not board.stack_high_water_mark then
 			-- If we don't have the stack high watermark, the trusted stack is smaller.
 			loader:set('loader_trusted_stack_size', 176)
-		end
-
-		-- Build the MMIO space for the board
-		for name, _ in table.orderpairs(board.devices) do
-			add_defines_each_dependency("DEVICE_EXISTS_" .. name)
 		end
 
 		-- Generate our top-level linker script as a configfile
