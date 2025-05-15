@@ -250,6 +250,22 @@ local function visit_all_dependencies_of(target, callback)
 	visit(target)
 end
 
+-- Write contents to path if it would create or update the contents
+local function maybe_writefile(xmake_io, xmake_try, path, contents)
+	xmake_try
+	{ function()
+		-- Try reading the file and comparing
+		local old_contents = xmake_io.readfile(path)
+		if old_contents == contents then return end
+		xmake_io.writefile(path, contents)
+	  end
+	, { catch = function()
+		-- If that threw an exception, just write the file
+		xmake_io.writefile(path, contents)
+	  end
+	} }
+end
+
 
 -- Common rules for any CHERI MCU component (library or compartment)
 rule("cheriot.component")
