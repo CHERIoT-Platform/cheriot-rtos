@@ -1168,6 +1168,7 @@ rule("cheriot.firmware")
 		batchcmds:mkdir(target:targetdir())
 		local objects = target:objectfiles()
 		visit_all_dependencies_of(target, function (dep)
+			if not dep:targetfile() then return end
 			if (dep:get("cheriot.type") == "library") or
 				(dep:get("cheriot.type") == "compartment") or
 				(dep:get("cheriot.type") == "privileged compartment") or
