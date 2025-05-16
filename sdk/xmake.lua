@@ -364,6 +364,19 @@ rule("cheriot.privileged-library")
 		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 	end)
 
+rule("cheriot.generated-source")
+	on_load(function(target)
+		target:set("cheriot.type", "generated source")
+
+		-- Generated source targets get used during compilation, and not just
+		-- linking, phases of dependent targets, so tell xmake about that.
+		--
+		-- XXX: If/when we can mandate xmake v3 or later, apparently the
+		-- preferred mechanism is that such generated code targets use the newer
+		-- {before,on,after}_prepare phase rather than ..._build.
+		target:set("policy", "build.fence", true)
+	end)
+
 -- Build the switcher as an object file that we can import into the final
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
