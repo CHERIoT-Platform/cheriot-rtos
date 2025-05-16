@@ -364,6 +364,11 @@ rule("cheriot.privileged-library")
 		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 	end)
 
+rule("cheriot.generated-source")
+	on_load(function(target)
+		target:set("cheriot.type", "generated source")
+	end)
+
 -- Build the switcher as an object file that we can import into the final
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
