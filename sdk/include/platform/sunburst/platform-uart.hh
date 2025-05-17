@@ -1,13 +1,10 @@
 #pragma once
-#pragma push_macro("CHERIOT_PLATFORM_CUSTOM_UART")
-#define CHERIOT_PLATFORM_CUSTOM_UART
-#include_next <platform-uart.hh>
-#pragma pop_macro("CHERIOT_PLATFORM_CUSTOM_UART")
 
 #ifndef DEFAULT_UART_BAUD_RATE
 #	define DEFAULT_UART_BAUD_RATE 921'600
 #endif
 
+#include <platform/concepts/uart.hh>
 #include <utils.hh>
 
 /**
