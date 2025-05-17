@@ -980,6 +980,7 @@ namespace loader
 			return p;
 		}
 	};
+	static_assert(sizeof(ImportEntry) == sizeof(void *));
 
 	struct ImportTable
 	{
