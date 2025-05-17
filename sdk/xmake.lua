@@ -120,55 +120,65 @@ local scriptdir = os.scriptdir()
 local coredir = path.join(scriptdir, "core")
 
 -- Set up our llvm configuration.
-toolchain("cheriot-clang")
-	set_kind("standalone")
-	set_toolset("cc", "clang")
-	set_toolset("cxx", "clang++")
-	set_toolset("ld", "ld.lld")
-	set_toolset("objdump", "llvm-objdump")
-	set_toolset("strip", "llvm-strip")
-	set_toolset("as", "clang")
+local function mk_cheriot_toolchain(name, opts)
+	toolchain(name)
+		set_kind("standalone")
+		set_toolset("cc", "clang")
+		set_toolset("cxx", "clang++")
+		set_toolset("ld", "ld.lld")
+		set_toolset("objdump", "llvm-objdump")
+		set_toolset("strip", "llvm-strip")
+		set_toolset("as", "clang")
 
-	--Set up the flags that we need.
-	on_load(function (toolchain)
-		local core_directory = scriptdir
-		local include_directory = path.join(core_directory, "include")
-		-- Flags used for C/C++ and assembly
-		local default_flags = {
-			"-target",
-			"riscv32cheriot-unknown-cheriotrtos",
-			"-mcpu=cheriot",
-			"-mabi=cheriot",
-			"-mxcheri-rvc",
-			"-mrelax",
-			"-fshort-wchar",
-			"-nostdinc",
-			"-Oz",
-			"-g",
-			"-ffunction-sections",
-			"-fdata-sections",
-			"-fomit-frame-pointer",
-			"-fno-builtin-setjmp",
-			"-fno-builtin-longjmp",
-			"-fno-builtin-printf",
-			"-fno-exceptions",
-			"-fno-asynchronous-unwind-tables",
-			"-fno-c++-static-destructors",
-			"-fno-rtti",
-			"-I" .. path.join(include_directory, "c++-config"),
-			"-I" .. path.join(include_directory, "libc++"),
-			"-I" .. include_directory,
-		}
-		-- C/C++ flags
-		toolchain:add("cxflags", default_flags, {force = true})
-		toolchain:add("cflags", default_flags)
-		toolchain:add("cxxflags", "-std=c++23")
-		toolchain:add("cflags", "-std=c23")
-		-- Assembly flags
-		toolchain:add("asflags", default_flags)
-	end)
-toolchain_end()
+		--Set up the flags that we need.
+		on_load(function (toolchain)
+			local core_directory = scriptdir
+			local include_directory = path.join(core_directory, "include")
+			-- Flags used for C/C++ and assembly
+			local default_flags = {
+				"-target", opts.triple,
+				"-mcpu=cheriot",
+				"-mabi=" .. opts.abi,
+				"-mxcheri-rvc",
+				"-mrelax",
+				"-fshort-wchar",
+				"-nostdinc",
+				"-Oz",
+				"-g",
+				"-ffunction-sections",
+				"-fdata-sections",
+				"-fomit-frame-pointer",
+				"-fno-builtin-setjmp",
+				"-fno-builtin-longjmp",
+				"-fno-builtin-printf",
+				"-fno-exceptions",
+				"-fno-asynchronous-unwind-tables",
+				"-fno-c++-static-destructors",
+				"-fno-rtti",
+				"-I" .. path.join(include_directory, "c++-config"),
+				"-I" .. path.join(include_directory, "libc++"),
+				"-I" .. include_directory,
+			}
+			-- C/C++ flags
+			toolchain:add("cxflags", default_flags, {force = true})
+			toolchain:add("cflags", default_flags)
+			toolchain:add("cxxflags", "-std=c++23")
+			toolchain:add("cflags", "-std=c23")
+			-- Assembly flags
+			toolchain:add("asflags", default_flags)
 
+			if opts.onload_tail then opts.onload_tail(toolchain) end
+		end)
+	toolchain_end()
+end
+mk_cheriot_toolchain("cheriot-clang", {
+	triple = "riscv32cheriot-unknown-cheriotrtos",
+	abi = "cheriot"
+})
+mk_cheriot_toolchain("cheriot-baremetal-clang", {
+	triple = "riscv32cheriot-unknown-unknown",
+	abi = "cheriot-baremetal"
+})
 
 set_defaultarchs("cheriot")
 set_defaultplat("cheriot")
