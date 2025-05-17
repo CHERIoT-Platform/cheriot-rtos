@@ -452,19 +452,20 @@ target("cheriot.software_revoker")
 	end)
 
 -- Helper to find a board file given either the name of a board file or a path.
-local function board_file_for_name(boardName)
-	local boardfile = boardName
+local function board_file_for_name(boardName, searchDir)
+	-- ${sdkboards} for absolute references
+	local boardfile = string.gsub(boardName, "${(%w*)}",
+		{ sdkboards=path.join(scriptdir, "boards") })
 	-- The directory containing the board file.
 	local boarddir = path.directory(boardfile);
-	-- If this isn't a path, look in the boards directory
+	-- If this isn't a path, look in searchDir
 	if not os.isfile(boardfile) then
-		boarddir = path.join(scriptdir, "boards")
+		boarddir = searchDir
 		local fullBoardPath = path.join(boarddir, boardfile .. '.json')
 		if not os.isfile(fullBoardPath) then
 			fullBoardPath = path.join(boarddir, boardfile .. '.patch')
 		end
 		if not os.isfile(fullBoardPath) then
-			print("unable to find board file " .. boardfile .. ".  Try specifying a full path")
 			return nil
 		end
 		boardfile = fullBoardPath
@@ -519,14 +520,14 @@ local function isarray(t)
 end
 
 
-local function patch_board(json, base, patches)
+local function patch_board(base, patches, xmakeJson)
 	for _, p in ipairs(patches) do
 		if not p.op then
-			print("missing op in "..json.encode(p))
+			print("missing op in "..xmakeJson.encode(p))
 			return nil
 		end
 		if not p.path or (type(p.path) ~= "string") then
-			print("missing or invalid path in "..json.encode(p))
+			print("missing or invalid path in "..xmakeJson.encode(p))
 			return nil
 		end
 
@@ -543,7 +544,7 @@ local function patch_board(json, base, patches)
 		end
 
 		if #objectPath < 1 then
-			print("invalid path in "..json.encode(p))
+			print("invalid path in "..xmakeJson.encode(p))
 			return nil
 		end
 
@@ -557,7 +558,7 @@ local function patch_board(json, base, patches)
 		for _, pathComponent in ipairs(objectPath) do
 			if isarray(nodeToModify) then
 				if type(pathComponent) ~= "number" then
-					print("invalid non-numeric index into array in "..json.encode(p))
+					print("invalid non-numeric index into array in "..xmakeJson.encode(p))
 					return nil
 				end
 				pathComponent = pathComponent + 1
@@ -580,7 +581,7 @@ local function patch_board(json, base, patches)
 		-- Handle the operation
 		if (p.op == "replace") or (p.op == "add") then
 			if not p.value then
-				print(tostring(p.op).. " requires a value, missing in ", json.encode(p))
+				print(tostring(p.op).. " requires a value, missing in ", xmakeJson.encode(p))
 				return nil
 			end
 			if isArrayOperation and p.op == "add" then
@@ -591,7 +592,7 @@ local function patch_board(json, base, patches)
 		elseif p.op == "remove" then
 			nodeToModify[nodeName] = nil
 		else
-			print(tostring(p.op) .. " is not a valid operation in ", json.encode(p))
+			print(tostring(p.op) .. " is not a valid operation in ", xmakeJson.encode(p))
 			return nil
 		end
 	end
@@ -600,31 +601,35 @@ end
 -- Helper to load a board file.  This must be passed the json object provided
 -- by import("core.base.json") because import does not work in helper
 -- functions at the top level.
-local function load_board_file_inner(json, boardFile)
+local function load_board_file_inner(boardDir, boardFile, xmakeJson)
 	if path.extension(boardFile) == ".json" then
-		return json.loadfile(boardFile)
+		return xmakeJson.loadfile(boardFile)
 	end
 	if path.extension(boardFile) ~= ".patch" then
 		print("unknown extension for board file: " .. boardFile)
 		return nil
 	end
-	local patch = json.loadfile(boardFile)
+	local patch = xmakeJson.loadfile(boardFile)
 	if not patch.base then
 		print("Board file " .. boardFile .. " does not specify a base")
 		return nil
 	end
-	local _, baseFile = board_file_for_name(patch.base)
-	local base = load_board_file_inner(json, baseFile)
+	local baseDir, baseFile = board_file_for_name(patch.base, boardDir)
+	if not baseDir then
+		print("unable to find board file " .. patch.name .. ".  Try specifying a full path")
+		return nil
+	end
+	local base = load_board_file_inner(baseDir, baseFile, xmakeJson)
 
-	patch_board(json, base, patch.patch)
+	patch_board(base, patch.patch, xmakeJson)
 
 	return base
 end
 
 -- Load a board (patch) file (recursively) and then apply the configuration's
 -- mixins as well.
-local function load_board_file(json, boardFile, xmakeConfig)
-	local base = load_board_file_inner(json, boardFile)
+local function load_board_file(boardDir, boardFile, xmakeJson, xmakeConfig)
+	local base = load_board_file_inner(boardDir, boardFile, xmakeJson)
 
 	local mixinString = xmakeConfig.get("board-mixins")
 	if not mixinString or mixinString == "" then
@@ -632,17 +637,26 @@ local function load_board_file(json, boardFile, xmakeConfig)
 	end
 
 	for mixinName in mixinString:gmatch("([^,]*),?") do
-		local _, mixinFile = board_file_for_name(mixinName)
+		-- Initially, look next to the board file
+		local mixinDir, mixinFile = board_file_for_name(mixinName, boardDir)
+		if not mixinDir then
+			-- Fall back to looking in the SDK/ boards dir (which might be the same thing)
+			mixinDir, mixinFile = board_file_for_name(mixinName, path.join(scriptdir, "boards"))
+		end
+		if not mixinDir then
+			print("unable to find board mixin " .. mixinName .. ".  Try specifying a full path")
+			return nil
+		end
 
 		-- XXX this *ought* to return nil, error on error, but it just throws.
-		local mixinTree, err = json.loadfile(mixinFile)
+		local mixinTree, err = xmakeJson.loadfile(mixinFile)
 		if not mixinTree then
 			error ("Could not process mixin %q: %s"):format(mixinName, err)
 		end
 
 		print(("Patching board with %q"):format(mixinFile))
 
-		patch_board(json, base, mixinTree)
+		patch_board(base, mixinTree, xmakeJson)
 	end
 
 	return base
@@ -656,8 +670,11 @@ target("cheriot.board")
 		import("core.base.json")
 		import("core.project.config")
 
-		local boarddir, boardfile = board_file_for_name(get_config("board"))
-		local board = load_board_file(json, boardfile, config)
+		local boarddir, boardfile = board_file_for_name(get_config("board"), path.join(scriptdir, "boards"))
+		if not boarddir then
+			raise("unable to find board file " .. get_config("board") .. ".  Try specifying a full path")
+		end
+		local board = load_board_file(boarddir, boardfile, json, config)
 
 		-- Normalize memory extents within the board to have either both an end
 		-- and length or neither.
