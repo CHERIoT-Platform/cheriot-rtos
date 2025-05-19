@@ -978,6 +978,77 @@ rule("cheriot.board.ldscript.conf")
 		target:set("configvar", "ldscript_top_sections", table.concat(ldscript_top_sections, "\n"))
 	end)
 
+-- Rule for linking targets that are top-level firmware image like
+rule("cheriot.firmware.linkcmd")
+
+	after_load(function (target)
+		target:add("deps", "cheriot.board.ldscript.mmio")
+	end)
+
+	-- Perform the final link step for a firmware image.
+	on_linkcmd(function (target, batchcmds, opt)
+		-- Get a specified linker script, or set the default to the compartment
+		-- linker script.
+		local linkerscript_mmio = target:dep("cheriot.board.ldscript.mmio"):targetfile()
+		local linkerscript1 = target:get("cheriot.ldscript")
+		-- Link using the firmware's linker script.
+		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
+		batchcmds:mkdir(target:targetdir())
+		local objects = target:objectfiles()
+
+		local depfilter = target:extraconf("rules", "cheriot.firmware.linkcmd", "dependency_filter")
+		                  or function() return true end
+		visit_all_dependencies_of(target, function (dep)
+			if not dep:targetfile() then return end
+			if depfilter(dep) then
+				table.insert(objects, dep:targetfile())
+			end
+		end)
+
+		local ldargs = {
+			"-n",
+			"--script=" .. linkerscript_mmio,
+			"--script=" .. linkerscript1,
+			"--relax",
+			"-o", target:targetfile()
+		}
+		if target:extraconf("rules", "cheriot.firmware.linkcmd", "compartment_report") then
+			batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
+			table.insert(ldargs, "--compartment-report=" .. target:targetfile() .. ".json")
+		end
+
+		batchcmds:vrunv(target:tool("ld"), table.join(ldargs, objects), opt)
+		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
+		batchcmds:vexecv(target:tool("objdump"), {"-glxsdrS", "--demangle", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
+		batchcmds:add_depfiles(linkerscript_mmio, linkerscript1)
+		batchcmds:add_depfiles(target:get("cheriot.ldscripts"))
+		batchcmds:add_depfiles(objects)
+	end)
+
+-- Specialize the above specifically for a RTOS firmware target
+rule ("cheriot.firmware.link")
+	add_deps("cheriot.firmware.linkcmd")
+	before_link(function(target)
+		-- add_deps(), as used in cheriot.firmware below, doesn't set rule
+		-- extraconfigs, and we don't want to make the firmware targets have to
+		-- add the rule by hand, so... do that here before the
+		-- "cheriot.firmware.linkcmd" on_linkcmd script fires.  Even though we
+		-- control most of the firmware target definition, it's rude to steal
+		-- all the script hooks for something we expect the user to touch, so
+		-- do this in a rule, too.
+		local cr = target:extraconf("rules", "cheriot.firmware.link", "compartment_report")
+		target:extraconf_set("rules", "cheriot.firmware.linkcmd", "compartment_report",
+			cr == nil and true or cr)
+		target:extraconf_set("rules", "cheriot.firmware.linkcmd", "dependency_filter",
+			target:extraconf("rules", "cheriot.firmware.link", "dependency_filter") or
+			function(dep)
+				return (dep:get("cheriot.type") == "library") or
+					(dep:get("cheriot.type") == "compartment") or
+					(dep:get("cheriot.type") == "privileged compartment") or
+					(dep:get("cheriot.type") == "privileged library")
+			end)
+	end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
@@ -985,6 +1056,8 @@ rule("cheriot.firmware")
 
 	-- Firmware targets want board-driven ldscript processing
 	add_deps("cheriot.board.ldscript.conf")
+
+	add_deps("cheriot.firmware.link")
 
 	add_imports("core.project.config")
 
@@ -1043,8 +1116,6 @@ rule("cheriot.firmware")
 		-- Pick up the dependency on the board information, which has been
 		-- processed already by virtue of that target being *loaded*.
 		target:add("deps", "cheriot.board")
-
-		target:add("deps", "cheriot.board.ldscript.mmio")
 
 		local function visit_all_dependencies(callback)
 			visit_all_dependencies_of(target, callback)
@@ -1458,41 +1529,6 @@ rule("cheriot.firmware")
 		end
 	end)
 
-	-- Perform the final link step for a firmware image.
-	on_linkcmd(function (target, batchcmds, opt)
-		-- Get a specified linker script, or set the default to the compartment
-		-- linker script.
-		local linkerscript_mmio = target:dep("cheriot.board.ldscript.mmio"):targetfile()
-		local linkerscript1 = target:get("cheriot.ldscript")
-		-- Link using the firmware's linker script.
-		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
-		batchcmds:mkdir(target:targetdir())
-		local objects = target:objectfiles()
-		visit_all_dependencies_of(target, function (dep)
-			if not dep:targetfile() then return end
-			if (dep:get("cheriot.type") == "library") or
-				(dep:get("cheriot.type") == "compartment") or
-				(dep:get("cheriot.type") == "privileged compartment") or
-				(dep:get("cheriot.type") == "privileged library") then
-				table.insert(objects, dep:targetfile())
-			end
-		end)
-		batchcmds:vrunv(target:tool("ld"),
-			table.join({
-				"-n",
-				"--script=" .. linkerscript_mmio,
-				"--script=" .. linkerscript1,
-				"--relax",
-				"-o", target:targetfile(),
-				"--compartment-report=" .. target:targetfile() .. ".json"
-			}, objects), opt)
-		batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
-		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
-		batchcmds:vexecv(target:tool("objdump"), {"-glxsdrS", "--demangle", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
-		batchcmds:add_depfiles(linkerscript_mmio, linkerscript1)
-		batchcmds:add_depfiles(target:get("cheriot.ldscripts"))
-		batchcmds:add_depfiles(objects)
-	end)
 
 -- Rule for conditionally enabling debug for a component.
 rule("cheriot.component-debug")
