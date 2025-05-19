@@ -690,6 +690,14 @@ target("cheriot.board")
 		if board.data_memory then
 			normalize_extent({"data_memory"}, board.data_memory)
 		end
+		local jsonpath = {"ldscript_fragments"}
+		for name, fragment in table.orderpairs(board.ldscript_fragments) do
+			-- XXX: ldscript fragments don't always know where they end?
+			if type(name) == "string" and (fragment["end"] or fragment.length) then
+				jsonpath[2] = name
+				normalize_extent(jsonpath, fragment)
+			end
+		end
 
 		target:set("cheriot.board_dir", boarddir)
 		target:set("cheriot.board_file", boardfile)
@@ -744,6 +752,32 @@ target("cheriot.board.ldscript.mmio")
 			table.insert(mmios, format("__export_mem_%s_end = 0x%x", name, stop))
 		end
 
+		-- For the built-in, named memory segments, provide starts and ends
+		-- See the ldscript generation for others
+		local spans = {}
+		do
+			local imem = board.instruction_memory
+			spans["instruction_memory"] = { imem.start, imem["end"] }
+		end
+		if board.data_memory then
+			local dmem = board.data_memory
+			spans["data_memory"] = { dmem.start, dmem["end"] }
+		end
+
+		-- For named ldscript fragments with starts and ends, do the same.
+		for name, fragment in table.orderpairs(board.ldscript_fragments) do
+			if type(name) == "string" and fragment.start and fragment["end"] then
+				spans[name] = { fragment.start, fragment["end"] }
+			end
+		end
+
+		local span_text = {}
+		for name, range in pairs(spans) do
+			table.insert(span_text,
+				format("__memspan__%s = 0x%x;\n__memspan__%s_end = 0x%x;",
+					name, range[1], name, range[2]))
+		end
+
 		-- Provide the range of the MMIO space and the heap.
 		maybe_writefile(io, try, target:targetfile(),
 			table.concat({
@@ -751,7 +785,7 @@ target("cheriot.board.ldscript.mmio")
 				table.concat(mmios, ";\n"),
 				format("__mmio_region_end = 0x%x", mmio_end),
 				format("__export_mem_heap_end = 0x%x", board.heap["end"]),
-				";\n"
+				table.concat(span_text, "\n")
 			}, ";\n"))
 	end)
 
