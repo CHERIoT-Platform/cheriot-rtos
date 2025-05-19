@@ -717,7 +717,7 @@ target("cheriot.board.ldscript.mmio")
 		local board = target:dep("cheriot.board"):get("cheriot.board_info")
 
 		-- Build the MMIO space for the board
-		local mmio = ""
+		local mmios = {}
 		local mmio_start = 0xffffffff
 		local mmio_end = 0
 		-- Add start and end markers for all MMIO devices.
@@ -726,14 +726,19 @@ target("cheriot.board.ldscript.mmio")
 			local stop = range["end"]
 			mmio_start = math.min(mmio_start, start)
 			mmio_end = math.max(mmio_end, stop)
-			mmio = format("%s__export_mem_%s = 0x%x;\n__export_mem_%s_end = 0x%x;\n",
-				mmio, name, start, name, stop);
+			table.insert(mmios, format("__export_mem_%s = 0x%x", name, start))
+			table.insert(mmios, format("__export_mem_%s_end = 0x%x", name, stop))
 		end
 
 		-- Provide the range of the MMIO space and the heap.
 		maybe_writefile(io, try, target:targetfile(),
-			format("__mmio_region_start = 0x%x;\n%s__mmio_region_end = 0x%x;\n__export_mem_heap_end = 0x%x;\n",
-				mmio_start, mmio, mmio_end, board.heap["end"]))
+			table.concat({
+				format("__mmio_region_start = 0x%x", mmio_start),
+				table.concat(mmios, ";\n"),
+				format("__mmio_region_end = 0x%x", mmio_end),
+				format("__export_mem_heap_end = 0x%x", board.heap["end"]),
+				";\n"
+			}, ";\n"))
 	end)
 
 	on_link(function (target) end)
