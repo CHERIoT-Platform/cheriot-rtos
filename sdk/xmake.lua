@@ -1171,6 +1171,17 @@ rule("cheriot.firmware.scheduler.threads")
 		scheduler:add('defines', "CONFIG_THREAD_MAX_PRIORITY=" .. thread_max_priority)
 	end)
 
+rule("cheriot.firmware.common_shared_objects")
+	after_load(function (target)
+		local threads = target:values("threads")
+		target:values_set("shared_objects", {
+			-- 32-bit counter for the hazard-pointer epoch.
+			allocator_epoch = 4,
+			-- Two hazard pointers per thread.
+			allocator_hazard_pointers = #(threads) * 8 * 2
+		}, { expand = false })
+	end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
@@ -1526,12 +1537,7 @@ rule("cheriot.firmware")
 			end
 		end)
 
-		local shared_objects = {
-			-- 32-bit counter for the hazard-pointer epoch.
-			allocator_epoch = 4,
-			-- Two hazard pointers per thread.
-			allocator_hazard_pointers = #(threads) * 8 * 2
-			}
+		local shared_objects = { }
 		visit_all_dependencies(function (target)
 			local globals = target:values("shared_objects")
 			if globals then
@@ -1695,6 +1701,7 @@ function firmware(name)
 		set_kind("binary")
 		add_deps("cheriot.board.file")
 		add_rules("cheriot.firmware")
+		add_rules("cheriot.firmware.common_shared_objects")
 		add_rules("cheriot.conditionally_link_allocator")
 		add_deps(name .. ".scheduler", "cheriot.loader", "cheriot.switcher")
 		add_deps("cheriot.token_library")
