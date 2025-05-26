@@ -720,6 +720,15 @@ target("cheriot.board")
 		target:set("cheriot.board_dir", boarddir)
 		target:set("cheriot.board_file", boardfile)
 		target:set("cheriot.board_info", { board })
+
+		-- The size of a register spill frame in a trusted stack is a function
+		-- of the board.  While *most* of the system gets this from
+		-- core/switcher/trusted-stack-assembly.h, we need it when sizing
+		-- thread trusted stacks over in the generated linker scripts.  The
+		-- loader component asserts that this value matches what the rest of
+		-- the system sees.
+		target:set("cheriot.trusted_spill_size",
+			board.stack_high_water_mark and 192 or 176)
 	end)
 
 target("cheriot.board.file")
@@ -1266,16 +1275,10 @@ rule("cheriot.firmware")
 			visit_all_dependencies_of(target, callback)
 		end
 
-		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+		local board_target = target:deps()["cheriot.board"]
+		local board = board_target:get("cheriot.board_info")
 
 		local software_revoker = board.revoker == "software"
-
-		local loader = target:deps()['cheriot.loader'];
-
-		if not board.stack_high_water_mark then
-			-- If we don't have the stack high watermark, the trusted stack is smaller.
-			loader:set('loader_trusted_stack_size', 176)
-		end
 
 		-- Generate our top-level linker script as a configfile
 		do
@@ -1290,10 +1293,6 @@ rule("cheriot.firmware")
 		if board.heap.start then
 			heap_start = format("0x%x", board.heap.start)
 		end
-
-		local loader_stack_size = loader:get('loader_stack_size')
-		local loader_trusted_stack_size = loader:get('loader_trusted_stack_size')
-		loader:add('defines', "CHERIOT_LOADER_TRUSTED_STACK_SIZE=" .. loader_trusted_stack_size)
 
 		-- Get the threads config and prepare the predefined macros that describe them
 		local threads = target:values("threads")
@@ -1333,12 +1332,13 @@ rule("cheriot.firmware")
 		local stack_size_limit = 65280
 
 		-- Initial pass through thread sequence to derive values within each
+		local trusted_spill_size = board_target:get("cheriot.trusted_spill_size")
 		for i, thread in ipairs(threads) do
 			thread.mangled_entry_point = string.format("\"__export_%s__Z%d%sv\"", thread.compartment, string.len(thread.entry_point), thread.entry_point)
 			thread.thread_id = i
 			-- Trusted stack frame is 24 bytes.  If this size is too small, the
 			-- loader will fail.  If it is too big, we waste space.
-			thread.trusted_stack_size = loader_trusted_stack_size + (24 * thread.trusted_stack_frames)
+			thread.trusted_stack_size = trusted_spill_size + (24 * thread.trusted_stack_frames)
 
 			if thread.stack_size > stack_size_limit then
 				raise("thread " .. i .. " requested a " .. thread.stack_size ..
@@ -1349,20 +1349,8 @@ rule("cheriot.firmware")
 
 		-- Pass through thread sequence, generating linker directives
 		local thread_headers = ""
-		local thread_trusted_stacks =
-			"\n\t. = ALIGN(8);" ..
-			"\n\t.loader_trusted_stack : CAPALIGN" ..
-			"\n\t{" ..
-			"\n\t\tbootTStack = .;" ..
-			"\n\t\t. += " .. loader_trusted_stack_size .. ";" ..
-			"\n\t}\n"
-		local thread_stacks =
-			"\n\t. = ALIGN(16);" ..
-			"\n\t.loader_stack : CAPALIGN" ..
-			"\n\t{" ..
-			"\n\t\tbootStack = .;" ..
-			"\n\t\t. += " .. loader_stack_size .. ";" ..
-			"\n\t}\n"
+		local thread_trusted_stacks = ""
+		local thread_stacks = ""
 		for i, thread in ipairs(threads) do
 			thread_stacks = thread_stacks .. string.gsub(thread_stack_template, "${([_%w]*)}", thread)
 			thread_trusted_stacks = thread_trusted_stacks .. string.gsub(thread_trusted_stack_template, "${([_%w]*)}", thread)
@@ -1460,8 +1448,6 @@ rule("cheriot.firmware")
 			thread_headers=thread_headers,
 			thread_trusted_stacks=thread_trusted_stacks,
 			thread_stacks=thread_stacks,
-			loader_stack_size=loader:get('loader_stack_size'),
-			loader_trusted_stack_size=loader:get('loader_trusted_stack_size')
 		}
 		-- Helper function to add a dependency to the linker script
 		local add_dependency = function (name, dep, templates)
@@ -1643,21 +1629,13 @@ target("cheriot.loader")
 
 	after_load(function (target)
 		target:set('cheriot.debug-name', "loader")
-		local config = {
-			-- Size in bytes of the trusted stack.
-			loader_trusted_stack_size = 192,
-			-- Size in bytes of the loader's stack.
-			loader_stack_size = 1024
-		}
-		target:add('defines', "CHERIOT_LOADER_STACK_SIZE=" .. config.loader_stack_size)
 		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
-		target:set('cheriot_loader_config', config)
-		for k, v in pairs(config) do
-			target:set(k, v)
-		end
 
-		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+		local board_target = target:dep("cheriot.board")
+		local board = board_target:get("cheriot.board_info")
 		target:add("defines", board.rtos_defines and board.rtos_defines.loader)
+		target:add('defines',
+			"CHERIOT_LOADER_TRUSTED_SPILL_SIZE=" .. board_target:get("cheriot.trusted_spill_size"))
 	end)
 
 -- Helper function to define firmware.  Used as `target`.

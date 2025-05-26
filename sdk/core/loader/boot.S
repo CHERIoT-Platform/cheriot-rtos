@@ -265,3 +265,15 @@
 	bltu			a0, a1, .Lfill_block
 	cret
 .size start, . - start
+
+	.section .loader_trusted_stack, "a", @progbits
+	.type bootTStack, @object
+	.size bootTStack, BOOT_TSTACK_SIZE
+bootTStack:
+	.fill BOOT_TSTACK_SIZE
+
+	.section .loader_stack, "a", @progbits
+	.type bootStack, @object
+	.size bootStack, BOOT_STACK_SIZE
+bootStack:
+	.fill BOOT_STACK_SIZE

@@ -3,7 +3,17 @@
 __revoker_scan_start = .;
 __stack_space_start = .;
 
+.loader_trusted_stack : CAPALIGN
+{
+	*/loader/boot.S.o(.loader_trusted_stack);
+}
+
 @thread_trusted_stacks@
+
+.loader_stack : ALIGN(16)
+{
+	*/loader/boot.S.o(.loader_stack);
+}
 
 @thread_stacks@
 
