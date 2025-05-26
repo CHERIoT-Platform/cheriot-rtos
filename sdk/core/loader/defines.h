@@ -9,6 +9,6 @@
  * the idle thread must not do compartment calls, this trusted stack only needs
  * to have a register frame and not trusted stack frames.
  */
-#define BOOT_TSTACK_SIZE (TSTACK_REGFRAME_SZ + TSTACK_HEADER_SZ + (8 * 8))
+#define BOOT_TSTACK_SIZE TrustedStack_offset_frames
 
 #define BOOT_THREADINFO_SZ 16
