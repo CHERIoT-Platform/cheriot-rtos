@@ -950,19 +950,6 @@ rule("cheriot.firmware")
 			heap_start = format("0x%x", board.heap.start)
 		end
 
-		if board.interrupts then
-			-- Define the macro that's used to initialise the scheduler's interrupt configuration.
-			local interruptConfiguration = "CHERIOT_INTERRUPT_CONFIGURATION="
-			for _, interrupt in ipairs(board.interrupts) do
-				interruptConfiguration = interruptConfiguration .. "{"
-					.. math.floor(interrupt.number) .. ","
-					.. math.floor(interrupt.priority) .. ","
-					.. (interrupt.edge_triggered and "true" or "false")
-					.. "},"
-			end
-			scheduler:add('defines', interruptConfiguration)
-		end
-
 		local loader_stack_size = loader:get('loader_stack_size')
 		local loader_trusted_stack_size = loader:get('loader_trusted_stack_size')
 		loader:add('defines', "CHERIOT_LOADER_TRUSTED_STACK_SIZE=" .. loader_trusted_stack_size)
@@ -1411,6 +1398,22 @@ function firmware(name)
 			target:set('cheriot.debug-name', "scheduler")
 			target:add('defines', "SCHEDULER_ACCOUNTING=" .. tostring(get_config("scheduler-accounting")))
 			target:add('defines', "SCHEDULER_MULTIWAITER=" .. tostring(get_config("scheduler-multiwaiter")))
+		end)
+		after_load(function (target)
+			local board = target:dep("cheriot.board"):get("cheriot.board_info")
+
+			if board.interrupts then
+				-- Define the macro that's used to initialise the scheduler's interrupt configuration.
+				local interruptConfiguration = "CHERIOT_INTERRUPT_CONFIGURATION="
+				for _, interrupt in ipairs(board.interrupts) do
+					interruptConfiguration = interruptConfiguration .. "{"
+						.. math.floor(interrupt.number) .. ","
+						.. math.floor(interrupt.priority) .. ","
+						.. (interrupt.edge_triggered and "true" or "false")
+						.. "},"
+				end
+				target:add('defines', interruptConfiguration)
+			end
 		end)
 		add_files(path.join(coredir, "scheduler/main.cc"))
 
