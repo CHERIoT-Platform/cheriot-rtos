@@ -115,8 +115,8 @@ class Ksz8851Ethernet
 		IndirectAccessDataLow                 = 0xD0,
 		IndirectAccessDataHigh                = 0xD2,
 		PowerManagementEventControl           = 0xD4,
-		GoSleepWakeUp                         = 0xD4,
-		PhyReset                              = 0xD4,
+		GoSleepWakeUp                         = 0xD6,
+		PhyReset                              = 0xD8,
 		Phy1MiiBasicControl                   = 0xE4,
 		Phy1MiiBasicStatus                    = 0xE6,
 		Phy1IdLow                             = 0xE8,
@@ -259,6 +259,36 @@ class Ksz8851Ethernet
 		ReceiveInterrupt                  = 1 << 13,
 		TransmitInterrupt                 = 1 << 14,
 		LinkChangeInterruptStatus         = 1 << 15,
+	};
+
+	/**
+	 * Flags bits of the PowerManagementEventControl register.
+	 */
+	enum [[clang::flag_enum]] PowerManagementEventControl : uint16_t
+	{
+		PowerManagementModeNormal       = 0b00 << 0,
+		PowerManagementModeEnergyDetect = 0b01 << 0,
+		PowerManagementModeReserved     = 0b10 << 0,
+		PowerManagementModePowerSaving  = 0b11 << 0,
+		PowerManagementModeMask         = 0b11 << 0,
+
+		WakeUpEventEnergy = 0b0001 << 2,
+		WakeUpEventLinkup = 0b0010 << 2,
+		WakeUpEventMagic  = 0b0100 << 2,
+		WakeUpEventFrame  = 0b1000 << 2,
+		WakeUpEventMask   = 0b1111 << 2,
+
+		WakeUpToNormal = 1 << 6,
+		AutoWakeEnable = 1 << 7,
+
+		WakeOnLanEventPinEnergy = 0b0001 << 8,
+		WakeOnLanEventPinLinkup = 0b0010 << 8,
+		WakeOnLanEventPinMagic  = 0b0100 << 8,
+		WakeOnLanEventPinFrame  = 0b1000 << 8,
+		WakeOnLanEventPinMask   = 0b1111 << 8,
+
+		WakeOnLanEventPinPolarity = 1 << 12,
+		WakeOnLanEventPinDelay    = 1 << 14
 	};
 
 	/**
@@ -506,7 +536,8 @@ class Ksz8851Ethernet
 		receiveInterruptFutex =
 		  interrupt_futex_get(STATIC_SEALED_VALUE(ethernetInterruptCapability));
 		// Enable Receive interrupt
-		register_write(RegisterOffset::InterruptEnable, ReceiveInterrupt);
+		register_write(RegisterOffset::InterruptEnable,
+		               LinkupDetectInterrupt | ReceiveInterrupt);
 
 		// Enable QMU Transmit.
 		register_set(RegisterOffset::TransmitControl,
@@ -611,6 +642,14 @@ class Ksz8851Ethernet
 		if (framesToProcess == 0)
 		{
 			uint16_t isr = register_read(RegisterOffset::InterruptStatus);
+
+			if (isr & LinkupDetectInterrupt)
+			{
+				/* Acknowledge the power management event */
+				register_set(RegisterOffset::PowerManagementEventControl,
+				             PowerManagementEventControl::WakeUpEventLinkup);
+			}
+
 			if (!(isr & ReceiveInterrupt))
 			{
 				return std::nullopt;
