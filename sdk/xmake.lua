@@ -1508,27 +1508,10 @@ rule("cheriot.firmware.ldscript.files")
 		end
 	end)
 
--- Rule for defining a firmware image.
-rule("cheriot.firmware")
-	-- Firmwares are reachability roots.
-	add_deps("cheriot.reachability_root")
-
-	-- Firmware targets want board-driven ldscript processing
-	add_deps("cheriot.board.ldscript.conf")
-
-	-- Firmware targets want board-driven all-dependent-target configuration
-	add_deps("cheriot.board.targets.conf")
-
-	add_deps("cheriot.firmware.link")
-
-	add_deps("cheriot.firmware.scheduler.threads")
-
-	add_deps("cheriot.firmware.ldscript.conf")
-	add_deps("cheriot.firmware.ldscript.files")
-
-	add_imports("core.project.config")
-
+rule("cheriot.firmware.run")
 	on_run(function (target)
+		import("core.project.config")
+
 		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
 
 		if (not board.run_command) and (not board.simulator) then
@@ -1559,6 +1542,26 @@ rule("cheriot.firmware")
 		-- Otherwise, hope that it's in the path
 		run(simulator)
 	end)
+
+-- Rule for defining a firmware image.
+rule("cheriot.firmware")
+	-- Firmwares are reachability roots.
+	add_deps("cheriot.reachability_root")
+
+	-- Firmware targets want board-driven ldscript processing
+	add_deps("cheriot.board.ldscript.conf")
+
+	-- Firmware targets want board-driven all-dependent-target configuration
+	add_deps("cheriot.board.targets.conf")
+
+	add_deps("cheriot.firmware.link")
+
+	add_deps("cheriot.firmware.scheduler.threads")
+
+	add_deps("cheriot.firmware.ldscript.conf")
+	add_deps("cheriot.firmware.ldscript.files")
+
+	add_deps("cheriot.firmware.run")
 
 	-- Set up the thread defines and further information for the linker script.
 	-- This must be after load so that dependencies are resolved.
