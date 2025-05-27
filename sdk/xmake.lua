@@ -1129,6 +1129,48 @@ rule ("cheriot.firmware.link")
 			end)
 	end)
 
+-- Rule for setting thread count for the per-firmware scheduler target
+rule("cheriot.firmware.scheduler.threads")
+	after_load(function (target)
+		local scheduler = target:deps()[target:name() .. ".scheduler"]
+		local threads = target:values("threads")
+
+		local thread_priorities_set = {}
+		for _, thread in ipairs(threads) do
+			if type(thread.priority) ~= "number" or thread.priority < 0 then
+				raise(("thread %d has malformed priority %q"):format(i, thread.priority))
+			end
+			thread_priorities_set[thread.priority] = true
+		end
+
+		-- Repack thread priorities into a contiguous span starting at 0.
+		local thread_priorities = {}
+		for p, _ in pairs(thread_priorities_set) do
+			table.insert(thread_priorities, p)
+		end
+		table.sort(thread_priorities)
+		local thread_priority_remap = {}
+		for ix, v in ipairs(thread_priorities) do
+			thread_priority_remap[v] = ix - 1
+		end
+		for i, thread in ipairs(threads) do
+			if thread.priority ~= thread_priority_remap[thread.priority] then
+				print(("Remapping priority of thread %d from %d to %d"):format(
+					i, thread.priority, thread_priority_remap[thread.priority]
+				))
+				thread.priority = thread_priority_remap[thread.priority]
+			end
+		end
+
+		local thread_max_priority = 0
+		for _, thread in ipairs(threads) do
+			thread_max_priority = math.max(thread_max_priority, thread.priority)
+		end
+
+		scheduler:add('defines', "CONFIG_THREADS_NUM=" .. #(threads))
+		scheduler:add('defines', "CONFIG_THREAD_MAX_PRIORITY=" .. thread_max_priority)
+	end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
@@ -1141,6 +1183,8 @@ rule("cheriot.firmware")
 	add_deps("cheriot.board.targets.conf")
 
 	add_deps("cheriot.firmware.link")
+
+	add_deps("cheriot.firmware.scheduler.threads")
 
 	add_imports("core.project.config")
 
@@ -1214,8 +1258,6 @@ rule("cheriot.firmware")
 			end
 		end
 
-		local scheduler = target:deps()[target:name() .. ".scheduler"]
-
 		local loader = target:deps()['cheriot.loader'];
 
 		if not board.stack_high_water_mark then
@@ -1279,7 +1321,6 @@ rule("cheriot.firmware")
 		local stack_size_limit = 65280
 
 		-- Initial pass through thread sequence to derive values within each
-		local thread_priorities_set = {}
 		for i, thread in ipairs(threads) do
 			thread.mangled_entry_point = string.format("\"__export_%s__Z%d%sv\"", thread.compartment, string.len(thread.entry_point), thread.entry_point)
 			thread.thread_id = i
@@ -1292,33 +1333,9 @@ rule("cheriot.firmware")
 				" stack.  Stacks over " .. stack_size_limit ..
 				" are not yet supported in the compartment switcher.")
 			end
-
-			if type(thread.priority) ~= "number" or thread.priority < 0 then
-				raise(("thread %d has malformed priority %q"):format(i, thread.priority))
-			end
-			thread_priorities_set[thread.priority] = true
 		end
 
-		-- Repack thread priorities into a contiguous span starting at 0.
-		local thread_priorities = {}
-		for p, _ in pairs(thread_priorities_set) do
-			table.insert(thread_priorities, p)
-		end
-		table.sort(thread_priorities)
-		local thread_priority_remap = {}
-		for ix, v in ipairs(thread_priorities) do
-			thread_priority_remap[v] = ix - 1
-		end
-		for i, thread in ipairs(threads) do
-			if thread.priority ~= thread_priority_remap[thread.priority] then
-				print(("Remapping priority of thread %d from %d to %d"):format(
-					i, thread.priority, thread_priority_remap[thread.priority]
-				))
-				thread.priority = thread_priority_remap[thread.priority]
-			end
-		end
-
-		-- Second pass through thread sequence, generating linker directives
+		-- Pass through thread sequence, generating linker directives
 		local thread_headers = ""
 		local thread_trusted_stacks =
 			"\n\t. = ALIGN(8);" ..
@@ -1339,7 +1356,6 @@ rule("cheriot.firmware")
 			thread_trusted_stacks = thread_trusted_stacks .. string.gsub(thread_trusted_stack_template, "${([_%w]*)}", thread)
 			thread_headers = thread_headers .. string.gsub(thread_template, "${([_%w]*)}", thread)
 		end
-		scheduler:add('defines', "CONFIG_THREADS_NUM=" .. #(threads))
 
 		-- Next set up the substitutions for the linker scripts.
 
