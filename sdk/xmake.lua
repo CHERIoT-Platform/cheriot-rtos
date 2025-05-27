@@ -1244,19 +1244,20 @@ rule("cheriot.firmware")
 		-- processed already by virtue of that target being *loaded*.
 		target:add("deps", "cheriot.board")
 
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+		if board.revoker == "software" then
+			target:add('deps', "cheriot.software_revoker")
+		end
+	end)
+
+	before_config(function (target)
 		local function visit_all_dependencies(callback)
 			visit_all_dependencies_of(target, callback)
 		end
 
 		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
 
-		local software_revoker = false
-		if board.revoker then
-			if board.revoker == "software" then
-				software_revoker = true
-				target:add('deps', "cheriot.software_revoker")
-			end
-		end
+		local software_revoker = board.revoker == "software"
 
 		local loader = target:deps()['cheriot.loader'];
 
