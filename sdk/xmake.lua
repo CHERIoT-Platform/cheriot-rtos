@@ -1191,85 +1191,9 @@ rule("cheriot.firmware.common_shared_objects")
 		}, { expand = false })
 	end)
 
--- Rule for defining a firmware image.
-rule("cheriot.firmware")
-	-- Firmwares are reachability roots.
-	add_deps("cheriot.reachability_root")
-
-	-- Firmware targets want board-driven ldscript processing
-	add_deps("cheriot.board.ldscript.conf")
-
-	-- Firmware targets want board-driven all-dependent-target configuration
-	add_deps("cheriot.board.targets.conf")
-
-	add_deps("cheriot.firmware.link")
-
-	add_deps("cheriot.firmware.scheduler.threads")
-
-	add_imports("core.project.config")
-
-	on_run(function (target)
-		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
-
-		if (not board.run_command) and (not board.simulator) then
-			raise("board description does not define a run command")
-		end
-
-		local simulator = board.run_command or board.simulator
-		simulator = string.gsub(simulator, "${(%w*)}", { sdk=scriptdir, board=boarddir })
-		local firmware = target:targetfile()
-		local directory = path.directory(firmware)
-		firmware = path.filename(firmware)
-		local run = function(simulator)
-			local simargs = { firmware }
-			os.execv(simulator, simargs, { curdir = directory })
-		end
-		-- Try executing the simulator from the sdk directory, if it's there.
-		local tools_directory = config.get("sdk")
-		local simpath = path.join(tools_directory, simulator)
-		if os.isexec(simpath) then
-			run(simpath)
-			return
-		end
-		simpath = path.join(path.join(tools_directory, "bin"), simulator)
-		if os.isexec(simpath) then
-			run(simpath)
-			return
-		end
-		-- Otherwise, hope that it's in the path
-		run(simulator)
-	end)
-
-	-- Text and data segments are configfiles for each firmware target.  Set
-	-- those here and let the "cheriot.board.ldscript.conf" rule handle working
-	-- out the rest.  This must be done in on_load() because the bulk of that
-	-- rule's work is done in after_load().
-	on_load(function (target)
-		target:set("cheriot.ldfragment.rocode", {
-			{ srcpath = path.join(scriptdir, "firmware.rocode.ldscript.in")
-			, genname = target:name() .. "-firmware.rocode.ldscript"
-			}})
-
-		target:set("cheriot.ldfragment.rwdata", {
-			{ srcpath = path.join(scriptdir, "firmware.rwdata.ldscript.in")
-			, genname = target:name() .. "-firmware.rwdata.ldscript"
-			}})
-	end)
-
-	-- Set up the thread defines and further information for the linker script.
-	-- This must be after load so that dependencies are resolved.
-	after_load(function (target)
-
-		-- Pick up the dependency on the board information, which has been
-		-- processed already by virtue of that target being *loaded*.
-		target:add("deps", "cheriot.board")
-
-		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
-		if board.revoker == "software" then
-			target:add('deps', "cheriot.software_revoker")
-		end
-	end)
-
+-- Set configuration variables for firmware images' ldscripts base on board and
+-- target (thread) information
+rule("cheriot.firmware.ldscript.conf")
 	before_config(function (target)
 		local function visit_all_dependencies(callback)
 			visit_all_dependencies_of(target, callback)
@@ -1279,14 +1203,6 @@ rule("cheriot.firmware")
 		local board = board_target:get("cheriot.board_info")
 
 		local software_revoker = board.revoker == "software"
-
-		-- Generate our top-level linker script as a configfile
-		do
-			local top_ldscript_genname = target:name() .. "-firmware.ldscript"
-			target:set("cheriot.ldscript", path.join(target:configdir(), top_ldscript_genname))
-			target:add("configfiles", path.join(scriptdir, "firmware.ldscript.in"),
-				{pattern = "@(.-)@", filename = top_ldscript_genname })
-		end
 
 		-- The heap, by default, starts immediately after globals and static shared objects
 		local heap_start = '.'
@@ -1561,6 +1477,100 @@ rule("cheriot.firmware")
 		-- Set the each of the substitutions.
 		for key, value in pairs(ldscript_substitutions) do
 			target:set("configvar", key, value)
+		end
+
+	end)
+
+rule("cheriot.firmware.ldscript.files")
+	-- Text and data segments are configfiles for each firmware target.  Set
+	-- those here and let the "cheriot.board.ldscript.conf" rule handle working
+	-- out the rest.  This must be done in on_load() because the bulk of that
+	-- rule's work is done in after_load().
+	on_load(function (target)
+		target:set("cheriot.ldfragment.rocode", {
+			{ srcpath = path.join(scriptdir, "firmware.rocode.ldscript.in")
+			, genname = target:name() .. "-firmware.rocode.ldscript"
+			}})
+
+		target:set("cheriot.ldfragment.rwdata", {
+			{ srcpath = path.join(scriptdir, "firmware.rwdata.ldscript.in")
+			, genname = target:name() .. "-firmware.rwdata.ldscript"
+			}})
+	end)
+
+	after_load(function (target)
+		-- Generate our top-level linker script as a configfile
+		do
+			local top_ldscript_genname = target:name() .. "-firmware.ldscript"
+			target:set("cheriot.ldscript", path.join(target:configdir(), top_ldscript_genname))
+			target:add("configfiles", path.join(scriptdir, "firmware.ldscript.in"),
+				{pattern = "@(.-)@", filename = top_ldscript_genname })
+		end
+	end)
+
+-- Rule for defining a firmware image.
+rule("cheriot.firmware")
+	-- Firmwares are reachability roots.
+	add_deps("cheriot.reachability_root")
+
+	-- Firmware targets want board-driven ldscript processing
+	add_deps("cheriot.board.ldscript.conf")
+
+	-- Firmware targets want board-driven all-dependent-target configuration
+	add_deps("cheriot.board.targets.conf")
+
+	add_deps("cheriot.firmware.link")
+
+	add_deps("cheriot.firmware.scheduler.threads")
+
+	add_deps("cheriot.firmware.ldscript.conf")
+	add_deps("cheriot.firmware.ldscript.files")
+
+	add_imports("core.project.config")
+
+	on_run(function (target)
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+
+		if (not board.run_command) and (not board.simulator) then
+			raise("board description does not define a run command")
+		end
+
+		local simulator = board.run_command or board.simulator
+		simulator = string.gsub(simulator, "${(%w*)}", { sdk=scriptdir, board=boarddir })
+		local firmware = target:targetfile()
+		local directory = path.directory(firmware)
+		firmware = path.filename(firmware)
+		local run = function(simulator)
+			local simargs = { firmware }
+			os.execv(simulator, simargs, { curdir = directory })
+		end
+		-- Try executing the simulator from the sdk directory, if it's there.
+		local tools_directory = config.get("sdk")
+		local simpath = path.join(tools_directory, simulator)
+		if os.isexec(simpath) then
+			run(simpath)
+			return
+		end
+		simpath = path.join(path.join(tools_directory, "bin"), simulator)
+		if os.isexec(simpath) then
+			run(simpath)
+			return
+		end
+		-- Otherwise, hope that it's in the path
+		run(simulator)
+	end)
+
+	-- Set up the thread defines and further information for the linker script.
+	-- This must be after load so that dependencies are resolved.
+	after_load(function (target)
+
+		-- Pick up the dependency on the board information, which has been
+		-- processed already by virtue of that target being *loaded*.
+		target:add("deps", "cheriot.board")
+
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+		if board.revoker == "software" then
+			target:add('deps', "cheriot.software_revoker")
 		end
 	end)
 
