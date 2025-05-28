@@ -13,7 +13,8 @@ _start = .;
     *.scheduler.compartment(.compartment_export_table);
     .scheduler_export_table_end = .;
 
-    .allocator_export_table = ALIGN(8);
+    . = ALIGN(8);
+    .allocator_export_table = .;
     */cheriot.allocator.compartment(.compartment_export_table);
     .allocator_export_table_end = .;
 

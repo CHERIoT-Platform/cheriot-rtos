@@ -865,7 +865,7 @@ rule("cheriot.firmware")
 				"\n\t\t\"${obj}\"(.bss)" ..
 				"\n\t}\n",
 			compartment_exports =
-				"\n\t\t\".${compartment}_export_table\" = ALIGN(8);" ..
+				"\n\t\t. = ALIGN(8); \".${compartment}_export_table\" = .;" ..
 				"\n\t\t\"${obj}\"(.compartment_export_table);" ..
 				"\n\t\t\".${compartment}_export_table_end\" = .;\n",
 			cap_relocs =
@@ -958,7 +958,7 @@ rule("cheriot.firmware")
 				"\n\t}" ..
 				"\n\t.software_revoker_globals_end = .;\n"
 			ldscript_substitutions.compartment_exports =
-				"\n\t\t.software_revoker_export_table = ALIGN(8);" ..
+				"\n\t\t. = ALIGN(8); .software_revoker_export_table = .;" ..
 				"\n\t\t*/cheriot.software_revoker.compartment(.compartment_export_table);" ..
 				"\n\t\t.software_revoker_export_table_end = .;\n" ..
 				ldscript_substitutions.compartment_exports
