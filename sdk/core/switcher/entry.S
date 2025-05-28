@@ -148,7 +148,7 @@ switcher_scheduler_entry_cgp:
 # Global for the scheduler's CSP.  Stored in the switcher's code section.
 	.section .text, "ax", @progbits
 	.globl switcher_scheduler_entry_csp
-	.p2align 2
+	.p2align 3
 switcher_scheduler_entry_csp:
 	.long 0
 	.long 0
