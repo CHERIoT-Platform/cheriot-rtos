@@ -11,7 +11,8 @@ __stack_space_start = .;
 
 __stack_space_end = .;
 
-__compart_cgps = ALIGN(64);
+. = ALIGN(64);
+__compart_cgps = .;
 
 .scheduler_globals : CAPALIGN
 {
@@ -210,11 +211,12 @@ __cap_relocs_end = .;
 
 .library_export_tables : ALIGN(8)
 {
-    .token_library_export_table = ALIGN(8);
+    .token_library_export_table = .;
     */cheriot.token_library.library(.compartment_export_table);
     .token_library_export_table_end = .;
 
-    .switcher_export_table = ALIGN(8);
+    . = ALIGN(8);
+    .switcher_export_table = .;
     */switcher/entry.S.o(.compartment_export_table);
     .switcher_export_table_end = .;
 
