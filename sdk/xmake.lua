@@ -743,6 +743,14 @@ target("cheriot.board.ldscript.mmio")
 
 	on_link(function (target) end)
 
+-- Add a target's configuration directory to its 'cxflags' in a way that xmake
+-- propagates to things that depend on this target.
+rule("cheriot.cxflags.interface.iquote.targetdir")
+	after_load(function (target)
+		target:add('cxflags', format("-iquote%s", target:targetdir()),
+		  {force = true, interface = true})
+	end)
+
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
 	-- Firmwares are reachability roots.
