@@ -249,7 +249,14 @@ struct OpenTitanUart : private utils::NoCopyNoMove
 		const uint32_t Nco =
 		  ((static_cast<uint64_t>(baudRate) << 20) / CPU_TIMER_HZ);
 		// Set the baud rate and enable transmit & receive
-		control = (Nco << 16) | ControlTransmitEnable | ControlReceiveEnable;
+		control = (Nco << 16) | (control & 0xFFFF) | ControlTransmitEnable |
+		          ControlReceiveEnable;
+	}
+
+	/// Turn off the transceivers
+	void disable() volatile
+	{
+		control &= ~(ControlTransmitEnable | ControlReceiveEnable);
 	}
 
 	[[gnu::always_inline]] uint16_t transmit_fifo_level() volatile
