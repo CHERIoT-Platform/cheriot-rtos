@@ -259,6 +259,15 @@ struct OpenTitanUart : private utils::NoCopyNoMove
 		control &= ~(ControlTransmitEnable | ControlReceiveEnable);
 	}
 
+	/**
+	 * Reset the control register to all zeros.  That disables the transceivers,
+	 * clears any loopbacks, disables parity, and so on.
+	 */
+	void reset() volatile
+	{
+		control = 0;
+	}
+
 	[[gnu::always_inline]] uint16_t transmit_fifo_level() volatile
 	{
 		return fifoStatus & 0xff;
