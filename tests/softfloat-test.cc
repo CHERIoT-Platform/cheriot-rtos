@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 #define TEST_NAME "Softfloat"
 #include "stack_tests.h"
 #include "tests.hh"
@@ -53,11 +55,37 @@ namespace
 	}
 } // namespace
 
+/**
+ * Regression test for compiler bug with floats and varargs.
+ * See https://github.com/CHERIoT-Platform/llvm-project/pull/165
+ * The bug depends a bit on stack alignment so try a couple of different
+ * argument types.
+ */
+double test_varargs(int c, ...)
+{
+	va_list ap;
+	va_start(ap, c);
+	switch (c)
+	{
+		case 'i':
+			va_arg(ap, int);
+			break;
+		case 'l':
+			va_arg(ap, long long);
+			break;
+	}
+	double f = va_arg(ap, double);
+	va_end(ap);
+	return f;
+}
+
 int test_softfloat()
 {
 	debug_log("Testing float");
 	test<float>();
 	debug_log("Testing double");
 	test<double>();
+	TEST_EQUAL(test_varargs('i', 1, 2.5), 2.5, "varargs i failed");
+	TEST_EQUAL(test_varargs('l', 1ll, -1.0), -1.0, "varargs l failed");
 	return 0;
 }
