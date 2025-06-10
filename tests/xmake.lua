@@ -46,6 +46,9 @@ compartment("ccompile_test")
 	"freertos-compile-recursive-mutex-only",
 	"freertos-compile-all-options")
 
+compartment("enum_utils-compile_test")
+	add_files("enum_utils-compile.cc")
+
 -- Test MMIO access
 test("mmio")
 -- Test the allocator and the revoker.
@@ -126,6 +129,7 @@ firmware("test-suite")
     add_deps("crash_recovery_test", "crash_recovery_inner", "crash_recovery_outer")
     add_deps("multiwaiter_test")
     add_deps("ccompile_test")
+    add_deps("enum_utils-compile_test")
     add_deps("stack_test", "stack_integrity_thread")
     add_deps("compartment_calls_test", "compartment_calls_inner")
     add_deps("check_pointer_test")
