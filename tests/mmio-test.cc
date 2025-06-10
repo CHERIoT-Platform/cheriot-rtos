@@ -16,6 +16,7 @@ void check_permissions(Capability<volatile void> mmio, PermissionSet p)
 
 int test_mmio()
 {
+#if !__has_attribute(cheriot_mmio)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, false, false),
 	  {Permission::Global});
@@ -28,27 +29,32 @@ int test_mmio()
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, true, true),
 	  {Permission::Global});
+#endif
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, false, false),
 	  {Permission::Global, Permission::Store});
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, true, false),
 	  {Permission::Global, Permission::Store, Permission::LoadStoreCapability});
+#if !__has_attribute(cheriot_mmio)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, false, true),
 	  {Permission::Global, Permission::Store});
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, true, true),
 	  {Permission::Global, Permission::Store, Permission::LoadStoreCapability});
+#endif
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, false, false),
 	  {Permission::Global, Permission::Load});
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, true, false),
 	  {Permission::Global, Permission::Load, Permission::LoadStoreCapability});
+#if !__has_attribute(cheriot_mmio)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, false, true),
 	  {Permission::Global, Permission::Load});
+#endif
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, true, true),
 	  {Permission::Global,
@@ -64,9 +70,11 @@ int test_mmio()
 	   Permission::Load,
 	   Permission::Store,
 	   Permission::LoadStoreCapability});
+#if !__has_attribute(cheriot_mmio)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, false, true),
 	  {Permission::Global, Permission::Load, Permission::Store});
+#endif
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, true, true),
 	  {Permission::Global,
