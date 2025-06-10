@@ -16,57 +16,94 @@ void check_permissions(Capability<volatile void> mmio, PermissionSet p)
 
 int test_mmio()
 {
+#if !__has_attribute(cheriot_mmio)
+	// XXX No permissions; the compiler misinterprets this as all permissions!
+	// To mitigate this, we add a static assertion in the code this macro
+	// generates to make sure that this discrepancy does not cause any trouble.
+	//
+	// https://github.com/CHERIoT-Platform/llvm-project/issues/349
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, false, false),
 	  {Permission::Global});
+#endif
+
+	/*
+	 * The cheriot_mmio annotation does some semantic checks at compile time,
+	 * rejecting meaningless combinations that cannot be expressed
+	 * architecturally.  We therefore don't get a chance to probe at the
+	 * architectural behavior here, but that's surely fine.
+	 */
+#if !__has_attribute(cheriot_mmio)
+	// Bad: MC without LD or SD
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, true, false),
 	  {Permission::Global});
+	// Bad: LM without MC
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, false, true),
 	  {Permission::Global});
+	// Bad: LM without LD (but with MC)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, true, true),
 	  {Permission::Global});
+#endif
+	// OK: SD
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, false, false),
 	  {Permission::Global, Permission::Store});
+	// OK: SD and MC
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, true, false),
 	  {Permission::Global, Permission::Store, Permission::LoadStoreCapability});
+#if !__has_attribute(cheriot_mmio)
+	// Bad: LM without MC (but with SD)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, false, true),
 	  {Permission::Global, Permission::Store});
+	// Bad: LM without LD (but with MC and SD)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, true, true),
 	  {Permission::Global, Permission::Store, Permission::LoadStoreCapability});
+#endif
+	// OK: LD
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, false, false),
 	  {Permission::Global, Permission::Load});
+	// OK: LD and MC
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, true, false),
 	  {Permission::Global, Permission::Load, Permission::LoadStoreCapability});
+#if !__has_attribute(cheriot_mmio)
+	// Bad: LM without MC (but with LD)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, false, true),
 	  {Permission::Global, Permission::Load});
+#endif
+	// OK: LD, MC, and LM
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, true, true),
 	  {Permission::Global,
 	   Permission::Load,
 	   Permission::LoadStoreCapability,
 	   Permission::LoadMutable});
+	// OK: LD and SD
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, false, false),
 	  {Permission::Global, Permission::Load, Permission::Store});
+	// OK: LD, SD, and MC
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, true, false),
 	  {Permission::Global,
 	   Permission::Load,
 	   Permission::Store,
 	   Permission::LoadStoreCapability});
+#if !__has_attribute(cheriot_mmio)
+	// Bad: LM without MC (but with LD and SD)
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, false, true),
 	  {Permission::Global, Permission::Load, Permission::Store});
+#endif
+	// OK: LD, SD, MC, and LM
 	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, true, true),
 	  {Permission::Global,

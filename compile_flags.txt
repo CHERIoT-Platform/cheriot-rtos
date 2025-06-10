@@ -16,6 +16,7 @@ riscv32cheriot-unknown-unknown
 -fno-asynchronous-unwind-tables
 -fno-rtti
 -Werror
+-Wno-cheri-missing-compartment
 -Isdk/include/c++-config
 -Isdk/include/libc++
 -Isdk/include/platform/generic-riscv
