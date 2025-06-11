@@ -148,11 +148,11 @@ start:
 
 	// Done scheduler setup. Now prepare an idle thread.
 	zeroOne			sp
-	li				t1, 0x880
+	li				t1, (MIE_MEIE | MIE_MTIE)
 	// Enable external and timer interrupts.
 	csrs			mie, t1
 	// Globally enable interrupts.
-	csrsi			mstatus, 0x8
+	csrsi			mstatus, MSTATUS_MIE
 	// Yield to the scheduler to start real tasks.
 	ecall
 	// The idle thread sleeps and only waits for interrupts.

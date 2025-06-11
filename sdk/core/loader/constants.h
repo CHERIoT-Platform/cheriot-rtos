@@ -8,6 +8,8 @@
 #define IMAGE_HEADER_LOADER_DATA_SIZE_OFFSET 10
 
 #ifdef __cplusplus
+#	include <priv/riscv.h>
+
 #	include "types.h"
 #	include "../scheduler/loaderinfo.h"
 namespace
@@ -41,3 +43,6 @@ namespace
 #endif
 
 EXPORT_ASSEMBLY_OFFSET(SchedulerEntryInfo, threads, 16);
+EXPORT_ASSEMBLY_EXPRESSION(MIE_MEIE, priv::MIE_MEIE, 0x800);
+EXPORT_ASSEMBLY_EXPRESSION(MIE_MTIE, priv::MIE_MTIE, 0x080);
+EXPORT_ASSEMBLY_EXPRESSION(MSTATUS_MIE, priv::MSTATUS_MIE, 8);

@@ -127,6 +127,9 @@ namespace priv
 	constexpr size_t MIE_STIE = (1 << 5);
 	constexpr size_t MIE_HTIE = (1 << 6);
 	constexpr size_t MIE_MTIE = (1 << 7);
+	constexpr size_t MIE_SEIE = (1 << 9);
+	constexpr size_t MIE_HEIE = (1 << 10);
+	constexpr size_t MIE_MEIE = (1 << 11);
 
 	constexpr size_t MIP_USIP = (1 << 0);
 	constexpr size_t MIP_SSIP = (1 << 1);
@@ -137,6 +140,7 @@ namespace priv
 	constexpr size_t MIP_HTIP = (1 << 6);
 	constexpr size_t MIP_MTIP = (1 << 7);
 	constexpr size_t MIP_SEIP = (1 << 9);
+	constexpr size_t MIE_HEIP = (1 << 10);
 	constexpr size_t MIP_MEIP = (1 << 11);
 
 	static inline size_t intr_disable(void)
