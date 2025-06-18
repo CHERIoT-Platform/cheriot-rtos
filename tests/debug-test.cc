@@ -25,5 +25,30 @@ int test_debug_cxx()
 	  "This should not be printed (information)");
 	Warn::log<DebugLevel::Warning>("This should be printed (warning)");
 	Warn::log<DebugLevel::Error>("This should be printed (error)");
+
+	{
+		bool correctEval = false;
+		Warn::log_if<DebugLevel::Error>(
+		  [&]() {
+			  correctEval = true;
+			  return true;
+		  },
+		  "This conditional log line should be printed");
+		Warn::Invariant(correctEval,
+		                "Failed to evaluate conditional log's lambda");
+	}
+
+	{
+		bool excessiveEval = false;
+		Warn::log_if<DebugLevel::Information>(
+		  [&]() {
+			  excessiveEval = true;
+			  return true;
+		  },
+		  "This conditional log line should not be printed");
+		Warn::Invariant(!excessiveEval,
+		                "Suppressed conditional log still evaluated");
+	}
+
 	return 0;
 }
