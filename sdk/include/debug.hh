@@ -752,6 +752,39 @@ namespace
 			}
 		}
 
+		template<DebugLevel Level = DebugLevel::Information>
+		static __always_inline void
+		log_if(bool condition, const char *fmt, auto... args)
+		{
+			static_assert(
+			  Level != DebugLevel::None,
+			  "None is valid only as a threshold, not as a reporting level");
+			if constexpr (Level >= Threshold)
+			{
+				if (condition)
+				{
+					log<Level>(fmt, args...);
+				}
+			}
+		}
+
+		template<DebugLevel                   Level = DebugLevel::Information,
+		         DebugConcepts::LazyAssertion Condition>
+		static __always_inline void
+		log_if(Condition condition, const char *fmt, auto... args)
+		{
+			static_assert(
+			  Level != DebugLevel::None,
+			  "None is valid only as a threshold, not as a reporting level");
+			if constexpr (Level >= Threshold)
+			{
+				if (condition())
+				{
+					log<Level>(fmt, args...);
+				}
+			}
+		}
+
 		/**
 		 * Helper to report failure.
 		 *
