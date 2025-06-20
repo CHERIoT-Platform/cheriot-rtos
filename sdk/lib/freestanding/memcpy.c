@@ -121,6 +121,10 @@ done:
 }
 
 void *memmove(void *dst0, const void *src0, size_t length)
+#if defined(__CHERIOT__) && (__CHERIOT__ >= 20250610)
+  __attribute__((alias("memcpy")));
+#else
 {
 	return memcpy(dst0, src0, length);
 }
+#endif
