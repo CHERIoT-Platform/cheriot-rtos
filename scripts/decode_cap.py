@@ -2,11 +2,17 @@
 import sys
 
 cap_hex = sys.argv[1]
-(addr_hex, meta_hex) = cap_hex.split('+')
+
+# Assume the argument is of the form 'addr+metadata' or a single 64-bit hex
+# word with address in least significant bits.
+if '+' in cap_hex:
+    (addr_hex, meta_hex) = cap_hex.split('+')
+else:
+    addr_hex=cap_hex[-8:]
+    meta_hex=cap_hex[:-8]
 addr=int(addr_hex, 16)
 meta=int(meta_hex, 16)
 B=meta & 0x1ff
-T=(meta >> 9) & 0x1ff
 T=(meta >> 9) & 0x1ff
 E=(meta >> 18) & 0xf
 otype = (meta >> 22) & 0x7
