@@ -16,7 +16,7 @@
 		static const struct Perms                                              \
 		{                                                                      \
 			bool permitLoad, permitStore, permitLoadStoreCapabilities,         \
-			  permitLoadMutable;                                               \
+			  permitLoadMutable, permitLoadGlobal;                             \
 		} perms = {__VA_ARGS__};                                               \
 		type *ret; /* NOLINT(bugprone-macro-parentheses) */                    \
 		__asm(".ifndef " mangledName "\n"                                      \
@@ -38,7 +38,8 @@
 		      : "i"(((perms.permitLoad) ? (1 << 31) : 0) +                     \
 		            ((perms.permitStore) ? (1 << 30) : 0) +                    \
 		            ((perms.permitLoadStoreCapabilities) ? (1 << 29) : 0) +    \
-		            ((perms.permitLoadMutable) ? (1 << 28) : 0)));             \
+		            ((perms.permitLoadMutable) ? (1 << 28) : 0) +              \
+		            ((perms.permitLoadGlobal) ? (1 << 27) : 0)));              \
 		ret;                                                                   \
 	})
 
@@ -48,8 +49,8 @@
  * can be used only in code (it cannot be used to initialise a global).
  *
  * The last arguments specify the set of permissions that this capability
- * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), and Load
- * Mutable (LM).
+ * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), Load
+ * Mutable (LM), and Load Global (LG).
  *
  * MMIO capabilities are always global (GL) and without store local (SL).
  */
@@ -79,8 +80,8 @@
  * used to initialise a global).
  *
  * The last arguments specify the set of permissions that this capability
- * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), and Load
- * Mutable (LM).
+ * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), Load
+ * Mutable (LM), and Load Global (LG).
  *
  * Capabilities to pre-shared objects are always global (GL) and without store
  * local (SL).
@@ -103,7 +104,21 @@
  * To define a reduced set of permissions use `SHARED_OBJECT_WITH_PERMISSIONS`.
  */
 #define SHARED_OBJECT(type, name)                                              \
-	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true)
+	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true, true)
+
+/**
+ * Provide a capability of the type `type *` referring to the pre-shared object
+ * with `name` as its name.  This macro can be used only in code (it cannot be
+ * used to initialise a global).
+ *
+ * Pre-shared object capabilities produced by this macro have the indicated load
+ * and store permission, but no load/store-capability permissions (and,
+ * therefore, no load-mutable or load-global permissions).
+ */
+#define SHARED_OBJECT_WITH_DATA_PERMISSIONS(                                   \
+  type, name, permitLoad, permitStore)                                         \
+	SHARED_OBJECT_WITH_PERMISSIONS(                                            \
+	  type, name, permitLoad, permitStore, false, false, false)
 
 /**
  * Macro to test whether a device with a specific name exists in the board
