@@ -44,8 +44,11 @@ elif p4 and not p3 and not p2:
 elif not p4 and p3:
     EX, LD, MC = 1, 1, 1
     SR, LM, LG = p2, p1, p0
-elif not p4 and not 3:
+elif not p4 and not p3:
     U0, SE, US = p2, p1, p0
+else:
+    # The above should cover all cases
+    assert False, "unreachable"
 
 def pc(p,c):
     return c if p else '-'
