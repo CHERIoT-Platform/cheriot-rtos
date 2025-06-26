@@ -56,6 +56,7 @@ perm_str+=pc(SD, 'W')
 perm_str+=pc(MC, 'c')
 perm_str+=pc(LG, 'g')
 perm_str+=pc(LM, 'm')
+perm_str+=pc(SL, "l")
 perm_str+=' '
 perm_str+=pc(EX, 'X')
 perm_str+=pc(SR, 'a')
