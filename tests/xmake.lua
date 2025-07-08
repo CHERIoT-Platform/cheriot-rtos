@@ -208,6 +208,8 @@ test("multiwaiter", { name = "Multiwatier" })
 test("allocator", { name = "Allocator" })
     add_deps("cxxrt")
 
+test("bitpacks")
+
 includes(path.join(sdkdir, "lib"))
 
 rule("cheriot.tests")
