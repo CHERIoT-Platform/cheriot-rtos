@@ -212,6 +212,8 @@ test("allocator", { name = "Allocator" })
 test("rust", { name = "Rust", not_most = true })
   add_files("rust-test.rs")
 
+test("bitpacks")
+
 includes(path.join(sdkdir, "lib"))
 
 rule("cheriot.tests")
