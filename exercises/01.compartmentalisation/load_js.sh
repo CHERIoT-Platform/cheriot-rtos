@@ -18,7 +18,7 @@ if [ ! -f ./node_modules/.bin/microvium ] ; then
 			echo npm is not installed.  Trying to install it from apt.
 			echo If you are not using the devcontainer, this may fail.
 			sudo apt update
-			sudo apt install nodejs make gcc g++
+			sudo apt install npm nodejs make gcc g++
 		else
 			echo npm is not installed.  Please install it.
 			exit 1
