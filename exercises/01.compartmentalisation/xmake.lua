@@ -16,14 +16,17 @@ includes(path.join(sdkdir, "lib/freestanding"),
 option("board")
     set_default("ibex-safe-simulator")
 
+compartment("secret")
+    add_files("secret.cc")
+
 compartment("js")
     add_files("js.cc")
-    add_files("secret.cc")
 
 -- Firmware image for the example.
 firmware("javascript")
     add_deps("crt", "freestanding", "string", "microvium", "atomic_fixed")
     add_deps("js")
+    add_deps("secret")
     add_deps("debug")
     on_load(function(target)
         target:values_set("board", "$(board)")

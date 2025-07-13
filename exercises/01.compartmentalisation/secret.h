@@ -9,9 +9,9 @@
  * *not* a good way of getting entropy, but it's the only one that we have
  * in the simulator.
  */
-void set_secret();
+void __cheri_compartment("secret") set_secret();
 
 /**
  * Report the current value of the secret and pick a new one.
  */
-void check_secret(int32_t guess);
+void  __cheri_compartment("secret") check_secret(int32_t guess);
