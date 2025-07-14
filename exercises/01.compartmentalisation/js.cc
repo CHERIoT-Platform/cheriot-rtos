@@ -6,6 +6,9 @@
 using Debug = ConditionalDebug<true, "JS compartment">;
 
 int run_js (uint8_t *bytecode, size_t sz) {
+	Debug::log("{} bytes of heap available",
+		heap_quota_remaining(MALLOC_CAPABILITY));
+
     ////////////////////////////////////////////////////////////////////////
     // We've now read the bytecode into a buffer.  Spin up the JavaScript
     // VM to execute it.
