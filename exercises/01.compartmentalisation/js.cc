@@ -1,9 +1,16 @@
-#include <vector>
 #include <debug.hh>
 #include "microvium-ffi.hh"
 #include "js.hh"
 
 using Debug = ConditionalDebug<true, "JS compartment">;
+
+extern "C" ErrorRecoveryBehaviour
+compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
+{
+	Debug::log("Error {}", mcause);
+	heap_free_all(MALLOC_CAPABILITY);
+	return ForceUnwind;
+}
 
 int run_js (uint8_t *bytecode, size_t sz) {
 	Debug::log("{} bytes of heap available",
