@@ -1113,24 +1113,12 @@ namespace
 
 // The parameters are passed by the boot assembly sequence.
 // XXX: arguments have capptr templates, 4 roots
-extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
-                                                 void         *almightyPCC,
-                                                 void         *almightySeal,
-                                                 void         *almightyRW)
+extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
+                                   const ImgHdr       &imgHdr,
+                                   void               *almightyPCC,
+                                   void               *almightySeal,
+                                   void               *almightyRW)
 {
-	// This relies on a slightly surprising combination of two C++ features:
-	// - Flexible array members (C99, not technically part of C++ but supported
-	//   basically everywhere).
-	// - Guaranteed return copy elision (C++17).
-	//
-	// This means that the caller can allocate a variable-sized structure and
-	// this definition will refer to the space allocated by the caller.  In a
-	// CHERI system, the caller will also set bounds, and so this is actually a
-	// safe thing to do, on any other system it is a terrible idea.  This means
-	// that `ret` points to the space on the stack that was set up by the
-	// caller and which can subsequently be passed to the scheduler.
-	SchedulerEntryInfo ret;
-
 	// Populate the 4 roots from system registers.
 	Root::install_root<Root::ISAType::Execute>(almightyPCC);
 	Root::install_root<Root::ISAType::Seal>(almightySeal);
@@ -1473,7 +1461,6 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 
 	ret.schedPCC = schedPCC;
 	ret.schedCGP = schedCGP;
-	return ret;
 }
 
 /**
