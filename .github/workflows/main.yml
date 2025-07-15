@@ -100,7 +100,7 @@ jobs:
       run: |
         set -e
         cd $PWD/examples/03.hello_safe_compartment/
-        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --board-mixins=sonata-1.x-sram-mixin
+        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --board-mixins=sonata-1.x-sram-mixin --allocator=false
         xmake
         env SONATA_SIMULATOR_BOOT_STUB=/cheriot-tools/elf/sonata_simulator_sram_boot_stub xmake run
 
