@@ -1321,11 +1321,24 @@ class MState
 					foundSkippedValue = true;
 					continue;
 				}
-				Debug::log("Found safe-to-free object in hazard list: {}", ptr);
 				// Re-derive a pointer to the chunk.
 				Capability heap{heapStart};
 				heap.address() = ptr.address();
 				auto chunk     = MChunkHeader::from_body(heap);
+				if (chunk->claims > 0)
+				{
+					/*
+					 * The chunk was freed but ended up in
+					 * the hazard quarantine due to an
+					 * ephemeral claim. Then it was
+					 * claimed, and so we cannot free it
+					 * anymore. However we can remove it
+					 * from the hazard list since
+					 * `!hazard_pointer_check(ptr)` above.
+					 */
+					continue;
+				}
+				Debug::log("Found safe-to-free object in hazard list: {}", ptr);
 				// We know this isn't in the hazard lists (we just checked!) so
 				// free it without doing any hazard pointer checks checks.
 				mspace_free(*chunk, ptr.length(), true);
