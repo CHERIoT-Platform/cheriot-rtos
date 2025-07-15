@@ -949,7 +949,15 @@ namespace CHERI
 		}
 
 		/**
-		 * Returns the tag bit indicating whether this is a valid capability.
+		 * Returns the tag bit indicating whether this is a valid
+		 * capability.
+		 *
+		 * This returns a value subject to Common Subexpression
+		 * Elimination (CSE): multiple calls to `is_valid` on the same
+		 * capability may be optimized by the compiler into a single
+		 * call. This may lead to stale results if the tag bit was
+		 * cleared between the calls. See `is_valid_temporal` for a
+		 * non-CSEable alternative.
 		 */
 		[[nodiscard]] bool is_valid() const
 		{
@@ -958,6 +966,26 @@ namespace CHERI
 			// returns true.  Explicitly assume that a tagged thing is non-null
 			// to fix this.
 			if (__builtin_cheri_tag_get(ptr))
+			{
+				__builtin_assume(ptr != nullptr);
+				return true;
+			}
+			return false;
+		}
+
+		/**
+		 * Returns the tag bit indicating whether this is a valid
+		 * capability.
+		 *
+		 * This variant of `is_valid` is not subject to CSE.
+		 */
+		[[nodiscard]] bool is_valid_temporal() const
+		{
+			// The clang static analyser doesn't yet know that null is untagged
+			// and so warns of possible null dereferences after this method
+			// returns true.  Explicitly assume that a tagged thing is non-null
+			// to fix this.
+			if (__builtin_cheri_tag_get_temporal(ptr))
 			{
 				__builtin_assume(ptr != nullptr);
 				return true;
