@@ -596,10 +596,15 @@ namespace
 		debug_log("Before allocating, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
 		Timeout longTimeout{1000};
-		void   *ptr = heap_allocate(&longTimeout, SECOND_HEAP, 16);
-		TEST(__builtin_cheri_tag_get(ptr), "Failed to allocate 16 bytes");
-		void *ptr2 = heap_allocate(&longTimeout, SECOND_HEAP, 16);
-		TEST(__builtin_cheri_tag_get(ptr2), "Failed to allocate 16 bytes");
+		size_t  allocSize = 16;
+		void   *ptr       = heap_allocate(&longTimeout, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate {} bytes",
+		     allocSize);
+		void *ptr2 = heap_allocate(&longTimeout, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr2),
+		     "Failed to allocate {} bytes",
+		     allocSize);
 		debug_log("After allocating, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
 		static cheriot::atomic<int> state = 0;
@@ -649,11 +654,18 @@ namespace
 		     "After alloc and free from {}-byte quota, {} bytes left",
 		     SECOND_HEAP_QUOTA,
 		     quotaLeft);
+		// Try to claim the buffer. This should succeed since there is
+		// still an ephemeral claim on it.
+		ssize_t claimSize = heap_claim(MALLOC_CAPABILITY, ptr2);
+		TEST((allocSize <= claimSize),
+		     "{}-byte allocation claimed as {} bytes",
+		     allocSize,
+		     claimSize);
 		// Stop the async and sleep until it is gone. When the async is
 		// freed, the allocator is called, causing it to release the
-		// ephemeral claims and truly free `ptr` and `ptr2`. At this
-		// stage calling `heap_free` on `ptr` or `ptr2` will now return
-		// `-EINVAL` (instead of `-EPERM`).
+		// ephemeral claims and truly free `ptr`. At this stage calling
+		// `heap_free` on `ptr` will now return `-EINVAL` (instead of
+		// `-EPERM`).
 		state  = 2;
 		sleeps = 0;
 		while (heap_free(SECOND_HEAP, ptr) != -EINVAL)
@@ -667,6 +679,29 @@ namespace
 		TEST(quotaLeft == SECOND_HEAP_QUOTA,
 		     "Double-frees changed {}-byte quota to {} bytes",
 		     SECOND_HEAP_QUOTA,
+		     quotaLeft);
+		// Now `ptr` should be invalid, but `ptr2` should remain valid
+		// since it still has a claim on it.
+		TEST(!Capability{ptr}.is_valid_temporal(),
+		     "Pointer was not freed: {}",
+		     ptr);
+		TEST(
+		  Capability{ptr2}.is_valid_temporal(), "Pointer was freed: {}", ptr2);
+		// Release the claim on `ptr2`.
+		debug_log("Before freeing, quota left: {}",
+		          heap_quota_remaining(MALLOC_CAPABILITY));
+		TEST_EQUAL(
+		  heap_free(MALLOC_CAPABILITY, ptr2), 0, "Releasing the claim failed");
+		debug_log("After releasing the claim, quota left: {}",
+		          heap_quota_remaining(MALLOC_CAPABILITY));
+		// Now the allocation should be invalid and the quota refunded.
+		TEST(!Capability{ptr2}.is_valid_temporal(),
+		     "Pointer in hazard slot was freed: {}",
+		     ptr);
+		quotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
+		TEST(quotaLeft == MALLOC_QUOTA,
+		     "The concurrent claim changed {}-byte quota to {} bytes",
+		     MALLOC_QUOTA,
 		     quotaLeft);
 		debug_log("Hazard pointer tests done");
 	}
