@@ -608,12 +608,13 @@ namespace
 			int     claimed = heap_claim_ephemeral(&t, ptr, ptr2);
 			TEST(claimed == 0, "Heap claim failed: {}", claimed);
 			state = 1;
-			while (state.load() == 1) {}
+			while (state.load() == 1)
+			{
+				// This is not a cross-compartment call and so
+				// won't drop the ephemeral claims.
+				yield();
+			}
 			debug_log("Releasing hazard pointers");
-			// Exiting this task will cause this closure to be freed, which
-			// will collect dangling hazard pointers.  Wait for long enough for
-			// the heap check to work.
-			TEST(sleep(1) >= 0, "Failed to sleep");
 		});
 		// Allow the async function to run and establish hazards
 		sleeps = 0;
@@ -637,29 +638,34 @@ namespace
 		TEST(Capability{ptr2}.is_valid_temporal(),
 		     "Pointer in hazard slot was freed: {}",
 		     ptr2);
-		state = 2;
-		// Yield to allow the hazards to be dropped.
-		TEST(sleep(1) >= 0, "Failed to yield to drop hazards");
-		// Try a double free.  This may logically succeed, but should not affect
-		// our quota.
+		// Try a double free. This should fail with `-EPERM` (since the
+		// chunks are still valid allocations) and not affect our
+		// quota.
 		TEST_EQUAL(heap_free(SECOND_HEAP, ptr),
 		           -EPERM,
 		           "Attempt to free freed but hazarded pointer not EPERM");
-		// Sleep again to make sure that the lambda from our async is gone.
-		// The logs may make it take more than one quantum in debug builds.
-		// The next test requires all memory allocated from the malloc
-		// capability to be freed before it starts.
+		auto quotaLeft = heap_quota_remaining(SECOND_HEAP);
+		TEST(quotaLeft == SECOND_HEAP_QUOTA,
+		     "After alloc and free from {}-byte quota, {} bytes left",
+		     SECOND_HEAP_QUOTA,
+		     quotaLeft);
+		// Stop the async and sleep until it is gone. When the async is
+		// freed, the allocator is called, causing it to release the
+		// ephemeral claims and truly free `ptr` and `ptr2`. At this
+		// stage calling `heap_free` on `ptr` or `ptr2` will now return
+		// `-EINVAL` (instead of `-EPERM`).
+		state  = 2;
 		sleeps = 0;
-		while (heap_quota_remaining(MALLOC_CAPABILITY) < MALLOC_QUOTA &&
-		       heap_quota_remaining(MALLOC_CAPABILITY) > 0)
+		while (heap_free(SECOND_HEAP, ptr) != -EINVAL)
 		{
 			TEST(sleep(1) >= 0, "Failed to sleep");
 			TEST(sleeps++ < 100,
 			     "Sleeping for too long waiting for async lambda to be freed");
 		}
-		auto quotaLeft = heap_quota_remaining(SECOND_HEAP);
+		// The double frees above should not affect our quota.
+		quotaLeft = heap_quota_remaining(SECOND_HEAP);
 		TEST(quotaLeft == SECOND_HEAP_QUOTA,
-		     "After alloc and free from {}-byte quota, {} bytes left",
+		     "Double-frees changed {}-byte quota to {} bytes",
 		     SECOND_HEAP_QUOTA,
 		     quotaLeft);
 		debug_log("Hazard pointer tests done");
