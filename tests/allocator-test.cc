@@ -78,7 +78,7 @@ namespace
 		int res = heap_free(MALLOC_CAPABILITY, p);
 		TEST_EQUAL(res, 0, "heap_free returned nonzero");
 		TEST(
-		  !Capability{p}.is_valid(),
+		  !Capability{p}.is_valid_temporal(),
 		  "Freed pointer still live; load barrier or revoker out of service?");
 	}
 
@@ -631,10 +631,10 @@ namespace
 		TEST_EQUAL(heap_free(SECOND_HEAP, ptr2), 0, "Second free failed");
 		debug_log("After free 2, quota left: {}",
 		          heap_quota_remaining(SECOND_HEAP));
-		TEST(Capability{ptr}.is_valid(),
+		TEST(Capability{ptr}.is_valid_temporal(),
 		     "Pointer in hazard slot was freed: {}",
 		     ptr);
-		TEST(Capability{ptr2}.is_valid(),
+		TEST(Capability{ptr2}.is_valid_temporal(),
 		     "Pointer in hazard slot was freed: {}",
 		     ptr2);
 		state = 2;
@@ -847,7 +847,7 @@ int test_allocator()
 		q.without_permissions(CHERI::Permission::Global);
 
 		TEST_SUCCESS(heap_free(MALLOC_CAPABILITY, q));
-		TEST(!Capability{p}.is_valid(),
+		TEST(!Capability{p}.is_valid_temporal(),
 		     "Free of non-global pointer failed to revoke");
 	}
 
