@@ -1,5 +1,5 @@
 -xc++-header
--std=c++20
+-std=c++23
 -Qunused-arguments
 -target
 riscv32-unknown-unknown
