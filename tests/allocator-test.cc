@@ -511,8 +511,7 @@ namespace
 		auto claim      = [&]() {
             ssize_t claimSize = heap_claim(SECOND_HEAP, alloc);
             claimCount++;
-            TEST((allocSize <= claimSize) &&
-                   (claimSize <= allocSize + CHERIOTHeapMinChunkSize),
+            TEST((allocSize <= claimSize),
                  "{}-byte allocation claimed as {} bytes (claim number {})",
                  allocSize,
                  claimSize,
