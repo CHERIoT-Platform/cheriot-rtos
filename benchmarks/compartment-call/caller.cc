@@ -72,7 +72,7 @@ int __cheri_compartment("caller") run()
 		auto [full, callPath, returnPath] =
 		  CHERI::with_interrupts_disabled([&]() {
 			  auto start  = METRIC();
-			  auto middle = local_noop_return_metric();
+			  auto middle = callee_noop_return_metric();
 			  auto end    = METRIC();
 			  return std::tuple{end - start, middle - start, end - middle};
 		  });
