@@ -2,7 +2,7 @@
 -std=c++23
 -Qunused-arguments
 -target
-riscv32-unknown-unknown
+riscv32cheriot-unknown-unknown
 -mcpu=cheriot
 -mabi=cheriot
 -mxcheri-rvc
