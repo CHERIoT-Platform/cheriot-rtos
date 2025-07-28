@@ -196,7 +196,7 @@ int __cheri_compartment("test_runner") run_tests()
 		run_timed("Compartment calls", test_compartment_call);
 		run_timed("check_pointer", test_check_pointer);
 		run_timed("Misc APIs", test_misc);
-		run_timed("Stacks exhaustion in the switcher", test_stack);
+		run_timed("Switcher stack handling", test_stack);
 		run_timed("Thread pool", test_thread_pool);
 		run_timed("Global Constructors", test_global_constructors);
 		run_timed("Queue", test_queue);
