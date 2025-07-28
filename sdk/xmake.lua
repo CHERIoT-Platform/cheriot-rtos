@@ -1132,6 +1132,8 @@ rule("cheriot.define-rtos-git-description")
 -- Build the loader.  The firmware rule will set the flags required for
 -- this to create threads.
 target("cheriot.loader")
+	set_toolchains("cheriot-baremetal-clang")
+
 	add_rules("cheriot.component-debug")
 	set_kind("object")
 	-- FIXME: We should be setting this based on a board config file.
