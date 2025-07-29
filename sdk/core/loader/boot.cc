@@ -1466,6 +1466,7 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 /**
  * a dumb implementation, assuming no overlap and no capabilities
  */
+// NOLINTBEGIN(clang-analyzer-cheri.CapabilityCopy)
 void *memcpy(void *dst, const void *src, size_t n)
 {
 	char       *dst0 = static_cast<char *>(dst);
@@ -1478,3 +1479,4 @@ void *memcpy(void *dst, const void *src, size_t n)
 
 	return dst0;
 }
+// NOLINTEND(clang-analyzer-cheri.CapabilityCopy)
