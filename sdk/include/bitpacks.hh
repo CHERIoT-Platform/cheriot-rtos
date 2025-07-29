@@ -1,0 +1,450 @@
+#pragma once
+
+#include <concepts>
+#include <stddef.h>
+#include <type_traits>
+
+template<typename Storage>
+    requires std::is_unsigned_v<Storage>
+class Bitpack
+{
+	Storage value;
+
+	public:
+	constexpr Bitpack() : value(0) {}
+	constexpr Bitpack(Storage v) : value(v) {}
+
+	/**
+	 * Assign a whole Bitpack at once given a (const, not volatile) Bitpack of
+	 * the same type.
+	 *
+	 * To assign from a `volatile` Bitpack, perform an explicit `.read()` first.
+	 *
+	 * "Deducing this" gives us CRTP-esque behavior without, well, the CRTP, so
+	 * this will not accept an unrelated derived Bitpack class.  (But will
+	 * accept types that can be converted, so assigning to a Bitpack, not a
+	 * derived class, will accept any derived class, for example.)
+	 */
+	template<typename Self>
+	// NOLINTNEXTLINE(misc-unconventional-assign-operator)
+	constexpr Self &&operator=(this Self                      &&self,
+	                           const std::remove_cvref_t<Self> &b)
+	{
+		self.value = b.value;
+		return self;
+	}
+
+	/**
+	 * Compare `Bitpack`-s for equality (reflecting that of `Storage`).
+	 *
+	 * Neither side may be volatile; use explicit `.read()`-s first.
+	 */
+	template<typename Self>
+	    requires(!std::is_volatile_v<Self>)
+	constexpr bool operator==(this Self                      &&self,
+	                          const std::remove_cvref_t<Self> &b)
+	{
+		return self.value == b.value;
+	}
+
+	/**
+	 * Spaceship operator on `Bitpack`-s (reflecing that of `Storage`).
+	 *
+	 * Neither side may be volatile; use explicit `.read()`-s first.
+	 */
+	template<typename Self>
+	    requires(!std::is_volatile_v<Self>)
+	constexpr auto operator<=>(this Self                      &&self,
+	                           const std::remove_cvref_t<Self> &b)
+	{
+		return self.value <=> b.value;
+	}
+
+	/**
+	 * Extract the underlying Storage value.
+	 *
+	 * This is emphatically not `volatile`-qualified, and has no
+	 * `volatile`-qualified overload, to make it more apparent where `volatile`
+	 * reads are taking place in code handling `Bitpack`-s.  Use `read()` first.
+	 */
+	constexpr explicit operator Storage() const
+	{
+		return this->value;
+	}
+
+	/// A shorter way of spelling static_cast<Storage>()...
+	constexpr Storage raw() const
+	{
+		return static_cast<Storage>(*this);
+	}
+
+	/**
+	 * Return a snapshot of the underlying storage.
+	 *
+	 * Notably, this can be used to get a `const Bitpack` from a `volatile
+	 * Bitpack` (`const` or not).
+	 */
+	template<typename Self>
+	const auto read(this Self &&self)
+	{
+		return std::remove_cvref_t<Self>{self.value};
+	}
+
+	/// Convenience wrapper for the types of numeric fields.
+	template<typename T>
+	    requires std::is_unsigned_v<T>
+	struct Numeric
+	{
+		using NumericType = T;
+
+		static_assert(sizeof(T) <= sizeof(Storage));
+
+		T value;
+
+		constexpr Numeric(T v) : value(v) {}
+
+		constexpr operator T() const
+		{
+			return this->value;
+		}
+	};
+
+	/// Information about a field within a Bitpack
+	struct FieldInfo
+	{
+		/// Minimum 0-indexed bit position occupied by this field
+		size_t minIndex;
+		/// Maximum 0-indexed bit position occupied by this field
+		size_t maxIndex;
+		/**
+		 * Should this field be viewed as constant (and so mutation be slightly
+		 * less ergonomic)?
+		 */
+		bool isConst = false;
+	};
+
+	template<typename TypeParam, FieldInfo InfoParam>
+	struct Field
+	{
+		using Type                      = TypeParam;
+		static constexpr FieldInfo Info = InfoParam;
+
+		static_assert(Info.maxIndex >= Info.minIndex);
+
+		static constexpr Storage ValueMask =
+		  (1U << (Info.maxIndex - Info.minIndex + 1)) - 1;
+		static constexpr Storage FieldMask = ValueMask << Info.minIndex;
+
+		/// Extract a Field from a raw Storage value
+		constexpr static Type raw_view(Storage storage)
+		{
+			return static_cast<Type>((storage >> Info.minIndex) & ValueMask);
+		}
+
+		/// Compute the underlying Storage transform for a Field update
+		constexpr static Storage raw_with(Storage lhs, Storage rhs)
+		{
+			return (lhs & ~FieldMask) | ((rhs & ValueMask) << Info.minIndex);
+		}
+
+		/// Update for fields whose type can be static_cast to Storage
+		constexpr static Storage raw_with(Storage lhs, Type rhs)
+		    requires requires { static_cast<Storage>(std::declval<Type>()); }
+		{
+			return raw_with(lhs, static_cast<Storage>(rhs));
+		}
+
+		/// Update for fields that are themselves Bitpacks at smaller types
+		template<typename OtherStorage>
+		    requires requires { sizeof(OtherStorage) < sizeof(Storage); }
+		constexpr static Storage raw_with(Storage               lhs,
+		                                  Bitpack<OtherStorage> rhs)
+		{
+			return raw_with(lhs, static_cast<OtherStorage>(rhs));
+		}
+
+		template<typename DerivedBitpack, typename RefTypeParam>
+		    requires std::is_base_of_v<Bitpack, DerivedBitpack> &&
+		             std::is_lvalue_reference_v<RefTypeParam> &&
+		             std::is_same_v<Storage, std::remove_cvref_t<RefTypeParam>>
+		class View
+		{
+			RefTypeParam ref;
+
+			public:
+			using Field   = Field;
+			using RefType = RefTypeParam;
+
+			template<typename R>
+			constexpr View(R &r) : ref(r.value)
+			{
+			}
+
+			/**
+			 * Compute and store an updated `Bitpack` value with a new value for
+			 * this field.
+			 *
+			 * For `volatile` `Bitpack`s, this will perform a load and store.
+			 */
+			template<typename Self>
+			    requires(
+			      !std::is_const_v<std::remove_reference_t<RefTypeParam>>)
+			// NOLINTNEXTLINE(misc-unconventional-assign-operator)
+			constexpr Self &&operator=(this Self &&self, Field::Type rhs)
+			{
+				self.ref = raw_with(self.ref, rhs);
+				return self;
+			}
+
+			/**
+			 * Explicit conversion of a Field::View to the field value.
+			 *
+			 * This is emphatically not `volatile`-qualified, and has no
+			 * `volatile`-qualified overload.  `.read()` the containing
+			 * `Bitpack`, first.
+			 */
+			constexpr operator Field::Type() const
+			{
+				return raw_view(ref);
+			}
+
+			/**
+			 * Construct a new `Bitpack` value with an updated value of this
+			 * field.
+			 *
+			 * This is emphatically not `volatile`-qualified, and has no
+			 * `volatile`-qualified overload.  `.read()` the containing
+			 * `Bitpack`, first.
+			 */
+			constexpr DerivedBitpack with(Field::Type rhs) const
+			{
+				return DerivedBitpack{raw_with(this->ref, rhs)};
+			}
+
+			/**
+			 * Construct a new `Bitpack` value with an updated value of this
+			 * field as a function of its current value.
+			 *
+			 * This is emphatically not `volatile`-qualified, and has no
+			 * `volatile`-qualified overload.  `.read()` the containing
+			 * `Bitpack`, first.
+			 */
+			template<typename F>
+			    requires std::is_invocable_r_v<Field::Type, F, Field::Type>
+			constexpr DerivedBitpack with(F f) const
+			{
+				/*
+				 * Perform one read and use it twice to avoid double-tapping
+				 * volatile storage!
+				 */
+				Storage storage = this->ref;
+				return raw_with(storage, f(raw_view(storage)));
+			}
+
+			/**
+			 * Compute and store an updated `Bitpack` value with a new value for
+			 * this field as a function of its current value.
+			 *
+			 * For `volatile` `Bitpack`s, this will perform a load and store.
+			 */
+			template<typename F, typename Self>
+			    requires(
+			      std::is_invocable_r_v<Field::Type, F, Field::Type> &&
+			      !std::is_const_v<std::remove_reference_t<RefTypeParam>>)
+			constexpr void alter(this Self &&self, F f)
+			{
+				Storage storage = self.ref;
+				self.ref        = raw_with(storage, f(raw_view(storage)));
+			}
+		};
+
+		template<bool C, typename T>
+		    requires std::is_lvalue_reference_v<T>
+		using ConditionalConstRef = std::
+		  conditional_t<C, std::add_const_t<std::remove_reference_t<T>> &, T>;
+
+		/*
+		 * Guide template deduction to conclude that a Field has a RefType
+		 * that is as CV-qualified as the Bitpack of which it is a part, with
+		 * the further possibility of const-qualification for fields annotated
+		 * as constant.
+		 *
+		 * Yes, the `decltype(())` is deliberate: we want the lvalue expression
+		 * rather than the prvalue expression.
+		 */
+		template<typename BitpackType>
+		View(BitpackType &r)
+		  -> View<std::remove_cvref_t<BitpackType>,
+		          ConditionalConstRef<Info.isConst, decltype((r.value))>>;
+	};
+
+	protected:
+	/**
+	 * Build a Field::View of an explicitly given type and info.
+	 *
+	 * This is protected so that it is available to subclasses but not more
+	 * generally.
+	 */
+	template<typename FieldType, FieldInfo Info, typename Self>
+	constexpr auto view(this Self &&self)
+	{
+		return typename Field<FieldType, Info>::View(self);
+	}
+
+	public:
+	/**
+	 * Build a Field::View proxy by asking the derived Self class for a
+	 * FieldInfo structure computed from template expansion of
+	 * Self::field_info_for_type<FieldType>().
+	 */
+	template<typename FieldType, typename Self>
+	    requires std::is_convertible_v<
+	      decltype(std::remove_cvref_t<Self>::template field_info_for_type<
+	               FieldType>()),
+	      const FieldInfo>
+	constexpr auto view(this Self &&self)
+	{
+		/*
+		 * Find the information for the field type; "deducing this" gives us
+		 * access to the derived class's type without need for the CRTP.
+		 */
+		static constexpr FieldInfo Info =
+		  std::remove_cvref_t<Self>::template field_info_for_type<FieldType>();
+
+		return self.template view<FieldType, Info>();
+	}
+
+	/**
+	 * Fetch the value of a field in this `Bitpack` based on the field type.
+	 *
+	 * For `volatile` `Bitpack`s, this will perform a load.
+	 */
+	template<typename FieldType, typename Self>
+	constexpr FieldType get(this Self &&self)
+	{
+		return self.template view<FieldType>();
+	}
+
+	/**
+	 * Compute a new `Bitpack` value with an updated field of a given type.
+	 *
+	 * For `volatile` `Bitpack`s, this will perform a load.
+	 */
+	template<typename FieldType, typename Self>
+	constexpr std::remove_cvref_t<Self> with(this Self &&self, FieldType v)
+	{
+		return self.template view<FieldType>().with(v);
+	}
+
+	/**
+	 * Compute a new `Bitpack` value with an updated field of a given type.
+	 *
+	 * For `volatile` `Bitpack`s, this will perform a load and store.
+	 */
+	template<typename FieldType, typename Self>
+	constexpr void set(this Self &&self, FieldType v)
+	{
+		self.template view<FieldType>() = v;
+	}
+
+	/**
+	 * Convenience function for unconditionally changing several sub-fields at
+	 * once.  Intended particularly for use with `volatile` Bitpacks, to help
+	 * ensure only one read and one write takes place, as the callback operates
+	 * on a non-volatile Bitpack.
+	 */
+	template<typename F, typename Self>
+	    requires std::is_invocable_r_v<std::remove_cvref_t<Self>,
+	                                   F,
+	                                   std::remove_cvref_t<Self>>
+	constexpr void alter(this Self &&self, F f)
+	{
+		std::remove_cvref_t<Self> value{self.value};
+		self.value = f(value);
+	}
+};
+
+/**
+ * A convenience macro that presumes the type `t` is defined within the Bitpack
+ * `b` and finds such a field's proxy.
+ */
+#define BITPACK_BY_QTYPE(b, t) (b).view<decltype(b)::t>()
+
+#define BITPACK_ENUM_ASSIGN(f, v)                                              \
+	{                                                                          \
+		using E = decltype(f)::Field::Type;                                    \
+		static_assert(std::is_enum_v<E>);                                      \
+		using enum E;                                                          \
+		(f) = (v);                                                             \
+	}
+
+#define BITPACK_ENUM_WITH(f, v)                                                \
+	({                                                                         \
+		using E = decltype(f)::Field::Type;                                    \
+		static_assert(std::is_enum_v<E>);                                      \
+		using enum E;                                                          \
+		(f).with(v);                                                           \
+	})
+
+/// A fusion of BITPACK_BY_QTYPE and BITPACK_ENUM_ASSIGN
+#define BITPACK_ENUM_QTYPE_ASSIGN(b, t, v)                                     \
+	BITPACK_ENUM_ASSIGN(BITPACK_BY_QTYPE(b, t), v)
+
+/// A fusion of .view<>() and BITPACK_ENUM_ASSIGN
+#define BITPACK_ENUM_UTYPE_ASSIGN(b, t, v) BITPACK_ENUM_ASSIGN(b.view<t>(), v)
+
+/// A fusion of BITPACK_BY_QTYPE and BITPACK_ENUM_WITH
+#define BITPACK_ENUM_QTYPE_WITH(b, t, v)                                       \
+	BITPACK_ENUM_WITH(BITPACK_BY_QTYPE(b, t), v)
+
+/// A fusion of .view<>() and BITPACK_ENUM_WITH
+#define BITPACK_ENUM_UTYPE_WITH(b, t, v) BITPACK_ENUM_WITH(b.view<t>(), v)
+
+/**
+ * Convenience for scoped enum fields, bringing the enumerators of the field
+ * type into scope while evaluating the value.
+ */
+#define BITPACK_ENUM_EQUAL(f, v)                                               \
+	({                                                                         \
+		using E = decltype(f)::Field::Type;                                    \
+		static_assert(std::is_enum_v<E>);                                      \
+		using enum E;                                                          \
+		(f) == (v);                                                            \
+	})
+
+/// A fusion of BITPACK_BY_QTYPE and BITPACK_ENUM_EQUAL
+#define BITPACK_ENUM_QTYPE_EQUAL(b, t, v)                                      \
+	BITPACK_ENUM_EQUAL(BITPACK_BY_QTYPE(b, t), v)
+
+/// A fusion of .view<>() and BITPACK_ENUM_EQUAL
+#define BITPACK_ENUM_UTYPE_EQUAL(b, t, v) BITPACK_ENUM_EQUAL(b.view<t>(), v)
+
+/// Compare a `Numeric` `Field::View` against a numeric value.
+#define BITPACK_NUMERIC_OP(f, op, v)                                           \
+	({                                                                         \
+		using F = decltype(f)::Field::Type;                                    \
+		static_cast<F::NumericType>(                                           \
+		  static_cast<F>(f)) /* NOLINTNEXTLINE(bugprone-macro-parentheses) */  \
+		  op static_cast<F::NumericType>(v);                                   \
+	})
+
+/// A fusion of BITPACK_BY_QTYPE and BITPACK_NUMERIC_OP
+#define BITPACK_NUMERIC_QTYPE_OP(b, t, op, v)                                  \
+	BITPACK_NUMERIC_OP(BITPACK_BY_QTYPE(b, t), op, v)
+
+/// A fusion of .view<>() and BITPACK_NUMERIC_OP
+#define BITPACK_NUMERIC_UTYPE_OP(b, t, op, v)                                  \
+	BITPACK_NUMERIC_OP(b.view<t>(), op, v)
+
+/// An incredibly unhygenic helper for BITPACK_QWITHS
+#define BITPACK_QWITHS_HELPER(x) .with(decltype(__bitpack)::x)
+
+/**
+ * Construct a chain of .with() whose arguments are all qualified with the type
+ * of the bitpack.  #include<__macro_map.h> if you want to use this.
+ */
+#define BITPACK_QWITHS(b, ...)                                                 \
+	({                                                                         \
+		auto __bitpack = b;                                                    \
+		(__bitpack) CHERIOT_MAP(BITPACK_QWITHS_HELPER, __VA_ARGS__);           \
+	})

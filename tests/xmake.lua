@@ -97,6 +97,8 @@ test("misc")
 test("unwind_cleanup")
     add_deps("unwind_error_handler")
 
+test("bitpacks")
+
 includes(path.join(sdkdir, "lib"))
 
 -- Compartment for the test entry point.
@@ -134,6 +136,7 @@ firmware("test-suite")
     add_deps("softfloat_test")
     add_deps("debug_test")
     add_deps("unwind_cleanup_test")
+    add_deps("bitpacks_test")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
         target:values_set("board", "$(board)")
