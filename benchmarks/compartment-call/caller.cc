@@ -9,19 +9,55 @@
 
 using Debug = ConditionalDebug<DEBUG_CALLER, "Compartment call benchmark">;
 
+DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(MALLOC_CAP_TWO, 1024);
+
 __noinline int local_noop_return_metric()
 {
 	return METRIC();
 }
 
-__noinline int local_attenuate_return_metric(void *p)
+__always_inline int local_attenuate_return_metric(void *p)
 {
 	using namespace CHERI;
 	Capability cap{p};
 	cap.permissions() &= Permission::Load;
 	cap.bounds() = 1;
 
+	// Note that the branch is included in the cycles calculation
+	// (and undesired), but it's a handy way to avoid `cap` being
+	// optimized away.
 	return cap.is_valid() ? METRIC() : 0;
+}
+
+__always_inline int local_check_pointer_return_metric(void *p)
+{
+	using namespace CHERI;
+
+	if (!check_pointer<PermissionSet{Permission::Load}>(p))
+	{
+		return -EINVAL;
+	}
+
+	// Here too the branch is included in the cycles calculation (and
+	// undesired), but it allows us to prevent the compiler from optimizing
+	// the check away.
+	return METRIC();
+}
+
+__always_inline int local_ephemeral_claim_return_metric(void *p)
+{
+	Timeout t{UnlimitedTimeout};
+	heap_claim_ephemeral(&t, p);
+
+	return METRIC();
+}
+
+__always_inline int local_claim_release_return_metric(void *p)
+{
+	heap_claim(MALLOC_CAPABILITY, p);
+	heap_free(MALLOC_CAPABILITY, p);
+
+	return METRIC();
 }
 
 auto benchWithMiddle = []<typename F>(F f) {
@@ -93,24 +129,6 @@ int __cheri_compartment("caller") run()
 			       returnPath);
 		}
 
-		printf("#cross call with check_pointer\n");
-		benchWithMiddle(
-		  [](int) { return callee_check_pointer_return_metric(&nextResult); });
-
-		printf("#cross call with heap_claim_ephemeral\n");
-		benchWithMiddle([](int) {
-			return callee_ephemeral_claim_return_metric(&nextResult);
-		});
-
-		/*
-		 * This marks the first time the callee uses its MALLOC_QUOTA, so the
-		 * first one of these is going to be very slightly more expensive as the
-		 * allocator assigns a new identifier.
-		 */
-		printf("#cross call with claim_release\n");
-		benchWithMiddle(
-		  [](int) { return callee_claim_release_return_metric(&nextResult); });
-
 		printf("#cross call dereference OK\n");
 		benchAround([](int) { return callee_dereference(&nextResult); });
 
@@ -156,12 +174,33 @@ int __cheri_compartment("caller") run()
 		printf("#function call\n");
 		benchWithMiddle([](int) { return local_noop_return_metric(); });
 
-		printf("#function call pointer manipulation\n");
+		printf("#pointer manipulation\n");
 		benchWithMiddle(
 		  [](int) { return local_attenuate_return_metric(&nextResult); });
 
 		printf("#library call\n");
 		benchWithMiddle([](int) { return lib_noop_return_metric(); });
+
+		printf("#check_pointer\n");
+		benchWithMiddle(
+		  [](int) { return local_check_pointer_return_metric(&nextResult); });
+
+		Timeout t{UnlimitedTimeout};
+		void   *alloc =
+		  heap_allocate(&t, STATIC_SEALED_VALUE(MALLOC_CAP_TWO), 10);
+
+		printf("#heap_claim_ephemeral\n");
+		benchWithMiddle(
+		  [&alloc](int) { return local_ephemeral_claim_return_metric(alloc); });
+
+		/*
+		 * This marks the first time the callee uses its MALLOC_QUOTA, so the
+		 * first one of these is going to be very slightly more expensive as the
+		 * allocator assigns a new identifier.
+		 */
+		printf("#claim and claim_release\n");
+		benchWithMiddle(
+		  [&alloc](int) { return local_claim_release_return_metric(alloc); });
 
 		printf("#dynamic token allocation\n");
 		SKey tokens[5];
