@@ -106,6 +106,14 @@ int exhaust_thread_stack()
  */
 int exhaust_thread_stack_spill(__cheri_callback int (*fn)())
 {
+	/*
+	 * The switcher spills five callee-save registers, but only after it checks
+	 * for 16-byte alignment of the stack pointer (and its base).  Leave
+	 * insufficient space for the whole spill while preserving alignment.
+	 */
+	constexpr size_t Stackleft = 2 * sizeof(void *);
+	static_assert((Stackleft & 0xf) == 0);
+
 	register auto      rfn asm("ct1") = fn;
 	register uintptr_t res asm("ca0") = 0;
 
@@ -126,7 +134,7 @@ int exhaust_thread_stack_spill(__cheri_callback int (*fn)())
 
 	  "cmove     csp, cs0\n"
 	  : /* outs */ "+C"(res)
-	  : /* ins */[stackleft] "i"(sizeof(void *))
+	  : /* ins */[stackleft] "i"(Stackleft)
 	  : /* clobbers */
 	  "cs0" /* scratch in asm above */,
 	  "ct2" /* scratch in asm above */,
@@ -171,6 +179,16 @@ int test_stack_invalid_on_call(__cheri_callback int (*fn)())
 {
 	// the `move zero, %1` is a no-op, just to have an operand
 	CALL_CHERI_CALLBACK(fn, "move zero, %1\nccleartag csp, csp\n", 0);
+
+	*threadStackTestFailed = true;
+	TEST(false, "Should be unreachable");
+	return -EINVAL;
+}
+
+int test_stack_global_on_call(__cheri_callback int (*fn)())
+{
+	// the `move zero, %1` is a no-op, just to have an operand
+	CALL_CHERI_CALLBACK(fn, "move zero, %1\ncmove csp, cgp\n", 0);
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
