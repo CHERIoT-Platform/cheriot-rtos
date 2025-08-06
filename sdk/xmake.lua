@@ -1178,6 +1178,7 @@ rule("cheriot.define-rtos-git-description")
 -- this to create threads.
 target("cheriot.loader")
 	add_rules("cheriot.component-debug")
+	add_rules("cheriot.baremetal-abi")
 	set_kind("object")
 	-- FIXME: We should be setting this based on a board config file.
 	add_files(path.join(coredir, "loader/boot.S"), path.join(coredir, "loader/boot.cc"),  {force = {cxflags = "-O1"}})
