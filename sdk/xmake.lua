@@ -187,8 +187,7 @@ toolchain("cheriot-clang")
 			"-I" .. include_directory,
 		}
 		-- C/C++ flags
-		toolchain:add("cxflags", default_flags, {force = true})
-		toolchain:add("cflags", default_flags)
+		toolchain:add("cxflags", default_flags)
 		toolchain:add("cxxflags", "-std=c++23")
 		toolchain:add("cflags", "-std=c23")
 		-- Assembly flags
