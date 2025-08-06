@@ -195,6 +195,22 @@ toolchain("cheriot-clang")
 	end)
 toolchain_end()
 
+-- Override cxflags and cflags for the cheriot-clang toolchain to use the
+-- baremetal ABI and target triple instead.
+--
+-- For xmake reasons, these get appended to the toolchain parameters, so we're
+-- relying on the tools having a "last one wins" policy, with nothing in the
+-- middle being interpreted relative to an earlier value.
+rule("cheriot.baremetal-abi")
+	on_load(function (target)
+		for _, flags in ipairs({"cxflags", "asflags"}) do
+			target:add(flags,
+				{ "-target", "riscv32cheriot-unknown-unknown",
+					"-mabi=cheriot-baremetal" },
+				{ expand = false, force = true })
+		end
+	end)
+rule_end()
 
 set_defaultarchs("cheriot")
 set_defaultplat("cheriot")
