@@ -121,7 +121,7 @@ jobs:
       run: ./scripts/run_clang_tidy_format.sh /cheriot-tools/bin
 
   all-checks:
-    needs: [run-tests, check-format]
+    needs: [run-tests, sonata-sram-hello, check-format]
     runs-on: ubuntu-latest
     steps:
     - name: Dummy step
