@@ -9,6 +9,7 @@ function softfloat_library(size, name)
 		set_default(false)
 		add_cxflags("-include " .. softfloatheader)
 		add_files("../../third_party/compiler-rt/fp_mode.c")
+		add_defines("__SOFTFP__")
 end
 
 function softfloat_op_library(op)
