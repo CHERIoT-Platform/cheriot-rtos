@@ -13,5 +13,5 @@ int __cheri_compartment("hello") say_hello()
 {
 	// Print hello world, along with the compartment's name to the default UART.
 	Debug::log("Hello world");
-	return 0;
+	return 1;
 }
