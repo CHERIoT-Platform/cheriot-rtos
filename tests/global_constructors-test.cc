@@ -19,11 +19,13 @@ struct X
 } x;
 
 /// Check that we run global constructors precisely once.
-void test_global_constructors()
+int test_global_constructors()
 {
 	TEST(X::setInCtor == 0, "Constructor run surprisingly early");
 	GlobalConstructors::run();
 	TEST(X::setInCtor == 1, "Constructor not run");
 	GlobalConstructors::run();
 	TEST(X::setInCtor == 1, "Constructor run twice");
+
+	return 0;
 }

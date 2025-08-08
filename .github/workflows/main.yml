@@ -85,6 +85,25 @@ jobs:
           xmake
         done
 
+  tests-subset:
+    name: Check that we can build and run a proper subset of the test suite
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cheriot-platform/devcontainer:latest
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build and run a few tests
+      run: |
+        set -e
+        cd $PWD/tests
+        xmake f --board=sail --sdk=/cheriot-tools/ --all-tests=n --test-preflight=y --test-mmio=y
+        xmake
+        xmake run
+
   sonata-sram-hello:
     name: Check Sonata SRAM-only Hello World
     runs-on: ubuntu-latest
