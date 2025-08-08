@@ -295,7 +295,7 @@ namespace loader
 	 * Concept for a raw address range.  This exposes a range of addresses.
 	 */
 	template<typename T>
-	concept RawAddressRange = requires(T range) {
+	concept IsAddressRange = requires(T range) {
 		{ range.size() } -> IsAddress;
 		{ range.start() } -> IsAddress;
 	};
@@ -310,7 +310,8 @@ namespace loader
 		/**
 		 * Helper for encapsulating an address range.
 		 */
-		struct __packed AddressRange
+		template<size_t Shift>
+		struct __packed ShiftedAddressRange
 		{
 			/**
 			 * Start address.
@@ -335,12 +336,12 @@ namespace loader
 			 */
 			[[nodiscard]] size_t size() const
 			{
-				return smallSize;
+				return static_cast<size_t>(smallSize) << Shift;
 			}
 		};
 
-		static_assert(RawAddressRange<AddressRange>,
-		              "AddressRange should be a raw address range");
+		static_assert(IsAddressRange<ShiftedAddressRange<0>>,
+		              "ShiftedAddressRange should be an address range");
 
 		/**
 		 * The loader metadata.  This is simply the PCC and GDC ranges and is
@@ -352,12 +353,12 @@ namespace loader
 			/**
 			 * The range for the loader's PCC.
 			 */
-			AddressRange code;
+			ShiftedAddressRange<0> code;
 
 			/**
 			 * The range for the loader's globals.
 			 */
-			AddressRange data;
+			ShiftedAddressRange<0> data;
 		} loader;
 
 		/**
@@ -370,7 +371,7 @@ namespace loader
 			/**
 			 * The PCC for the compartment switcher.
 			 */
-			AddressRange code;
+			ShiftedAddressRange<0> code;
 
 			/**
 			 * The PCC-relative location of the cross-compartment call return
@@ -405,10 +406,13 @@ namespace loader
 			uint16_t schedulerCSP;
 
 			/**
-			 * Export table start location.  The first export is the
-			 * compartment switcher entry point.
+			 * Export table address and length.
+			 *
+			 * The first export is "well known" to be the compartment switcher
+			 * entry point.  See the `export`s at the end of our
+			 * sdk/core/switcher/entry.S .
 			 */
-			AddressRange exportTable;
+			ShiftedAddressRange<0> exportTable;
 
 			/**
 			 * The location of the sealing key as a full address.
@@ -453,33 +457,33 @@ namespace loader
 			/**
 			 * The compartment's PCC.
 			 */
-			AddressRange code;
+			ShiftedAddressRange<0> code;
 
 			/**
 			 * The compartment's globals.
 			 */
-			AddressRange data;
+			ShiftedAddressRange<2> data;
 
 			/**
 			 * The import table for the compartment.
 			 */
-			AddressRange importTable;
+			ShiftedAddressRange<0> importTable;
 
 			/**
 			 * The export table for the compartment.
 			 */
-			AddressRange exportTable;
+			ShiftedAddressRange<0> exportTable;
 
 			/**
 			 * The range of statically allocated sealed objects for this
 			 * compartment.
 			 */
-			AddressRange sealedObjects;
+			ShiftedAddressRange<0> sealedObjects;
 
 			/**
 			 * Returns the range of the import table.
 			 */
-			[[nodiscard]] AddressRange import_table() const
+			[[nodiscard]] auto import_table() const
 			{
 				return importTable;
 			}
@@ -624,7 +628,7 @@ namespace loader
 			// This is a random 32-bit number and should be changed whenever
 			// the compartment header layout changes to provide some sanity
 			// checking.
-			return magic == 0xca2b63de;
+			return magic == 0x46391da0;
 		}
 
 		/**
@@ -661,41 +665,7 @@ namespace loader
 			/**
 			 * The code section for this compartment.
 			 */
-			struct __packed
-			{
-				/**
-				 * Start of the PCC region.  Stored as a raw 32-bit address.
-				 */
-				ptraddr_t startAddress;
-
-				/**
-				 * The size of the PCC region.  The PCC region must be at least
-				 * capability aligned and so this is stored as a 16-bit integer,
-				 * right-shifted by 3, giving a maximum of 512 KiB of code per
-				 * compartment.
-				 */
-				uint16_t rawSize;
-
-				/**
-				 * Returns the start address.
-				 */
-				[[nodiscard]] ptraddr_t start() const
-				{
-					return startAddress;
-				}
-
-				/**
-				 * The size of the PC region.
-				 */
-				[[nodiscard]] size_t size() const
-				{
-					return static_cast<size_t>(rawSize) << CodeSizeShift;
-				}
-			} code;
-
-			static_assert(
-			  RawAddressRange<decltype(code)>,
-			  "Compartment code range should be a raw address range");
+			ShiftedAddressRange<CodeSizeShift> code;
 
 			/**
 			 * Length in bytes of the import table.  The start of the import
@@ -706,7 +676,7 @@ namespace loader
 			/**
 			 * Returns the import table as an address range.
 			 */
-			[[nodiscard]] AddressRange import_table() const
+			[[nodiscard]] ShiftedAddressRange<0> import_table() const
 			{
 				return {code.start(), importTableSize};
 			}
@@ -714,35 +684,37 @@ namespace loader
 			/**
 			 * Export table start location.
 			 */
-			AddressRange exportTable;
+			ShiftedAddressRange<0> exportTable;
 
 			/**
 			 * The (mutable) data section for this compartment.
 			 */
-			AddressRange data;
+			ShiftedAddressRange<2> data;
 
 			/**
 			 * The size in bytes of the data section that is initialised
 			 * (everything after this should be zeroes).  This is currently
 			 * unused but can eventually allow compartment reset.
+			 *
+			 * This counts in the same units as `data.size()`.
 			 */
 			uint16_t initialisedDataSize;
 
 			/**
 			 * The range of the cap relocs for this section.
 			 */
-			AddressRange capRelocs;
+			ShiftedAddressRange<0> capRelocs;
 
 			/**
 			 * The range of statically allocated sealed objects for this
 			 * compartment.
 			 */
-			AddressRange sealedObjects;
+			ShiftedAddressRange<0> sealedObjects;
 
 			/**
 			 * The range of initialised data for this compartment.
 			 */
-			AddressRange initialised_data()
+			ShiftedAddressRange<2> initialised_data()
 			{
 				return {data.start(), initialisedDataSize};
 			}
@@ -750,7 +722,7 @@ namespace loader
 			/**
 			 * The range of zeroed data for this compartment.
 			 */
-			AddressRange zeroed_data()
+			ShiftedAddressRange<2> zeroed_data()
 			{
 				return {
 				  data.start() + initialisedDataSize,
@@ -812,11 +784,11 @@ namespace loader
 			/**
 			 * The location for the stack for this thread.
 			 */
-			AddressRange stack;
+			ShiftedAddressRange<0> stack;
 			/**
 			 * The location for the trusted stack for this thread.
 			 */
-			AddressRange trustedStack;
+			ShiftedAddressRange<0> trustedStack;
 		};
 
 		/**

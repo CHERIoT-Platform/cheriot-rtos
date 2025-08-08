@@ -250,7 +250,7 @@ namespace
 	         PermissionSet Permissions = Root::Permissions<Type>,
 	         bool          Precise     = true>
 	Capability<T> build(auto &&range)
-	    requires(RawAddressRange<decltype(range)>)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		return build<T, Type, Permissions, Precise>(range.start(),
 		                                            range.size());
@@ -265,7 +265,7 @@ namespace
 	         // NOLINTNEXTLINE(google-readability-casting)
 	         PermissionSet Permissions = Root::Permissions<Type>>
 	Capability<T> build(auto &&range, ptraddr_t address)
-	    requires(RawAddressRange<decltype(range)>)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		return build<T, Type, Permissions>(
 		  range.start(), range.size(), address);
@@ -384,7 +384,7 @@ namespace
 	 * is completely contained within a specified range.
 	 */
 	bool contains(const auto &range, ptraddr_t addr, size_t size)
-	    requires(RawAddressRange<decltype(range)>)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		return (range.start() <= addr) &&
 		       (range.start() + range.size() >= addr + size);
@@ -397,7 +397,7 @@ namespace
 	 */
 	template<typename T = char>
 	bool contains(const auto &range, ptraddr_t addr)
-	    requires(RawAddressRange<decltype(range)>)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		return contains(range, addr, sizeof(T));
 	}
@@ -448,7 +448,7 @@ namespace
 	 */
 	template<typename T, bool Precise = true>
 	ContiguousPtrRange<T> build_range(const auto &range)
-	    requires(RawAddressRange<decltype(range)>)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		Capability<T> start = build<T,
 		                            Root::Type::RWGlobal,

@@ -67,6 +67,7 @@ test("stdio")
 -- Test the debug helpers.
 test("debug")
 	add_files("debug-test.c")
+-- test("bigdata")
 -- Test the static sealing types
 test("static_sealing")
 compartment("static_sealing_inner")
