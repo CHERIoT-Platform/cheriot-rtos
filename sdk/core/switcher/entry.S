@@ -273,35 +273,6 @@ __Z26compartment_switcher_entryz:
 	 *  tp, t2: dead
 	 */
 	/*
-	 * By virtue of making a call, the caller is indicating that all caller-save
-	 * registers are dead.  Because we are crossing a trust boundary, the
-	 * switcher must spill callee-save registers.  If we find ourselves unable
-	 * to do so for "plausibly accidental" reasons, we'll return an error to the
-	 * caller (via the exception path; see .Lhandle_error_in_switcher).
-	 * Specifically, the first spill here is to the lowest address and so
-	 * guaranteed to raise a bounds fault if any of the stores here would access
-	 * below the base (lowest address) of the stack capability.
-	 *
-	 * Certain other kinds of less plausibly accidental malice (for example, an
-	 * untagged or sealed or SD-permission-less capability in sp) will also be
-	 * caught by this first spill.  In some sense we should forcibly unwind the
-	 * caller, but it's acceptable, in the sense that no would-be-callee can be
-	 * harmed, to just return an error instead.
-	 *
-	 * Yet other kinds of less plausibly accidental malice can survive the first
-	 * spill.  For example, consider a MC-permission-less capability in sp and a
-	 * non-capability value in s0.  While the first spill will not trap, these
-	 * forms of malice will certainly be detected in a few instructions, when we
-	 * scrutinize sp in detail.  They might (or might not) cause an intervening
-	 * (specifically, spill) instruction to trap.  Either way will result in us
-	 * ending up in .Lcommon_force_unwind, either directly or via the exception
-	 * handler.
-	 *
-	 * At entry, the register file is safe to expose to the caller, and so if
-	 * and when we take the "just return an error" option, no changes, beyond
-	 * populating the error return values in a0 and a1, are required.
-	 */
-	/*
 	 * __Z26compartment_switcher_entryz is exposed to callers directly as a
 	 * forward-arc interrupt-disabling sentry via the somewhat lengthy chain
 	 * of events involving...
@@ -322,32 +293,18 @@ __Z26compartment_switcher_entryz:
 	 * and to be run with interrupts deferred, we'd like the switcher, and
 	 * especially its stack-zeroing, to be preemtable.
 	 */
-.Lswitch_entry_first_spill:
-	/*
-	 * FROM: above
-	 * ITO: .Lswitch_just_return (via .Lhandle_error_in_switcher)
-	 */
-	csc               cs0, (SPILL_SLOT_cs0-SPILL_SLOT_SIZE)(csp)
-	cincoffset        csp, csp, -SPILL_SLOT_SIZE
-	csc               cs1, SPILL_SLOT_cs1(csp)
-	csc               cgp, SPILL_SLOT_cgp(csp)
-	csc               cra, SPILL_SLOT_pcc(csp)
-	/*
-	 * Atlas update:
-	 *  ra, gp, s0, s1: dead (presently, redundant caller values)
-	 */
 
 	/*
-	 * Before we access any privileged state, we can verify the compartment's
-	 * csp is valid. If not, force unwind.  Note that these checks are purely to
-	 * protect the callee, not the switcher itself, which can always bail and
-	 * forcibly unwind the caller.
+	 * Before we access any privileged state or spill callee-save registers to
+	 * the thread's untrusted stack (csp), we should perform some validity
+	 * tests.  If these fail, we will force unwind.  Note that these checks are
+	 * meant purely to protect the callee from a malicious caller, and may have
+	 * some defense in depth against a corrupted caller; they are not the
+	 * switcher defending itself.
 	 *
 	 * Make sure the caller's CSP has the expected permissions (including that
 	 * it is a stack pointer, by virtue of being local and bearing SL) and that
-	 * its top and base are at least 16-byte aligned.  We have already checked
-	 * that it is tagged and unsealed and at least 8-byte aligned by virtue of
-	 * surviving the stores above.
+	 * its top and base are at least 16-byte aligned.
 	 *
 	 * TODO for formal verification: it should be the case that after these
 	 * tests and the size checks below, no instruction in the switcher
@@ -364,8 +321,58 @@ __Z26compartment_switcher_entryz:
 	/*
 	 * Atlas update:
 	 *  t2, tp: dead (again)
-	 *  sp: the caller's untrusted stack pointer, now validated and pointing at
-	 *      the callee-save register spill area we made above
+	 *  sp: the caller's untrusted stack pointer, now lightly validated
+	 */
+
+	/*
+	 * By virtue of making a call, the caller is indicating that all caller-save
+	 * registers are dead.  Because we are crossing a trust boundary, the
+	 * switcher must spill callee-save registers.  If we find ourselves unable
+	 * to do so for "plausibly accidental" reasons, we'll return an error to the
+	 * caller (via the exception path; see .Lhandle_error_in_switcher).
+	 * Specifically, the first spill here is to the lowest address and so
+	 * guaranteed to raise a bounds fault if any of the stores here would access
+	 * below the base (lowest address) of the stack capability.
+	 *
+	 * Certain other kinds of less plausibly accidental malice (for example, an
+	 * untagged or sealed or SD-permission-less capability in sp, or a csp that
+	 * is not capability aligned) will have survived the above checks but will
+	 * also be caught by this first spill.  In some sense we should forcibly
+	 * unwind the caller, but it's acceptable, in the sense that no
+	 * would-be-callee can be harmed, to just return an error instead.
+	 *
+	 * By virtue of having checked stack permissions above, we have ruled out
+	 * certain risks for the caller and its thread, as well: its csp cannot
+	 * point to shared memory, for example, so there is no risk of accidental
+	 * state leak.  sp cannot lack MC or SL permissions, and so there is no
+	 * possibility of faulting due to a tagged (or tagged and local) cap in one
+	 * of the callee-saved registers.
+	 *
+	 * TODO: For formal verification: if the first spill here does not trap, it
+	 * should be impossible for any of the others to trap, given the above
+	 * checks and the checks implicitly passed by a successful store.
+	 *
+	 * At entry and at present, the register file is safe to expose to the
+	 * caller (while tp and t2 have been clobbered, they hold neither secrets
+	 * nor authority), and so if and when we take the "just return an error"
+	 * option, no changes, beyond populating the error return values in a0 and
+	 * a1, are required.
+	 */
+.Lswitch_entry_first_spill:
+	/*
+	 * FROM: above
+	 * ITO: .Lswitch_just_return (via .Lhandle_error_in_switcher)
+	 */
+	csc               cs0, (SPILL_SLOT_cs0-SPILL_SLOT_SIZE)(csp)
+	cincoffset        csp, csp, -SPILL_SLOT_SIZE
+	csc               cs1, SPILL_SLOT_cs1(csp)
+	csc               cgp, SPILL_SLOT_cgp(csp)
+	csc               cra, SPILL_SLOT_pcc(csp)
+	/*
+	 * Atlas update:
+	 *  ra, gp, s0, s1: dead (presently, redundant caller values)
+	 *  sp: the caller's untrusted stack pointer, pointing to the lowest of the
+	 *      callee-save register spills we just did.
 	 */
 
 	// mtdc should always have an offset of 0.
