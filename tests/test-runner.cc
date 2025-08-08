@@ -118,6 +118,8 @@ int __cheri_compartment("test_runner") run_tests()
 		  "Switcher cross-call sentry should be IRQ-disabling forward sentry");
 	}
 
+	TEST(false, "fail tests");
+
 	// This is started as an interrupts-disabled thread, make sure that it
 	// really is!  This should always be CheriSealTypeReturnSentryDisabling,
 	// but older ISA versions didn't have separate forward and backwards
