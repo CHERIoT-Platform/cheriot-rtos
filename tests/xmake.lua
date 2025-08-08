@@ -45,9 +45,11 @@ function test(name, opts)
 
         -- https://github.com/xmake-io/xmake/issues/6419#issuecomment-2872975584
         on_check(function (option)
-            try { function ()
-                option:set_value(option:dep("most-tests"):enabled())
-            end }
+            if opts.not_most ~= true then
+                try { function ()
+                    option:set_value(option:dep("most-tests"):enabled())
+                end }
+            end
         end)
 
     target(name .. "_test")
@@ -124,7 +126,7 @@ test("softfloat")
 test("stdio")
     add_deps("stdio")
 
--- test("bigdata")
+test("bigdata", { not_most = true, conflicts = { "allocator" } })
 
 -- Test the static sealing types
 compartment("static_sealing_inner")
@@ -258,6 +260,16 @@ rule("cheriot.tests")
                and get_config(d:get("cheriot.test.option"))
             then
                 target:add("files", d:get("files"))
+            end
+        end
+
+        for _, test in ipairs(defined_tests) do
+            local opts = test_options[test]
+            if get_config("test-" .. test) and opts.conflicts then
+              for _, conflict in ipairs(opts.conflicts) do
+                assert(not get_config("test-" .. conflict),
+                 ("Enabled test %s conflicts with also enabled %s"):format(test, conflict))
+              end
             end
         end
     end)
