@@ -318,6 +318,76 @@ namespace SonataSpi
 			}
 		}
 
+
+		/*
+		* Sets the level transmit watermark.
+		*
+		* When the number of bytes in the transmit FIFO reach this level,
+		* the transmit watermark interrupt will fire.
+		*/
+		void transmit_watermark(uint32_t level) volatile
+		{
+			control = ((level << 4) & ControlTransmitWatermarkMask) | (control & ~ControlTransmitWatermarkMask);
+		}
+	
+		/**
+		* Sets the level receive watermark.
+		*
+		* When the number of bytes in the receive FIFO reach this level,
+		* the receive watermark interrupt will fire.
+		*/
+		void receive_watermark(uint32_t level) volatile
+		{
+			control = ((level << 8) & ControlReceiveWatermarkMask) | (control & ~ControlReceiveWatermarkMask);
+		}
+
+		/*
+		* Sends `len` bytes from the given `txData` buffer &
+		* receives `len` bytes and puts them in the `rxData` buffer,
+		* where `len` is at most `0x7ff`.
+		*
+		* This method will block until the requested number of bytes
+		* has been received. There is currently no timeout.
+		*/
+		void blocking_transfer(const uint8_t txData[], uint8_t rxData[], uint16_t len) volatile
+		{
+			Debug::Assert(len <= StartByteCountMask,
+						"You can't receive more than 0x7ff bytes at a time.");
+			len &= StartByteCountMask;
+			wait_idle();
+			// Do not attempt a zero-byte transfer; not supported by the controller.
+			if (len)
+			{
+				control = ControlReceiveEnable | ControlTransmitEnable;
+				start   = len;
+	
+				uint16_t txCnt = 0;
+				uint16_t rxCnt = 0;
+				uint8_t dummy;
+				while(rxCnt < len)
+				{
+					// Check if any space available in the TX FIFO
+					if((txCnt < len) && (!(status & StatusTxFifoFull))) {
+						if(txData != NULL) {
+							transmitFifo = txData[txCnt];
+						} else {
+							transmitFifo = 0xff;
+						}
+						txCnt++;
+					}
+					// Check if any data available in the RX FIFO
+					if((status & StatusRxFifoLevel) > 0) {
+						if(rxData != NULL) {
+							rxData[rxCnt] = static_cast<uint8_t>(receiveFifo);
+						} else {
+							dummy = static_cast<uint8_t>(receiveFifo);
+						}
+						rxCnt++;
+					}
+				}
+			}
+		}
+
 		/**
 		 * Asserts/de-asserts a given chip select.
 		 *
@@ -332,15 +402,38 @@ namespace SonataSpi
 		inline void chip_select_assert(const bool Assert = true) volatile
 		{
 			static_assert(Index < NumChipSelects,
-			              "SPI chip select index out of bounds");
+						"SPI chip select index out of bounds");
 
 			const uint32_t State =
-			  DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
+			DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
 
 			const uint32_t Bit = (1 << Index);
 			chipSelects        = Assert ? State & ~Bit : State | Bit;
 		}
-	};
+
+		/**
+		 * Asserts/de-asserts a given chip select.
+		 *
+		 * Note, SPI chip selects are active low signals, so the register bit is
+		 * zero when asserted and one when de-asserted.
+		 *
+		 * @tparam DeassertOthers Whether to de-assert all other chip selects.
+		 * @param Index The index of the chip select to be set.
+		 * @param Assert Whether to assert (true) or de-assert (false).
+		*/
+		template<bool DeassertOthers = true>
+		inline void chip_select_assert(uint8_t index, const bool Assert = true) volatile
+		{
+			Debug::Assert(index < NumChipSelects,
+			"SPI chip select index out of bounds");
+
+			const uint32_t State =
+			DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
+
+			const uint32_t Bit = (1 << index);
+			chipSelects        = Assert ? State & ~Bit : State | Bit;
+		}
+	  };
 
 	/// A specialised driver for the SPI device connected to the Ethernet MAC.
 	class EthernetMac : public Generic<2>
