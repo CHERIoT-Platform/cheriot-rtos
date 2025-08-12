@@ -736,8 +736,9 @@ rule("cheriot.firmware")
 		local code_start = format("0x%x", board.instruction_memory.start);
 		-- Put the data either at the specified address if given, or directly after code
 		local data_start = board.data_memory and format("0x%x", board.data_memory.start) or '.';
-		local rwdata_ldscript = path.join(config.buildir(), target:name() .. "-firmware.rwdata.ldscript")
-		local rocode_ldscript = path.join(config.buildir(), target:name() .. "-firmware.rocode.ldscript")
+		local builddir = config.builddir and config.builddir() or config.buildir()
+		local rwdata_ldscript = path.join(builddir, target:name() .. "-firmware.rwdata.ldscript")
+		local rocode_ldscript = path.join(builddir, target:name() .. "-firmware.rocode.ldscript")
 		if not board.data_memory or (board.instruction_memory.start < board.data_memory.start) then
 			-- If we're not explicilty given a data address or it's lower than the code address
 			-- then code needs to go first in the linker script.
@@ -1107,9 +1108,10 @@ rule("cheriot.firmware")
 		import("core.project.config")
 		-- Get a specified linker script, or set the default to the compartment
 		-- linker script.
-		local linkerscript1 = path.join(config.buildir(), target:name() .. "-firmware.ldscript")
-		local linkerscript2 = path.join(config.buildir(), target:name() .. "-firmware.rocode.ldscript")
-		local linkerscript3 = path.join(config.buildir(), target:name() .. "-firmware.rwdata.ldscript")
+		local builddir = config.builddir and config.builddir() or config.buildir()
+		local linkerscript1 = path.join(builddir, target:name() .. "-firmware.ldscript")
+		local linkerscript2 = path.join(builddir, target:name() .. "-firmware.rocode.ldscript")
+		local linkerscript3 = path.join(builddir, target:name() .. "-firmware.rwdata.ldscript")
 		-- Link using the firmware's linker script.
 		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
 		batchcmds:mkdir(target:targetdir())
