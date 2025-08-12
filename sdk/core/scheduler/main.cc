@@ -541,9 +541,9 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(Timeout        *timeout,
 	return 0;
 }
 
-__cheriot_minimum_stack(0xc0) int futex_wake(uint32_t *address, uint32_t count)
+__cheriot_minimum_stack(0xd0) int futex_wake(uint32_t *address, uint32_t count)
 {
-	STACK_CHECK(0xc0);
+	STACK_CHECK(0xd0);
 	// Futex wake requires you to have a valid pointer, but doesn't require any
 	// permissions.  This allows some things to trigger spurious wakes, but
 	// ensures that the scheduler never needs a writeable capability to a
