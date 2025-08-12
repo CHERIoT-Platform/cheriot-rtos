@@ -104,6 +104,25 @@ jobs:
         xmake
         xmake run
 
+  test-bigdata:
+    name: Check that we can build and run the bigdata tests
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cheriot-platform/devcontainer:latest
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build and run a few tests
+      run: |
+        set -e
+        cd $PWD/tests
+        xmake f --board=sail --sdk=/cheriot-tools/ --most-tests=n --test-bigdata=y
+        xmake
+        xmake run
+
   sonata-sram-hello:
     name: Check Sonata SRAM-only Hello World
     runs-on: ubuntu-latest
@@ -143,6 +162,7 @@ jobs:
     needs:
       - run-tests
       - tests-subset
+      - test-bigdata
       - sonata-sram-hello
       - check-format
     # Use a GH Action "object filter" to project the .results of each needs-ed
