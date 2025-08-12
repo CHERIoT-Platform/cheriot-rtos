@@ -280,7 +280,8 @@ namespace displacement_proxy
  *       - Collected in a treebin ring, using either/both the TChunk linkages
  *         or/and the MChunk::ring links present in body().
  */
-struct __packed __aligned(MallocAlignment) MChunkHeader
+struct __packed __aligned(MallocAlignment)
+__cheri_no_subobject_bounds MChunkHeader
 {
 	/**
 	 * Each chunk has a 16-bit metadata field that is used to store a small

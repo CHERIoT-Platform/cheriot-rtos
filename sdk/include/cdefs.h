@@ -67,6 +67,7 @@ using _Bool = bool;
 	  "cheriot_minimum_stack attribute not supported, please update your compiler"
 #	define __cheriot_minimum_stack(x)
 #endif
+#define __cheri_no_subobject_bounds __attribute__((cheri_no_subobject_bounds))
 
 // When running clang-tidy, we use the same compile flags for everything and so
 // will get errors about things being defined in the wrong compartment, so

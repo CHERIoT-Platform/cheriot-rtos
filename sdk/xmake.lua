@@ -214,6 +214,21 @@ rule("cheriot.baremetal-abi")
 	end)
 rule_end()
 
+rule("cheriot.subobject-bounds")
+	on_config(function (target)
+		import("lib.detect.check_cxsnippets")
+
+		local versionCheckString = "_Static_assert(__CHERIOT__ >= 20250812);"
+		local ok = target:check_cxxsnippets(versionCheckString)
+		if ok then
+			print("Enabling sub-object bounds for ".. target:name())
+			target:add("cxflags",
+				"-Xclang -cheri-bounds=subobject-safe",
+				{ expand = false, force = true })
+		end
+	end)
+rule_end()
+
 set_defaultarchs("cheriot")
 set_defaultplat("cheriot")
 set_languages("c23", "cxx23")
@@ -317,7 +332,7 @@ target("cheriot.switcher")
 -- having an allocator (or into providing a different allocator for a
 -- particular application)
 target("cheriot.allocator")
-	add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks")
+	add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks", "cheriot.subobject-bounds")
 	add_files(path.join(coredir, "allocator/main.cc"))
 	add_deps("locks")
 	add_deps("compartment_helpers")
@@ -1187,8 +1202,7 @@ rule("cheriot.define-rtos-git-description")
 -- Build the loader.  The firmware rule will set the flags required for
 -- this to create threads.
 target("cheriot.loader")
-	add_rules("cheriot.component-debug")
-	add_rules("cheriot.baremetal-abi")
+	add_rules("cheriot.component-debug", "cheriot.baremetal-abi", "cheriot.subobject-bounds")
 	set_kind("object")
 	-- FIXME: We should be setting this based on a board config file.
 	add_files(path.join(coredir, "loader/boot.S"), path.join(coredir, "loader/boot.cc"),  {force = {cxflags = "-O1"}})
@@ -1214,7 +1228,7 @@ function firmware(name)
 	-- Build the scheduler.  The firmware rule will set the flags required for
 	-- this to create threads.
 	target(name .. ".scheduler")
-		add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks")
+		add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks", "cheriot.subobject-bounds")
 		add_deps("locks", "crt", "atomic1")
 		add_deps("compartment_helpers")
 		on_load(function (target)
