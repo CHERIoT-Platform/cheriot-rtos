@@ -19,8 +19,13 @@ option("most-tests")
 
 -- All targets here gain the build directory as an include path, since we
 -- generate the test prototype header therein.
+rule("cheriot.test.ibuilddir")
+    on_load(function (target)
+        import("core.project.config")
+        target:add("cxflags", config.builddir and "-I$(builddir)" or "-I$(buildir)")
+    end)
 target()
-    add_cxflags("-I$(buildir)")
+    add_rules("cheriot.test.ibuilddir")
 
 rule("cheriot.test.phony")
     on_load(function (target)
