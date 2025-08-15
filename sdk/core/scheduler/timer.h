@@ -187,6 +187,7 @@ namespace
 		{
 			return -1;
 		}
-		return Timer::time() + (timeout * TIMERCYCLES_PER_TICK);
+		return Timer::time() +
+		       (static_cast<uint64_t>(timeout) * TIMERCYCLES_PER_TICK);
 	}
 } // namespace
