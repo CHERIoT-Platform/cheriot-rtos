@@ -258,7 +258,7 @@ namespace
 		/**
 		 * Write a 32-bit unsigned integer to the buffer as hex with no prefix.
 		 */
-		void append_hex_word(uint32_t s)
+		void append_hex_word(uint32_t s, bool skipZero = true)
 		{
 			std::array<char, 8> buf;
 			const char          Hexdigits[] = "0123456789abcdef";
@@ -269,7 +269,6 @@ namespace
 				buf.at(static_cast<size_t>(i)) = Hexdigits[s & 0xf];
 				s >>= 4;
 			}
-			bool skipZero = true;
 			for (auto c : buf)
 			{
 				if (skipZero && (c == '0'))
@@ -308,7 +307,7 @@ namespace
 			{
 				append_hex_word(hi);
 			}
-			append_hex_word(lo);
+			append_hex_word(lo, false);
 		}
 
 		/**
