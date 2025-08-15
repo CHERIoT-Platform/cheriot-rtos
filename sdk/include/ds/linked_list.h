@@ -467,7 +467,7 @@ namespace ds::linked_list
 		 * interface in terms of pointers).  CHERI bounds on the returned
 		 * pointers are inherited from the pointer to `this` cons cell.
 		 */
-		class PtrAddr
+		class __cheri_no_subobject_bounds PtrAddr
 		{
 			ptraddr_t prev, next;
 
