@@ -30,15 +30,10 @@ jobs:
         build-type: [ debug, release ]
         board: [ sail, ibex-safe-simulator ]
         include:
-          - sonata: false
           - build-type: debug
             build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=information --allocator-rendering=y -m debug  --print-doubles=y --print-floats=n
           - build-type: release
             build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=n --print-floats=y
-          - board: sonata-simulator
-            build-type: release
-            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=y --print-floats=y
-            sonata: true
       fail-fast: false
     runs-on: ubuntu-latest
     container:
@@ -58,6 +53,58 @@ jobs:
       run: |
         cd tests
         xmake run
+
+  run-tests-sonata:
+    strategy:
+      matrix:
+        testset-flags:
+          - --most-tests=y --test-allocator=n
+          - --most-tests=n --test-allocator=y
+      fail-fast: false
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build tests
+      run: |
+        cd tests
+        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=y --print-floats=y ${{ matrix.testset-flags }}
+        xmake
+    - name: Run tests
+      run: |
+        cd tests
+        xmake run
+
+  run-examples:
+    strategy:
+      matrix:
+        build-type: [ debug, release ]
+        board: [ sail, ibex-safe-simulator ]
+        include:
+          - sonata: false
+          - build-type: debug
+            build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=information --allocator-rendering=y -m debug  --print-doubles=y --print-floats=n
+          - build-type: release
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=n --print-floats=y
+          - board: sonata-simulator
+            build-type: release
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=y --print-floats=y
+            sonata: true
+      fail-fast: false
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
     - name: Build examples
       run: |
         set -e
@@ -85,30 +132,11 @@ jobs:
           xmake
         done
 
-  tests-subset:
-    name: Check that we can build and run a proper subset of the test suite
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/cheriot-platform/devcontainer:latest
-      options: --user 1001
-    steps:
-    - name: Checkout repository and submodules
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    - name: Build and run a few tests
-      run: |
-        set -e
-        cd $PWD/tests
-        xmake f --board=sail --sdk=/cheriot-tools/ --most-tests=n --test-preflight=y --test-mmio=y
-        xmake
-        xmake run
-
   test-bigdata:
     name: Check that we can build and run the bigdata tests
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cheriot-platform/devcontainer:latest
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
       options: --user 1001
     steps:
     - name: Checkout repository and submodules
@@ -127,7 +155,7 @@ jobs:
     name: Check Sonata SRAM-only Hello World
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cheriot-platform/devcontainer:latest
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
       options: --user 1001
     steps:
     - name: Checkout repository and submodules
@@ -146,7 +174,7 @@ jobs:
     name: Check coding conventions
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cheriot-platform/devcontainer:latest
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
       options: --user 1001
     steps:
     - name: Checkout repository and submodules
@@ -161,7 +189,8 @@ jobs:
   all-checks:
     needs:
       - run-tests
-      - tests-subset
+      - run-tests-sonata
+      - run-examples
       - test-bigdata
       - sonata-sram-hello
       - check-format
