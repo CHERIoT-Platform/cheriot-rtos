@@ -172,7 +172,7 @@ int __cheri_compartment("test_runner") run_tests()
 		debug_log("Trying to print 64-bit integer: {}", 123456789012345LL);
 		debug_log("Trying to print unsigned 32-bit integer: {}", 0x12345U);
 		debug_log("Trying to print unsigned 64-bit integer: {}",
-		          0x123456789012345ULL);
+		          0x1234567809012345ULL);
 		debug_log("Trying to print a float 123.456: {}", 123.456f);
 		debug_log("Trying to print a double 123.456: {}", 123.456);
 		debug_log("Trying to print function pointer {}",
