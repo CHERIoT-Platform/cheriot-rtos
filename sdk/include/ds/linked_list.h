@@ -494,10 +494,25 @@ namespace ds::linked_list
 			return p;
 		}
 
+		/**
+		 * Like linked_list::search, this applies the callback to each object
+		 * on the ring, stopping early with a pointer to the indicated object
+		 * if the callback returns true.
+		 *
+		 * However, unlike linked_list::search, the callback may not change the
+		 * object pointer it is given (that is, even if it takes the pointer by
+		 * reference, updates will be ignored).  This is done to discourage
+		 * accidentally treating the sentinel's Cell as within an Object, which
+		 * it usually is not.  Most such cases were for destructive traversal
+		 * and reset the cursor to the previous Cell; as such, these can use
+		 * search_safe() instead.  If fancier manipulations are required, the
+		 * untyped raw Cell interface is probably a better choice!
+		 */
 		template<bool Reverse = false, typename F>
 		__always_inline auto search(F f)
 		{
-			return linked_list::search<Reverse>(&sentinel, f);
+			return linked_list::search<Reverse>(&sentinel,
+			                                    [f](Cell *c) { return f(c); });
 		}
 
 		template<bool Reverse = false, typename F>
