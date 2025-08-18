@@ -2089,7 +2089,6 @@ class MState
 	 */
 	void unlink_large_chunk(TChunk *x)
 	{
-		TChunk *xp = x->parent;
 		TChunk *r;
 		if (!ds::linked_list::is_singleton(&x->mchunk.ring))
 		{
@@ -2130,7 +2129,8 @@ class MState
 		}
 		if (!x->is_tree_ring())
 		{
-			TChunk **h = treebin_at(x->index);
+			TChunk  *xp = x->parent;
+			TChunk **h  = treebin_at(x->index);
 			if (x == *h)
 			{
 				if ((*h = r) == nullptr)
