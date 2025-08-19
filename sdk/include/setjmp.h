@@ -9,6 +9,7 @@
  * clearing tags (which will then cause `longjmp` to fail).
  */
 
+#include <cdefs.h>
 #include <stddef.h>
 #include <stdint.h>
 
