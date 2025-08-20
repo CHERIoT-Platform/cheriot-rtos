@@ -205,8 +205,10 @@ rule("cheriot.baremetal-abi")
 	on_load(function (target)
 		for _, flags in ipairs({"cxflags", "asflags"}) do
 			target:add(flags,
-				{ "-target", "riscv32cheriot-unknown-unknown",
-					"-mabi=cheriot-baremetal" },
+				{ "-target", "riscv32cheriot-unknown-unknown" },
+				{ expand = false, force = true })
+			target:add(flags,
+				{ "-mabi=cheriot-baremetal" },
 				{ expand = false, force = true })
 		end
 	end)
