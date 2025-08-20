@@ -26,15 +26,11 @@ using Debug = ConditionalDebug<true, "irq">;
 
 struct Source
 {
-	static constexpr const char *name = "Stub";
-
-	uint32_t fake_futex;
-
-	Source() : fake_futex(0) {}
+	static constexpr const char *Name = "Stub";
 
 	auto futex()
 	{
-		return &fake_futex;
+		return static_cast<uint32_t*>(nullptr);
 	}
 
 	void init()
@@ -106,7 +102,7 @@ struct RevokerSource
 
 struct Source : public RevokerSource<Ibex::HardwareRevoker>
 {
-	static constexpr const char *name = "Ibex Revoker";
+	static constexpr const char *Name = "Ibex Revoker";
 };
 
 #elif defined(IRQ_SOURCE_sunburst_uart1)
@@ -120,7 +116,7 @@ DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(uart1InterruptCap,
 
 struct Source
 {
-	static constexpr const char *name = "Sunburst UART 1";
+	static constexpr const char *Name = "Sunburst UART 1";
 
 	volatile Uart &uart1;
 
@@ -182,13 +178,12 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 {
 	Source source{};
 
-	Debug::log("Using {} for IRQs", source.name);
+	Debug::log("Using {} for IRQs", source.Name);
 
 	source.init();
 
-	auto            interruptFutex = source.futex();
-	decltype(start) lastStart      = 0;
-	uint32_t        lastIrqCount   = *interruptFutex - 1;
+	auto     interruptFutex = source.futex();
+	uint32_t lastIrqCount   = *interruptFutex - 1;
 
 	while (true)
 	{
@@ -197,18 +192,24 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		auto irqCount = *interruptFutex;
 		source.go();
 
-		auto waitRes = futex_timed_wait(&t, interruptFutex, irqCount);
-		auto end     = METRIC();
+		auto waitStart = METRIC();
+		auto waitRes   = futex_timed_wait(&t, interruptFutex, irqCount);
+		auto end       = METRIC();
 
 		// Force the metric read to happen prior to our invariant checks &c.
 		asm volatile("" : : : "memory");
 
-		Debug::log("{} latency at IRQ count {}; {} ",
+		source.done();
+
+		auto waitDelta = end - waitStart;
+		auto wakeDelta = end - start;
+
+		Debug::log("{} latency at IRQ count {}; end {}, wait {}, wake {} ",
 		           __XSTRING(METRIC),
 		           irqCount,
-		           end - start);
-
-		source.done();
+		           end,
+		           waitDelta,
+		           wakeDelta);
 
 		/*
 		 * If this reports ETIMEDOUT, check that `t` is actually allowing enough
@@ -218,10 +219,8 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		Debug::Invariant(
 		  waitRes == 0, "Unexpected result from futex_timed_wait: {}", waitRes);
 
-		Debug::Invariant(
-		  start != lastStart,
-		  "Low priority thread did not run; make the source do more work");
-		lastStart = start;
+		Debug::Invariant(wakeDelta < waitDelta,
+		                 "Wait did not yield; make the source do more work");
 
 		Debug::Invariant(irqCount == lastIrqCount + 1,
 		                 "Missed IRQ at {}; was {}",
@@ -229,9 +228,11 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		                 lastIrqCount);
 		lastIrqCount = irqCount;
 
+#ifndef SIMULATION
 		// Rate limit us to make the output easier to observe
 		t = MS_TO_TICKS(250);
 		thread_sleep(&t, ThreadSleepNoEarlyWake);
+#endif
 	}
 }
 
