@@ -59,6 +59,9 @@ int test_mmio()
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, false, false),
 	  {Permission::Global, Permission::Load, Permission::Store});
 	check_permissions(
+	  MMIO_CAPABILITY(Uart, uart) /* check default permissions */,
+	  {Permission::Global, Permission::Load, Permission::Store});
+	check_permissions(
 	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, true, false),
 	  {Permission::Global,
 	   Permission::Load,
