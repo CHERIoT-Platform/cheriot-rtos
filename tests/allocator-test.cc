@@ -121,6 +121,38 @@ namespace
 		     "Load of freed pointer still live; load barrier or revoker "
 		     "out of service?");
 
+		/*
+		 * Issue several CLCs of a freed cap in a row, in an attempt to push at
+		 * least one into each issue queue of, for example, Kudu cores.
+		 *
+		 * Again, we are relying on revocation having not run, so that we are
+		 * probing at load filter behavior.
+		 */
+		{
+			void *volatile *pp = &p;
+			int             tagOr;
+
+			__asm__ volatile("clc ca0, 0(%[pp])\n"
+			                 "clc ca1, 0(%[pp])\n"
+			                 "clc ca2, 0(%[pp])\n"
+			                 "clc ca3, 0(%[pp])\n"
+			                 "cgettag %[tagOr], ca0\n"
+			                 "cgettag a1, ca1\n"
+			                 "or %[tagOr], %[tagOr], a1\n"
+			                 "cgettag a2, ca2\n"
+			                 "or %[tagOr], %[tagOr], a2\n"
+			                 "cgettag a3, ca3\n"
+			                 "or %[tagOr], %[tagOr], a3\n"
+			                 : [tagOr] "=r"(tagOr)
+			                 : [pp] "C"(pp)
+			                 : "ca0", "ca1", "ca2", "ca3");
+
+			TEST_EQUAL(tagOr,
+			           0,
+			           "Freed pointer read back as live; load barrier or "
+			           "revoker out of service?");
+		}
+
 		debug_log("Allocator preflight test OK");
 	}
 
