@@ -1308,8 +1308,8 @@ namespace CHERI
 	         bool          CheckStack  = true,
 	         bool          EnforceStrictPermissions = false>
 	__always_inline inline bool
-	check_pointer(auto  &ptr,
-	              size_t space = sizeof(std::remove_pointer<decltype(ptr)>))
+	  check_pointer(auto  &ptr,
+	                size_t space = sizeof(std::remove_pointer<decltype(ptr)>))
 	    requires(std::is_pointer_v<std::remove_cvref_t<decltype(ptr)>> ||
 	             IsSmartPointerLike<std::remove_cvref_t<decltype(ptr)>>)
 	{
