@@ -20,26 +20,28 @@ inline void check_stack(SourceLocation loc = SourceLocation::current())
 	const ptraddr_t         StackAddress = csp.address();
 	const size_t            Length       = StackAddress - csp.base();
 	csp.address()                        = csp.base();
-	ptrdiff_t failAddress                = -1;
+
 	// Scan the stack from the current stack pointer downwards and report the
 	// first non-zero value. We must not call any functions in this loop or we
 	// would move the stack pointer and write some non-zero values.
+	ptrdiff_t failOffset = -1;
 	for (ptrdiff_t i = Length - 1; i > 0; i--)
 	{
 		if (csp[i] != 0)
 		{
-			if (failAddress != -1)
-			{
-				failAddress = csp.address() + i;
-			}
+			failOffset = i;
+			break;
 		}
 	}
-	Test::Invariant<size_t, void *, size_t, unsigned>(
-	  failAddress == -1,
-	  "Byte at {} in {} (stack address: {}) is {}, not 0",
-	  csp.address() + failAddress,
-	  csp,
-	  StackAddress,
-	  csp[failAddress],
-	  loc);
+
+	/*
+	 * Do a somewhat awkward dance to quiet clang-tidy's complaint that we might
+	 * be about to compute and dereference csp[-1].
+	 */
+	ptrdiff_t debugOffset = (failOffset == -1) ? 0 : failOffset;
+	Test::Invariant<char *, unsigned char>(failOffset == -1,
+	                                       "Byte at {} is {}, not 0",
+	                                       &csp[debugOffset],
+	                                       csp[debugOffset],
+	                                       loc);
 }
