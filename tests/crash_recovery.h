@@ -40,6 +40,6 @@ inline void check_stack(SourceLocation loc = SourceLocation::current())
 	  csp.address() + failAddress,
 	  csp,
 	  StackAddress,
-	  csp[failAddress],
+	  csp[failAddress], // NOLINT(clang-analyzer-security.ArrayBound)
 	  loc);
 }
