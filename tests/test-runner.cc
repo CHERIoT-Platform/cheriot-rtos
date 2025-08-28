@@ -158,6 +158,8 @@ int __cheri_compartment("test_runner") run_tests()
 		size_t index = 0;
 		for (auto permission : Permissions)
 		{
+			TEST(index < std::extent_v<decltype(permissionArray)>,
+			     "PermissionSet iterator extraneous yield");
 			TEST_EQUAL(permission,
 			           permissionArray[index++],
 			           "Iterator of PermissionSet failed");
