@@ -1,0 +1,6 @@
+libdivide is vendored from https://github.com/ridiculousfish/libdivide at revision eea3b2436925396287abe64298e0e8a1c5674f68
+
+Local modifications:
+ - Disabled clang-format to preserve upstream formatting
+ - Disabled clang-tidy warnings
+ - Applied LIBDIVIDE_CONSTEXPR to many more functions
