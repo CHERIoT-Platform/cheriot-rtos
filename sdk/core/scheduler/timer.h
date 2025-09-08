@@ -6,6 +6,7 @@
 #include "common.h"
 #include "plic.h"
 #include "thread.h"
+#include <libdivide/libdivide.h>
 #include <platform-timer.hh>
 #include <stdint.h>
 #include <tick_macros.h>
@@ -127,9 +128,14 @@ namespace
 		 */
 		static void expiretimers()
 		{
-			uint64_t now = time();
-			Thread::ticksSinceBoot =
-			  (now - zeroTickTime) / TIMERCYCLES_PER_TICK;
+			// We compute a branch-free multiplicative inverse at compile time
+			// so that we can guarantee a fixed cycle overhead during
+			// interrupts.
+			constexpr libdivide::divider<uint64_t> FastDivisor(
+			  TIMERCYCLES_PER_TICK);
+
+			uint64_t now           = time();
+			Thread::ticksSinceBoot = (now - zeroTickTime) / FastDivisor;
 			if (Thread::waitingList == nullptr)
 			{
 				return;
