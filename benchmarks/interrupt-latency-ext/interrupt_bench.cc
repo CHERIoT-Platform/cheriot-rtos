@@ -7,6 +7,7 @@
 #include <simulator.h>
 #include <thread.h>
 #include <timeout.h>
+#include <platform-timer.hh>
 
 using Debug = ConditionalDebug<true, "irq">;
 
@@ -176,6 +177,11 @@ extern "C"
  */
 int __cheri_compartment("interrupt_bench") entry_high_priority()
 {
+	TimerCore::init();
+	// Debug::log("time={}", TimerCore::time());
+	TimerCore::settimelow(0xffffffff);
+	// Debug::log("time={}", TimerCore::time());
+
 	Source source{};
 
 	Debug::log("Using {} for IRQs", source.Name);
@@ -185,7 +191,9 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 	auto     interruptFutex = source.futex();
 	uint32_t lastIrqCount   = *interruptFutex - 1;
 
-	while (true)
+	int c = 2;
+
+	while (c-- > 0)
 	{
 		Timeout t{MS_TO_TICKS(2000)};
 
@@ -204,9 +212,10 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		auto waitDelta = end - waitStart;
 		auto wakeDelta = end - start;
 
-		Debug::log("{} latency at IRQ count {}; end {}, wait {}, wake {} ",
+		Debug::log("{} latency at IRQ count {}; cycle {} end {}, wait {}, wake {} ",
 		           __XSTRING(METRIC),
 		           irqCount,
+				   TimerCore::time(),
 		           end,
 		           waitDelta,
 		           wakeDelta);
@@ -234,6 +243,8 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		thread_sleep(&t, ThreadSleepNoEarlyWake);
 #endif
 	}
+	simulation_exit(0);
+	return 0;
 }
 
 /**

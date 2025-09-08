@@ -1,5 +1,5 @@
 {
-  "image": "ghcr.io/cheriot-platform/devcontainer:latest",
+  "image": "sha256:5b79df7b85c616497cb5f9672f65539cd231776b89c3044a54df9889489c3dad",
   "remoteUser": "cheriot",
   "containerUser": "cheriot",
   "onCreateCommand": "git config --global --add safe.directory /workspaces/cheriot-rtos && git submodule update --init --recursive && ./scripts/generate_compile_commands.sh",

@@ -55,6 +55,10 @@ class StandardClint : private utils::NoCopyNoMove
 		return (static_cast<uint64_t>(timeHigh) << 32) | timeLow;
 	}
 
+	static void settimelow(uint32_t t) {
+		*(pmtimer) = t;
+	}
+
 	/**
 	 * Set the timer comparison for next interrupt to given value.
 	 * Note that CLINT does not need any action to acknowledge the
