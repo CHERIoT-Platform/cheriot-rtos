@@ -1112,7 +1112,7 @@ namespace
 } // namespace
 
 // The parameters are passed by the boot assembly sequence.
-// XXX: arguments have capptr templates, 4 roots
+// XXX: root arguments might want better types
 extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
                                    const ImgHdr       &imgHdr,
                                    void               *almightyPCC,
@@ -1249,9 +1249,6 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 		  auto key =
 		    CHERI::Capability{build<void, Root::Type::Seal>(lower, length)};
 		  key.permissions() &= permissions;
-		  // FIXME: Some compartments need only permit-unseal (e.g. the
-		  // compartment switcher).  Drop permit-seal and keep only
-		  // permit-unseal once these are separated.
 		  Debug::log("Sealing key: {}", key);
 		  *location = key;
 		  return key;
