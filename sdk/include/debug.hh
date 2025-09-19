@@ -743,11 +743,20 @@ namespace
 			if constexpr (Level >= Threshold)
 			{
 				asm volatile("" ::: "memory");
-				DebugFormatArgument arguments[sizeof...(args)];
-				make_debug_arguments_list(arguments, args...);
 				const char *context = Context;
-				debug_log_message_write(
-				  context, fmt, arguments, sizeof...(args));
+				// Don't create a zero-length on-stack allocation if there are
+				// no arguments.
+				if constexpr (sizeof...(args) == 0)
+				{
+					debug_log_message_write(context, fmt, nullptr, 0);
+				}
+				else
+				{
+					DebugFormatArgument arguments[sizeof...(args)];
+					make_debug_arguments_list(arguments, args...);
+					debug_log_message_write(
+					  context, fmt, arguments, sizeof...(args));
+				}
 				asm volatile("" ::: "memory");
 			}
 		}
