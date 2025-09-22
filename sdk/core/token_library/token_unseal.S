@@ -80,18 +80,18 @@ __sealingkey_dynamic:
 
   /*
    * Load software type tag.  This will not trap, thanks to above tag check and
-   * because IRQs are deferred (see our export entry below)
+   * because IRQs are deferred (see our export entry below), unless the
+   * loader (static objects) or allocator (dynamic) are malicious and/or buggy.
    */
-  clw a3, TokenSObj_offset_type(ca2)
+  clw a3, (TokenSObj_offset_type - TokenSObj_size)(ca2)
 
   /* Verify that the loaded value matches the address of the key. */
   bne a0, a3, .Lexit_failure
 
-  /* Subset bounds to ->data */
+  /* Subset bounds to ->data; a2 is already pointing there */
   // Get the top into a3
   cgettop         a3, ca2
-  // Move the address to the start of the data, clobber the user's sealing key
-  cincoffset      ca0, ca2, TokenSObj_offset_data
+  cmove           ca0, ca2
   // Subtract the address of the (to-be-returned-unsealed) data from the top to
   // give the length, clobbering our unsealing key.
   sub             a2, a3, a0
