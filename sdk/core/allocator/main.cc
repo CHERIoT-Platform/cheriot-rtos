@@ -1134,7 +1134,7 @@ namespace
 		// encodings, so we'll do a tiny bit of extra work here to avoid
 		// accidentally introducing a security vulnerability in a future
 		// encoding.
-		size_t sealedSize = unsealedSize + ObjHdrSize;
+		size_t sealedSize;
 		if (__builtin_add_overflow(ObjHdrSize, unsealedSize, &sealedSize))
 		{
 			Debug::log<DebugLevel::Warning>(
@@ -1170,10 +1170,15 @@ namespace
 		// requested alignment beyond 8, this will be a no-op.
 		obj.align_down(MallocAlignment);
 
-		obj->type   = key.address();
+		obj->type = key.address();
+		obj.address() += ObjHdrSize;
+
+		// Sealed points at payload but can access header, at negative offset
 		auto sealed = obj.seal(allocatorSealingKey);
-		obj.address() += ObjHdrSize; // Exclude the header.
+
+		// Unsealed points at payload and can access only payload
 		obj.bounds() = obj.top() - obj.address();
+
 		Debug::Assert(
 		  obj.is_valid(), "Unsealed object {} is not representable", obj);
 		return {sealed, obj};
@@ -1279,7 +1284,7 @@ __cheriot_minimum_stack(0x260) int token_obj_destroy(
   CHERI_SEALED(void *) object)
 {
 	STACK_CHECK(0x260);
-	void *unsealed;
+	SealedAllocation unsealed;
 	{
 		LockGuard g{lock};
 		unsealed = unseal_internal(
@@ -1294,6 +1299,10 @@ __cheriot_minimum_stack(0x260) int token_obj_destroy(
 		// The key can't be revoked and so there is no race with the key going
 		// away after the check.
 	}
+
+	// The sealed pointer was an interior address; move back to the base
+	unsealed.address() = unsealed.base();
+
 	return heap_free_nostackcheck(heapCapability, unsealed);
 }
 
@@ -1318,6 +1327,10 @@ __cheriot_minimum_stack(0xf0) int token_obj_can_destroy(
 		// The key can't be revoked and so there is no race with the key going
 		// away after the check.
 	}
+
+	// The sealed pointer was an interior address; move back to the base
+	unsealed.address() = unsealed.base();
+
 	return heap_can_free(heapCapability, unsealed);
 }
 
