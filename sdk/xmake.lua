@@ -1628,28 +1628,41 @@ rule("cheriot.define-rtos-git-description")
 		target:fileconfig_set(sourcefile, fileconfig)
 	end)
 
--- Build the loader.  The firmware rule will set the flags required for
--- this to create threads.
-target("cheriot.loader")
-	set_default(false)
-	add_rules("cheriot.component-debug", "cheriot.baremetal-abi", "cheriot.subobject-bounds")
-	set_kind("object")
-	-- FIXME: We should be setting this based on a board config file.
-	add_files(path.join(coredir, "loader/boot.S"), path.join(coredir, "loader/boot.cc"),  {force = {cxflags = "-O1"}})
-	add_defines("CHERIOT_AVOID_CAPRELOCS")
+-- Common aspects of the CHERIoT loader target
+rule("cheriot.loader.base")
+	add_deps("cheriot.component-debug",
+	         "cheriot.baremetal-abi",
+	         "cheriot.subobject-bounds")
 
-	add_deps("cheriot.board")
+	on_load(function (target)
+		target:set("kind", "object")
+		target:set("default", false)
+
+		target:add("deps", "cheriot.board")
+
+		target:add("defines",
+		           "CHERIOT_AVOID_CAPRELOCS",
+		           "CHERIOT_NO_AMBIENT_MALLOC")
+
+		target:set('cheriot.debug-name', "loader")
+	end)
 
 	after_load(function (target)
-		target:set('cheriot.debug-name', "loader")
-		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
-
 		local board_target = target:dep("cheriot.board")
 		local board = board_target:get("cheriot.board_info")
 		target:add("defines", board.rtos_defines and board.rtos_defines.loader)
 		target:add('defines',
 			"CHERIOT_LOADER_TRUSTED_SPILL_SIZE=" .. board_target:get("cheriot.trusted_spill_size"))
 	end)
+
+-- Build the loader.
+target("cheriot.loader")
+	add_rules("cheriot.loader.base")
+
+	-- FIXME: We should be setting this based on a board config file.
+	add_files(path.join(coredir, "loader/boot.S"),
+	          path.join(coredir, "loader/boot.cc"),
+	          {force = {cxflags = "-O1"}})
 
 -- Helper function to define firmware.  Used as `target`.
 function firmware(name)
