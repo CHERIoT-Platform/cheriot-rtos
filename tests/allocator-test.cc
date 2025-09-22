@@ -19,6 +19,8 @@
 #include <token.h>
 #include <vector>
 
+#include "../sdk/core/allocator/token.h"
+
 using thread_pool::async;
 #define SECOND_HEAP_QUOTA 1024U
 DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(secondHeap, SECOND_HEAP_QUOTA);
@@ -837,14 +839,16 @@ namespace
 		     "Length of unsealed capability is not {}: {}",
 		     tokenSize,
 		     unsealedCapability);
-		TEST(sealedPointer.length() >= unsealedLength + 8,
+		TEST(sealedPointer.length() >= (unsealedLength + ObjHdrSize),
 		     "Length of unsealed capability is not the unsealed size plus the "
 		     "header size: {}",
 		     unsealedCapability);
-		TEST(sealedPointer.address() + 4 <
+		TEST(sealedPointer.address() >= (sealedPointer.base() + ObjHdrSize),
+		     "Sealed handle {} has implausible offset",
+		     sealedPointer);
+		TEST(sealedPointer.address() ==
 		       Capability{unsealedCapability}.address(),
-		     "Header for the sealed capability ({}) is not before the start of "
-		     "the unsealed capability ({})",
+		     "Sealed handle {} does not point at payload {}",
 		     sealedPointer,
 		     unsealedCapability);
 		Capability unsealedLarge =
