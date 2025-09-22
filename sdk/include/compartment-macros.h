@@ -17,7 +17,8 @@
                                                   permitLoad,                  \
                                                   permitStore,                 \
                                                   permitLoadStoreCapabilities, \
-                                                  permitLoadMutable)           \
+                                                  permitLoadMutable,           \
+                                                  permitLoadGlobal)            \
 	({                                                                         \
 		type *ret; /* NOLINT(bugprone-macro-parentheses) */                    \
 		__asm(".ifndef " mangledName "\n"                                      \
@@ -39,7 +40,8 @@
 		      : "i"(((permitLoad) ? (1 << 31) : 0) +                           \
 		            ((permitStore) ? (1 << 30) : 0) +                          \
 		            ((permitLoadStoreCapabilities) ? (1 << 29) : 0) +          \
-		            ((permitLoadMutable) ? (1 << 28) : 0)));                   \
+		            ((permitLoadMutable) ? (1 << 28) : 0) +                    \
+		            ((permitLoadGlobal) ? (1 << 27) : 0)));                    \
 		ret;                                                                   \
 	})
 
@@ -52,7 +54,8 @@
                                                 permitLoad,                    \
                                                 permitStore,                   \
                                                 permitLoadStoreCapabilities,   \
-                                                permitLoadMutable)             \
+                                                permitLoadMutable,             \
+                                                permitLoadGlobal)              \
 	IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                            \
 	                                          name,                            \
 	                                          __export_mem_,                   \
@@ -60,7 +63,8 @@
 	                                          permitLoad,                      \
 	                                          permitStore,                     \
 	                                          permitLoadStoreCapabilities,     \
-	                                          permitLoadMutable)
+	                                          permitLoadMutable,               \
+	                                          permitLoadGlobal)
 
 /**
  * Provide a capability of the type `volatile type *` referring to the MMIO
@@ -76,16 +80,19 @@
                                          permitLoad,                           \
                                          permitStore,                          \
                                          permitLoadStoreCapabilities,          \
-                                         permitLoadMutable)                    \
+                                         permitLoadMutable,                    \
+                                         permitLoadGlobal)                     \
 	MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(                                   \
 	  volatile type, /* NOLINT(bugprone-macro-parentheses) */                  \
 	  name,                                                                    \
 	  "__import_mem_" #name "_" #permitLoad "_" #permitStore                   \
-	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
+	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable                  \
+	  "_" #permitLoadGlobal,                                                   \
 	  permitLoad,                                                              \
 	  permitStore,                                                             \
 	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable)
+	  permitLoadMutable,                                                       \
+	  permitLoadGlobal)
 
 /**
  * Provide a capability of the type `volatile type *` referring to the MMIO
@@ -97,7 +104,8 @@
  * MMIO_CAPABILITY_WITH_PERMISSIONS.
  */
 #define MMIO_CAPABILITY(type, name)                                            \
-	MMIO_CAPABILITY_WITH_PERMISSIONS(type, name, true, true, false, false)
+	MMIO_CAPABILITY_WITH_PERMISSIONS(                                          \
+	  type, name, true, true, false, false, false)
 
 /**
  * Provide a capability of the type `type *` referring to the pre-shared object
@@ -113,17 +121,20 @@
                                        permitLoad,                             \
                                        permitStore,                            \
                                        permitLoadStoreCapabilities,            \
-                                       permitLoadMutable)                      \
+                                       permitLoadMutable,                      \
+                                       permitLoadGlobal)                       \
 	IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(                                 \
 	  type, /* NOLINT(bugprone-macro-parentheses) */                           \
 	  name,                                                                    \
 	  __cheriot_shared_object_,                                                \
 	  "__import_cheriot_shared_object_" #name "_" #permitLoad "_" #permitStore \
-	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
+	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable                  \
+	  "_" #permitLoadGlobal,                                                   \
 	  permitLoad,                                                              \
 	  permitStore,                                                             \
 	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable)
+	  permitLoadMutable,                                                       \
+	  permitLoadGlobal)
 
 /**
  * Provide a capability of the type `type *` referring to the pre-shared object
@@ -131,11 +142,25 @@
  * used to initialise a global).
  *
  * Pre-shared object capabilities produced by this macro have load, store,
- * load-mutable, and load/store-capability permissions.  To define a reduced
- * set of permissions use `SHARED_OBJECT_WITH_PERMISSIONS`.
+ * load-mutable, load-global, and load/store-capability permissions.  To define
+ * a reduced set of permissions use `SHARED_OBJECT_WITH_PERMISSIONS`.
  */
 #define SHARED_OBJECT(type, name)                                              \
-	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true)
+	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true, true)
+
+/**
+ * Provide a capability of the type `type *` referring to the pre-shared object
+ * with `name` as its name.  This macro can be used only in code (it cannot be
+ * used to initialise a global).
+ *
+ * Pre-shared object capabilities produced by this macro have the indicated load
+ * and store permission, but no load/store-capability permissions (and,
+ * therefore, no load-mutable or load-global permissions).
+ */
+#define SHARED_OBJECT_WITH_DATA_PERMISSIONS(                                   \
+  type, name, permitLoad, permitStore)                                         \
+	SHARED_OBJECT_WITH_PERMISSIONS(                                            \
+	  type, name, permitLoad, permitStore, false, false, false)
 
 /**
  * Macro to test whether a device with a specific name exists in the board
