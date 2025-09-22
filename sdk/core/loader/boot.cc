@@ -10,6 +10,7 @@
 #define __cheri_libcall
 #include <string.h>
 
+#include "../allocator/token_types.h"
 #include "../switcher/tstack.h"
 #include "constants.h"
 #include "debug.hh"
@@ -701,9 +702,10 @@ namespace
 					                 typeAddress);
 				}
 				// Seal with the static token sealing key
+				Capability object = build(entry.address, entry.size());
+				object.address() += sizeof(SObjStruct);
 				Capability sealedObject =
-				  build(entry.address, entry.size())
-				    .seal(build<void, Root::Type::Seal>(StaticToken, 1));
+				  object.seal(build<void, Root::Type::Seal>(StaticToken, 1));
 				Debug::log("Static sealed object: {}", sealedObject);
 				return sealedObject;
 			}
