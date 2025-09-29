@@ -10,6 +10,7 @@
 #define __cheri_libcall
 #include <string.h>
 
+#include "../allocator/token_types.h"
 #include "../switcher/tstack.h"
 #include "constants.h"
 #include "debug.hh"
@@ -701,9 +702,10 @@ namespace
 					                 typeAddress);
 				}
 				// Seal with the static token sealing key
+				Capability object = build(entry.address, entry.size());
+				object.address() += sizeof(TokenObjectHeader);
 				Capability sealedObject =
-				  build(entry.address, entry.size())
-				    .seal(build<void, Root::Type::Seal>(StaticToken, 1));
+				  object.seal(build<void, Root::Type::Seal>(StaticToken, 1));
 				Debug::log("Static sealed object: {}", sealedObject);
 				return sealedObject;
 			}
@@ -1377,7 +1379,7 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
   !defined(CHERIOT_NO_SEALED_POINTERS)
 	      __export_scheduler__Z15exception_entryU19__sealed_capabilityP19TrustedStackGenericILj0EEjjj
 #else
-	      __export_scheduler__Z15exception_entryP10SObjStructjjj
+	      __export_scheduler__Z15exception_entryP15TokenObjectTypejjj
 #endif
 	      ))
 	    ->functionStart;

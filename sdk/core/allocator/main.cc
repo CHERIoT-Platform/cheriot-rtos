@@ -25,7 +25,7 @@ __attribute__((section(".sealing_key1"))) void *allocatorSealingKey;
 /**
  * The root for the software sealing key.
  */
-__attribute__((section(".sealing_key2"))) Capability<SKeyStruct>
+__attribute__((section(".sealing_key2"))) Capability<TokenKeyType>
                                           softwareSealingKey;
 
 using namespace CHERI;
@@ -1077,27 +1077,23 @@ namespace
 	 */
 	uint32_t nextSealingType = std::numeric_limits<uint32_t>::max();
 
-	/**
-	 * Helper that unseals `in` if it is a valid sealed capability sealed with
-	 * our hardware sealing key.  Returns the unsealed pointer, `nullptr` if it
-	 * cannot be helped.
+	/// A type alias for a sealed capability to a token object.
+	using SealedTokenHandle = CHERI::Capability<TokenObjectType, true>;
+
+	/*
+	 * A type alias for an unsealed capability to a token object.  The template
+	 * parameter distinguishes whether the token object header is in bounds
+	 * (that is, whether this capability must be considered secret).
 	 */
-	SealedAllocation unseal_if_valid(Capability<SObjStruct, true> in)
-	{
-		// The input must be tagged and sealed with our type.
-		// FIXME: At the moment the ISA is still shuffling types around, but
-		// eventually we want to know the type statically and don't need dynamic
-		// instructions.
-		auto unsealed = in.unseal(allocatorSealingKey);
-		return unsealed.is_valid() ? unsealed : SealedAllocation{nullptr};
-	}
+	template<bool HeaderInBounds>
+	using TokenHandle = CHERI::Capability<TokenObjectType, false>;
 
 	/**
 	 * Helper that allocates a sealed object and returns the sealed and
 	 * unsealed capabilities to the object.  Requires that the sealing key have
 	 * all of the permissions in `permissions`.
 	 */
-	std::pair<CHERI_SEALED(void *), void *>
+	std::pair<SealedTokenHandle, TokenHandle<false>>
 	  __noinline allocate_sealed_unsealed(Timeout            *timeout,
 	                                      AllocatorCapability heapCapability,
 	                                      SealingKey          key,
@@ -1134,8 +1130,9 @@ namespace
 		// encodings, so we'll do a tiny bit of extra work here to avoid
 		// accidentally introducing a security vulnerability in a future
 		// encoding.
-		size_t sealedSize = unsealedSize + ObjHdrSize;
-		if (__builtin_add_overflow(ObjHdrSize, unsealedSize, &sealedSize))
+		size_t sealedSize;
+		if (__builtin_add_overflow(
+		      sizeof(TokenObjectHeader), unsealedSize, &sealedSize))
 		{
 			Debug::log<DebugLevel::Warning>(
 			  "Requested size {} is too large to include header",
@@ -1149,16 +1146,20 @@ namespace
 		{
 			return {nullptr, nullptr};
 		}
-		SealedAllocation obj{static_cast<SObjStruct *>(malloc_internal(
-		  sealedSize, std::move(g), capability, timeout, true))};
-		if (obj == nullptr)
+		CHERI::Capability underlyingAllocation{
+		  malloc_internal(sealedSize, std::move(g), capability, timeout, true)};
+		if (underlyingAllocation == nullptr)
 		{
 			Debug::log<DebugLevel::Warning>(
 			  "Underlying allocation failed for sealed object");
 			return {nullptr, nullptr};
 		}
-		obj.address() = obj.top() - sealedSize;
-		// Round down the base to the heap alignment size.
+
+		// Allocate space at the top for the payload.
+		auto headerThenPayload = underlyingAllocation.cast<TokenObjectHeader>();
+		headerThenPayload.address() = headerThenPayload.top() - sealedSize;
+
+		// Round down the base to the heap alignment size, padding the payload.
 		// This ensures that the header is aligned and gives the same alignment
 		// as a normal allocation.  We will already be this aligned for most
 		// requested sizes.  The allocator always aligns the top and bottom of
@@ -1168,19 +1169,29 @@ namespace
 		// the header and the start of the unsealed object.  If the
 		// representable-length rounding of the requested size increased the
 		// requested alignment beyond 8, this will be a no-op.
-		obj.align_down(MallocAlignment);
+		headerThenPayload.align_down(MallocAlignment);
 
-		obj->type   = key.address();
-		auto sealed = obj.seal(allocatorSealingKey);
-		obj.address() += ObjHdrSize; // Exclude the header.
-		obj.bounds() = obj.top() - obj.address();
-		Debug::Assert(
-		  obj.is_valid(), "Unsealed object {} is not representable", obj);
-		return {sealed, obj};
+		headerThenPayload->type = key.address();
+
+		TokenHandle<true> payloadAfterHeader{
+		  reinterpret_cast<TokenObjectType *>(headerThenPayload.get())};
+		payloadAfterHeader.address() += sizeof(TokenObjectHeader);
+
+		// Sealed points at payload but can access header, at negative offset
+		auto sealed = payloadAfterHeader.seal(allocatorSealingKey);
+
+		// Unsealed points at payload and can access only payload
+		TokenHandle<false> payload{payloadAfterHeader.get()};
+		payload.bounds() = payload.top() - payload.address();
+
+		Debug::Assert(payload.is_valid(),
+		              "Unsealed object {} is not representable",
+		              payload);
+		return {sealed, payload};
 	}
 } // namespace
 
-SKey token_key_new()
+TokenKey token_key_new()
 {
 	// This needs protecting against races but doesn't touch any other data
 	// structures and so can have its own lock.
@@ -1206,7 +1217,7 @@ SKey token_key_new()
 __cheriot_minimum_stack(0x290) CHERI_SEALED(void *)
   token_sealed_unsealed_alloc(Timeout            *timeout,
                               AllocatorCapability heapCapability,
-                              SKey                key,
+                              TokenKey            key,
                               size_t              sz,
                               void              **unsealed)
 {
@@ -1241,7 +1252,7 @@ __cheriot_minimum_stack(0x290) CHERI_SEALED(void *)
 __cheriot_minimum_stack(0x260) CHERI_SEALED(void *)
   token_sealed_alloc(Timeout            *timeout,
                      AllocatorCapability heapCapability,
-                     SKey                rawKey,
+                     TokenKey            rawKey,
                      size_t              sz)
 {
 	STACK_CHECK(0x260);
@@ -1254,36 +1265,46 @@ __cheriot_minimum_stack(0x260) CHERI_SEALED(void *)
  * Helper used to unseal a sealed object with a given key.  Performs all of the
  * relevant checks and returns nullptr if this is not a valid key and object
  * sealed with that key.
+ *
+ * Call with the allocator lock held.
  */
-__noinline static SealedAllocation
-unseal_internal(SKey rawKey, CHERI_SEALED(SObjStruct *) obj)
+__noinline static TokenHandle<true>
+unseal_internal(TokenKey key, CHERI_SEALED(TokenObjectType *) object)
 {
-	SealingKey key{rawKey};
-	Capability unsealedInner = token_unseal<void>(key, obj);
+	Capability unsealedInner{token_obj_unseal_dynamic(key, object)};
 	if (!unsealedInner.is_valid())
 	{
 		return nullptr;
 	}
 
-	if (!key.permissions().contains(Permission::Unseal))
-	{
-		return nullptr;
-	}
-
-	return unseal_if_valid(obj);
+	/*
+	 * The call to token_obj_unseal_dynamic above has already done this unseal,
+	 * but will not share the result with us.  That said, if we get here, the
+	 * object capability was tagged and unsealed correctly inside that call.
+	 * Since we (by assumption) hold the allocator lock, there is no TOCTTOU and
+	 * it remains tagged and unsealable; it is, in particular, not possible that
+	 * the underlying allocation has been freed between that check and now, so
+	 * we need not check the result of this unseal for validity.
+	 *
+	 * It has also already checked that the key is tagged, has positive length,
+	 * has address equal to its base, and grants unseal (US) permission.  These
+	 * are properties of the capability, which is not subject to revocation, and
+	 * so still hold.
+	 */
+	return Capability{object}.unseal(allocatorSealingKey);
 }
 
 __cheriot_minimum_stack(0x260) int token_obj_destroy(
   AllocatorCapability heapCapability,
-  SKey                key,
+  TokenKey            key,
   CHERI_SEALED(void *) object)
 {
 	STACK_CHECK(0x260);
-	void *unsealed;
+	TokenHandle<true> unsealed;
 	{
 		LockGuard g{lock};
 		unsealed = unseal_internal(
-		  key, reinterpret_cast<CHERI_SEALED(SObjStruct *)>(object));
+		  key, reinterpret_cast<CHERI_SEALED(TokenObjectType *)>(object));
 		if (unsealed == nullptr)
 		{
 			return -EINVAL;
@@ -1294,20 +1315,24 @@ __cheriot_minimum_stack(0x260) int token_obj_destroy(
 		// The key can't be revoked and so there is no race with the key going
 		// away after the check.
 	}
+
+	// The sealed pointer was an interior address; move back to the base
+	unsealed.address() = unsealed.base();
+
 	return heap_free_nostackcheck(heapCapability, unsealed);
 }
 
 __cheriot_minimum_stack(0xf0) int token_obj_can_destroy(
   AllocatorCapability heapCapability,
-  SKey                key,
+  TokenKey            key,
   CHERI_SEALED(void *) object)
 {
 	STACK_CHECK(0xf0);
-	void *unsealed;
+	TokenHandle<true> unsealed;
 	{
 		LockGuard g{lock};
 		unsealed = unseal_internal(
-		  key, reinterpret_cast<CHERI_SEALED(SObjStruct *)>(object));
+		  key, reinterpret_cast<CHERI_SEALED(TokenObjectType *)>(object));
 		if (unsealed == nullptr)
 		{
 			return -EINVAL;
@@ -1318,6 +1343,10 @@ __cheriot_minimum_stack(0xf0) int token_obj_can_destroy(
 		// The key can't be revoked and so there is no race with the key going
 		// away after the check.
 	}
+
+	// The sealed pointer was an interior address; move back to the base
+	unsealed.address() = unsealed.base();
+
 	return heap_can_free(heapCapability, unsealed);
 }
 

@@ -15,9 +15,7 @@
 		  !defined(CHERIOT_NO_SEALED_POINTERS)
 #			define CHERI_SEALED(T) T __sealed_capability
 #		else
-struct SObjStruct;
-typedef struct SObjStruct *SObj;
-#			define CHERI_SEALED(T) struct SObjStruct *
+#			define CHERI_SEALED(T) struct TokenObjectType *
 #		endif
 #	endif
 #endif

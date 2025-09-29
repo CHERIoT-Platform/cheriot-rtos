@@ -12,15 +12,15 @@ using Debug = ConditionalDebug<false, "MessageQueue compartment">;
 
 namespace
 {
-	__always_inline SKey handle_key()
+	__always_inline TokenKey handle_key()
 	{
 		return STATIC_SEALING_TYPE(MessageQueueHandle);
 	}
-	__always_inline SKey receive_key()
+	__always_inline TokenKey receive_key()
 	{
 		return STATIC_SEALING_TYPE(ReceiveHandle);
 	}
-	__always_inline SKey send_key()
+	__always_inline TokenKey send_key()
 	{
 		return STATIC_SEALING_TYPE(SendHandle);
 	}
@@ -40,7 +40,7 @@ namespace
 	 * Unseal something that is either a queue handle or a restricted endpoint
 	 * with the specified key.
 	 */
-	MessageQueue *unseal(SKey key, CHERI_SEALED(MessageQueue *) handle)
+	MessageQueue *unseal(TokenKey key, CHERI_SEALED(MessageQueue *) handle)
 	{
 		MessageQueue *queue = nullptr;
 		// TODO: The cast expression below is overcomplicated
@@ -206,7 +206,7 @@ namespace
 	                               AllocatorCapability heapCapability,
 	                               CHERI_SEALED(MessageQueue *) handle,
 	                               CHERI_SEALED(MessageQueue *) * outHandle,
-	                               SKey sealingKey)
+	                               TokenKey sealingKey)
 	{
 		MessageQueue *queue =
 		  token_unseal(handle_key(), Sealed<MessageQueue>(handle));
