@@ -8,8 +8,10 @@
 #include <stdlib.h>
 #include <timeout.h>
 
-struct SKeyStruct;
-typedef struct SKeyStruct *SKey;
+struct TokenKeyType;
+typedef struct TokenKeyType *TokenKey;
+
+typedef TokenKey SKey __attribute__((deprecated("SKey renamed to TokenKey")));
 
 __BEGIN_DECLS
 
@@ -32,7 +34,7 @@ __BEGIN_DECLS
  * If the sealing keys have been exhausted then this will return
  * null.  This API is guaranteed never to block.
  */
-SKey __cheri_compartment("allocator") token_key_new(void);
+TokenKey __cheri_compartment("allocator") token_key_new(void);
 
 /**
  * Allocate a new object with size `sz`.
@@ -52,7 +54,7 @@ CHERI_SEALED(void *)
 __cheri_compartment("allocator")
   token_sealed_unsealed_alloc(Timeout            *timeout,
                               AllocatorCapability heapCapability,
-                              SKey                key,
+                              TokenKey            key,
                               size_t              sz,
                               void              **unsealed);
 
@@ -66,7 +68,7 @@ CHERI_SEALED(void *)
 __cheri_compartment("allocator")
   token_sealed_alloc(Timeout            *timeout,
                      AllocatorCapability heapCapability,
-                     SKey,
+                     TokenKey,
                      size_t);
 
 /**
@@ -85,7 +87,7 @@ __cheri_compartment("allocator")
  * succeeds, or null if both fail.
  */
 [[cheriot::interrupt_state(disabled)]] void *
-  __cheri_libcall token_obj_unseal(SKey, CHERI_SEALED(void *));
+  __cheri_libcall token_obj_unseal(TokenKey, CHERI_SEALED(void *));
 
 /**
  * Unseal the object given the key.
@@ -98,7 +100,7 @@ __cheri_compartment("allocator")
  * correct type, null otherwise.
  */
 [[cheriot::interrupt_state(disabled)]] void *
-  __cheri_libcall token_obj_unseal_static(SKey, CHERI_SEALED(void *));
+  __cheri_libcall token_obj_unseal_static(TokenKey, CHERI_SEALED(void *));
 
 /**
  * Unseal the object given the key.
@@ -112,7 +114,7 @@ __cheri_compartment("allocator")
  * correct type, null otherwise.
  */
 [[cheriot::interrupt_state(disabled)]] void *
-  __cheri_libcall token_obj_unseal_dynamic(SKey, CHERI_SEALED(void *));
+  __cheri_libcall token_obj_unseal_dynamic(TokenKey, CHERI_SEALED(void *));
 
 /**
  * Destroy the object given its key, freeing memory.
@@ -124,7 +126,7 @@ __cheri_compartment("allocator")
  */
 int __cheri_compartment("allocator")
   token_obj_destroy(AllocatorCapability heapCapability,
-                    SKey,
+                    TokenKey,
                     CHERI_SEALED(void *));
 
 /**
@@ -136,7 +138,7 @@ int __cheri_compartment("allocator")
  */
 int __cheri_compartment("allocator")
   token_obj_can_destroy(AllocatorCapability heapCapability,
-                        SKey                key,
+                        TokenKey            key,
                         CHERI_SEALED(void *) object);
 
 __END_DECLS
@@ -161,7 +163,7 @@ class Sealed
 	Sealed(CHERI_SEALED(T *) sealedPointer) : sealedPointer(sealedPointer) {}
 #	else
 	Sealed(void *sealedPointer)
-	  : sealedPointer(reinterpret_cast<SObj>(sealedPointer))
+	  : sealedPointer(reinterpret_cast<TokenObjectType *>(sealedPointer))
 	{
 	}
 #	endif
@@ -208,7 +210,9 @@ class Sealed
  */
 template<typename T>
 __always_inline std::pair<T *, Sealed<T>>
-token_allocate(Timeout *timeout, AllocatorCapability heapCapability, SKey key)
+                token_allocate(Timeout            *timeout,
+                               AllocatorCapability heapCapability,
+                               TokenKey            key)
 {
 	/*
 	 * Explicitly initialize unsealed, since callers like to check it, and not
@@ -229,17 +233,18 @@ token_allocate(Timeout *timeout, AllocatorCapability heapCapability, SKey key)
 }
 
 template<typename T>
-__always_inline T *token_unseal(SKey key, Sealed<T> sealed)
+__always_inline T *token_unseal(TokenKey key, Sealed<T> sealed)
 {
 	return static_cast<T *>(token_obj_unseal(key, sealed));
 }
 
 #endif // __cplusplus
 
-#if __has_extension(cheri_sealed_pointers)
+#if __has_extension(cheri_sealed_pointers) &&                                  \
+  !defined(CHERIOT_NO_SEALED_POINTERS)
 #	ifdef __cplusplus
 template<typename T>
-__always_inline T *token_unseal(SKey key, T *__sealed_capability sealed)
+__always_inline T *token_unseal(TokenKey key, T *__sealed_capability sealed)
 {
 	return static_cast<T *>(token_obj_unseal(key, sealed));
 }

@@ -839,11 +839,13 @@ namespace
 		     "Length of unsealed capability is not {}: {}",
 		     tokenSize,
 		     unsealedCapability);
-		TEST(sealedPointer.length() >= (unsealedLength + ObjHdrSize),
+		TEST(sealedPointer.length() >=
+		       (unsealedLength + sizeof(TokenObjectHeader)),
 		     "Length of unsealed capability is not the unsealed size plus the "
 		     "header size: {}",
 		     unsealedCapability);
-		TEST(sealedPointer.address() >= (sealedPointer.base() + ObjHdrSize),
+		TEST(sealedPointer.address() >=
+		       (sealedPointer.base() + sizeof(TokenObjectHeader)),
 		     "Sealed handle {} has implausible offset",
 		     sealedPointer);
 		TEST(sealedPointer.address() ==

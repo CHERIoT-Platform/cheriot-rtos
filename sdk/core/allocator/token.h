@@ -15,12 +15,8 @@
 
 #	include "token_types.h"
 
-typedef struct SObjStruct TokenSObj;
-
-constexpr size_t ObjHdrSize = offsetof(SObjStruct, data);
-
 /// Helper for referring to a sealing key
-struct SealingKey : public CHERI::Capability<SKeyStruct>
+struct SealingKey : public CHERI::Capability<TokenKeyType>
 {
 	/**
 	 * Constructor.  Checks that this is a plausible sealing key (but does not
@@ -28,7 +24,7 @@ struct SealingKey : public CHERI::Capability<SKeyStruct>
 	 * one and whose address and base match, then this will be set to null and
 	 * all subsequent checks on it will fail.
 	 */
-	__always_inline SealingKey(SKeyStruct *rawPtr) : Capability(rawPtr)
+	__always_inline SealingKey(TokenKey rawPtr) : Capability(rawPtr)
 	{
 		// Sealing keys must be length-one, in-bounds capabilities.
 		if (!is_valid() || (base() != address()) || (length() != 1))
@@ -53,7 +49,7 @@ struct DebugFormatArgumentAdaptor<SealingKey>
 
 #include <assembly-helpers.h>
 
-EXPORT_ASSEMBLY_OFFSET(TokenSObj, type, 0);
-EXPORT_ASSEMBLY_SIZE(TokenSObj, 8);
+EXPORT_ASSEMBLY_OFFSET(TokenObjectHeader, type, 0);
+EXPORT_ASSEMBLY_SIZE(TokenObjectHeader, 8);
 EXPORT_ASSEMBLY_NAME(CheriSealTypeAllocator, 11);
 EXPORT_ASSEMBLY_NAME(CheriSealTypeStaticToken, 12);

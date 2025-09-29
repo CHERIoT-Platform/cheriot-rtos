@@ -203,7 +203,7 @@ int __cheri_compartment("caller") run()
 		  [&alloc](int) { return local_claim_release_return_metric(alloc); });
 
 		printf("#dynamic token allocation\n");
-		SKey tokens[5];
+		TokenKey tokens[5];
 		benchAround([&](int i) { tokens[i] = token_key_new(); });
 
 		printf("#token_sealed_unsealed_alloc\n");
