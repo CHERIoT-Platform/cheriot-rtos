@@ -1092,21 +1092,6 @@ namespace
 	using TokenHandle = CHERI::Capability<TokenObjectType, false>;
 
 	/**
-	 * Helper that unseals `in` if it is a valid sealed capability sealed with
-	 * our hardware sealing key.  Returns the unsealed pointer, `nullptr` if it
-	 * cannot be helped.
-	 */
-	TokenHandle<true> unseal_if_valid(Capability<TokenObjectType, true> in)
-	{
-		// The input must be tagged and sealed with our type.
-		// FIXME: At the moment the ISA is still shuffling types around, but
-		// eventually we want to know the type statically and don't need dynamic
-		// instructions.
-		auto unsealed = in.unseal(allocatorSealingKey);
-		return unsealed.is_valid() ? unsealed : TokenHandle<true>{nullptr};
-	}
-
-	/**
 	 * Helper that allocates a sealed object and returns the sealed and
 	 * unsealed capabilities to the object.  Requires that the sealing key have
 	 * all of the permissions in `permissions`.
@@ -1283,23 +1268,33 @@ __cheriot_minimum_stack(0x260) CHERI_SEALED(void *)
  * Helper used to unseal a sealed object with a given key.  Performs all of the
  * relevant checks and returns nullptr if this is not a valid key and object
  * sealed with that key.
+ *
+ * Call with the allocator lock held.
  */
 __noinline static TokenHandle<true>
-unseal_internal(TokenKey rawKey, CHERI_SEALED(TokenObjectType *) obj)
+unseal_internal(TokenKey key, CHERI_SEALED(TokenObjectType *) object)
 {
-	SealingKey key{rawKey};
-	Capability unsealedInner = token_unseal<void>(key, obj);
+	Capability unsealedInner{token_obj_unseal_dynamic(key, object)};
 	if (!unsealedInner.is_valid())
 	{
 		return nullptr;
 	}
 
-	if (!key.permissions().contains(Permission::Unseal))
-	{
-		return nullptr;
-	}
-
-	return unseal_if_valid(obj);
+	/*
+	 * The call to token_obj_unseal_dynamic above has already done this unseal,
+	 * but will not share the result with us.  That said, if we get here, the
+	 * object capability was tagged and unsealed correctly inside that call.
+	 * Since we (by assumption) hold the allocator lock, there is no TOCTTOU and
+	 * it remains tagged and unsealable; it is, in particular, not possible that
+	 * the underlying allocation has been freed between that check and now, so
+	 * we need not check the result of this unseal for validity.
+	 *
+	 * It has also already checked that the key is tagged, has positive length,
+	 * has address equal to its base, and grants unseal (US) permission.  These
+	 * are properties of the capability, which is not subject to revocation, and
+	 * so still hold.
+	 */
+	return Capability{object}.unseal(allocatorSealingKey);
 }
 
 static constexpr size_t TokenObjDestroyStackUsage = 0x270;
