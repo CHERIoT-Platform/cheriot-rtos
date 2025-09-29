@@ -108,7 +108,7 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	/**
 	 * Sealing type used by `Handle`.
 	 */
-	static SKey sealing_type()
+	static TokenKey sealing_type()
 	{
 		return STATIC_SEALING_TYPE(MultiWaiterKey);
 	}

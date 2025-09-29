@@ -72,9 +72,9 @@ namespace thread_pool
 		 * allocator's token mechanism.
 		 */
 		template<typename T>
-		inline SKey sealing_key_for_type()
+		inline TokenKey sealing_key_for_type()
 		{
-			static SKey key = token_key_new();
+			static TokenKey key = token_key_new();
 			return key;
 		}
 
