@@ -935,25 +935,25 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 	if (cap == nullptr)
 	{
 		Debug::log<DebugLevel::Warning>("Invalid heap cap");
-		return 0;
+		return -EPERM;
 	}
 	if (!Capability{pointer}.is_valid())
 	{
 		Debug::log<DebugLevel::Warning>("Invalid claimed cap");
-		return 0;
+		return -EINVAL;
 	}
 	auto *chunk = gm->allocation_start(Capability{pointer}.address());
 	if (chunk == nullptr)
 	{
 		Debug::log<DebugLevel::Warning>("chunk not found");
-		return 0;
+		return -EINVAL;
 	}
 	if (claim_add(*cap, *chunk))
 	{
 		return gm->chunk_body_size(*chunk);
 	}
 	Debug::log<DebugLevel::Warning>("failed to add claim");
-	return 0;
+	return -EPERM;
 }
 
 static constexpr size_t HeapFreeStackUsage = 0x260;
