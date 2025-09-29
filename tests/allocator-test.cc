@@ -662,6 +662,35 @@ namespace
 		TEST(!__builtin_launder(&alloc)->is_valid(),
 		     "Heap capability still valid after releasing last claim: {}",
 		     alloc);
+
+		// Failure cases -- exercise the four failure modes for heap_claim.
+		ssize_t claimSize = heap_claim(nullptr, alloc);
+		TEST(claimSize == -EPERM,
+		     "Expected claim failure due to invalid quota, returned {}",
+		     claimSize);
+
+		claimSize = heap_claim(SECOND_HEAP, nullptr);
+		TEST(claimSize == -EINVAL,
+		     "Expected claim failure due to invalid allocation, returned {}",
+		     claimSize);
+
+		int              stackVar = 1234;
+		Capability<void> stackCap{&stackVar};
+		claimSize = heap_claim(SECOND_HEAP, stackCap);
+		TEST(
+		  claimSize == -EINVAL,
+		  "Expected claim failure on chunk outside of heap bounds, returned {}",
+		  claimSize);
+
+		CHERI::Capability bigAlloc{
+		  heap_allocate(&noWait, MALLOC_CAPABILITY, 2048U)};
+		TEST(bigAlloc.is_valid(), "Allocation failed");
+		claimSize = heap_claim(SECOND_HEAP, bigAlloc);
+		TEST(claimSize == -EPERM,
+		     "Expected failure in claim_add due to lack of quota, returned {}",
+		     claimSize);
+		ret = heap_free(MALLOC_CAPABILITY, bigAlloc);
+		TEST(ret == 0, "Freeing failed claim on allocation returned {}", ret);
 	}
 
 	/**
