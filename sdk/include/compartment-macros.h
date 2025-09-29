@@ -150,7 +150,7 @@
  */
 #define CHERIOT_EMIT_STATIC_SEALING_TYPE(name)                                 \
 	({                                                                         \
-		SKey ret; /* NOLINT(bugprone-macro-parentheses) */                     \
+		TokenKey ret; /* NOLINT(bugprone-macro-parentheses) */                 \
 		__asm(                                                                 \
 		  ".ifndef __import." name "\n"                                        \
 		  "  .type     __import." name ",@object\n"                            \

@@ -11,7 +11,7 @@ using namespace CHERI;
 int test_static_sealed_object(Sealed<TestType> obj)
 {
 	// Get our static sealing key.
-	SKey       key = STATIC_SEALING_TYPE(SealingType);
+	TokenKey   key = STATIC_SEALING_TYPE(SealingType);
 	Capability keyCap{key};
 
 	debug_log("Static sealing key: {}", key);

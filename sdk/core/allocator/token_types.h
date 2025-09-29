@@ -11,7 +11,7 @@
  * Sealing keys don't really point to anything, but they are CHERI
  * capabilities, and so C/C++ sees them as pointer types.
  */
-struct SKeyStruct;
+struct TokenKeyType;
 
 /**
  * A sealed token object's header.
@@ -52,12 +52,16 @@ struct SKeyStruct;
  *                Address of sealed capability is here.
  * ```
  */
-struct SObjStruct
+struct TokenObjectHeader
 {
 	/// The sealing type for this object.
 	uint32_t type;
 	/// Padding for alignment
 	uint32_t padding;
-	/// The real data for this.
-	char data[];
 };
+
+/**
+ * An opaque type used as the target type of capabilities pointing, as above,
+ * to the boundary between the token object header and the associated payload.
+ */
+struct TokenObjectType;

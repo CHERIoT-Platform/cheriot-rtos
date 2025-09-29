@@ -113,7 +113,7 @@ If we do not, then sub-object bounds (which are good for security) become less u
 I propose that we implement an API with this signature:
 
 ```
-size_t claim_object(struct SObjStruct *heapCapability, void *capability);
+size_t claim_object(AllocatorCapability heapCapability, void *capability);
 ```
 
 The return value of this is the number of bytes that were consumed from the quota.

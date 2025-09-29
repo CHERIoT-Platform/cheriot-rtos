@@ -703,7 +703,7 @@ namespace
 				}
 				// Seal with the static token sealing key
 				Capability object = build(entry.address, entry.size());
-				object.address() += sizeof(SObjStruct);
+				object.address() += sizeof(TokenObjectHeader);
 				Capability sealedObject =
 				  object.seal(build<void, Root::Type::Seal>(StaticToken, 1));
 				Debug::log("Static sealed object: {}", sealedObject);
@@ -1379,7 +1379,7 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
   !defined(CHERIOT_NO_SEALED_POINTERS)
 	      __export_scheduler__Z15exception_entryU19__sealed_capabilityP19TrustedStackGenericILj0EEjjj
 #else
-	      __export_scheduler__Z15exception_entryP10SObjStructjjj
+	      __export_scheduler__Z15exception_entryP15TokenObjectTypejjj
 #endif
 	      ))
 	    ->functionStart;
