@@ -49,5 +49,6 @@
     "revoker" : "hardware",
     "stack_high_water_mark" : true,
     "simulation": true,
-    "run_command" : "${sdk}/../scripts/run-ibex-safe-sim.sh"
+    "run_command" : "${sdk}/../scripts/run-ibex-safe-sim.sh",
+    "cxflags": "-mcpu=cheriot-ibex"
 }
