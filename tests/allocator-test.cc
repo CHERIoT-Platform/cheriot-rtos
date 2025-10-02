@@ -28,6 +28,9 @@ using namespace CHERI;
 DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(emptyHeap, 0);
 #define EMPTY_HEAP STATIC_SEALED_VALUE(emptyHeap)
 
+DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(fuzzHeap, MALLOC_QUOTA);
+#define FUZZ_HEAP STATIC_SEALED_VALUE(fuzzHeap)
+
 /* Used to test that the revoker sweeps static sealed capabilities */
 struct AllocatorTestStaticSealedType
 {
@@ -420,8 +423,8 @@ namespace
 			 */
 			AllocatorCapability quota;
 			/**
-			 * Allocations made with this quota. Any freed allocations should be
-			 * removed to avoid a double free.
+			 * List of allocations made with this quota. Any freed allocations
+			 * should be removed to avoid a double free.
 			 */
 			std::vector<void *> allocations;
 
@@ -455,7 +458,9 @@ namespace
 		 * Helper lambdas for allocation/free operations.
 		 *  - doAlloc: Allocates and memsets with 0xCA for debugging
 		 *  - doFree: Frees random allocation and caches pointer for temporal
-		 * safety checks
+		 *  safety checks
+		 *  - doFreeAll: Frees all allocations associated with quota, caches
+		 *  small sample of pointers.
 		 */
 		auto doAlloc = [&](HeapTestState &heap, size_t sz) {
 			CHERI::Capability p{heap_allocate(&t, heap.quota, sz)};
@@ -483,15 +488,46 @@ namespace
 			heap_free(heap.quota, p);
 		};
 
-		// Clear global vector to ensure we're in a clean state
-		allocations.clear();
-		allocations.shrink_to_fit();
+		auto doFreeAll = [&](HeapTestState &heap) {
+			if (heap.allocations.size() == 0)
+			{
+				return;
+			}
+			size_t allocCount = heap.allocations.size();
+
+			// Take a small sample to set up test for revocation failure
+			for (size_t i = 0; i < std::min(allocCount, 4U); i++)
+			{
+				cachedFrees[rand.next() % NCachedFrees] = heap.allocations[i];
+			}
+
+			ssize_t freed = heap_free_all(heap.quota);
+
+			TEST(freed > 0,
+			     "heap_free_all on {} returned {} but had {} allocations",
+			     &heap,
+			     freed,
+			     allocCount);
+
+			/*
+			 * This assumption does not hold on sealed capabilities, nor if any
+			 * of these allocations is claimed.
+			 */
+			for (auto eachAllocation : heap.allocations)
+			{
+				TEST(!Capability{eachAllocation}.is_valid(),
+				     "Failed free {}",
+				     eachAllocation);
+			}
+
+			heap.allocations.clear();
+		};
 
 		std::vector<HeapTestState> heapList;
-		heapList.emplace_back(MALLOC_CAPABILITY);
+		heapList.emplace_back(FUZZ_HEAP);
 		heapList.emplace_back(SECOND_HEAP);
 
-		/**
+		/*
 		 * Main fuzzing loop: Issue bursts of allocations (0-15) followed by
 		 * burst of frees to simulate "realistic" patterns. Operations are
 		 * randomly distributed across heap quotas.
@@ -501,16 +537,16 @@ namespace
 			if ((i & 0x7) == 0)
 			{
 				/*
-				 * Some notion of progress on the console is useful, but
-				 * don't be too chatty.
+				 * Some notion of progress on the console is useful, but don't
+				 * be too chatty.
 				 */
 				debug_log("fuzz i={}", i);
 			}
 
 			// Burst of allocations
+			HeapTestState &heap = heapList[rand.next() % heapList.size()];
 			for (size_t j = rand.next() & 0xF; j > 0; j--)
 			{
-				HeapTestState &heap = heapList[rand.next() % heapList.size()];
 				if (heap.allocations.size() < MaxAllocs)
 				{
 					size_t szix = rand.next() % NAllocSizes;
@@ -519,13 +555,28 @@ namespace
 				}
 			}
 
-			// Burst of frees
-			for (size_t j = rand.next() & 0xF; j > 0; j--)
+			/*
+			 * Invoke `heap_free_all` in 1/32 iterations.
+			 *
+			 * Since we average ~7.5 allocations per iteration, we don't expect
+			 * to accumulate more than ~240 allocations before we see a
+			 * `heap_free_all`. Given MaxAllocs is set to 256 this is a
+			 * reasonable figure.
+			 */
+			heap = heapList[rand.next() % heapList.size()];
+			if ((rand.next() & 0x1F) == 0)
 			{
-				HeapTestState &heap = heapList[rand.next() % heapList.size()];
-				if (heap.allocations.size() > 0)
+				doFreeAll(heap);
+			}
+			else
+			{
+				// Burst of frees
+				for (size_t j = rand.next() & 0xF; j > 0; j--)
 				{
-					doFree(heap);
+					if (heap.allocations.size() > 0)
+					{
+						doFree(heap);
+					}
 				}
 			}
 
@@ -541,6 +592,7 @@ namespace
 				}
 			}
 		}
+		cachedFrees.clear();
 		heapList.clear();
 	}
 
