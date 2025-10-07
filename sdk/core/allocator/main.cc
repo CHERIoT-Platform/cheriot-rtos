@@ -856,7 +856,7 @@ __cheriot_minimum_stack(0xa0) ssize_t
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
-		return -1;
+		return -EPERM;
 	}
 	return cap->quota;
 }

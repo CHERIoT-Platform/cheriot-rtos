@@ -1092,6 +1092,14 @@ int test_allocator()
 
 	test_preflight();
 
+	// Test `heap_quota_remaining` failure value. This is used throughout the
+	// allocator tests, so ensure that we fail correctly.
+	int failedQuotaRemaining = heap_quota_remaining(nullptr);
+	TEST(failedQuotaRemaining == -EPERM,
+	     "heap_quota_remaining failed incorrectly with value {} when passed "
+	     "nullptr",
+	     failedQuotaRemaining);
+
 	// Make sure that free() accepts delegated (non-global) pointers.
 	{
 		Timeout t{UnlimitedTimeout};
