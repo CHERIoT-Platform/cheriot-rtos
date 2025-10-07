@@ -281,8 +281,11 @@ ssize_t __cheri_compartment("allocator")
   heap_free_all(AllocatorCapability heapCapability);
 
 /**
- * Returns 0 if the allocation can be freed with the given capability, a
- * negated errno value otherwise.
+ * Returns 0 if the allocation can be freed with the given capability,
+ * `-EPERM` if `heapCapability` is not valid or it cannot free the provided
+ * allocation (such as when `heapCapability` does not own the allocation,
+ * and holds no claim on it), and `-EINVAL` if `ptr` is not a valid pointer
+ * into a live heap allocation.
  */
 int __cheri_compartment("allocator")
   heap_can_free(AllocatorCapability heapCapability, void *ptr);
