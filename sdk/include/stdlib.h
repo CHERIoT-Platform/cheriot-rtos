@@ -291,9 +291,9 @@ int __cheri_compartment("allocator")
   heap_can_free(AllocatorCapability heapCapability, void *ptr);
 
 /**
- * Returns the space available in the given quota. This will return -1 if
- * `heapCapability` is not valid or if the stack is insufficient to run the
- * function.
+ * Returns the space available in the given quota. This will return `-EPERM` if
+ * `heapCapability` is not valid or `-ENOTENOUGHSTACK` if the stack is
+ * insufficient to run the function.
  */
 ssize_t __cheri_compartment("allocator")
   heap_quota_remaining(AllocatorCapability heapCapability);
