@@ -25,7 +25,10 @@
 // - Add asm labels so that the compiler doesn't need to know the C++ type encodings for builtins.
 // - Use standard integer types.
 // - Add SPDX tags for license from the upstream repository (commit 426b7578ecfb5ce7c841e738613cff2a261214eb)
-// - Add the implementation of __multi3() 
+// - Add the implementation of __multi3()
+// - Provide real implementations for __clzsi2() / __clzdi2() / __popcount* only when the RISCV Zbb extension is not present
+// - Use __builtin_clzg rather than calling __clzdi2 from other functions
+// - Replace clz*/ctz*/popcount* implementations with calls to clang builtins: they have slightly smaller code size without B, or will use B instructions if enabled and present
 //
 // This file is *not* formatted, to make it easier to track changes from upstream (if there are any).
 
@@ -42,17 +45,22 @@ arith64_s64 __cheri_libcall __ashldi3(arith64_s64 a, int b) __asm__("__ashldi3")
 arith64_s64 __cheri_libcall __absvdi2(arith64_s64 a) __asm__("__absvdi2");
 arith64_s64 __cheri_libcall __ashldi3(arith64_s64 a, int b) __asm__("__ashldi3");
 arith64_s64 __cheri_libcall __ashrdi3(arith64_s64 a, int b) __asm__("__ashrdi3");
+
+#if !defined(__riscv_zbb)
+// These should use dedicated instructions when B extension is enabled
 int __cheri_libcall __clzsi2(arith64_u32 a) __asm__("__clzsi2");
 int __cheri_libcall __clzdi2(arith64_u64 a) __asm__("__clzdi2");
 int __cheri_libcall __ctzsi2(arith64_u32 a) __asm__("__ctzsi2");
 int __cheri_libcall __ctzdi2(arith64_u64 a) __asm__("__ctzdi2");
+int __cheri_libcall __popcountsi2(arith64_u32 a) __asm__("__popcountsi2");
+int __cheri_libcall __popcountdi2(arith64_u64 a) __asm__("__popcountdi2");
+#endif
+
 arith64_u64 __cheri_libcall __divmoddi4(arith64_u64 a, arith64_u64 b, arith64_u64 *c) __asm__("__divmoddi4");
 arith64_s64 __cheri_libcall __divdi3(arith64_s64 a, arith64_s64 b) __asm__("__divdi3");
 int __cheri_libcall __ffsdi2(arith64_u64 a) __asm__("__ffsdi2");
 arith64_u64 __cheri_libcall __lshrdi3(arith64_u64 a, int b) __asm__("__lshrdi3");
 arith64_s64 __cheri_libcall __moddi3(arith64_s64 a, arith64_s64 b) __asm__("__moddi3");
-int __cheri_libcall __popcountsi2(arith64_u32 a) __asm__("__popcountsi2");
-int __cheri_libcall __popcountdi2(arith64_u64 a) __asm__("__popcountdi2");
 arith64_u64 __cheri_libcall __udivdi3(arith64_u64 a, arith64_u64 b) __asm__("__udivdi3");
 arith64_u64 __cheri_libcall __umoddi3(arith64_u64 a, arith64_u64 b) __asm__("__umoddi3");
 arith64_s64 __cheri_libcall __multi3(arith64_s64 a, arith64_s64 b) __asm__("__multi3");
@@ -132,51 +140,45 @@ typedef union
     return w.s64;
 }
 
+#if !defined(__riscv_zbb)
+
 // These functions return the number of leading 0-bits in a, starting at the
 // most significant bit position. If a is zero, the result is undefined.
 [[clang::no_builtin]] int __clzsi2(arith64_u32 a)
 {
-    int b, n = 0;
-    b = !(a & 0xffff0000) << 4; n += b; a <<= b;
-    b = !(a & 0xff000000) << 3; n += b; a <<= b;
-    b = !(a & 0xf0000000) << 2; n += b; a <<= b;
-    b = !(a & 0xc0000000) << 1; n += b; a <<= b;
-    return n + !(a & 0x80000000);
+    return __builtin_clzg(a);
 }
 
 [[clang::no_builtin]] int __clzdi2(arith64_u64 a)
 {
-    int b, n = 0;
-    b = !(a & 0xffffffff00000000ULL) << 5; n += b; a <<= b;
-    b = !(a & 0xffff000000000000ULL) << 4; n += b; a <<= b;
-    b = !(a & 0xff00000000000000ULL) << 3; n += b; a <<= b;
-    b = !(a & 0xf000000000000000ULL) << 2; n += b; a <<= b;
-    b = !(a & 0xc000000000000000ULL) << 1; n += b; a <<= b;
-    return n + !(a & 0x8000000000000000ULL);
+    return __builtin_clzg(a);
 }
 
 // These functions return the number of trailing 0-bits in a, starting at the
 // least significant bit position. If a is zero, the result is undefined.
 [[clang::no_builtin]] int __ctzsi2(arith64_u32 a)
 {
-    int b, n = 0;
-    b = !(a & 0x0000ffff) << 4; n += b; a >>= b;
-    b = !(a & 0x000000ff) << 3; n += b; a >>= b;
-    b = !(a & 0x0000000f) << 2; n += b; a >>= b;
-    b = !(a & 0x00000003) << 1; n += b; a >>= b;
-    return n + !(a & 0x00000001);
+    return __builtin_ctzg(a);
 }
 
 [[clang::no_builtin]] int __ctzdi2(arith64_u64 a)
 {
-    int b, n = 0;
-    b = !(a & 0x00000000ffffffffULL) << 5; n += b; a >>= b;
-    b = !(a & 0x000000000000ffffULL) << 4; n += b; a >>= b;
-    b = !(a & 0x00000000000000ffULL) << 3; n += b; a >>= b;
-    b = !(a & 0x000000000000000fULL) << 2; n += b; a >>= b;
-    b = !(a & 0x0000000000000003ULL) << 1; n += b; a >>= b;
-    return n + !(a & 0x0000000000000001ULL);
+    return __builtin_ctzg(a);
 }
+
+// Return the number of bits set in a.
+[[clang::no_builtin]] int __popcountsi2(arith64_u32 a)
+{
+    return __builtin_popcountg(a);
+}
+
+// Return the number of bits set in a.
+[[clang::no_builtin]] int __popcountdi2(arith64_u64 a)
+{
+    return __builtin_popcountg(a);
+}
+
+#endif // !defined(__riscv_zbb)
 
 // Calculate both the quotient and remainder of the unsigned division of a and
 // b. The return value is the quotient, and the remainder is placed in variable
@@ -208,8 +210,9 @@ typedef union
     }
 
     // let's do long division
-    char bits = __clzdi2(b) - __clzdi2(a) + 1;  // number of bits to iterate (a and b are non-zero)
-    arith64_u64 rem = a >> bits;                   // init remainder
+	char bits = __builtin_clzg(b) - __builtin_clzg(a) +
+	            1; // number of bits to iterate (a and b are non-zero)
+	arith64_u64 rem = a >> bits;                   // init remainder
     a <<= 64 - bits;                            // shift numerator to the high bit
     arith64_u64 wrap = 0;                          // start with wrap = 0
     while (bits-- > 0)                          // for each bit
@@ -234,7 +237,7 @@ typedef union
 // is zero. The least significant bit is index one.
 [[clang::no_builtin]] int __ffsdi2(arith64_u64 a)
 {
-    return a ? __ctzdi2(a) + 1 : 0;
+	return a ? __builtin_ctzg(a) + 1 : 0;
 }
 
 // Return the result of logically shifting a right by b bits.
@@ -262,31 +265,6 @@ typedef union
     arith64_u64 r;
     __divmoddi4(arith64_abs(a), arith64_abs(b), &r);
     return arith64_neg(r, a); // negate remainder if numerator is negative
-}
-
-// Return the number of bits set in a.
-[[clang::no_builtin]] int __popcountsi2(arith64_u32 a)
-{
-    // collect sums into two low bytes
-    a = a - ((a >> 1) & 0x55555555);
-    a = ((a >> 2) & 0x33333333) + (a & 0x33333333);
-    a = (a + (a >> 4)) & 0x0F0F0F0F;
-    a = (a + (a >> 16));
-    // add the bytes, return bottom 6 bits
-    return (a + (a >> 8)) & 63;
-}
-
-// Return the number of bits set in a.
-[[clang::no_builtin]] int __popcountdi2(arith64_u64 a)
-{
-    // collect sums into two low bytes
-    a = a - ((a >> 1) & 0x5555555555555555ULL);
-    a = ((a >> 2) & 0x3333333333333333ULL) + (a & 0x3333333333333333ULL);
-    a = (a + (a >> 4)) & 0x0F0F0F0F0F0F0F0FULL;
-    a = (a + (a >> 32));
-    a = (a + (a >> 16));
-    // add the bytes, return bottom 7 bits
-    return (a + (a >> 8)) & 127;
 }
 
 // Return the quotient of the unsigned division of a and b.
