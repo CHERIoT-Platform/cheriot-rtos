@@ -1037,14 +1037,14 @@ __cheriot_minimum_stack(0x1a0) ssize_t
 	return freed;
 }
 
-__cheriot_minimum_stack(0x220) void *heap_allocate_array(
+__cheriot_minimum_stack(0x230) void *heap_allocate_array(
   Timeout            *timeout,
   AllocatorCapability heapCapability,
   size_t              nElements,
   size_t              elemSize,
   uint32_t            flags)
 {
-	STACK_CHECK(0x220);
+	STACK_CHECK(0x230);
 	if (!check_timeout_pointer(timeout))
 	{
 		return nullptr;
