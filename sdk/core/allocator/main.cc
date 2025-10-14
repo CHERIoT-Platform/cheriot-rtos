@@ -956,14 +956,17 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 	return 0;
 }
 
-__cheriot_minimum_stack(
-  0x260) int heap_can_free(AllocatorCapability heapCapability, void *rawPointer)
+static constexpr size_t HeapFreeStackUsage = 0x260;
+
+__cheriot_minimum_stack(HeapFreeStackUsage) int heap_can_free(
+  AllocatorCapability heapCapability,
+  void               *rawPointer)
 {
 	// This function requires much less space, but we claim that we require as
 	// much as `heap_free` so that a call to `heap_free` will not fail due to
 	// insufficient stack immediately after `heap_can_free` has said that it's
 	// fine.
-	STACK_CHECK(0x260);
+	STACK_CHECK(HeapFreeStackUsage);
 	LockGuard g{lock};
 	return heap_free_internal(heapCapability, rawPointer, false);
 }
@@ -988,11 +991,11 @@ int heap_free_nostackcheck(AllocatorCapability heapCapability, void *rawPointer)
 	return 0;
 }
 
-__cheriot_minimum_stack(0x260) int heap_free(AllocatorCapability heapCapability,
-                                             void               *rawPointer)
+__cheriot_minimum_stack(HeapFreeStackUsage) int heap_free(
+  AllocatorCapability heapCapability,
+  void               *rawPointer)
 {
-	// If this value changes, update `heap_can_free` as well.
-	STACK_CHECK(0x260);
+	STACK_CHECK(HeapFreeStackUsage);
 	return heap_free_nostackcheck(heapCapability, rawPointer);
 }
 
@@ -1273,12 +1276,14 @@ unseal_internal(SKey rawKey, CHERI_SEALED(SObjStruct *) obj)
 	return unseal_if_valid(obj);
 }
 
-__cheriot_minimum_stack(0x260) int token_obj_destroy(
+static constexpr size_t TokenObjDestroyStackUsage = 0x260;
+
+__cheriot_minimum_stack(TokenObjDestroyStackUsage) int token_obj_destroy(
   AllocatorCapability heapCapability,
   SKey                key,
   CHERI_SEALED(void *) object)
 {
-	STACK_CHECK(0x260);
+	STACK_CHECK(TokenObjDestroyStackUsage);
 	void *unsealed;
 	{
 		LockGuard g{lock};
@@ -1297,12 +1302,12 @@ __cheriot_minimum_stack(0x260) int token_obj_destroy(
 	return heap_free_nostackcheck(heapCapability, unsealed);
 }
 
-__cheriot_minimum_stack(0xf0) int token_obj_can_destroy(
+__cheriot_minimum_stack(TokenObjDestroyStackUsage) int token_obj_can_destroy(
   AllocatorCapability heapCapability,
   SKey                key,
   CHERI_SEALED(void *) object)
 {
-	STACK_CHECK(0xf0);
+	STACK_CHECK(TokenObjDestroyStackUsage);
 	void *unsealed;
 	{
 		LockGuard g{lock};
