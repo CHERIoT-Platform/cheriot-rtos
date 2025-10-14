@@ -33,7 +33,8 @@ int thread_pool_async(ThreadPoolCallback fn, CHERI_SEALED(void *) data)
 	// We want to avoid this being able to make us trap and so we validate that
 	// the function is cross-compartment entry point and both can be stored in
 	// the message queue.
-	if (!fnCap.is_valid() || (fnCap.type() != 9) ||
+	if (!fnCap.is_valid() ||
+	    (fnCap.type() != CheriSealTypeSealedImportTableEntries) ||
 	    !fnCap.permissions().contains(Permission::Global) ||
 	    (dataCap.is_valid() && !dataCap.is_sealed()) ||
 	    (dataCap.is_valid() &&
