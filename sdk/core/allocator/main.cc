@@ -1276,7 +1276,7 @@ unseal_internal(SKey rawKey, CHERI_SEALED(SObjStruct *) obj)
 	return unseal_if_valid(obj);
 }
 
-static constexpr size_t TokenObjDestroyStackUsage = 0x260;
+static constexpr size_t TokenObjDestroyStackUsage = 0x270;
 
 __cheriot_minimum_stack(TokenObjDestroyStackUsage) int token_obj_destroy(
   AllocatorCapability heapCapability,
