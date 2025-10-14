@@ -100,6 +100,9 @@ namespace thread_pool
 			 * cross-compartment calls to the allocator at all, since we're
 			 * in its initial trusted activation frame and near the beginning
 			 * (highest address) of its stack.
+			 *
+			 * Well, mostly.  It can also fail if the allocator has stack usage
+			 * checks compiled in and we have forgotten to bump that value.
 			 */
 			(void)token_obj_destroy(MALLOC_CAPABILITY, key, rawFn);
 		}

@@ -875,6 +875,67 @@ namespace
 		           "Invalid outparam path failed to restore quota");
 	}
 
+	/*
+	 * The thread pool library (the thing providing async(), above) internally
+	 * uses sealed objects to pass closures to callbacks (running in the right
+	 * compartment).  As such, it calls token_obj_destroy().  This can,
+	 * internally, see past ephemeral hazards that now need cleanup.  Indeed,
+	 * this case happens in test_hazards above and nowhere else in the test
+	 * suite.  This test specifically forces the allocator down that path in a
+	 * way that we can explicitly probe the result that the thread pool library
+	 * discards (for not having a convenient way to report).
+	 */
+	__noinline void test_token_hazards()
+	{
+		debug_log("Beginning token hazard test");
+
+		Timeout t{UnlimitedTimeout};
+		auto    sealingCapability = STATIC_SEALING_TYPE(sealingTest);
+
+		auto s = token_sealed_unsealed_alloc(
+		  &t, SECOND_HEAP, sealingCapability, 16, nullptr);
+
+		auto p1 = heap_allocate(&t, SECOND_HEAP, 16);
+
+		static cheriot::atomic<int> state = 0;
+
+		async([p1, s, sealingCapability]() {
+			Timeout t{UnlimitedTimeout};
+
+			int claimed = heap_claim_ephemeral(&t, p1, nullptr);
+			TEST_EQUAL(claimed, 0, "Heap claim failed");
+
+			// Signal for mainline to free objects and wait for that to happen
+			state = 1;
+			while (state.load() == 1)
+			{
+				yield();
+			}
+
+			TEST_SUCCESS(token_obj_destroy(SECOND_HEAP, sealingCapability, s));
+
+			state = 3;
+		});
+
+		// Wait for background thread to establish ephemeral claims
+		while (state.load() == 0)
+		{
+			sleep(1);
+		}
+
+		// free object, ensuring that we snapshot it to the "hazard quarantine"
+		TEST_SUCCESS(heap_free(SECOND_HEAP, p1));
+
+		// Signal background thread to proceed with token destruction
+		state = 2;
+		while (state.load() == 2)
+		{
+			sleep(1);
+		}
+
+		debug_log("End of token hazard test");
+	}
+
 } // namespace
 
 /**
@@ -910,6 +971,7 @@ int test_allocator()
 
 	test_token();
 	test_hazards();
+	test_token_hazards();
 
 	// Make sure that free works only on memory owned by the caller.
 	Timeout t{5};
