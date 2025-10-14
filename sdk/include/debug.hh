@@ -994,7 +994,9 @@ namespace
 	enum class StackCheckMode
 	{
 		Disabled,
+		LoggingMonotonic,
 		Logging,
+		AssertingMonotonic,
 		Asserting,
 	};
 
@@ -1065,12 +1067,36 @@ namespace
 				ptraddr_t highest =
 				  CHERI::Capability{__builtin_cheri_stack_get()}.top();
 				size_t used = highest - lowest;
-				if (used > stackUsage)
+
+				bool tripped = false;
+				if constexpr ((Mode == StackCheckMode::LoggingMonotonic) ||
+				              (Mode == StackCheckMode::AssertingMonotonic))
 				{
-					stackUsage = used;
-					ConditionalDebug<true, Fn>::log("Stack used: {} bytes",
-					                                stackUsage);
-					if constexpr (Mode == StackCheckMode::Asserting)
+					if (used > stackUsage)
+					{
+						tripped    = true;
+						stackUsage = used;
+					}
+				}
+				else if constexpr ((Mode == StackCheckMode::Logging) ||
+				                   (Mode == StackCheckMode::Asserting))
+				{
+					if (used > Expected)
+					{
+						tripped = true;
+					}
+					if (used > stackUsage)
+					{
+						stackUsage = used;
+					}
+				}
+
+				if (tripped)
+				{
+					ConditionalDebug<true, Fn>::log(
+					  "Stack used: {} bytes (max {})", used, stackUsage);
+					if constexpr ((Mode == StackCheckMode::Asserting) ||
+					              (Mode == StackCheckMode::AssertingMonotonic))
 					{
 						__builtin_trap();
 					}
