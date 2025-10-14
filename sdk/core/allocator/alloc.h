@@ -2841,13 +2841,29 @@ class MState
 		                 toAddr(heapStart),
 		                 heapStart.top());
 
+		if (!hazard_quarantine_is_empty())
+		{
+			RenderDebug::log("  hazard quarantine:");
+			for (size_t i = 0; i < hazardQuarantineOccupancy; i++)
+			{
+				RenderDebug::log("   {}", Capability{hazardQuarantine[i]});
+			}
+		}
+		else
+		{
+			RenderDebug::log("  hazard quarantine empty");
+		}
+
 		while (toAddr(header) != heapStart.top())
 		{
-			RenderDebug::log("  header {}: size={} inuse={} pinuse={}",
-			                 toAddr(header),
-			                 header->size_get(),
-			                 header->isCurrInUse,
-			                 header->isPrevInUse);
+			RenderDebug::log(
+			  "  header {}: size={} inuse={} pinuse={} owner={} claims={}",
+			  toAddr(header),
+			  header->size_get(),
+			  header->isCurrInUse,
+			  header->isPrevInUse,
+			  header->ownerID,
+			  header->claims);
 
 			if (!header->is_in_use())
 			{
@@ -2934,12 +2950,12 @@ class MState
 			if (quarantinePendingChunks[ix].is_empty())
 			{
 				RenderDebug::log(
-				  "  index={} epoch={} empty", ix, quarantinePendingEpoch[ix]);
+				  "  ring {} epoch={} empty", ix, quarantinePendingEpoch[ix]);
 			}
 			else
 			{
 				RenderDebug::log(
-				  "  index={} epoch={}:", ix, quarantinePendingEpoch[ix]);
+				  "  ring {} epoch={}:", ix, quarantinePendingEpoch[ix]);
 				quarantine_pending_get(ix)->search(showQuarantineRing);
 			}
 		}

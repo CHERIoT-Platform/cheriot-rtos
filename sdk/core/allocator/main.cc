@@ -1334,6 +1334,8 @@ size_t heap_available()
 [[cheriot::interrupt_state(disabled)]] int heap_render()
 {
 #if HEAP_RENDER
+	LockGuard g{lock};
+	check_gm();
 	gm->render();
 #endif
 	return 0;
