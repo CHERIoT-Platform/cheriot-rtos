@@ -856,6 +856,23 @@ namespace
 		TEST_EQUAL(heap_quota_remaining(SECOND_HEAP),
 		           SECOND_HEAP_QUOTA,
 		           "Invalid outparam path failed to restore quota");
+
+		/*
+		 * Test the dynamic key handling.
+		 */
+		auto dynamicSealingKey = token_key_new();
+		sealedPointer          = token_sealed_unsealed_alloc(
+          &noWait, SECOND_HEAP, dynamicSealingKey, 0x18, nullptr);
+		TEST(sealedPointer.is_valid(), "Invalid outparam case failed alloc");
+		TEST_EQUAL(
+		  token_obj_destroy(SECOND_HEAP, sealingCapability, sealedPointer),
+		  -EINVAL,
+		  "token_obj_destroy with invalid key gives wrong return value");
+		TEST_SUCCESS(
+		  token_obj_destroy(SECOND_HEAP, dynamicSealingKey, sealedPointer));
+		TEST_EQUAL(heap_quota_remaining(SECOND_HEAP),
+		           SECOND_HEAP_QUOTA,
+		           "Invalid outparam path failed to restore quota");
 	}
 
 } // namespace
