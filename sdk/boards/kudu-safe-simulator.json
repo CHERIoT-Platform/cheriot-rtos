@@ -1,0 +1,50 @@
+{
+    "devices": {
+        "clint": {
+            "start": 0x14001000,
+            "length": 0x1000
+        },
+        "plic": {
+            "start": 0x10000000,
+            "end": 0x10400000
+        },
+        "uart": {
+            "start": 0x8f00b000,
+            "end":   0x8f00b100
+        },
+        "shadow" : {
+            "start": 0x200fe000,
+            "length": 0x2000
+        }
+    },
+    "instruction_memory": {
+        "start": 0x20040000,
+        "end": 0x20080000
+    },
+    "heap": {
+        "end": 0x20080000
+    },
+    "interrupts": [
+        {
+            "name": "DummyInterrupt",
+            "number": 1,
+            "priority": 2,
+            "edge_triggered": true
+        }
+    ],
+    "defines" : [
+        "MICROSOFT_CHERIOT_SAFE",
+        "RDCYCLE_OVERRIDE_CSR=mcycle"
+    ],
+    "driver_includes" : [
+        "../include/platform/kudu",
+        "../include/platform/microsoft_cheriot_safe",
+        "../include/platform/generic-riscv"
+    ],
+    "timer_hz" : 100000,
+    "tickrate_hz" : 10,
+    "revoker" : "software",
+    "stack_high_water_mark" : true,
+    "simulation": true,
+    "run_command" : "${sdk}/../scripts/msft-safe-run-sim.sh kudu"
+}
