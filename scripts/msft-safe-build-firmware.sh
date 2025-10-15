@@ -16,3 +16,7 @@ fi
 ${OBJCOPY} -O binary $1 - | hexdump -v -e '"%08X" "\n"' > firmware/cpu0_iram.vhx
 # Add a newline at the end of the vhx file
 echo >> firmware/cpu0_iram.vhx
+
+# Do the same thing for machines w/ 64-bit memories
+${OBJCOPY} -O binary $1 - | hexdump -v -e '1/8 "%016X" "\n"' > firmware/cpu0_iram64.vhx
+echo >> firmware/cpu0_iram64.vhx
