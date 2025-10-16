@@ -105,9 +105,9 @@ class StandardClint : private utils::NoCopyNoMove
 	}
 
 	private:
-#ifdef IBEX_SAFE
+#ifdef MICROSOFT_CHERIOT_SAFE
 	/**
-	 * The Ibex-SAFE platform doesn't implement a complete CLINT, only the
+	 * The Microsoft SAFE platform doesn't implement a complete CLINT, only the
 	 * timer part (which is all that we use).  Its offsets within the CLINT
 	 * region are different.
 	 */

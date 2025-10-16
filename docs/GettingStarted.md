@@ -289,7 +289,7 @@ Then, we need to build the firmware.
 This repository comes with a script to do this:
 
 ```sh
-$ ../scripts/ibex-build-firmware.sh build/cheriot/cheriot/release/test-suite
+$ ../scripts/msft-safe-build-firmware.sh build/cheriot/cheriot/release/test-suite
 ```
 
 The `./firmware` directory should now contain a firmware file `cpu0_iram.vhx`.
