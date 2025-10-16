@@ -38,10 +38,11 @@
     ],
     "defines" : [
         "IBEX",
-        "IBEX_SAFE"
+        "MICROSOFT_CHERIOT_SAFE"
     ],
     "driver_includes" : [
         "../include/platform/ibex",
+        "../include/platform/microsoft_cheriot_safe",
         "../include/platform/generic-riscv"
     ],
     "timer_hz" : 100000,
