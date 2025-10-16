@@ -1,35 +1,14 @@
 #include <cheri.hh>
+#include <platform-rdcycle.h>
 
 namespace
 {
-	/**
-	 * Read the cycle counter.
-	 */
+	/// Read the bottom 32 bits of the retired instruction counter
 	int rdinstret()
 	{
 		int res;
 		__asm__ volatile("csrr %0, minstret" : "=r"(res));
 		return res;
-	}
-
-	/**
-	 * Read the cycle counter.
-	 */
-	int rdcycle()
-	{
-		int cycles;
-#ifdef SAIL
-		// On Sail, report the number of instructions, the cycle count is
-		// meaningless.
-		__asm__ volatile("csrr %0, minstret" : "=r"(cycles));
-#elif defined(IBEX)
-		// CHERIoT-Ibex does not yet implement rdcycle, so read the CSR
-		// directly.
-		__asm__ volatile("csrr %0, mcycle" : "=r"(cycles));
-#else
-		__asm__ volatile("rdcycle %0" : "=r"(cycles));
-#endif
-		return cycles;
 	}
 
 #ifdef IBEX
