@@ -139,7 +139,7 @@
 	la_abs			s1, __thread_count
 	csetaddr		cs1, ca4, s1
 	clhu			s1, 0(cs1)
-	li			t0, -BOOT_THREADINFO_SZ
+	li			t0, -ThreadLoaderInfo_size
 	mul			s1, s1, t0
 	addi			s1, s1, -SchedulerEntryInfo_offset_threads
 	cincoffset		csp, csp, s1
