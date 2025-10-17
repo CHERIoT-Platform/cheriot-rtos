@@ -195,6 +195,7 @@ __cap_relocs_end = .;
     @thread_headers@
     __compart_headers_end = .;
 }
+__compart_headers_size = __compart_headers_end - __compart_headers;
 
 # The loader code is placed in the data sections so that it can be used as heap after the loader runs
 .loader_code : CAPALIGN
