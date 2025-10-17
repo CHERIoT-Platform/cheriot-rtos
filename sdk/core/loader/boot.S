@@ -103,10 +103,10 @@
 	 * the call stack.
 	 */
 		// First set the lower bound on the loader's PCC:
-	clw				s0, IMAGE_HEADER_LOADER_CODE_START_OFFSET(ca1)
+	la_abs			s0, .loader_code_start
 	csetaddr		cra, ca2, s0
 		// Set the size
-	clhu			s0, IMAGE_HEADER_LOADER_CODE_SIZE_OFFSET(ca1)
+	la_abs			s0, .loader_code_size
 	csetboundsexact	cra, cra, s0
 		// Set the C++ entry point of loader
 	la_abs			s0, loader_entry_point
@@ -116,18 +116,13 @@
 	 * Build the loader's globals pointer.  The base address and length are
 	 * specified in the header, and the permissions are *stack-flavored* (that
 	 * is, granting S(tore)L(ocal) and not GL(obal).
-	 *
-	 * Old sails don't support unaligned loads, so load the base as half-words.
 	 */
-	clhu			s0, IMAGE_HEADER_LOADER_DATA_START_OFFSET+2(ca1)
-	sll				s0, s0, 16
-	clhu			s1, IMAGE_HEADER_LOADER_DATA_START_OFFSET+0(ca1)
-	add				s0, s0, s1
-	clhu			s1, IMAGE_HEADER_LOADER_DATA_SIZE_OFFSET(ca1)
+	la_abs			s0, .loader_data_start
 	csetaddr		cgp, ca5, s0 // ca5 has the SL root.
-	csetboundsexact	cgp, cgp, s1
-	srli			s1, s1, 1
-	cincoffset		cgp, cgp, s1
+	la_abs			s0, .loader_data_size
+	csetboundsexact	cgp, cgp, s0
+	srli			s0, s0, 1
+	cincoffset		cgp, cgp, s0
 
 	/*
 	 * mscratchc still has the sealing root; take it and stash the RW root.

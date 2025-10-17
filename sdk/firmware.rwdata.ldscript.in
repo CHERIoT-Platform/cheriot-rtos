@@ -83,14 +83,6 @@ __cap_relocs_end = .;
 .compartment_headers : ALIGN(4)
 {
     __compart_headers = .;
-    # Loader code start
-    LONG(.loader_code_start);
-    # Loader code length
-    SHORT(.loader_code_end - .loader_code_start);
-    # Loader data start
-    LONG(.loader_data_start);
-    # Loader data length
-    SHORT(.loader_data_end - .loader_data_start);
 
     # Compartment switcher start address
     LONG(.compartment_switcher_start);
@@ -210,14 +202,14 @@ __cap_relocs_end = .;
     .loader_code_start = .;
     */loader/boot.cc.o(.text .text.* .rodata .rodata.* .data.rel.ro);
 }
-.loader_code_end = .;
+.loader_code_size = SIZEOF(.loader_code);
 
 .loader_data : CAPALIGN
 {
     .loader_data_start = .;
     */loader/boot.cc.o(.data .data.* .sdata .sdata.* .sbss .sbss.* .bss .bss.*);
 }
-.loader_data_end = .;
+.loader_data_size = SIZEOF(.loader_data);
 
 .library_export_tables : ALIGN(8)
 {
