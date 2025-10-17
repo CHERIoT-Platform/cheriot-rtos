@@ -44,7 +44,7 @@ EXPORT_ASSEMBLY_SIZE(SchedulerEntryInfo, 32);
 EXPORT_ASSEMBLY_EXPRESSION(MIE_MEIE, priv::MIE_MEIE, 0x800);
 EXPORT_ASSEMBLY_EXPRESSION(MIE_MTIE, priv::MIE_MTIE, 0x080);
 EXPORT_ASSEMBLY_EXPRESSION(MSTATUS_MIE, priv::MSTATUS_MIE, 8);
-
 EXPORT_ASSEMBLY_EXPRESSION(ThreadHeapHazards_size,
                            HazardPointersPerThread * sizeof(void *),
                            16);
+EXPORT_ASSEMBLY_SIZE(ThreadLoaderInfo, 16);
