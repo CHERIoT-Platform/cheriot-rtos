@@ -11,5 +11,3 @@
  */
 #define BOOT_TSTACK_SIZE                                                       \
 	(TrustedStack_offset_frames + (2 * TrustedStackFrame_size))
-
-#define BOOT_THREADINFO_SZ 16
