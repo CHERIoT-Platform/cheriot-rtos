@@ -81,8 +81,7 @@
 
 	// Prepare a bounded, data RO, local pointer to the header.
 	la_abs			a1, __compart_headers
-	la_abs			a3, __compart_headers_end
-	sub				a3, a3, a1
+	la_abs			a3, __compart_headers_size
 	li				a2, ~(CHERI_PERM_STORE | \
 					      CHERI_PERM_LOAD_STORE_CAP | \
 					      CHERI_PERM_GLOBAL)
