@@ -10,5 +10,3 @@
  * to have a register frame and not trusted stack frames.
  */
 #define BOOT_TSTACK_SIZE TrustedStack_offset_frames
-
-#define BOOT_THREADINFO_SZ 16
