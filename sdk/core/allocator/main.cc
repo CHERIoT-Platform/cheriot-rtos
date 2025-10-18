@@ -953,7 +953,7 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 		return gm->chunk_body_size(*chunk);
 	}
 	Debug::log<DebugLevel::Warning>("failed to add claim");
-	return -EPERM;
+	return -ENOMEM;
 }
 
 static constexpr size_t HeapFreeStackUsage = 0x260;

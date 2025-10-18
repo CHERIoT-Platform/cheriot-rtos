@@ -218,9 +218,9 @@ void *__cheri_compartment("allocator")
  * larger than the size requested in the original `heap_allocate` call; see its
  * documentation for more information).
  *
- * Returns `-EPERM` if `heapCapability` is not valid or if the provided quota
- * is too small to accomodate the claim, and `-EINVAL` if `pointer` is not a
- * valid pointer into a live heap allocation.
+ * Returns `-EPERM` if `heapCapability` is not valid, `-ENOMEM` if the provided
+ * quota is too small to accomodate the claim, and `-EINVAL` if `pointer` is not
+ * a valid pointer into a live heap allocation.
  *
  * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
  * stack is insufficiently large to run the function. See `heap_allocate`.
