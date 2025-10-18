@@ -688,7 +688,7 @@ namespace
 		  heap_allocate(&noWait, MALLOC_CAPABILITY, 2048U)};
 		TEST(bigAlloc.is_valid(), "Allocation failed");
 		claimSize = heap_claim(SECOND_HEAP, bigAlloc);
-		TEST(claimSize == -EPERM,
+		TEST(claimSize == -ENOMEM,
 		     "Expected failure in claim_add due to lack of quota, returned {}",
 		     claimSize);
 		ret = heap_free(MALLOC_CAPABILITY, bigAlloc);
