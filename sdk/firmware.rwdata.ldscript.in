@@ -3,17 +3,12 @@
 __revoker_scan_start = .;
 __stack_space_start = .;
 
-.loader_trusted_stack : CAPALIGN
+.loader_stacks : CAPALIGN
 {
-	*/loader/boot.S.o(.loader_trusted_stack);
+    */*.loader.o(.stacks);
 }
 
 @thread_trusted_stacks@
-
-.loader_stack : ALIGN(16)
-{
-	*/loader/boot.S.o(.loader_stack);
-}
 
 @thread_stacks@
 
@@ -197,20 +192,18 @@ __cap_relocs_end = .;
 }
 __compart_headers_size = __compart_headers_end - __compart_headers;
 
-# The loader code is placed in the data sections so that it can be used as heap after the loader runs
-.loader_code : CAPALIGN
+# These (code and data) need to be kept in separate sections, since the linker
+# resolves relocations as PCC- or CGP-relative based on the flags of the output
+# section containing the relocation symbol.
+.loader_ephemeral_code : CAPALIGN
 {
-    .loader_code_start = .;
-    */loader/boot.cc.o(.text .text.* .rodata .rodata.* .data.rel.ro);
+    */*.loader.o(.code_ephemeral);
 }
-.loader_code_size = SIZEOF(.loader_code);
 
-.loader_data : CAPALIGN
+.loader_ephemeral_data : CAPALIGN
 {
-    .loader_data_start = .;
-    */loader/boot.cc.o(.data .data.* .sdata .sdata.* .sbss .sbss.* .bss .bss.*);
+    */*.loader.o(.data_ephemeral);
 }
-.loader_data_size = SIZEOF(.loader_data);
 
 .library_export_tables : ALIGN(8)
 {
