@@ -92,21 +92,23 @@
 	// to span two sections.
 	csetbounds		ca1, ca1, a3
 
-	// We just want to grab the EXE root. Offset in auipcc matters not.
-	auipcc			ca2, 0
-
 	/*
 	 * Set up ra to be the loader's C++ entry point.
 	 *
 	 * We are safe to clobber ra here because this is the root function on
 	 * the call stack.
 	 */
-		// First set the lower bound on the loader's PCC:
-	la_abs			s0, .loader_code_start
-	csetaddr		cra, ca2, s0
+		/*
+		 * First set the lower bound on the loader's PCC.  While here, leave the
+		 * executable root in ca2 for later use as an argument to the loader
+		 * entrypoint itself.
+		 */
+1:
+	auipcc			ca2, %cheriot_compartment_hi(.code_ephemeral_start)
+	cincoffset		ca2, ca2, %cheriot_compartment_lo_i(1b)
 		// Set the size
-	la_abs			s0, .loader_code_size
-	csetboundsexact	cra, cra, s0
+	la_abs			s0, .code_ephemeral_size
+	csetboundsexact	cra, ca2, s0
 		// Set the C++ entry point of loader
 	la_abs			s0, loader_entry_point
 	csetaddr		cra, cra, s0
@@ -116,9 +118,9 @@
 	 * specified in the header, and the permissions are *stack-flavored* (that
 	 * is, granting S(tore)L(ocal) and not GL(obal).
 	 */
-	la_abs			s0, .loader_data_start
+	la_abs			s0, .data_ephemeral_start
 	csetaddr		cgp, ca5, s0 // ca5 has the SL root.
-	la_abs			s0, .loader_data_size
+	la_abs			s0, .data_ephemeral_size
 	csetboundsexact	cgp, cgp, s0
 	srli			s0, s0, 1
 	cincoffset		cgp, cgp, s0

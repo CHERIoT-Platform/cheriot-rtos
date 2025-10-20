@@ -1436,13 +1436,21 @@ rule("cheriot.define-rtos-git-description")
 -- Common aspects of the CHERIoT loader target
 rule("cheriot.loader.base")
 	add_deps("cheriot.toolchain",
+	         "cheriot.reachability_check",
 	         "cheriot.component-debug",
 	         "cheriot.baremetal-abi",
 	         "cheriot.subobject-bounds")
 
 	on_load(function (target)
-		target:set("kind", "object")
 		target:set("default", false)
+
+		target:set("cheriot.type", "privileged library")
+		target:set('cheriot.debug-name', "loader")
+
+		-- "binary"-kinded xmake targets get both compilation and linking phases
+		-- (and use the dynamic linker).
+		target:set("kind", "binary")
+		target:set("extension", ".loader.o")
 
 		target:add("deps", "cheriot.board")
 
@@ -1450,10 +1458,16 @@ rule("cheriot.loader.base")
 		           "CHERIOT_AVOID_CAPRELOCS",
 		           "CHERIOT_NO_AMBIENT_MALLOC")
 
-		target:set('cheriot.debug-name', "loader")
-
 		target:set("optimize", "fast")
 		target:set("languages", "c23", "cxx23")
+
+		-- When linking, generate a relocatable object and use the indicated
+		-- custom linker script (via xmake's built-in rule for such things,
+		-- fished out through its file-extension based lookup mechanism).
+		target:add("ldflags", "--relocatable", { force = true })
+		target:add("files",
+		           path.join(coredir, "loader/loader.ldscript"),
+		           { sourcekind = ".lds" })
 	end)
 
 	after_load(function (target)
@@ -1471,6 +1485,12 @@ target("cheriot.loader")
 	-- FIXME: We should be setting this based on a board config file.
 	add_files(path.join(coredir, "loader/boot.S"),
 	          path.join(coredir, "loader/boot.cc"))
+
+	-- For the baseline loader, remove any extraneous sections.  Other,
+	-- device- and/or situation-specific loaders may want to carry other
+	-- sections up to the final firmware image, so this isn't present up in the
+	-- "cheriot.loader.base" rule.
+	add_ldflags("--gc-sections")
 
 -- Helper function to define firmware.  Used as `target`.
 function firmware(name)
