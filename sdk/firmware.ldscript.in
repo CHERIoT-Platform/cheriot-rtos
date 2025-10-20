@@ -19,4 +19,7 @@ SECTIONS
 	/DISCARD/ : {
     	*(.note.cheriot.compartment-name)
 	}
+
+	# Explicitly discard allocating sections from the loader not claimed elsewhere.
+	/DISCARD/ : { INPUT_SECTION_FLAGS (SHF_ALLOC) *.loader.o(*) }
 }
