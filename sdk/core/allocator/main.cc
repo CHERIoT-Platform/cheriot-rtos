@@ -260,7 +260,7 @@ namespace
 	 *
 	 * The lock guard own the lock on entry. It will drop the lock if a
 	 * transient error occurs and attempt to reacquire it. If the lock cannot be
-	 * reacquired during the permitted timeout then this returns nullptr.
+	 * reacquired during the permitted timeout then this returns -ETIMEDOUT.
 	 *
 	 * If `isSealedAllocation` is true, then the allocation is marked as sealed
 	 * and excluded during `heap_free_all`.
@@ -284,11 +284,10 @@ namespace
 			{
 				return std::get<Capability<void>>(ret);
 			}
-			// If the call is non-blocking (`flags` is
-			// `AllocateWaitNone`, or `timeout` is 0), fail now.
-			if (flags == AllocateWaitNone || !may_block(timeout))
+			// Check for permanent allocation failures first.
+			if (std::holds_alternative<MState::AllocationFailurePermanent>(ret))
 			{
-				return nullptr;
+				return reinterpret_cast<void *>(-EINVAL);
 			}
 			// If there is enough memory in the quarantine to fulfil this
 			// allocation, try dequeing some things and retry.
@@ -298,9 +297,14 @@ namespace
 			{
 				if (!(flags & AllocateWaitRevocationNeeded))
 				{
-					// The flags specify that we should not
-					// wait when revocation is needed.
-					return nullptr;
+					// The flags specify that we should not wait when revocation
+					// is needed. May succeed on retry
+					return reinterpret_cast<void *>(-EAGAIN);
+				}
+
+				if (!may_block(timeout))
+				{
+					return reinterpret_cast<void *>(-ETIMEDOUT);
 				}
 
 				// If we are able to dequeue some objects from quarantine then
@@ -322,7 +326,9 @@ namespace
 					if (!wait_for_background_revoker(
 					      timeout, needsRevocation->waitingEpoch, g))
 					{
-						return nullptr;
+						// Failed to reacquire the lock within the allowed
+						// timeout period
+						return reinterpret_cast<void *>(-ETIMEDOUT);
 					}
 				}
 				continue;
@@ -344,7 +350,7 @@ namespace
 					// The flags specify that we should not
 					// wait when the heap is full and/or
 					// when the quota is exceeded.
-					return nullptr;
+					return reinterpret_cast<void *>(-ENOMEM);
 				}
 
 				Debug::log("Not enough free space to handle {}-byte "
@@ -370,16 +376,14 @@ namespace
 				Debug::log("Woke from futex wake");
 				if (!reacquire_lock(timeout, g))
 				{
-					return nullptr;
+					// Failed to acquire lock within allowed timeout.
+					return reinterpret_cast<void *>(-ETIMEDOUT);
 				}
 				continue;
 			}
-			if (std::holds_alternative<MState::AllocationFailurePermanent>(ret))
-			{
-				return nullptr;
-			}
 		} while (may_block(timeout));
-		return nullptr;
+		// Exhausted the timeout period while retrying the allocation.
+		return reinterpret_cast<void *>(-ETIMEDOUT);
 	}
 
 	/**
@@ -914,13 +918,13 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(
 	STACK_CHECK(0x220);
 	if (!check_timeout_pointer(timeout))
 	{
-		return nullptr;
+		return reinterpret_cast<void *>(-EINVAL);
 	}
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
-		return nullptr;
+		return reinterpret_cast<void *>(-EPERM);
 	}
 	// Use the default memory space.
 	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags);
