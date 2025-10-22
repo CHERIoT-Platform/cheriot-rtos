@@ -441,7 +441,7 @@ namespace
 			{
 				for (auto eachAllocation : allocations)
 				{
-					heap_free(quota, eachAllocation);
+					TEST_SUCCESS(heap_free(quota, eachAllocation));
 				}
 				allocations.clear();
 			}
@@ -485,7 +485,7 @@ namespace
 
 			cachedFrees[rand.next() % NCachedFrees] = p;
 
-			heap_free(heap.quota, p);
+			TEST_SUCCESS(heap_free(heap.quota, p));
 		};
 
 		auto doFreeAll = [&](HeapTestState &heap) {
