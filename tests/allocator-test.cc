@@ -278,6 +278,9 @@ namespace
 		     HeapSize);
 		debug_log("BigAllocSize {} bytes", BigAllocSize);
 
+		// Store our return values here.
+		int result;
+
 		allocations.resize(MaxAllocCount);
 		// Create the background worker before we try to exhaust memory.
 		async([]() {
@@ -292,7 +295,7 @@ namespace
 			// Free all of the allocations to make space.
 			for (auto &allocation : allocations)
 			{
-				if (allocation != nullptr)
+				if (__builtin_cheri_tag_get(allocation))
 				{
 					TEST_EQUAL(heap_free(MALLOC_CAPABILITY, allocation),
 					           0,
@@ -305,20 +308,20 @@ namespace
 		});
 
 		/*
-		 * Empty the allocator's quarantine so that we're sure that the nullptr
-		 * failure we see below isn't because we aren't allowing the revocation
-		 * state machine to advance.
+		 * Empty the allocator's quarantine so that we're sure that the
+		 * `-ENOMEM` failure we see below isn't because we aren't allowing
+		 * the revocation state machine to advance.
 		 */
 		TEST_SUCCESS(heap_quarantine_empty());
 
 		bool memoryExhausted = false;
 		for (auto &allocation : allocations)
 		{
-			allocation =
-			  heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize);
-			// here test for nullptr (as opposed to the valid tag
+			allocation = heap_allocate(
+			  &noWait, MALLOC_CAPABILITY, BigAllocSize, AllocateWaitNone);
+			// here test for `-ENOMEM` (as opposed to the valid tag
 			// bit) because we specifically want to check for OOM
-			if (allocation == nullptr)
+			if (reinterpret_cast<int>(allocation) == -ENOMEM)
 			{
 				memoryExhausted = true;
 				break;
@@ -328,59 +331,78 @@ namespace
 		debug_log("Calling heap_render");
 		TEST_EQUAL(heap_render(), 0, "heap_render returned non-zero");
 		debug_log("Trying a non-blocking allocation");
-		// nullptr check because we explicitly want to check for OOM
-		TEST(heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize) == nullptr,
-		     "Non-blocking heap allocation did not return failure with memory "
-		     "exhausted");
+		result = reinterpret_cast<int>(
+		  heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize));
+		TEST_EQUAL(result,
+		           -ETIMEDOUT,
+		           "Non-blocking heap allocation did not fail with memory "
+		           "exhausted");
 		debug_log("Checking that the 'heap full' flag works");
 		Timeout forever{UnlimitedTimeout};
-		TEST(heap_allocate(&forever,
-		                   MALLOC_CAPABILITY,
-		                   BigAllocSize,
-		                   AllocateWaitRevocationNeeded |
-		                     AllocateWaitQuotaExceeded) == nullptr,
-		     "Blocking heap allocation with the heap full flag unset did not "
-		     "return failure with memory "
-		     "exhausted");
+		result = reinterpret_cast<int>(heap_allocate(
+		  &forever,
+		  MALLOC_CAPABILITY,
+		  BigAllocSize,
+		  AllocateWaitRevocationNeeded | AllocateWaitQuotaExceeded));
+		TEST_EQUAL(
+		  result,
+		  -ENOMEM,
+		  "Blocking heap allocation with the heap full flag unset did not "
+		  "fail with memory exhausted");
 		Timeout thirtyticks{30};
-		TEST(heap_allocate(&thirtyticks,
-		                   MALLOC_CAPABILITY,
-		                   BigAllocSize,
-		                   AllocateWaitHeapFull) == nullptr,
-		     "Time-limited blocking allocation did not return failure with "
-		     "memory exhausted");
-		TEST(thirtyticks.remaining == 0,
-		     "Allocation with heap full wait flag set did not wait on memory "
-		     "exhausted");
+		result = reinterpret_cast<int>(heap_allocate(
+		  &thirtyticks, MALLOC_CAPABILITY, BigAllocSize, AllocateWaitHeapFull));
+		TEST_EQUAL(result,
+		           -ETIMEDOUT,
+		           "Time-limited blocking allocation did not fail "
+		           "with memory exhausted");
+		TEST_EQUAL(
+		  thirtyticks.remaining,
+		  0,
+		  "Allocation with heap full wait flag set did not wait on memory "
+		  "exhausted");
 		debug_log("Checking that the 'quota exhausted' flag works");
-		TEST(heap_allocate(&forever,
-		                   EMPTY_HEAP,
-		                   BigAllocSize,
-		                   AllocateWaitRevocationNeeded) == nullptr,
-		     "Blocking heap allocation with the quota exhausted flag unset did "
-		     "not "
-		     "return failure with memory "
-		     "exhausted");
+		result = reinterpret_cast<int>(heap_allocate(
+		  &forever, EMPTY_HEAP, BigAllocSize, AllocateWaitRevocationNeeded));
+		TEST_EQUAL(
+		  result,
+		  -ENOMEM,
+		  "Blocking heap allocation with the quota exhausted flag unset did "
+		  "not fail with memory exhausted");
 		thirtyticks = Timeout{30};
-		TEST(heap_allocate(&thirtyticks,
-		                   EMPTY_HEAP,
-		                   BigAllocSize,
-		                   AllocateWaitQuotaExceeded) == nullptr,
-		     "Time-limited blocking allocation did not return failure with "
-		     "memory exhausted");
-		TEST(
-		  thirtyticks.remaining == 0,
+		result      = reinterpret_cast<int>(heap_allocate(
+          &thirtyticks, EMPTY_HEAP, BigAllocSize, AllocateWaitQuotaExceeded));
+		TEST_EQUAL(result,
+		           -ETIMEDOUT,
+		           "Time-limited blocking allocation did not fail with "
+		           "memory exhausted");
+		TEST_EQUAL(
+		  thirtyticks.remaining,
+		  0,
 		  "Allocation with quota exhausted wait flag set did not wait on quota "
 		  "exhausted");
 		// Note: we do not test the functioning of
 		// `AllocateWaitQuotaExceeded` as this would require to be able
 		// to manipulate the quarantine to be reliably done.
 		debug_log("Trying a huge allocation");
-		// nullptr check because we explicitly want to check for OOM
-		TEST(heap_allocate(&forever, MALLOC_CAPABILITY, 1024 * 1024 * 1024) ==
-		       nullptr,
-		     "Non-blocking heap allocation did not return failure on huge "
-		     "allocation");
+		result = reinterpret_cast<int>(
+		  heap_allocate(&forever, MALLOC_CAPABILITY, 1024 * 1024 * 1024));
+		TEST_EQUAL(result,
+		           -EINVAL,
+		           "Non-blocking heap allocation did not fail on huge "
+		           "allocation");
+		// Test invalid parameter return values
+		result = reinterpret_cast<int>(heap_allocate(&forever, nullptr, 64));
+		TEST_EQUAL(result,
+		           -EPERM,
+		           "Non-blocking heap allocation did not fail on null "
+		           "heap capability");
+		result =
+		  reinterpret_cast<int>(heap_allocate(nullptr, MALLOC_CAPABILITY, 64));
+		TEST_EQUAL(result,
+		           -EINVAL,
+		           "Non-blocking heap allocation did not fail on null "
+		           "timeout");
 		// Wake up the thread that will free memory
 		freeStart = 1;
 		debug_log("Notifying deallocation thread to start with futex {}",
@@ -1003,6 +1025,24 @@ namespace
 		           "Invalid outparam path failed to restore quota");
 
 		/*
+		 * Test the failed malloc_internal failure path.  We expect to see
+		 * `nullptr` return values.
+		 */
+		sealedPointer = token_sealed_unsealed_alloc(&noWait,
+		                                            SECOND_HEAP,
+		                                            sealingCapability,
+		                                            SECOND_HEAP_QUOTA + 64,
+		                                            &unsealedCapability);
+		TEST_EQUAL(
+		  sealedPointer,
+		  nullptr,
+		  "Allocation did not fail with size greater than available heap.");
+		TEST_EQUAL(
+		  unsealedCapability,
+		  nullptr,
+		  "Allocation did not fail with size greater than available heap.");
+
+		/*
 		 * Test the dynamic key handling.
 		 */
 		auto dynamicSealingKey = token_key_new();
@@ -1155,9 +1195,21 @@ int test_allocator()
 	     "Global object incorrectly reported as heap address");
 
 	t = 5;
-	Capability array{heap_allocate_array(&t, MALLOC_CAPABILITY, 0x80000004, 2)};
+	Capability array{
+	  heap_allocate_array(&t, SECOND_HEAP, SECOND_HEAP_QUOTA + 64, 2)};
 	TEST(
 	  !array.is_valid(), "Allocating too large an array succeeded: {}", array);
+	TEST_EQUAL(reinterpret_cast<int>(
+	             heap_allocate_array(&t, MALLOC_CAPABILITY, 0x80000004, 2)),
+	           -EINVAL,
+	           "Allocating array with size overflow succeeded");
+	TEST_EQUAL(reinterpret_cast<int>(
+	             heap_allocate_array(nullptr, MALLOC_CAPABILITY, 64, 2)),
+	           -EINVAL,
+	           "Allocating array with null timeout succeeded");
+	TEST_EQUAL(reinterpret_cast<int>(heap_allocate_array(&t, nullptr, 64, 2)),
+	           -EPERM,
+	           "Allocating array with null quota succeeded");
 	array = heap_allocate_array(&t, MALLOC_CAPABILITY, 16, 2);
 	TEST(array.is_valid(), "Allocating array failed: {}", array);
 	// If there's heap fragmentation, this may be rounded up to 40 because we
