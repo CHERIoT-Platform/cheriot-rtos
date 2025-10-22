@@ -160,22 +160,29 @@ enum [[clang::flag_enum]] AllocateWaitFlags
  * Specifically, the `flags` parameter defines on which conditions to wait, and
  * the `timeout` parameter how long to wait.
  *
+ * Returns `-EINVAL` if the provided timeout is invalid, and `-EPERM` if the
+ * heap capability is invalid.
+ *
  * The non-blocking mode (`AllocateWaitNone`, or `timeout` with no time
  * remaining) will return a successful allocation if one can be created
- * immediately, or `nullptr` otherwise.
+ * immediately, `-ENOMEM` for heap full or out-of-quota, `-EAGAIN` if
+ * there is enough memory to satisfy the allocation in quaratine, indicating
+ * that the operation could succeed if retried, or `-EINVAL` if the
+ * allocation cannot succeed under any circumstances.
  *
- * The blocking modes may return `nullptr` if the condition to wait is not
- * fulfilled, if the timeout has expired, or if the allocation cannot be
- * satisfied under any circumstances (for example if `size` is larger than the
- * total heap size).
- *
- * This means that calling this with `AllocateWaitAny` and `UnlimitedTimeout`
- * will only ever return `nullptr` if the allocation cannot be satisfied under
- * any circumstances.
+ * The blocking modes may return error codes if:
+ * - `-EAGAIN`: Revocation needed and flags specify no wait on this condition.
+ * - `-ENOMEM`: The heap is full or provided quota is exceeded, and flags
+ *   specify no wait on this condition
+ * - `-ETIMEDOUT`: The timeout has expired while waiting to acquire the
+ *   allocator lock or while retrying the allocation.
+ * - `-EINVAL`: The allocation cannot be satisfied under any circumstances,
+ *   for example if `size` is larger than the total heap size.
  *
  * In both blocking and non-blocking cases, `-ENOTENOUGHSTACK` may be returned
- * if the stack is insufficiently large to safely run the function. This means
- * that the return value of `heap_allocate` should be checked for the validity
+ * if the stack is insufficiently large to safely run the function.
+ *
+ * The return value of `heap_allocate` should be checked for the validity
  * of the tag bit *and not* simply compared against `nullptr`.
  *
  * Memory returned from this interface is guaranteed to be zeroed.

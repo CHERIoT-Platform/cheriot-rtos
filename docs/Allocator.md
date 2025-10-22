@@ -102,7 +102,8 @@ Handling of failure
 All `heap_` allocator APIs can fail with `-ENOTENOUGHSTACK`, which indicates that the stack space available was insufficient for the allocator to safely execute.
 This is because executing the allocator on insufficient stack space may allow attackers to trigger arbitrary failures in the allocator through carefully setting the size of the stack.
 
-This implies an important difference of semantics between `heap_allocate` and the C stdlib `malloc`: upon failure `heap_allocate` may return a `(void*) -ENOTENOUGHSTACK` pointer as well as a `NULL` pointer.
+This implies an important difference of semantics between `heap_allocate` and the C stdlib `malloc`: upon failure `heap_allocate` may return a `(void*) -ENOTENOUGHSTACK` pointer.
+Additionally, other failure modes of this function return other error values, instead of a `NULL` pointer.
 Success of `heap_allocate` must thus be checked by querying the tag bit of the returned capability, instead of comparing with a `NULL` pointer.
 
 A correct usage of `heap_allocate` with the C++ API looks like the following:
