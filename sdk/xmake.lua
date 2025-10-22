@@ -645,6 +645,38 @@ target("cheriot.board")
 		local boarddir, boardfile = board_file_for_name(get_config("board"))
 		local board = load_board_file(json, boardfile, config)
 
+		-- Normalize memory extents within the board to have either both an end
+		-- and length or neither.
+		local function normalize_extent(jsonpath, extent)
+			local start = extent.start
+			local stop = extent["end"]
+			local length = extent.length
+			if not stop and not length then
+				raise(table.concat({
+					"Memory extent",
+					table.concat(jsonpath,"."),
+					"does not specify a length or an end"}, " "))
+			elseif not stop then
+				extent["end"] = start + length
+			elseif not length then
+				extent.length = stop - start
+			elseif start + length ~= stop then
+				raise(table.concat({
+					"Memory extent",
+					table.concat(jsonpath,"/"),
+					"specifies inconsistent length and end"}, " "))
+			end
+		end
+		local jsonpath = {"devices"}
+		for name, extent in table.orderpairs(board.devices) do
+			jsonpath[2] = name
+			normalize_extent(jsonpath, extent)
+		end
+		normalize_extent({"instruction_memory"}, board.instruction_memory)
+		if board.data_memory then
+			normalize_extent({"data_memory"}, board.data_memory)
+		end
+
 		target:set("cheriot.board_dir", boarddir)
 		target:set("cheriot.board_file", boardfile)
 		target:set("cheriot.board_info", { board })
@@ -802,12 +834,6 @@ rule("cheriot.firmware")
 		for name, range in table.orderpairs(board.devices) do
 			local start = range.start
 			local stop = range["end"]
-			if not stop then
-				if not range.length then
-					raise("Device " .. name .. " does not specify a length or an end)")
-				end
-				stop = start + range.length
-			end
 			add_defines_each_dependency("DEVICE_EXISTS_" .. name)
 			mmio_start = math.min(mmio_start, start)
 			mmio_end = math.max(mmio_end, stop)
