@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "alloc.h"
+#include "cheri.hh"
 #include "revoker.h"
 #include "token.h"
 #include <compartment.h>
@@ -265,12 +266,12 @@ namespace
 	 * If `isSealedAllocation` is true, then the allocation is marked as sealed
 	 * and excluded during `heap_free_all`.
 	 */
-	void *malloc_internal(size_t                           bytes,
-	                      LockGuard<decltype(lock)>      &&g,
-	                      PrivateAllocatorCapabilityState *capability,
-	                      Timeout                         *timeout,
-	                      bool     isSealedAllocation = false,
-	                      uint32_t flags              = AllocateWaitAny)
+	ErrorOr<void> malloc_internal(size_t                           bytes,
+	                              LockGuard<decltype(lock)>      &&g,
+	                              PrivateAllocatorCapabilityState *capability,
+	                              Timeout                         *timeout,
+	                              bool     isSealedAllocation = false,
+	                              uint32_t flags              = AllocateWaitAny)
 	{
 		check_gm();
 
@@ -282,12 +283,12 @@ namespace
 			                               isSealedAllocation);
 			if (std::holds_alternative<Capability<void>>(ret))
 			{
-				return std::get<Capability<void>>(ret);
+				return {std::get<Capability<void>>(ret)};
 			}
 			// Check for permanent allocation failures first.
 			if (std::holds_alternative<MState::AllocationFailurePermanent>(ret))
 			{
-				return reinterpret_cast<void *>(-EINVAL);
+				return -EINVAL;
 			}
 			// If there is enough memory in the quarantine to fulfil this
 			// allocation, try dequeing some things and retry.
@@ -299,12 +300,12 @@ namespace
 				{
 					// The flags specify that we should not wait when revocation
 					// is needed. May succeed on retry
-					return reinterpret_cast<void *>(-EAGAIN);
+					return -EAGAIN;
 				}
 
 				if (!may_block(timeout))
 				{
-					return reinterpret_cast<void *>(-ETIMEDOUT);
+					return -ETIMEDOUT;
 				}
 
 				// If we are able to dequeue some objects from quarantine then
@@ -328,7 +329,7 @@ namespace
 					{
 						// Failed to reacquire the lock within the allowed
 						// timeout period
-						return reinterpret_cast<void *>(-ETIMEDOUT);
+						return -ETIMEDOUT;
 					}
 				}
 				continue;
@@ -350,7 +351,7 @@ namespace
 					// The flags specify that we should not
 					// wait when the heap is full and/or
 					// when the quota is exceeded.
-					return reinterpret_cast<void *>(-ENOMEM);
+					return -ENOMEM;
 				}
 
 				Debug::log("Not enough free space to handle {}-byte "
@@ -377,13 +378,13 @@ namespace
 				if (!reacquire_lock(timeout, g))
 				{
 					// Failed to acquire lock within allowed timeout.
-					return reinterpret_cast<void *>(-ETIMEDOUT);
+					return -ETIMEDOUT;
 				}
 				continue;
 			}
 		} while (may_block(timeout));
 		// Exhausted the timeout period while retrying the allocation.
-		return reinterpret_cast<void *>(-ETIMEDOUT);
+		return -ETIMEDOUT;
 	}
 
 	/**
@@ -927,7 +928,8 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(
 		return reinterpret_cast<void *>(-EPERM);
 	}
 	// Use the default memory space.
-	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags);
+	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags)
+	  .as_raw();
 }
 
 __cheriot_minimum_stack(0x1c0) ssize_t
@@ -1073,7 +1075,8 @@ __cheriot_minimum_stack(0x230) void *heap_allocate_array(
 	{
 		return nullptr;
 	}
-	return malloc_internal(req, std::move(g), cap, timeout, false, flags);
+	return malloc_internal(req, std::move(g), cap, timeout, false, flags)
+	  .as_raw();
 }
 
 namespace
@@ -1156,14 +1159,16 @@ namespace
 		{
 			return {nullptr, nullptr};
 		}
-		SealedAllocation obj{static_cast<SObjStruct *>(malloc_internal(
-		  sealedSize, std::move(g), capability, timeout, true))};
-		if (obj == nullptr)
+		auto alloc =
+		  malloc_internal(sealedSize, std::move(g), capability, timeout, true);
+		if (alloc.is_error())
 		{
 			Debug::log<DebugLevel::Warning>(
-			  "Underlying allocation failed for sealed object");
+			  "Underlying allocation failed for sealed object {}",
+			  alloc.as_error());
 			return {nullptr, nullptr};
 		}
+		SealedAllocation obj{static_cast<SObjStruct *>(alloc.as_pointer())};
 		obj.address() = obj.top() - sealedSize;
 		// Round down the base to the heap alignment size.
 		// This ensures that the header is aligned and gives the same alignment
