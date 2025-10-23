@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "alloc.h"
+#include "cheri.hh"
 #include "revoker.h"
 #include "token.h"
 #include <compartment.h>
@@ -265,12 +266,12 @@ namespace
 	 * If `isSealedAllocation` is true, then the allocation is marked as sealed
 	 * and excluded during `heap_free_all`.
 	 */
-	void *malloc_internal(size_t                           bytes,
-	                      LockGuard<decltype(lock)>      &&g,
-	                      PrivateAllocatorCapabilityState *capability,
-	                      Timeout                         *timeout,
-	                      bool     isSealedAllocation = false,
-	                      uint32_t flags              = AllocateWaitAny)
+	ErrorOr<void> malloc_internal(size_t                           bytes,
+	                              LockGuard<decltype(lock)>      &&g,
+	                              PrivateAllocatorCapabilityState *capability,
+	                              Timeout                         *timeout,
+	                              bool     isSealedAllocation = false,
+	                              uint32_t flags              = AllocateWaitAny)
 	{
 		check_gm();
 
@@ -287,7 +288,7 @@ namespace
 			// Check for permanent allocation failures first.
 			if (std::holds_alternative<MState::AllocationFailurePermanent>(ret))
 			{
-				return reinterpret_cast<void *>(-EINVAL);
+				return -EINVAL;
 			}
 			// If there is enough memory in the quarantine to fulfil this
 			// allocation, try dequeing some things and retry.
@@ -299,12 +300,12 @@ namespace
 				{
 					// The flags specify that we should not wait when revocation
 					// is needed. May succeed on retry
-					return reinterpret_cast<void *>(-EAGAIN);
+					return -EAGAIN;
 				}
 
 				if (!may_block(timeout))
 				{
-					return reinterpret_cast<void *>(-ETIMEDOUT);
+					return -ETIMEDOUT;
 				}
 
 				// If we are able to dequeue some objects from quarantine then
@@ -350,7 +351,7 @@ namespace
 					// The flags specify that we should not
 					// wait when the heap is full and/or
 					// when the quota is exceeded.
-					return reinterpret_cast<void *>(-ENOMEM);
+					return -ENOMEM;
 				}
 
 				Debug::log("Not enough free space to handle {}-byte "
@@ -377,13 +378,13 @@ namespace
 				if (!reacquire_lock(timeout, g))
 				{
 					// Failed to acquire lock within allowed timeout.
-					return reinterpret_cast<void *>(-ETIMEDOUT);
+					return -ETIMEDOUT;
 				}
 				continue;
 			}
 		} while (may_block(timeout));
 		// Exhausted the timeout period while retrying the allocation.
-		return reinterpret_cast<void *>(-ETIMEDOUT);
+		return -ETIMEDOUT;
 	}
 
 	/**
@@ -927,7 +928,8 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(
 		return reinterpret_cast<void *>(-EPERM);
 	}
 	// Use the default memory space.
-	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags);
+	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags)
+	  .as_raw();
 }
 
 __cheriot_minimum_stack(0x1c0) ssize_t
@@ -1068,7 +1070,8 @@ __cheriot_minimum_stack(0x230) void *heap_allocate_array(
 	{
 		return reinterpret_cast<void *>(-EINVAL);
 	}
-	return malloc_internal(req, std::move(g), cap, timeout, false, flags);
+	return malloc_internal(req, std::move(g), cap, timeout, false, flags)
+	  .as_raw();
 }
 
 namespace
@@ -1148,53 +1151,61 @@ namespace
 		{
 			return {nullptr, nullptr};
 		}
-		CHERI::Capability underlyingAllocation{
-		  malloc_internal(sealedSize, std::move(g), capability, timeout, true)};
-		if (!underlyingAllocation.is_valid())
-		{
-			Debug::log<DebugLevel::Warning>(
-			  "Underlying allocation failed for sealed object");
-			return {nullptr, nullptr};
-		}
 
-		// Allocate space at the top for the payload.
-		auto headerThenPayload = underlyingAllocation.cast<TokenObjectHeader>();
-		headerThenPayload.address() = headerThenPayload.top() - sealedSize;
+		return malloc_internal(
+		         sealedSize, std::move(g), capability, timeout, true)
+		  .either(
+		    [key, sealedSize](auto alloc) {
+			    // Allocate space at the top for the payload.
+			    auto headerThenPayload =
+			      alloc.template cast<TokenObjectHeader>();
+			    headerThenPayload.address() =
+			      headerThenPayload.top() - sealedSize;
 
-		// Round down the base to the heap alignment size, padding the payload.
-		// This ensures that the header is aligned and gives the same alignment
-		// as a normal allocation.  We will already be this aligned for most
-		// requested sizes.  The allocator always aligns the top and bottom of
-		// any allocations on a `MallocAlignment` boundary, and also on a
-		// representable boundary (whichever is stricter).  This extra
-		// alignment step ensures that this is also true for both the start of
-		// the header and the start of the unsealed object.  If the
-		// representable-length rounding of the requested size increased the
-		// requested alignment beyond 8, this will be a no-op.
-		headerThenPayload.align_down(MallocAlignment);
+			    // Round down the base to the heap alignment size, padding the
+			    // payload. This ensures that the header is aligned and gives
+			    // the same alignment as a normal allocation.  We will already
+			    // be this aligned for most requested sizes.  The allocator
+			    // always aligns the top and bottom of any allocations on a
+			    // `MallocAlignment` boundary, and also on a representable
+			    // boundary (whichever is stricter).  This extra alignment step
+			    // ensures that this is also true for both the start of the
+			    // header and the start of the unsealed object.  If the
+			    // representable-length rounding of the requested size increased
+			    // the requested alignment beyond 8, this will be a no-op.
+			    headerThenPayload.align_down(MallocAlignment);
 
-		headerThenPayload->type = key.address();
+			    headerThenPayload->type = key.address();
 
-		TokenHandle<true> payloadAfterHeader{
-		  reinterpret_cast<TokenObjectType *>(headerThenPayload.get())};
-		payloadAfterHeader.address() += sizeof(TokenObjectHeader);
+			    TokenHandle<true> payloadAfterHeader{
+			      reinterpret_cast<TokenObjectType *>(headerThenPayload.get())};
+			    payloadAfterHeader.address() += sizeof(TokenObjectHeader);
 
-		// Sealed points at payload but can access header, at negative offset.
-		auto sealed = [=]() {
-			auto res{payloadAfterHeader};
-			// Set all of the user permissions
-			res.address() += 7;
-			return res.seal(allocatorSealingKey);
-		}();
+			    // Sealed points at payload but can access header, at negative
+			    // offset.
+			    auto sealed = [=]() {
+				    auto res{payloadAfterHeader};
+				    // Set all of the user permissions
+				    res.address() += 7;
+				    return res.seal(allocatorSealingKey);
+			    }();
 
-		// Unsealed points at payload and can access only payload
-		TokenHandle<false> payload{payloadAfterHeader.get()};
-		payload.bounds() = payload.top() - payload.address();
+			    // Unsealed points at payload and can access only payload
+			    TokenHandle<false> payload{payloadAfterHeader.get()};
+			    payload.bounds() = payload.top() - payload.address();
 
-		Debug::Assert(payload.is_valid(),
-		              "Unsealed object {} is not representable",
-		              payload);
-		return {sealed, payload};
+			    Debug::Assert(payload.is_valid(),
+			                  "Unsealed object {} is not representable",
+			                  payload);
+			    return std::pair<SealedTokenHandle, TokenHandle<false>>{
+			      sealed, payload};
+		    },
+		    [](int e) {
+			    Debug::log<DebugLevel::Warning>(
+			      "Underlying allocation failed for sealed object {}", e);
+			    return std::pair<SealedTokenHandle, TokenHandle<false>>{
+			      nullptr, nullptr};
+		    });
 	}
 } // namespace
 
