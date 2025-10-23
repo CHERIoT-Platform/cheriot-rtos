@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "alloc.h"
+#include "cheri.hh"
 #include "revoker.h"
 #include "token.h"
 #include <compartment.h>
@@ -265,12 +266,12 @@ namespace
 	 * If `isSealedAllocation` is true, then the allocation is marked as sealed
 	 * and excluded during `heap_free_all`.
 	 */
-	void *malloc_internal(size_t                           bytes,
-	                      LockGuard<decltype(lock)>      &&g,
-	                      PrivateAllocatorCapabilityState *capability,
-	                      Timeout                         *timeout,
-	                      bool     isSealedAllocation = false,
-	                      uint32_t flags              = AllocateWaitAny)
+	ErrorOr<void> malloc_internal(size_t                           bytes,
+	                              LockGuard<decltype(lock)>      &&g,
+	                              PrivateAllocatorCapabilityState *capability,
+	                              Timeout                         *timeout,
+	                              bool     isSealedAllocation = false,
+	                              uint32_t flags              = AllocateWaitAny)
 	{
 		check_gm();
 
@@ -282,13 +283,13 @@ namespace
 			                               isSealedAllocation);
 			if (std::holds_alternative<Capability<void>>(ret))
 			{
-				return std::get<Capability<void>>(ret);
+				return {std::get<Capability<void>>(ret)};
 			}
 			// If the call is non-blocking (`flags` is
 			// `AllocateWaitNone`, or `timeout` is 0), fail now.
 			if (flags == AllocateWaitNone || !may_block(timeout))
 			{
-				return nullptr;
+				return -EINVAL;
 			}
 			// If there is enough memory in the quarantine to fulfil this
 			// allocation, try dequeing some things and retry.
@@ -298,9 +299,14 @@ namespace
 			{
 				if (!(flags & AllocateWaitRevocationNeeded))
 				{
-					// The flags specify that we should not
-					// wait when revocation is needed.
-					return nullptr;
+					// The flags specify that we should not wait when revocation
+					// is needed. May succeed on retry
+					return -EAGAIN;
+				}
+
+				if (!may_block(timeout))
+				{
+					return -ETIMEDOUT;
 				}
 
 				// If we are able to dequeue some objects from quarantine then
@@ -322,7 +328,9 @@ namespace
 					if (!wait_for_background_revoker(
 					      timeout, needsRevocation->waitingEpoch, g))
 					{
-						return nullptr;
+						// Failed to reacquire the lock within the allowed
+						// timeout period
+						return -ETIMEDOUT;
 					}
 				}
 				continue;
@@ -344,7 +352,7 @@ namespace
 					// The flags specify that we should not
 					// wait when the heap is full and/or
 					// when the quota is exceeded.
-					return nullptr;
+					return -ENOMEM;
 				}
 
 				Debug::log("Not enough free space to handle {}-byte "
@@ -370,7 +378,8 @@ namespace
 				Debug::log("Woke from futex wake");
 				if (!reacquire_lock(timeout, g))
 				{
-					return nullptr;
+					// Failed to acquire lock within allowed timeout.
+					return -ETIMEDOUT;
 				}
 				continue;
 			}
@@ -379,7 +388,8 @@ namespace
 				return nullptr;
 			}
 		} while (may_block(timeout));
-		return nullptr;
+		// Exhausted the timeout period while retrying the allocation.
+		return -ETIMEDOUT;
 	}
 
 	/**
@@ -923,7 +933,8 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(
 		return nullptr;
 	}
 	// Use the default memory space.
-	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags);
+	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags)
+	  .as_raw();
 }
 
 __cheriot_minimum_stack(0x1c0) ssize_t
@@ -1069,7 +1080,8 @@ __cheriot_minimum_stack(0x230) void *heap_allocate_array(
 	{
 		return nullptr;
 	}
-	return malloc_internal(req, std::move(g), cap, timeout, false, flags);
+	return malloc_internal(req, std::move(g), cap, timeout, false, flags)
+	  .as_raw();
 }
 
 namespace
@@ -1149,17 +1161,19 @@ namespace
 		{
 			return {nullptr, nullptr};
 		}
-		CHERI::Capability underlyingAllocation{
-		  malloc_internal(sealedSize, std::move(g), capability, timeout, true)};
-		if (underlyingAllocation == nullptr)
+		auto alloc =
+		  malloc_internal(sealedSize, std::move(g), capability, timeout, true);
+		if (alloc.is_error())
 		{
 			Debug::log<DebugLevel::Warning>(
-			  "Underlying allocation failed for sealed object");
+			  "Underlying allocation failed for sealed object {}",
+			  alloc.as_error());
 			return {nullptr, nullptr};
 		}
 
 		// Allocate space at the top for the payload.
-		auto headerThenPayload = underlyingAllocation.cast<TokenObjectHeader>();
+		auto headerThenPayload =
+		  CHERI::Capability{alloc.as_pointer()}.cast<TokenObjectHeader>();
 		headerThenPayload.address() = headerThenPayload.top() - sealedSize;
 
 		// Round down the base to the heap alignment size, padding the payload.
