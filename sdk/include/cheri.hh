@@ -1582,4 +1582,120 @@ namespace CHERI
 		    .value_or(RegisterNumber::Invalid);
 		return {causeCode, registerNumber};
 	}
+
+	/**
+	 * Helper for a value that encodes either a pointer or an error value in a
+	 * pointer-sized value, discriminated by the tag bit.
+	 *
+	 * This is a *non-owning* pointer type.
+	 */
+	template<typename T>
+	class ErrorOr
+	{
+		/// The underlying value
+		Capability<T> pointer;
+		public:
+		/**
+		 * Construct from a pointer.  This may be a C API that uses the
+		 * convention of holding a pointer or an error value.  You may call
+		 * this constructor with an invalid pointer.
+		 */
+		ErrorOr(T* pointer) : pointer(pointer) {}
+
+		/**
+		 * Initialise the value with an error value.  By convention, error
+		 * numbers are negated in CHERIoT RTOS.
+		 */
+		ErrorOr(int error) : pointer(reinterpret_cast<T*>(static_cast<intptr_t>(error))) {}
+
+		/**
+		 * Returns `true` if this holds an error value, false otherwise.
+		 */
+		bool is_error()
+		{
+			return !pointer.is_valid();
+		}
+
+		/**
+		 * If this holds an error value, return it, otherwise return 0.
+		 *
+		 * CHERIoT RTOS follows the C convention of using 0 to indicate
+		 * success, but this may result in ambiguity.  Use `is_error` if this
+		 * ambiguity matters.
+		 */
+		int as_error()
+		{
+			if (!is_error())
+			{
+				return 0;
+			}
+			return reinterpret_cast<intptr_t>(pointer.get());
+		}
+
+		/**
+		 * If this holds a pointer, return it, otherwise return `nullptr`.
+		 * This ensures that all values that are *not* valid pointers are
+		 * mapped to null.
+		 */
+		T* as_pointer()
+		{
+			if (is_error())
+			{
+				return nullptr;
+			}
+			return pointer;
+		}
+
+		/**
+		 * Monadic helper modelled on `std::optional`.  Takes a reference to a
+		 * callable object that accepts a `T*` or something that can be
+		 * implicitly cast to a `T*`.  The return value for the argument should
+		 * be either `void` or something that can implicitly cast to an
+		 * `ErrorOr<T>`.
+		 *
+		 * The callback is invoked if and only if this holds a valid pointer.
+		 */
+		ErrorOr and_then(auto &&function)
+		{
+			if (is_error())
+			{
+				return this;
+			}
+			auto result = function(pointer);
+			if constexpr (std::is_same_v<decltype(result), void>)
+			{
+				return this;
+			}
+			else
+			{
+				return result;
+			}
+		}
+
+		/**
+		 * Monadic helper modelled on `std::optional`.  Takes a reference to a
+		 * callable object that accepts an `int` implicitly cast to an `int`.
+		 * The return value for the argument should be either `void` or
+		 * something that can implicitly cast to an `ErrorOr<T>`.
+		 *
+		 * The callback is invoked if and only if this holds an error value.
+		 */
+		ErrorOr or_else(auto &&function)
+		{
+			if (!is_error())
+			{
+				return this;
+			}
+			auto result = function(static_cast<int>(reinterpret_cast<intptr_t>(pointer.get())));
+			if constexpr (std::is_same_v<decltype(result), void>)
+			{
+				return this;
+			}
+			else
+			{
+				return result;
+			}
+		}
+	};
+
 } // namespace CHERI
