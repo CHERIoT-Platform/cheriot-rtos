@@ -1646,6 +1646,17 @@ namespace CHERI
 			return pointer;
 		}
 
+
+		/**
+		 * Returns the underlying pointer, which may be an untagged capability
+		 * with integer error value. For type safety, prefer `as_pointer` or 
+		 * `as_error`.
+		 */
+		[[nodiscard]] T* as_raw()
+		{
+			return pointer.get();
+		}
+
 		/**
 		 * Monadic helper modelled on `std::optional`.  Takes a reference to a
 		 * callable object that accepts a `T*` or something that can be
