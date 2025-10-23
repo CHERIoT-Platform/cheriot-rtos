@@ -1583,4 +1583,220 @@ namespace CHERI
 		return {causeCode, registerNumber};
 	}
 
+	/**
+	 * Helper for a value that encodes either a pointer or an error value in a
+	 * pointer-sized value, discriminated by the tag bit.
+	 *
+	 * This is a *non-owning* pointer type.
+	 */
+	template<typename T, bool IsSealed = false>
+	class ErrorOr
+	{
+		/// The underlying value
+		Capability<T, IsSealed> pointer;
+
+		public:
+		/**
+		 * Construct from a pointer.  This may be a C API that uses the
+		 * convention of holding a pointer or an error value.  You may call
+		 * this constructor with an invalid pointer.
+		 */
+		ErrorOr(T *pointer) : pointer(pointer) {}
+
+		/**
+		 * Construct from a CHERI::Capability.  This may be a C API that uses
+		 * the convention of holding a pointer or an error value.  You may call
+		 * this constructor with an invalid pointer.
+		 */
+		__always_inline ErrorOr(Capability<T, IsSealed> pointer)
+		  : pointer(pointer)
+		{
+		}
+
+		/**
+		 * Initialise the value with an error value.  By convention, error
+		 * numbers are negated in CHERIoT RTOS.
+		 */
+		ErrorOr(int error)
+		  : pointer(reinterpret_cast<decltype(pointer)::PointerType>(
+		      static_cast<intptr_t>(error)))
+		{
+		}
+
+		/**
+		 * Returns `true` if this holds an error value, false otherwise.
+		 */
+		bool is_error()
+		{
+			return !pointer.is_valid();
+		}
+
+		/**
+		 * Generic eliminator for `ErrorOr<T>` values.  Read `x.either(t, e)` as
+		 * "either calls t with x's value or e with x's error".  That is,
+		 * `either` takes two callbacks, the first of which is called with
+		 * non-error `T *` values, and the second of which is called with `int`
+		 * error values.  The return type of the latter (the error handler) must
+		 * be convertable to the return type of the former (the `T *` handler).
+		 */
+		__always_inline auto either(auto &&onT,
+		                            auto &&onE) /* 🏳️‍⚧️ */
+		    requires std::is_invocable_v<decltype(onT),
+		                                 Capability<T, IsSealed>> &&
+		             std::is_invocable_v<decltype(onE), int> &&
+		             std::convertible_to<
+		               std::invoke_result_t<decltype(onE), int>,
+		               std::invoke_result_t<decltype(onT),
+		                                    Capability<T, IsSealed>>>
+		{
+			if (is_error())
+			{
+				auto e =
+				  reinterpret_cast<intptr_t>(static_cast<void *>(pointer));
+
+				/*
+				 * If `onT` returns `void`, then so must `onE` (given the
+				 * `requires`-ed `std::convertable_to` above), but `void` is not
+				 * a legal initializer type, so don't try.
+				 */
+				if constexpr (std::is_void_v<
+				                std::invoke_result_t<decltype(onT),
+				                                     Capability<T, IsSealed>>>)
+				{
+					return onE(e);
+				}
+				else
+				{
+					return std::invoke_result_t<decltype(onT),
+					                            Capability<T, IsSealed>>{
+					  onE(e)};
+				}
+			}
+			return onT(pointer);
+		}
+
+		/**
+		 * If this holds an error value, return it, otherwise return 0.
+		 *
+		 * CHERIoT RTOS follows the C convention of using 0 to indicate
+		 * success, but this may result in ambiguity.  Use `is_error` if this
+		 * ambiguity matters.
+		 */
+		int as_error()
+		{
+			return either([](auto) { return 0; }, [](int e) { return e; });
+		}
+
+		/**
+		 * If this holds a pointer, return it, otherwise return `nullptr`.
+		 * This ensures that all values that are *not* valid pointers are
+		 * mapped to null.
+		 */
+		T *as_pointer()
+		    requires requires() {
+			    { pointer.get() } -> std::same_as<T *>;
+		    }
+		{
+			return either([](auto t) { return t.get(); },
+			              [](int) { return nullptr; });
+		}
+
+		/**
+		 * Returns the underlying pointer, which may be an untagged capability
+		 * with integer error value. For type safety, prefer `as_pointer` or
+		 * `as_error`.
+		 */
+		T *as_raw()
+		    requires requires() {
+			    { pointer.get() } -> std::same_as<T *>;
+		    }
+		{
+			return pointer.get();
+		}
+
+		/**
+		 * Returns the underlying pointer, which may be an untagged capability
+		 * with integer error value, in its CHERI::Capability<> wrapper, which
+		 * includes the IsSealed flag.  For type safety, prefer `as_pointer` or
+		 * `as_error`.
+		 */
+		[[nodiscard]] auto as_raw_capability()
+		{
+			return pointer;
+		}
+
+		/**
+		 * Monadic helper modelled on `std::optional`.  Takes a reference to a
+		 * callable object that accepts a `T*` or something that can be
+		 * implicitly cast to a `T*`.  The return value for the argument should
+		 * be either `void` (in which case `and_then` returns `*this`) or an
+		 * `ErrorOr<U>`
+		 *
+		 * The callback is invoked if and only if this holds a valid pointer.
+		 */
+		auto and_then(auto &&function)
+		    requires std::is_convertible_v<decltype(pointer), T *> &&
+		             std::is_void_v<
+		               std::invoke_result_t<decltype(function), T *>>
+		{
+			either([function](T *t) { function(t); }, [](int) { return; });
+			return *this;
+		}
+
+		auto and_then(auto &&function)
+		  /*
+		   * Require that R, the result of `function` evaluation, is an
+		   * ErrorOr: in particular, that it is the same type returned by
+		   * an ErrorOr constructor (at a deduced template type, thus the
+		   * explicit namespacing!).  In particular, this gets us our copy
+		   * constructor in the success case.
+		   */
+		    requires std::is_convertible_v<decltype(pointer), T *> &&
+		             requires(std::invoke_result_t<decltype(function), T *> r) {
+			             requires std::is_same_v<decltype(CHERI::ErrorOr(r)),
+			                                     decltype(r)>;
+		             }
+		{
+			return either(function, [](int e) {
+				return std::invoke_result_t<decltype(function), T *>{e};
+			});
+		}
+
+		/**
+		 * Monadic helper modelled on `std::optional`.  Takes a reference to a
+		 * callable object that accepts an `int`.  The return value for the
+		 * argument should be either `void` (in which case `or_else` returns
+		 * `*this`) or something that can implicitly cast to an `ErrorOr<T>`.
+		 *
+		 * The callback is invoked if and only if this holds an error value.
+		 */
+		auto or_else(auto &&function)
+		    requires std::is_void_v<
+		      std::invoke_result_t<decltype(function), int>>
+		{
+			either([](T *) { return; }, [function](int e) { function(e); });
+			return *this;
+		}
+
+		auto or_else(auto &&function)
+		    requires std::is_convertible_v<
+		      std::invoke_result_t<decltype(function), int>,
+		      int>
+		{
+			return either([this](T *) { return *this; },
+			              [function](int e) { return function(e); });
+		}
+	};
+
+	/// Explicit copy constructor deduction guide
+	template<typename T, bool IsSealed>
+	ErrorOr(ErrorOr<T, IsSealed>) -> ErrorOr<T, IsSealed>;
+
+	/*
+	 * Partially ensure that CHERI::ErrorOr<>s can be housed in registers rather
+	 * than needing to go via memory.  See also the above test on Capability<>s.
+	 */
+	static_assert(std::is_trivially_copy_constructible_v<ErrorOr<void>> &&
+	              std::is_trivially_destructible_v<ErrorOr<void>>);
+
 } // namespace CHERI
