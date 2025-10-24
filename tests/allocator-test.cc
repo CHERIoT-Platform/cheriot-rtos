@@ -899,7 +899,7 @@ namespace
 		       (sealedPointer.base() + sizeof(TokenObjectHeader)),
 		     "Sealed handle {} has implausible offset",
 		     sealedPointer);
-		TEST(sealedPointer.address() ==
+		TEST((sealedPointer.address() & ~7) ==
 		       Capability{unsealedCapability}.address(),
 		     "Sealed handle {} does not point at payload {}",
 		     sealedPointer,
@@ -911,6 +911,8 @@ namespace
 		     "expected one ({} != {})",
 		     unsealedLarge,
 		     unsealedCapability);
+		// Make sure that removing a permission doesn't break deallocation
+		sealedPointer = token_permissions_and(sealedPointer.get(), 5);
 		int destroyed = token_obj_destroy(
 		  MALLOC_CAPABILITY, sealingCapability, sealedPointer);
 		TEST(destroyed == 0, "Failed to destroy large sealed capability");

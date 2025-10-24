@@ -220,7 +220,8 @@
 	 * original type.  This will be removed once the compiler understands      \
 	 * static sealed objects natively. */                                      \
 	extern valueType __sealed_type_placeholder_##name;                         \
-	extern __if_cxx("C") struct __##name##_type                                \
+	_Alignas(_Alignof(type) < 8 ? 8 : _Alignof(type)) extern __if_cxx(         \
+	  "C") struct __##name##_type                                              \
 	{                                                                          \
 		uint32_t key;                                                          \
 		uint32_t padding;                                                      \
@@ -260,7 +261,9 @@
 	extern __if_cxx("C") int __sealing_key_##compartment##_##keyName __asm(    \
 	  "__export.sealing_type." #compartment "." #keyName);                     \
 	__attribute__((section(".sealed_objects"), used)) __if_cxx(                \
-	  inline) struct __##name##_type                                           \
+	  inline) _Alignas(_Alignof(type) < 8                                      \
+	                     ? 8                                                   \
+	                     : _Alignof(type)) struct __##name##_type              \
 	  name = /* NOLINT(bugprone-macro-parentheses) */                          \
 	  {(uint32_t)&__sealing_key_##compartment##_##keyName,                     \
 	   0,                                                                      \

@@ -701,9 +701,18 @@ namespace
 					                 "Invalid sealed object {}",
 					                 typeAddress);
 				}
+				Debug::Invariant(
+				  (entry.address & 0x7) == 0,
+				  "Sealed objects must be 8-byte aligned, address {} is not",
+				  entry.address);
 				// Seal with the static token sealing key
 				Capability object = build(entry.address, entry.size());
+				// The address of the sealed object is the start of the object,
+				// not the header
 				object.address() += sizeof(TokenObjectHeader);
+				// Set all user-defined permissions.  These may be explicitly
+				// reduced for imported objects in a later version.
+				object.address() += 7;
 				Capability sealedObject =
 				  object.seal(build<void, Root::Type::Seal>(StaticToken, 1));
 				Debug::log("Static sealed object: {}", sealedObject);
@@ -1277,12 +1286,17 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	 * either and sometimes with static knowledge of which is expected.  To
 	 * avoid `li; csetaddr; csetbounds` sequences, we give it a separate cap
 	 * for each case.
+	 *
+	 * It also changes the software permissions of a sealed capability by
+	 * toggling the low bits, which means that it must have permit-seal
+	 * permission as well as permit-unseal.
 	 */
-	setSealingKey(imgHdr.token_library(),
-	              Allocator,
-	              2, // Allocator and StaticToken
-	              0,
-	              PermissionSet{Permission::Global, Permission::Unseal});
+	setSealingKey(
+	  imgHdr.token_library(),
+	  Allocator,
+	  2, // Allocator and StaticToken
+	  0,
+	  PermissionSet{Permission::Global, Permission::Unseal, Permission::Seal});
 	setSealingKey(imgHdr.token_library(),
 	              StaticToken,
 	              1,

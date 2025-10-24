@@ -78,6 +78,10 @@ __sealingkey_dynamic:
 
   /* Unseal, clobbering authority */
   cunseal ca2, ca1, ca2
+  // Clear the low 3 bits.
+  cgetaddr a1, ca2
+  andi     a1, a1, ~0x7
+  csetaddr ca2, ca2, a1
 
   /* Verify tag of unsealed form */
   cgettag a3, ca2
@@ -169,6 +173,43 @@ _Z24token_obj_unseal_dynamicP12TokenKeyTypeU19__sealed_capabilityPv:
 	LoadCapPCC ca2, __sealingkey_dynamic
 	j          .Ltoken_unseal_internal
 
+/**
+ * An in-assembler implementation of
+ *
+ * void *__cheri_libcall
+ * token_permissions_and(struct TokenKeyType *, int);
+ *
+ * The name has been manually mangled as per the C++ rules.
+ */
+	.hidden  _Z21token_permissions_andU19__sealed_capabilityPvi
+	.globl   _Z21token_permissions_andU19__sealed_capabilityPvi
+_Z21token_permissions_andU19__sealed_capabilityPvi:
+	// Clear all bits that aren't valid permission bits in the mask.
+	andi       a1, a1, 7
+	// Set all bits in the address part of the mask.  This is now a mask that
+	// we can apply to the address to preserve the address and clear some
+	// permissions.
+	ori        a1, a1, 0xfffffff8
+	// Get the sealing key and set its address for the reseal operation
+	// This may result in a sealing key that is invalid, but that's fine: the
+	// unseal and seal will just give invalid capabilities.
+	LoadCapPCC ca2, __sealingkey_either
+	cgettype   a3, ca0
+	csetaddr   ca2, ca2, a3
+	// Unseal a0 into a0
+	cunseal    ca0, ca0, ca2
+	// Apply the mask to the address
+	cgetaddr   a3, ca0
+	and        a3, a3, a1
+	csetaddr   ca0, ca0, a3
+	// Reseal the result
+	cseal      ca0, ca0, ca2
+	// Clear the sealing key
+	zeroOne    a2
+	// Return, the resealed value is now in ca0.
+	cret
+
+
 /* TODO: Eventually this goes away, when the assembler can generate it for us */
 CHERIOT_EXPORT_LIBCALL \
   _Z16token_obj_unsealP12TokenKeyTypeP15TokenObjectType, \
@@ -203,3 +244,8 @@ CHERIOT_EXPORT_LIBCALL \
   _Z24token_obj_unseal_dynamicP12TokenKeyTypeU19__sealed_capabilityPv, \
   0 /* No stack usage */, \
   0b00010010 /* IRQs deferred, two argument registers */
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z21token_permissions_andU19__sealed_capabilityPvi, \
+  0 /* No stack usage */, \
+  0b00000000 /* Interrupts enabled */
