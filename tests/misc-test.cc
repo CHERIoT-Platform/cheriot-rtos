@@ -283,6 +283,156 @@ namespace
 		     "CILS failed to store stack pointer");
 	}
 
+	/**
+	 * The dynamic bits of check_erroror, to prevent the compiler from
+	 * propagating constants, making it easier to check code generation.
+	 */
+	__noinline void check_erroror_dyn(int               *x,
+	                                  ErrorOr<int>       xOk,
+	                                  ErrorOr<short>     xErr,
+	                                  ErrorOr<int, true> xSealed)
+	{
+		TEST_EQUAL(xOk.is_error(), 0, "ErrorOr pointer is_error");
+		TEST_EQUAL(xOk.as_pointer(), x, "ErrorOr pointer as_pointer");
+		TEST_EQUAL(xOk.as_error(), 0, "ErrorOr pointer as_error");
+
+		TEST_EQUAL(!xErr.is_error(), 0, "ErrorOr error is_error");
+		TEST_EQUAL(xErr.as_pointer(), nullptr, "ErrorOr error as_pointer");
+		TEST_EQUAL(xErr.as_error(), -5, "ErrorOr error as_error");
+
+		TEST_EQUAL(!xSealed.is_error(), 0, "ErrorOr sealed error is_error");
+		TEST_EQUAL(xSealed.as_error(), -1, "ErrorOr sealed error as_error");
+
+		{
+			int  err = 0;
+			auto v   = xErr.or_else([&err](int e) { err = e * 2; });
+			static_assert(std::is_same_v<decltype(v), decltype(xErr)>);
+			TEST_EQUAL(err, -10, "ErrorOr error or_else void");
+			(void)v;
+		}
+
+		{
+			auto v = xErr.or_else([](int e) { return e * 2; });
+			static_assert(std::is_same_v<decltype(v), decltype(xErr)>);
+			TEST_EQUAL(v.as_error(), -10, "ErrorOr error or_else int");
+			(void)v;
+		}
+	}
+
+	/// Test ErrorOr<T> functionality.
+	struct TestErrorOr
+	{
+		template<typename EO, typename F>
+		constexpr static bool AndThen = requires(F &&f, EO o) {
+			{ o.and_then(f) };
+		};
+
+		template<typename EO, typename FT, typename FE>
+		constexpr static bool Either = requires(FT &&ft, FE &&fe, EO o) {
+			{ o.either(ft, fe) };
+		};
+
+		template<typename EO>
+		constexpr static bool AsRaw = requires(EO o) {
+			{ o.as_raw() };
+		};
+
+		template<typename EO>
+		constexpr static bool AsRawCapability = requires(EO o) {
+			{ o.as_raw_capability() };
+		};
+
+		template<typename EO>
+		constexpr static bool AsError = requires(EO o) {
+			{ o.as_error() };
+		};
+
+		template<typename EO>
+		constexpr static bool AsPointer = requires(EO o) {
+			{ o.as_pointer() };
+		};
+	};
+
+	void check_erroror()
+	{
+		int                x = 42;
+		ErrorOr<int>       xOk{&x};
+		ErrorOr<short>     xErr{-5};
+		ErrorOr<int, true> xSealed{-1};
+
+		check_erroror_dyn(&x, xOk, xErr, xSealed);
+
+		// and_then with callback returning ErrorOr of the same type
+		{
+			using A = decltype(xOk.and_then([](int *x) { return ErrorOr{x}; }));
+			static_assert(std::is_same_v<A, decltype(xOk)>);
+		}
+
+		// and_then with void callback
+		{
+			using A = decltype(xOk.and_then([](int *) { return; }));
+			static_assert(std::is_same_v<A, decltype(xOk)>);
+		}
+
+		// and_then with callback returning ErrorOr of a different type
+		{
+			short y;
+			using A =
+			  decltype(xOk.and_then([&y](int *x) { return ErrorOr(&y); }));
+			static_assert(std::is_same_v<A, ErrorOr<short>>);
+		}
+
+		{
+			/*
+			 * Can always get a raw capability but a raw T * or as_pointer()
+			 * only when unsealed.
+			 */
+			static_assert(TestErrorOr::AsRawCapability<decltype(xOk)>);
+			static_assert(TestErrorOr::AsRawCapability<decltype(xSealed)>);
+			static_assert(TestErrorOr::AsRaw<decltype(xOk)>);
+			static_assert(!TestErrorOr::AsRaw<decltype(xSealed)>);
+			static_assert(TestErrorOr::AsPointer<decltype(xOk)>);
+			static_assert(!TestErrorOr::AsPointer<decltype(xSealed)>);
+
+			// Error discriminator works regardless of sealing
+			static_assert(TestErrorOr::AsError<decltype(xOk)>);
+			static_assert(TestErrorOr::AsError<decltype(xSealed)>);
+
+			using PtrToErr = decltype([=](int *x) { return xErr; });
+			using PtrToInt = decltype([](int *x) { return 4; });
+
+			/*
+			 * Can call ErrorOr<>::and_then() with a callback returning an
+			 * ErrorOr<> but can't with a callback returning an int.
+			 */
+			static_assert(TestErrorOr::AndThen<decltype(xOk), PtrToErr>);
+			static_assert(!TestErrorOr::AndThen<decltype(xOk), PtrToInt>);
+
+			/*
+			 * Can't call ErrorOr<T, true>::and_then(), because we refuse to
+			 * coerce a sealed capability to a C++ pointer.
+			 */
+			static_assert(!TestErrorOr::AndThen<decltype(xSealed), PtrToErr>);
+
+			using CapToBool = decltype([](auto c) { return c.is_valid(); });
+			using IntToBool = decltype([](int x) { return false; });
+
+			/*
+			 * ErrorOr<T, _>::either() callbacks are given the Capability form,
+			 * so can work on sealed forms, but only if the callbacks don't
+			 * attempt coersion to T *.
+			 */
+			static_assert(
+			  TestErrorOr::Either<decltype(xOk), CapToBool, IntToBool>);
+			static_assert(
+			  TestErrorOr::Either<decltype(xSealed), CapToBool, IntToBool>);
+			static_assert(
+			  TestErrorOr::Either<decltype(xOk), PtrToErr, IntToBool>);
+			static_assert(
+			  !TestErrorOr::Either<decltype(xSealed), PtrToErr, IntToBool>);
+		}
+	}
+
 	const char *testString = "Hello world";
 
 } // namespace
@@ -372,6 +522,7 @@ int test_misc()
 	check_capability_set_inexact_at_most();
 	check_sealed_scoping();
 	check_cils();
+	check_erroror();
 
 	debug_log("Testing shared objects.");
 	check_shared_object("exampleK",
