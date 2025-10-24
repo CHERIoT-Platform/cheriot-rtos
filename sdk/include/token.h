@@ -117,6 +117,33 @@ __cheri_compartment("allocator")
   __cheri_libcall token_obj_unseal_dynamic(TokenKey, CHERI_SEALED(void *));
 
 /**
+ * Mask the user permissions of a sealed object. The first argument is the
+ * sealed capability, the second is a permission mask to apply.
+ */
+#ifndef __cplusplus
+CHERI_SEALED(void *)
+__cheri_libcall token_permissions_and(CHERI_SEALED(void *), int);
+#else
+extern "C++" template<typename T>
+CHERI_SEALED(T *)
+token_permissions_and(CHERI_SEALED(T *) object, int permissions)
+{
+	CHERI_SEALED(void *)
+	__cheri_libcall token_permissions_and(CHERI_SEALED(void *), int);
+	return static_cast<CHERI_SEALED(T *)>(
+	  token_permissions_and(object, permissions));
+}
+#endif
+
+/**
+ * Returns the user permissions bitmap for the sealed object.
+ */
+static inline int token_permissions_get(CHERI_SEALED(void *) object)
+{
+	return __builtin_cheri_address_get(object) & 0x7;
+}
+
+/**
  * Destroy the object given its key, freeing memory.
  *
  * The key must have the permit-unseal permission.

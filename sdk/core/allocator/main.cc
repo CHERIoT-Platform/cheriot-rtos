@@ -1179,8 +1179,13 @@ namespace
 		  reinterpret_cast<TokenObjectType *>(headerThenPayload.get())};
 		payloadAfterHeader.address() += sizeof(TokenObjectHeader);
 
-		// Sealed points at payload but can access header, at negative offset
-		auto sealed = payloadAfterHeader.seal(allocatorSealingKey);
+		// Sealed points at payload but can access header, at negative offset.
+		auto sealed = [=]() {
+			auto res{payloadAfterHeader};
+			// Set all of the user permissions
+			res.address() += 7;
+			return res.seal(allocatorSealingKey);
+		}();
 
 		// Unsealed points at payload and can access only payload
 		TokenHandle<false> payload{payloadAfterHeader.get()};

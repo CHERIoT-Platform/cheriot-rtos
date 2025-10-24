@@ -33,6 +33,19 @@ int test_static_sealed_object(Sealed<TestType> obj)
 	// Make sure that it's a single sealing type
 	TEST(keyCap.bounds() == 1, "Invalid bounds on {}", key);
 
+	debug_log("Permissions? {}", token_permissions_get(obj));
+	debug_log("Object? {}", obj.get());
+	TEST(token_permissions_get(obj) == 7,
+	     "Static sealed object is missing permissions: {} (should be 7)",
+	     token_permissions_get(obj));
+
+	obj = token_permissions_and(obj.get(), 5);
+	debug_log("Permissions? {}", token_permissions_get(obj));
+	debug_log("Object? {}", obj.get());
+	TEST(token_permissions_get(obj) == 5,
+	     "Static sealed object is missing permissions: {} (should be 5)",
+	     token_permissions_get(obj));
+
 	// Try to use it
 	Capability unsealed = token_unseal(key, obj);
 	debug_log("Unsealed object: {}", unsealed);
