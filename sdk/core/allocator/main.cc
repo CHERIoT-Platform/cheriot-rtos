@@ -1179,9 +1179,14 @@ namespace
 		TokenHandle<true> payloadAfterHeader{
 		  reinterpret_cast<TokenObjectType *>(headerThenPayload.get())};
 		payloadAfterHeader.address() += sizeof(TokenObjectHeader);
+		// Set all of the user permissions
+		payloadAfterHeader.address() += 7;
 
 		// Sealed points at payload but can access header, at negative offset
 		auto sealed = payloadAfterHeader.seal(allocatorSealingKey);
+
+		// Undo the displacement for the user permissions
+		payloadAfterHeader.address() -= 7;
 
 		// Unsealed points at payload and can access only payload
 		TokenHandle<false> payload{payloadAfterHeader.get()};
