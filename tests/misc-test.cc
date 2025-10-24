@@ -283,6 +283,80 @@ namespace
 		     "CILS failed to store stack pointer");
 	}
 
+	/**
+	 * The dynamic bits of check_erroror, to prevent the compiler from
+	 * propagating constants, making it easier to check code generation.
+	 */
+	__noinline void
+	check_erroror_dyn(int *x, ErrorOr<int> xOk, ErrorOr<short> xErr)
+	{
+		TEST_EQUAL(xOk.is_error(), 0, "ErrorOr pointer is_error");
+		TEST_EQUAL(xOk.as_pointer(), x, "ErrorOr pointer as_pointer");
+		TEST_EQUAL(xOk.as_error(), 0, "ErrorOr pointer as_error");
+
+		TEST_EQUAL(!xErr.is_error(), 0, "ErrorOr error is_error");
+		TEST_EQUAL(xErr.as_pointer(), nullptr, "ErrorOr error as_pointer");
+		TEST_EQUAL(xErr.as_error(), -5, "ErrorOr error as_error");
+
+		{
+			int  err = 0;
+			auto v   = xErr.or_else([&err](int e) { err = e * 2; });
+			static_assert(std::is_same_v<decltype(v), decltype(xErr)>);
+			TEST_EQUAL(err, -10, "ErrorOr error or_else void");
+		}
+
+		{
+			auto v = xErr.or_else([](int e) { return e * 2; });
+			static_assert(std::is_same_v<decltype(v), decltype(xErr)>);
+			TEST_EQUAL(v.as_error(), -10, "ErrorOr error or_else int");
+		}
+	}
+
+	/// Test ErrorOr<T> functionality.
+	struct TestErrorOr
+	{
+		template<typename F>
+		constexpr static bool AndThen =
+		  requires(F &&f, ErrorOr<int> o) { o.and_then(f); };
+	};
+
+	void check_erroror()
+	{
+		int            x = 42;
+		ErrorOr<int>   xOk{&x};
+		ErrorOr<short> xErr{-5};
+
+		check_erroror_dyn(&x, xOk, xErr);
+
+		// and_then with callback returning ErrorOr of the same type
+		{
+			auto v = xOk.and_then([](int *x) { return ErrorOr{x}; });
+			static_assert(std::is_same_v<decltype(v), decltype(xOk)>);
+		}
+
+		// and_then with void callback
+		{
+			auto v = xOk.and_then([](int *) { return; });
+			static_assert(std::is_same_v<decltype(v), decltype(xOk)>);
+		}
+
+		// and_then with callback returning ErrorOr of a different type
+		{
+			short y;
+			auto  v = xOk.and_then([&y](int *x) { return ErrorOr(&y); });
+			static_assert(std::is_same_v<decltype(v), ErrorOr<short>>);
+		}
+
+		{
+			auto badCall  = [](int *x) { return *x; };
+			auto goodCall = [=](int *x) { return xErr; };
+
+			// can't call and_then with a callback returning an int
+			static_assert(!TestErrorOr::AndThen<decltype(badCall)>);
+			static_assert(TestErrorOr::AndThen<decltype(goodCall)>);
+		}
+	}
+
 	const char *testString = "Hello world";
 
 } // namespace
@@ -372,6 +446,7 @@ int test_misc()
 	check_capability_set_inexact_at_most();
 	check_sealed_scoping();
 	check_cils();
+	check_erroror();
 
 	debug_log("Testing shared objects.");
 	check_shared_object("exampleK",
