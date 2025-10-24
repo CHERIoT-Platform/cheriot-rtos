@@ -583,12 +583,53 @@ class Bitpack
 /// A fusion of .view<>() and BITPACK_ENUM_WITH
 #define BITPACK_ENUM_UTYPE_WITH(b, t, v) BITPACK_ENUM_WITH((b).view<t>(), v)
 
+/**
+ * An in-situ probe for the #include-sion of <__macro_map.h>.
+ *
+ * While we could gate our behavior on `#if defined(CHERIOT_EVAL0)`, for
+ * example, that would require that <__macro_map.h> be included before us, which
+ * is slightly rude.  Instead, we can take creative advantage of the syntactic
+ * primitives __macro_map.h uses internally and some C++ quirks to (ab)usefully
+ * test the behavior of `CHERIOT_EVAL0` at each expansion of this macro.
+ *
+ * In terms of operation, this relies on `U CHERIOT_EVAL0(T);` meaning one of
+ *  two very different things and so dramatically changing what the subsequent
+ * `sizeof(T)` means.
+ *
+ *  - If CHERIOT_EVAL0 hasn't been #defined, then this defines a function named
+ *    CHERIOT_EVAL0 which takes a `struct T` and returns a `U`.  In this case,
+ *    the `T` in `sizeof(T)` means `struct T`, and that's 1 by definition,
+ *    since `sizeof(char)` is defined to be 1.
+ *
+ *  - If CHERIOT_EVAL0 has been defined as per <__macro_map.h>, then this is
+ *    preprocessed into `U T;`, a variable declaration, and the `T` in
+ *    `sizeof(T)` now refers to that variable and evaluates to 2.
+ */
+#define BITPACK_HAS_MACRO_MAP                                                  \
+	([]() {                                                                    \
+		struct BITPACK_HAS_MACRO_MAP_T                                         \
+		{                                                                      \
+			char t;                                                            \
+		};                                                                     \
+		struct BITPACK_HAS_MACRO_MAP_U                                         \
+		{                                                                      \
+			char u[2];                                                         \
+		};                                                                     \
+		BITPACK_HAS_MACRO_MAP_U CHERIOT_EVAL0(BITPACK_HAS_MACRO_MAP_T);        \
+		return sizeof(BITPACK_HAS_MACRO_MAP_T);                                \
+	}() > 1)
+
 /// Map function for BITPACK_QUALIFY
 #define BITPACK_QUALIFY_HELPER(x, b) decltype(b)::x
 
 /**
  * Given bitpack `b`, qualify each additional argument with `decltype(b)`.  That
  * is, `BITPACK_QUALIFY(b, X, Y)` evalutes to  `decltype(b)::X, decltype(b)::Y`.
+ *
+ * This requires #include <__macro_map.h> (and will give confusing error
+ * messages if not included).  (Because this is very much a C++ token level
+ * hack, unlike the other __macro_map users, it's hard for us to statically
+ * assert and give nice error messages.)
  */
 #define BITPACK_QUALIFY(b, ...)                                                \
 	CHERIOT_MAP_LIST_UD(BITPACK_QUALIFY_HELPER, b, __VA_ARGS__)
@@ -613,7 +654,12 @@ class Bitpack
  * Construct a chain of .with() whose arguments are all qualified with the type
  * of the bitpack.  #include <__macro_map.h> if you want to use this.
  */
-#define BITPACK_WITHS(b, ...) (b) CHERIOT_MAP(BITPACK_WITHS_HELPER, __VA_ARGS__)
+#define BITPACK_WITHS(b, ...)                                                  \
+	({                                                                         \
+		static_assert(BITPACK_HAS_MACRO_MAP,                                   \
+		              "BITPACK_WITHS requires __macro_map.h");                 \
+		(b) CHERIOT_MAP(BITPACK_WITHS_HELPER, __VA_ARGS__);                    \
+	})
 
 /// A fusion of BITPACK_WITH and BITPACK_QUALIFY
 #define BITPACK_QWITHS(b, ...) BITPACK_WITHS(b, BITPACK_QUALIFY(b, __VA_ARGS__))
@@ -639,6 +685,8 @@ class Bitpack
  */
 #define BITPACK_MASKED_OP(b, op, ...)                                          \
 	({                                                                         \
+		static_assert(BITPACK_HAS_MACRO_MAP,                                   \
+		              "BITPACK_MASKED_OP requires __macro_map.h");             \
 		constexpr decltype(b.raw()) __bitpack_mask =                           \
 		  (0)CHERIOT_MAP_UD(BITPACK_MASKED_OP_HELPER, b, __VA_ARGS__);         \
 		constexpr auto __bitpack_query =                                       \

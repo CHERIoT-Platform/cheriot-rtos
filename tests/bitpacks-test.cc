@@ -1,8 +1,13 @@
 #define TEST_NAME "Test bitpacks"
 #include "tests.hh"
 
-#include <__macro_map.h>
 #include <bitpacks.hh>
+
+static_assert(!BITPACK_HAS_MACRO_MAP);
+
+#include <__macro_map.h>
+
+static_assert(BITPACK_HAS_MACRO_MAP);
 
 /// An example "device" structure type, composed of two Bitpack "registers".
 struct Foo
