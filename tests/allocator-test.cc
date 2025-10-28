@@ -1115,7 +1115,10 @@ namespace
 		state = 2;
 		while (state.load() == 2)
 		{
-			sleep(1);
+			/*
+			 * Temporary fix, See Issue #509.
+			 */
+			sleep(2);
 		}
 
 		debug_log("End of token hazard test");
