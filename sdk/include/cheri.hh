@@ -830,27 +830,12 @@ namespace CHERI
 		/// Constructor, takes an existing pointer to wrap
 		constexpr Capability(decltype(ptr) p) : ptr(p) {}
 		/// Copy constructor, aliases the object that is pointed to by `ptr`.
-		constexpr Capability(const Capability &other) : ptr(other.ptr) {}
-		/// Move constructor.
-		constexpr Capability(Capability &&other) : ptr(other.ptr)
-		{
-			other.ptr = nullptr;
-		}
+		constexpr Capability(const Capability &other) = default;
 
 		/**
 		 * Replace the pointer that this capability wraps with another.
 		 */
 		Capability &operator=(const Capability &other) = default;
-
-		/**
-		 * Transfer the pointer that this capability wraps from .
-		 */
-		Capability &operator=(Capability &&other)
-		{
-			ptr       = other.ptr;
-			other.ptr = nullptr;
-			return *this;
-		}
 
 		/**
 		 * Access the address of the capability.
@@ -1258,6 +1243,15 @@ namespace CHERI
 	template<typename T>
 	Capability(CHERI_SEALED(T *)) -> Capability<T, true>;
 #endif
+
+	/*
+	 * Partially ensure that CHERI::Capability<>s can be housed in registers
+	 * rather than needing to go via memory.  This is an attempt to capture some
+	 * of C++'s [class.temporary]p3 requirements, but I don't know how to
+	 * capture all of them in the existing metaprogramming library.
+	 */
+	static_assert(std::is_trivially_copy_constructible_v<Capability<void>> &&
+	              std::is_trivially_destructible_v<Capability<void>>);
 
 	/**
 	 * Concept that matches pointers.
