@@ -1126,6 +1126,100 @@ namespace
 		debug_log("End of token hazard test");
 	}
 
+	/**
+	 * Test allocator capability permission restrictions.
+	 * Tests that the permission bits in sealed allocator capabilities
+	 * correctly restrict allocation and free operations across the allocator
+	 * APIs.
+	 */
+	__noinline void test_permissions()
+	{
+		debug_log("Beginning permission restriction tests");
+
+		Timeout t{UnlimitedTimeout};
+		size_t  allocSize = 128;
+
+		auto noAllocCap =
+		  token_permissions_and(SECOND_HEAP, ~AllocatorPermitAllocate);
+		auto noFreeCap =
+		  token_permissions_and(SECOND_HEAP, ~AllocatorPermitFree);
+
+		// Try to allocate with no-allocate quota
+		void *ptr = heap_allocate(&t, noAllocCap, allocSize);
+		TEST(!__builtin_cheri_tag_get(ptr),
+		     "Allocation succeeded with no-allocate quota");
+		// Ensure that no allocate can still free
+		ptr = heap_allocate(&t, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for free permission test");
+		TEST_EQUAL(
+		  heap_free(noAllocCap, ptr), 0, "Free failed with no-alloc quota");
+
+		// Ensure that no free can still allocate
+		ptr = heap_allocate(&t, noFreeCap, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for free permission test");
+		// Try to free with no-free quota
+		TEST_EQUAL(heap_free(noFreeCap, ptr),
+		           -EPERM,
+		           "Free succeeded with no-free quota");
+		TEST_EQUAL(heap_free(SECOND_HEAP, ptr), 0, "Cleanup free failed");
+
+		// Try to claim with owner no-allocate quota
+		ptr = heap_allocate(&t, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for claim permission test");
+		TEST_EQUAL(heap_claim(noAllocCap, ptr),
+		           -EPERM,
+		           "Owner claim succeeded with no-allocate quota");
+		TEST_EQUAL(heap_free(SECOND_HEAP, ptr), 0, "Cleanup free failed");
+
+		// Try to claim with non-owner no-allocate quota
+		void *mallocPtr = heap_allocate(&t, MALLOC_CAPABILITY, allocSize);
+		TEST(__builtin_cheri_tag_get(mallocPtr),
+		     "Failed to allocate for claim permission test");
+		TEST_EQUAL(heap_claim(noAllocCap, mallocPtr),
+		           -EPERM,
+		           "Non-owner claim succeeded with no-allocate quota");
+
+		// Try to release claim with no-free quota
+		TEST(heap_claim(SECOND_HEAP, mallocPtr) > 0,
+		     "Failed to claim for claim release permission test");
+		TEST_EQUAL(heap_free(noFreeCap, mallocPtr),
+		           -EPERM,
+		           "Released claim with no-free quota");
+		TEST_EQUAL(
+		  heap_free(MALLOC_CAPABILITY, mallocPtr), 0, "Cleanup free failed");
+
+		// Try heap_free_all with no-free quota
+		ptr = heap_allocate(&t, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for free_all permission test");
+		ssize_t freed = heap_free_all(noFreeCap);
+		TEST_EQUAL(freed, -EPERM, "heap_free_all succeeded with no-free quota");
+		TEST(Capability{ptr}.is_valid(),
+		     "Object freed despite permission denial");
+		TEST(heap_free_all(SECOND_HEAP) >= allocSize,
+		     "Cleanup free_all failed");
+
+		// Try heap_allocate_array with no-allocate quota
+		int numAllocs = 4;
+		ptr = heap_allocate_array(&t, noAllocCap, numAllocs, allocSize);
+		TEST_EQUAL(
+		  ptr, nullptr, "Array allocation succeeded with no-allocate quota");
+
+		// Try to make sealed allocation with no-allocate quota
+		auto       sealingCapability = STATIC_SEALING_TYPE(sealingTest);
+		void      *unsealedCapability;
+		Capability sealedPointer = token_sealed_unsealed_alloc(
+		  &t, noAllocCap, sealingCapability, 128, &unsealedCapability);
+		TEST(!sealedPointer.is_valid(),
+		     "Sealed object allocation succeeded with no-allocate quota: "
+		     "{}",
+		     sealedPointer);
+		debug_log("End of permission restriction tests");
+	}
+
 } // namespace
 
 /**
@@ -1193,6 +1287,7 @@ int test_allocator()
 	     "After alloc and free from 1024-byte quota, {} bytes left",
 	     quotaLeft);
 	test_claims();
+	test_permissions();
 
 	TEST(heap_address_is_valid(&t) == false,
 	     "Stack object incorrectly reported as heap address");
