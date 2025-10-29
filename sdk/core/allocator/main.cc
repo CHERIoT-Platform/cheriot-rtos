@@ -387,18 +387,25 @@ namespace
 	}
 
 	/**
-	 * Unseal an allocator capability and return it.  Returns `nullptr` if this
-	 * is not a heap capability.
+	 * Unseal an allocator capability and return it.
+	 *
+	 * Returns a pair, with `nullptr` as the first element if this is not a
+	 * heap capability.
+	 *
+	 * The permission bits from the sealed capability are extracted and returned
+	 * in the second element of the pair.
 	 */
-	PrivateAllocatorCapabilityState *
+	std::pair<PrivateAllocatorCapabilityState *, int>
 	malloc_capability_unseal(AllocatorCapability in)
 	{
+		int permissions = token_permissions_get(in);
+
 		auto  key        = STATIC_SEALING_TYPE(MallocKey);
 		auto *capability = token_unseal<AllocatorCapabilityState>(key, in);
 		if (!capability)
 		{
 			Debug::log<DebugLevel::Warning>("Invalid malloc capability {}", in);
-			return nullptr;
+			return std::make_pair(nullptr, 0);
 		}
 
 		auto *state =
@@ -410,11 +417,11 @@ namespace
 			static uint32_t nextIdentifier = 1;
 			if (nextIdentifier >= (1 << MChunkHeader::OwnerIDWidth))
 			{
-				return nullptr;
+				return std::make_pair(nullptr, 0);
 			}
 			state->identifier = nextIdentifier++;
 		}
-		return state;
+		return std::make_pair(state, permissions);
 	}
 
 	/**
@@ -823,11 +830,16 @@ namespace
 	                                  void               *rawPointer,
 	                                  bool                reallyFree)
 	{
-		auto *capability = malloc_capability_unseal(heapCapability);
+		auto [capability, quotaPermissions] =
+		  malloc_capability_unseal(heapCapability);
 		if (capability == nullptr)
 		{
 			Debug::log<DebugLevel::Warning>("Invalid heap capability {}",
 			                                heapCapability);
+			return -EPERM;
+		}
+		if (!(quotaPermissions & AllocatorPermitFree))
+		{
 			return -EPERM;
 		}
 		Capability<void> mem{rawPointer};
@@ -857,7 +869,8 @@ __cheriot_minimum_stack(0xa0) ssize_t
 {
 	STACK_CHECK(0xa0);
 	LockGuard g{lock};
-	auto     *cap = malloc_capability_unseal(heapCapability);
+	// Querying quota does not require any permissions
+	auto [cap, quotaPermissions] = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
 		return -EPERM;
@@ -921,8 +934,12 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(
 		return reinterpret_cast<void *>(-EINVAL);
 	}
 	LockGuard g{lock};
-	auto     *cap = malloc_capability_unseal(heapCapability);
+	auto [cap, quotaPermissions] = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
+	{
+		return reinterpret_cast<void *>(-EPERM);
+	}
+	if (!(quotaPermissions & AllocatorPermitAllocate))
 	{
 		return reinterpret_cast<void *>(-EPERM);
 	}
@@ -935,10 +952,14 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 {
 	STACK_CHECK(0x1c0);
 	LockGuard g{lock};
-	auto     *cap = malloc_capability_unseal(heapCapability);
+	auto [cap, quotaPermissions] = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
 		Debug::log<DebugLevel::Warning>("Invalid heap cap");
+		return -EPERM;
+	}
+	if (!(quotaPermissions & AllocatorPermitAllocate))
+	{
 		return -EPERM;
 	}
 	if (!Capability{pointer}.is_valid())
@@ -1008,11 +1029,16 @@ __cheriot_minimum_stack(0x1a0) ssize_t
 {
 	STACK_CHECK(0x1a0);
 	LockGuard g{lock};
-	auto     *capability = malloc_capability_unseal(heapCapability);
+	auto [capability, quotaPermissions] =
+	  malloc_capability_unseal(heapCapability);
 	if (capability == nullptr)
 	{
 		Debug::log<DebugLevel::Warning>("Invalid heap capability {}",
 		                                heapCapability);
+		return -EPERM;
+	}
+	if (!(quotaPermissions & AllocatorPermitFree))
+	{
 		return -EPERM;
 	}
 
@@ -1057,10 +1083,14 @@ __cheriot_minimum_stack(0x230) void *heap_allocate_array(
 		return reinterpret_cast<void *>(-EINVAL);
 	}
 	LockGuard g{lock};
-	auto     *cap = malloc_capability_unseal(heapCapability);
+	auto [cap, quotaPermissions] = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
 		return reinterpret_cast<void *>(-EPERM);
+	}
+	if (!(quotaPermissions & AllocatorPermitAllocate))
+	{
+		return nullptr;
 	}
 	// Use the default memory space.
 	size_t req;
@@ -1143,8 +1173,13 @@ namespace
 		}
 
 		LockGuard g{lock};
-		auto     *capability = malloc_capability_unseal(heapCapability);
+		auto [capability, quotaPermissions] =
+		  malloc_capability_unseal(heapCapability);
 		if (capability == nullptr)
+		{
+			return {nullptr, nullptr};
+		}
+		if (!(quotaPermissions & AllocatorPermitAllocate))
 		{
 			return {nullptr, nullptr};
 		}

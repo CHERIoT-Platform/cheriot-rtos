@@ -147,6 +147,32 @@ enum [[clang::flag_enum]] AllocateWaitFlags
 };
 
 /**
+ * Permission bits for allocator capabilities.
+ */
+enum [[clang::flag_enum]] AllocatorPermissions
+{
+	/**
+	 * This allocator capability is fully de-permissioned.
+	 */
+	AllocatorPermitNone = 0,
+	/**
+	 * This allocator capability may be used to perform allocations and make
+	 * claims using its quota.
+	 */
+	AllocatorPermitAllocate = (1 << 0),
+	/**
+	 * This allocator capability may be used to free and release claims
+	 * using its quota.
+	 */
+	AllocatorPermitFree = (1 << 1),
+	/**
+	 * This allocator capability is fully permissioned. It can be used to
+	 * allocate and free.
+	 */
+	AllocatorPermitFull = (AllocatorPermitAllocate | AllocatorPermitFree),
+};
+
+/**
  * Non-standard allocation API.  Allocates `size` bytes.
  *
  * The `heapCapability` quota object must have remaining capacity sufficient
@@ -161,7 +187,7 @@ enum [[clang::flag_enum]] AllocateWaitFlags
  * the `timeout` parameter how long to wait.
  *
  * Returns `-EINVAL` if the provided timeout is invalid, and `-EPERM` if the
- * heap capability is invalid.
+ * heap capability does not have permission to perform this allocation.
  *
  * The non-blocking mode (`AllocateWaitNone`, or `timeout` with no time
  * remaining) will return a successful allocation if one can be created
@@ -205,7 +231,8 @@ void *__cheri_compartment("allocator")
  * `size` overflows.
  *
  * Returns `-EINVAL` on such an overflow, or when the provided timeout pointer
- * is invalid. Returns `-EPERM` on an invalid heap capability.
+ * is invalid. Returns `-EPERM` if `heapCapability` does not have permission to
+ * perform this allocation.
  *
  * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
  * stack is insufficiently large to run the function. See `heap_allocate` for
@@ -229,9 +256,10 @@ void *__cheri_compartment("allocator")
  * larger than the size requested in the original `heap_allocate` call; see its
  * documentation for more information).
  *
- * Returns `-EPERM` if `heapCapability` is not valid, `-ENOMEM` if the provided
- * quota is too small to accomodate the claim, and `-EINVAL` if `pointer` is not
- * a valid pointer into a live heap allocation.
+ * Returns `-EPERM` if `heapCapability` does not have permission to perform this
+ * claim, `-ENOMEM` if the provided quota is too small to accomodate the claim,
+ * and `-EINVAL` if `pointer` is not a valid pointer into a live heap
+ * allocation.
  *
  * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
  * stack is insufficiently large to run the function. See `heap_allocate`.
@@ -284,9 +312,9 @@ int __cheri_compartment("allocator")
 /**
  * Free all allocations owned by this capability.
  *
- * Returns the number of bytes freed, `-EPERM` if this is not a valid heap
- * capability, or `-ENOTENOUGHSTACK` if the stack size is insufficiently large
- * to safely run the function.
+ * Returns the number of bytes freed, `-EPERM` if this heap capability does not
+ * have permission to perform this action, or `-ENOTENOUGHSTACK` if the stack
+ * size is insufficiently large to safely run the function.
  */
 ssize_t __cheri_compartment("allocator")
   heap_free_all(AllocatorCapability heapCapability);

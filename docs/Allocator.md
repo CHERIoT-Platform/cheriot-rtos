@@ -22,6 +22,10 @@ Compartments may hold more than one allocation capability.
 The design embodies the principle of intentionality: you must explicitly specify the quota against which an allocation counts when performing that allocation.
 The standard C/C++ interfaces do not respect this principle and so are implemented as wrappers that use a default allocator capability (see below).
 
+By default, an allocator capability is fully permissioned and can be used to both allocate and free.
+Its permissions can be restricted using `token_permissions_and()` and queried using `token_permissions_get()`, which enables partial delegation of an allocator capability to another compartment.
+For example, a compartment may grant allocation authority without allowing the recipient to free existing allocations made against that quota by setting `~AllocatorPermissionsFree`.
+
 When inspecting the linker audit report for a firmware image, you will see an entry like this for each allocator capability:
 
 ```json
