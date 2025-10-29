@@ -5,6 +5,7 @@
 #define TEST_NAME "Allocator"
 
 #include "tests.hh"
+#include <allocator.h>
 #include <cheri.hh>
 #include <cheriot-atomic.hh>
 #include <cstdlib>
@@ -1223,6 +1224,144 @@ namespace
 		debug_log("End of token hazard test");
 	}
 
+	/**
+	 * Test allocator capability permission restrictions.
+	 * Tests that the permission bits in sealed allocator capabilities
+	 * correctly restrict operations across the allocator APIs.
+	 */
+	__noinline void test_permissions()
+	{
+		debug_log("Beginning permission restriction tests");
+
+		Timeout t{UnlimitedTimeout};
+		size_t  allocSize = 128;
+
+		auto noAllocCap =
+		  allocator_permissions_and(SECOND_HEAP, ~AllocatorPermitAllocate);
+		auto noFreeAllCap =
+		  allocator_permissions_and(SECOND_HEAP, ~AllocatorPermitFreeAll);
+		auto noPermsCap =
+		  allocator_permissions_and(SECOND_HEAP, AllocatorPermitNone);
+
+		// Verify permission getter returns correct permission bits
+		TEST_EQUAL((allocator_permissions(noAllocCap) & AllocatorPermitFreeAll),
+		           AllocatorPermitFreeAll,
+		           "no-allocate capability has wrong permissions");
+		TEST_EQUAL(
+		  (allocator_permissions(noFreeAllCap) & AllocatorPermitAllocate),
+		  AllocatorPermitAllocate,
+		  "no-free-all capability has wrong permissions");
+		TEST_EQUAL(allocator_permissions(SECOND_HEAP),
+		           AllocatorPermitFull,
+		           "full capability has wrong permissions");
+		TEST_EQUAL(allocator_permissions(noPermsCap),
+		           AllocatorPermitNone,
+		           "fully depermissioned capability has wrong permissions");
+
+		// Verify fully depermissioned capability can still heap_free
+		void *ptr = heap_allocate(&t, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for depermissioned free test");
+		TEST_EQUAL(heap_free(noPermsCap, ptr),
+		           0,
+		           "heap_free failed with fully depermissioned capability");
+
+		// Try to allocate with no-allocate quota
+		ptr = heap_allocate(&t, noAllocCap, allocSize);
+		TEST(!__builtin_cheri_tag_get(ptr),
+		     "Allocation succeeded with no-allocate quota");
+		// Ensure that no-allocate can still free (heap_free is always allowed)
+		ptr = heap_allocate(&t, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for free permission test");
+		TEST_EQUAL(
+		  heap_free(noAllocCap, ptr), 0, "Free failed with no-alloc quota");
+
+		// Ensure that no-free-all can still allocate
+		ptr = heap_allocate(&t, noFreeAllCap, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for free permission test");
+		// heap_free should still work with no-free-all quota
+		TEST_EQUAL(heap_free(noFreeAllCap, ptr),
+		           0,
+		           "heap_free failed with no-free-all quota");
+
+		// Try to claim with owner no-allocate quota
+		ptr = heap_allocate(&t, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for claim permission test");
+		TEST_EQUAL(heap_claim(noAllocCap, ptr),
+		           -EPERM,
+		           "Owner claim succeeded with no-allocate quota");
+		TEST_EQUAL(heap_free(SECOND_HEAP, ptr), 0, "Cleanup free failed");
+
+		// Try to claim with non-owner no-allocate quota
+		void *mallocPtr = heap_allocate(&t, MALLOC_CAPABILITY, allocSize);
+		TEST(__builtin_cheri_tag_get(mallocPtr),
+		     "Failed to allocate for claim permission test");
+		TEST_EQUAL(heap_claim(noAllocCap, mallocPtr),
+		           -EPERM,
+		           "Non-owner claim succeeded with no-allocate quota");
+
+		// Release claim should work with no-free-all quota (heap_free is
+		// implicit)
+		TEST(heap_claim(SECOND_HEAP, mallocPtr) > 0,
+		     "Failed to claim for claim release permission test");
+		TEST_EQUAL(heap_free(noFreeAllCap, mallocPtr),
+		           0,
+		           "Released claim failed with no-free-all quota");
+		TEST_EQUAL(
+		  heap_free(MALLOC_CAPABILITY, mallocPtr), 0, "Cleanup free failed");
+
+		// Try heap_free_all with no-free-all quota
+		ptr = heap_allocate(&t, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for free_all permission test");
+		ssize_t freed = heap_free_all(noFreeAllCap);
+		TEST_EQUAL(
+		  freed, -EPERM, "heap_free_all succeeded with no-free-all quota");
+		TEST(Capability{ptr}.is_valid(),
+		     "Object freed despite permission denial");
+		TEST(heap_free_all(SECOND_HEAP) >= allocSize,
+		     "Cleanup free_all failed");
+
+		// Try heap_allocate_array with no-allocate quota
+		int numAllocs = 4;
+		ptr = heap_allocate_array(&t, noAllocCap, numAllocs, allocSize);
+		TEST(!Capability{ptr}.is_valid(),
+		     "Array allocation succeeded with no-allocate quota: ",
+		     "{}",
+		     ptr);
+
+		// Try to make sealed allocation with no-allocate quota
+		auto       sealingCapability = STATIC_SEALING_TYPE(sealingTest);
+		void      *unsealedCapability;
+		Capability sealedPointer = token_sealed_unsealed_alloc(
+		  &t, noAllocCap, sealingCapability, 128, &unsealedCapability);
+		TEST(!sealedPointer.is_valid(),
+		     "Sealed object allocation succeeded with no-allocate quota: "
+		     "{}",
+		     sealedPointer);
+
+		// Verify heap_can_free works with restricted permissions
+		ptr = heap_allocate(&t, SECOND_HEAP, allocSize);
+		TEST(__builtin_cheri_tag_get(ptr),
+		     "Failed to allocate for heap_can_free test");
+		TEST_EQUAL(heap_can_free(noPermsCap, ptr),
+		           0,
+		           "heap_can_free failed with fully depermissioned capability");
+
+		// Verify heap_quota_remaining works with restricted permissions
+		ssize_t quotaRemaining = heap_quota_remaining(noPermsCap);
+		TEST(quotaRemaining >= 0,
+		     "heap_quota_remaining failed with no-allocate capability");
+
+		// Cleanup
+		TEST_EQUAL(heap_free(SECOND_HEAP, ptr), 0, "Final cleanup free failed");
+
+		debug_log("End of permission restriction tests");
+	}
+
 } // namespace
 
 /**
@@ -1292,6 +1431,7 @@ int test_allocator()
 	     "After alloc and free from 1024-byte quota, {} bytes left",
 	     quotaLeft);
 	test_claims();
+	test_permissions();
 
 	TEST(heap_address_is_valid(&t) == false,
 	     "Stack object incorrectly reported as heap address");
