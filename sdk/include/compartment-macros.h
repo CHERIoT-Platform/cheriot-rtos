@@ -10,15 +10,14 @@
  * Helper macro for MMIO and pre-shared object imports, should not be used
  * directly.
  */
-#define IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                        \
-                                                  name,                        \
-                                                  prefix,                      \
-                                                  mangledName,                 \
-                                                  permitLoad,                  \
-                                                  permitStore,                 \
-                                                  permitLoadStoreCapabilities, \
-                                                  permitLoadMutable)           \
+#define IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(                             \
+  type, name, prefix, mangledName, ...)                                        \
 	({                                                                         \
+		static const struct Perms                                              \
+		{                                                                      \
+			bool permitLoad, permitStore, permitLoadStoreCapabilities,         \
+			  permitLoadMutable, permitLoadGlobal;                             \
+		} perms = {__VA_ARGS__};                                               \
 		type *ret; /* NOLINT(bugprone-macro-parentheses) */                    \
 		__asm(".ifndef " mangledName "\n"                                      \
 		      "  .type     " mangledName ",@object\n"                          \
@@ -36,31 +35,13 @@
 		      "      %%cheriot_compartment_hi(" mangledName ")\n"              \
 		      "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"             \
 		      : "=C"(ret)                                                      \
-		      : "i"(((permitLoad) ? (1 << 31) : 0) +                           \
-		            ((permitStore) ? (1 << 30) : 0) +                          \
-		            ((permitLoadStoreCapabilities) ? (1 << 29) : 0) +          \
-		            ((permitLoadMutable) ? (1 << 28) : 0)));                   \
+		      : "i"(((perms.permitLoad) ? (1 << 31) : 0) +                     \
+		            ((perms.permitStore) ? (1 << 30) : 0) +                    \
+		            ((perms.permitLoadStoreCapabilities) ? (1 << 29) : 0) +    \
+		            ((perms.permitLoadMutable) ? (1 << 28) : 0) +              \
+		            ((perms.permitLoadGlobal) ? (1 << 27) : 0)));              \
 		ret;                                                                   \
 	})
-
-/**
- * Helper macro, should not be used directly.
- */
-#define MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                          \
-                                                name,                          \
-                                                mangledName,                   \
-                                                permitLoad,                    \
-                                                permitStore,                   \
-                                                permitLoadStoreCapabilities,   \
-                                                permitLoadMutable)             \
-	IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                            \
-	                                          name,                            \
-	                                          __export_mem_,                   \
-	                                          mangledName,                     \
-	                                          permitLoad,                      \
-	                                          permitStore,                     \
-	                                          permitLoadStoreCapabilities,     \
-	                                          permitLoadMutable)
 
 /**
  * Provide a capability of the type `volatile type *` referring to the MMIO
@@ -68,24 +49,18 @@
  * can be used only in code (it cannot be used to initialise a global).
  *
  * The last arguments specify the set of permissions that this capability
- * holds.  MMIO capabilities are always global and without store local.  They
- * may optionally omit additional capabilities.
+ * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), Load
+ * Mutable (LM), and Load Global (LG).
+ *
+ * MMIO capabilities are always global (GL) and without store local (SL).
  */
-#define MMIO_CAPABILITY_WITH_PERMISSIONS(type,                                 \
-                                         name,                                 \
-                                         permitLoad,                           \
-                                         permitStore,                          \
-                                         permitLoadStoreCapabilities,          \
-                                         permitLoadMutable)                    \
-	MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(                                   \
+#define MMIO_CAPABILITY_WITH_PERMISSIONS(type, name, ...)                      \
+	IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(                                 \
 	  volatile type, /* NOLINT(bugprone-macro-parentheses) */                  \
 	  name,                                                                    \
-	  "__import_mem_" #name "_" #permitLoad "_" #permitStore                   \
-	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
-	  permitLoad,                                                              \
-	  permitStore,                                                             \
-	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable)
+	  __export_mem_,                                                           \
+	  "\"__import_mem_" #name "_" #__VA_ARGS__ "\"",                           \
+	  __VA_ARGS__)
 
 /**
  * Provide a capability of the type `volatile type *` referring to the MMIO
@@ -97,7 +72,7 @@
  * MMIO_CAPABILITY_WITH_PERMISSIONS.
  */
 #define MMIO_CAPABILITY(type, name)                                            \
-	MMIO_CAPABILITY_WITH_PERMISSIONS(type, name, true, true, false, false)
+	MMIO_CAPABILITY_WITH_PERMISSIONS(type, name, true, true)
 
 /**
  * Provide a capability of the type `type *` referring to the pre-shared object
@@ -105,37 +80,45 @@
  * used to initialise a global).
  *
  * The last arguments specify the set of permissions that this capability
- * holds.  Pre-shared objects are always global and without store local.  They
- * may optionally omit additional permissions.
+ * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), Load
+ * Mutable (LM), and Load Global (LG).
+ *
+ * Capabilities to pre-shared objects are always global (GL) and without store
+ * local (SL).
  */
-#define SHARED_OBJECT_WITH_PERMISSIONS(type,                                   \
-                                       name,                                   \
-                                       permitLoad,                             \
-                                       permitStore,                            \
-                                       permitLoadStoreCapabilities,            \
-                                       permitLoadMutable)                      \
+#define SHARED_OBJECT_WITH_PERMISSIONS(type, name, ...)                        \
 	IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(                                 \
 	  type, /* NOLINT(bugprone-macro-parentheses) */                           \
 	  name,                                                                    \
 	  __cheriot_shared_object_,                                                \
-	  "__import_cheriot_shared_object_" #name "_" #permitLoad "_" #permitStore \
-	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
-	  permitLoad,                                                              \
-	  permitStore,                                                             \
-	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable)
+	  "\"__import_cheriot_shared_object_" #name "_" #__VA_ARGS__ "\"",         \
+	  __VA_ARGS__)
 
 /**
  * Provide a capability of the type `type *` referring to the pre-shared object
  * with `name` as its name.  This macro can be used only in code (it cannot be
  * used to initialise a global).
  *
- * Pre-shared object capabilities produced by this macro have load, store,
- * load-mutable, and load/store-capability permissions.  To define a reduced
- * set of permissions use `SHARED_OBJECT_WITH_PERMISSIONS`.
+ * Pre-shared object capabilities produced by this macro have Load Data (LD),
+ * Store Data (SD), Memory Capability (MC), and Load Mutable (LM) permissions.
+ * To define a reduced set of permissions use `SHARED_OBJECT_WITH_PERMISSIONS`.
  */
 #define SHARED_OBJECT(type, name)                                              \
-	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true)
+	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true, true)
+
+/**
+ * Provide a capability of the type `type *` referring to the pre-shared object
+ * with `name` as its name.  This macro can be used only in code (it cannot be
+ * used to initialise a global).
+ *
+ * Pre-shared object capabilities produced by this macro have the indicated load
+ * and store permission, but no load/store-capability permissions (and,
+ * therefore, no load-mutable or load-global permissions).
+ */
+#define SHARED_OBJECT_WITH_DATA_PERMISSIONS(                                   \
+  type, name, permitLoad, permitStore)                                         \
+	SHARED_OBJECT_WITH_PERMISSIONS(                                            \
+	  type, name, permitLoad, permitStore, false, false, false)
 
 /**
  * Macro to test whether a device with a specific name exists in the board
