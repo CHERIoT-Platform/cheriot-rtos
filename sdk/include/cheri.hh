@@ -476,12 +476,17 @@ namespace CHERI
 	/**
 	 * Helper class for accessing capability properties on pointers.
 	 */
-	template<typename T, bool IsSealed = false>
+	template<typename T, bool IsSealedT = false>
 	class Capability
 	{
+		public:
+		static constexpr bool IsSealed = IsSealedT;
+		using PointerType =
+		  std::conditional_t<IsSealed, CHERI_SEALED(T *), T *>;
+
 		protected:
 		/// The capability that this class wraps.
-		std::conditional_t<IsSealed, CHERI_SEALED(T *), T *> ptr;
+		PointerType ptr;
 
 		private:
 		/**
@@ -1134,6 +1139,7 @@ namespace CHERI
 		 * Explicitly get the raw pointer.
 		 */
 		T *get()
+		    requires std::is_convertible_v<PointerType, T *>
 		{
 			return ptr;
 		}
@@ -1576,4 +1582,5 @@ namespace CHERI
 		    .value_or(RegisterNumber::Invalid);
 		return {causeCode, registerNumber};
 	}
+
 } // namespace CHERI
