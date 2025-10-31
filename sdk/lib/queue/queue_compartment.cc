@@ -16,51 +16,35 @@ namespace
 	{
 		return STATIC_SEALING_TYPE(MessageQueueHandle);
 	}
-	__always_inline TokenKey receive_key()
+
+	template<MessageQueuePermission... Permissions>
+	__always_inline bool has_permissions(CHERI_SEALED(MessageQueue *) handle)
 	{
-		return STATIC_SEALING_TYPE(ReceiveHandle);
-	}
-	__always_inline TokenKey send_key()
-	{
-		return STATIC_SEALING_TYPE(SendHandle);
+		static const constinit int PermissionsMask = []() {
+			std::tuple permissions    = std::make_tuple(Permissions...);
+			int        permissionMask = 0;
+			std::for_each(permissions, [&](MessageQueuePermission permission) {
+				permissionMask |= permission;
+			});
+			return permissionMask;
+		};
+		return ((queue_permissions(handle) & PermissionsMask) ==
+		        PermissionsMask);
 	}
 
 	/**
-	 * Wrapper used for restricted endpoints.  This is used to provide
-	 * capabilities that allow only sending or receiving.  Instances of this
-	 * will be sealed with either `send_key()` or `receive_key()` to define
-	 * their types.
+	 * Unseal a queue handle if it has all the given permissions.  Returns the
+	 * unsealed handle or null if the handle is invalid or lacks the relevant
+	 * permissions.
 	 */
-	struct RestrictedEndpoint
+	MessageQueue *unseal(CHERI_SEALED(MessageQueue *) handle, int permissions)
 	{
-		MessageQueue *handle;
-	};
-
-	/**
-	 * Unseal something that is either a queue handle or a restricted endpoint
-	 * with the specified key.
-	 */
-	MessageQueue *unseal(TokenKey key, CHERI_SEALED(MessageQueue *) handle)
-	{
-		MessageQueue *queue = nullptr;
-		// TODO: The cast expression below is overcomplicated
-		// (RestrictedEndpoint is specified twice) so that it works with both
-		// the old SObj model and the new type-system-exposed sealing model.
-		if (auto *unsealed = token_unseal(
-		      key,
-		      Sealed<RestrictedEndpoint>{
-		        reinterpret_cast<CHERI_SEALED(RestrictedEndpoint *)>(handle)}))
+		if ((queue_permissions(handle) & permissions) != permissions)
 		{
-			queue = unsealed->handle;
+			return nullptr;
 		}
-		else if (auto *unsealed =
-		           token_unseal(handle_key(), Sealed<MessageQueue>{handle}))
-		{
-			queue = unsealed;
-		}
-		return queue;
+		return token_unseal(handle_key(), Sealed<MessageQueue>{handle});
 	}
-
 } // namespace
 
 int queue_create_sealed(Timeout            *timeout,
@@ -93,17 +77,14 @@ int queue_destroy_sealed(Timeout            *timeout,
                          AllocatorCapability heapCapability,
                          CHERI_SEALED(MessageQueue *) queueHandle)
 {
-	if (token_obj_unseal(handle_key(), queueHandle) != nullptr)
+	if (MessageQueue *queue = unseal(queueHandle, MessageQueuePermitDestroy))
 	{
+		if (heap_can_free(heapCapability, queueHandle) != 0)
+		{
+			return -EPERM;
+		}
+		queue_stop(queue);
 		return token_obj_destroy(heapCapability, handle_key(), queueHandle);
-	}
-	if (token_obj_unseal(send_key(), queueHandle) != nullptr)
-	{
-		return token_obj_destroy(heapCapability, send_key(), queueHandle);
-	}
-	if (token_obj_unseal(receive_key(), queueHandle) != nullptr)
-	{
-		return token_obj_destroy(heapCapability, receive_key(), queueHandle);
 	}
 	return -EINVAL;
 }
@@ -112,7 +93,7 @@ int queue_send_sealed(Timeout *timeout,
                       CHERI_SEALED(MessageQueue *) handle,
                       const void *src)
 {
-	MessageQueue *queue = unseal(send_key(), handle);
+	MessageQueue *queue = unseal(handle, MessageQueuePermitSend);
 	if (!queue || !check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
@@ -125,7 +106,7 @@ int queue_send_multiple_sealed(Timeout *timeout,
                                const void *src,
                                size_t      count)
 {
-	MessageQueue *queue = unseal(send_key(), handle);
+	MessageQueue *queue = unseal(handle, MessageQueuePermitSend);
 	if (!queue || !check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
@@ -137,7 +118,7 @@ int queue_receive_sealed(Timeout *timeout,
                          CHERI_SEALED(MessageQueue *) handle,
                          void *dst)
 {
-	MessageQueue *queue = unseal(receive_key(), handle);
+	MessageQueue *queue = unseal(handle, MessageQueuePermitReceive);
 	if (!queue || !check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
@@ -150,7 +131,7 @@ int queue_receive_multiple_sealed(Timeout *timeout,
                                   void  *dst,
                                   size_t count)
 {
-	MessageQueue *queue = unseal(receive_key(), handle);
+	MessageQueue *queue = unseal(handle, MessageQueuePermitReceive);
 	if (!queue || !check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
@@ -161,7 +142,7 @@ int queue_receive_multiple_sealed(Timeout *timeout,
 int multiwaiter_queue_receive_init_sealed(struct EventWaiterSource *source,
                                           CHERI_SEALED(MessageQueue *) handle)
 {
-	MessageQueue *queue = unseal(receive_key(), handle);
+	MessageQueue *queue = unseal(handle, MessageQueuePermitReceive);
 	if (!queue)
 	{
 		return -EINVAL;
@@ -173,7 +154,7 @@ int multiwaiter_queue_receive_init_sealed(struct EventWaiterSource *source,
 int multiwaiter_queue_send_init_sealed(struct EventWaiterSource *source,
                                        CHERI_SEALED(MessageQueue *) handle)
 {
-	MessageQueue *queue = unseal(send_key(), handle);
+	MessageQueue *queue = unseal(handle, MessageQueuePermitSend);
 	if (!queue)
 	{
 		return -EINVAL;
@@ -185,12 +166,11 @@ int multiwaiter_queue_send_init_sealed(struct EventWaiterSource *source,
 int queue_items_remaining_sealed(CHERI_SEALED(MessageQueue *) handle,
                                  size_t *items)
 {
-	MessageQueue *queue = unseal(send_key(), handle);
-	// This function takes either endpoint, so we need to try unsealing with
-	// both keys.
-	if (!queue)
+	MessageQueue *queue = unseal(handle, 0);
+	if ((queue_permissions(handle) &
+	     (MessageQueuePermitSend | MessageQueuePermitReceive)) == 0)
 	{
-		queue = unseal(receive_key(), handle);
+		return -EPERM;
 	}
 	if (!queue)
 	{
@@ -198,49 +178,4 @@ int queue_items_remaining_sealed(CHERI_SEALED(MessageQueue *) handle,
 	}
 	queue_items_remaining(queue, items);
 	return 0;
-}
-
-namespace
-{
-	int queue_handle_create_sealed(struct Timeout     *timeout,
-	                               AllocatorCapability heapCapability,
-	                               CHERI_SEALED(MessageQueue *) handle,
-	                               CHERI_SEALED(MessageQueue *) * outHandle,
-	                               TokenKey sealingKey)
-	{
-		MessageQueue *queue =
-		  token_unseal(handle_key(), Sealed<MessageQueue>(handle));
-		if (!queue)
-		{
-			return -EINVAL;
-		}
-		auto [unsealed, sealed] = token_allocate<RestrictedEndpoint>(
-		  timeout, heapCapability, sealingKey);
-		if (!sealed.is_valid())
-		{
-			return -ENOMEM;
-		}
-		unsealed->handle = queue;
-		*outHandle =
-		  reinterpret_cast<CHERI_SEALED(MessageQueue *)>(sealed.get());
-		return 0;
-	}
-} // namespace
-
-int queue_receive_handle_create_sealed(struct Timeout     *timeout,
-                                       AllocatorCapability heapCapability,
-                                       CHERI_SEALED(MessageQueue *) handle,
-                                       CHERI_SEALED(MessageQueue *) * outHandle)
-{
-	return queue_handle_create_sealed(
-	  timeout, heapCapability, handle, outHandle, receive_key());
-}
-
-int queue_send_handle_create_sealed(struct Timeout     *timeout,
-                                    AllocatorCapability heapCapability,
-                                    CHERI_SEALED(MessageQueue *) handle,
-                                    CHERI_SEALED(MessageQueue *) * outHandle)
-{
-	return queue_handle_create_sealed(
-	  timeout, heapCapability, handle, outHandle, send_key());
 }
