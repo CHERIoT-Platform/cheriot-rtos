@@ -1,0 +1,74 @@
+. = @code_start@;
+_start = .;
+
+.loader_start :
+{
+    *(.loader_start);
+}
+
+.compartment_export_tables : ALIGN(8)
+{
+    # The scheduler and allocator's export tables are at the start.
+    .scheduler_export_table = .;
+    *.scheduler.compartment(.compartment_export_table);
+    .scheduler_export_table_end = .;
+
+    . = ALIGN(8);
+    .allocator_export_table = .;
+    */cheriot.allocator.compartment(.compartment_export_table);
+    .allocator_export_table_end = .;
+
+    @compartment_exports@
+}
+
+
+__compart_pccs = .;
+
+compartment_switcher_code : CAPALIGN
+{
+    .compartment_switcher_start = .;
+    */switcher/entry.S.o(.text);
+}
+.compartment_switcher_end = .;
+
+scheduler_code : CAPALIGN
+{
+    .scheduler_start = .;
+    *.scheduler.compartment(.compartment_sealing_keys);
+    .scheduler_import_start = .;
+    *.scheduler.compartment(.compartment_import_table);
+    .scheduler_import_end = .;
+    *.scheduler.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+}
+.scheduler_end = .;
+
+allocator_code : CAPALIGN
+{
+    .allocator_start = .;
+    */cheriot.allocator.compartment(.compartment_sealing_keys);
+    .allocator_import_start = .;
+    */cheriot.allocator.compartment(.compartment_import_table);
+    .allocator_import_end = .;
+    allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+    */cheriot.allocator.compartment(.text .text.* .rodata .rodata.* .data.rel.ro);
+}
+.allocator_end = .;
+
+
+token_library_code : CAPALIGN
+{
+    .token_library_start = .;
+    */cheriot.token_library.library(.compartment_sealing_keys);
+    .token_library_import_start = .;
+    */cheriot.token_library.library(.compartment_import_table);
+    .token_library_import_end = .;
+    token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
+    */cheriot.token_library.library(.text .text.* .rodata .rodata.* .data.rel.ro);
+}
+.token_library_end = .;
+
+
+@software_revoker_code@
+
+@pcc_ld@
+__compart_pccs_end = .;

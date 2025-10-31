@@ -1,23 +1,27 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
-#include <cassert>
 #include <cdefs.h>
+#include <debug.hh>
 #include <futex.h>
 #include <limits>
 #include <stdint.h>
+
+using Debug = ConditionalDebug<DEBUG_CXXRT, "cxxrt">;
 
 /**
  * The helper functions need to expose an unmangled name because the compiler
  * inserts calls to them.  Declare them using the asm label extension.
  */
 #define DECLARE_ATOMIC_LIBCALL(name, ret, ...)                                 \
-	[[cheri::interrupt_state(disabled)]] __cheri_libcall ret name(             \
+	[[cheriot::interrupt_state(disabled)]] __cheri_libcall ret name(           \
 	  __VA_ARGS__) asm(#name);
 
+// NOLINTBEGIN(readability-identifier-naming)
 DECLARE_ATOMIC_LIBCALL(__cxa_guard_acquire, int, uint64_t *)
 DECLARE_ATOMIC_LIBCALL(__cxa_guard_release, void, uint64_t *)
 DECLARE_ATOMIC_LIBCALL(__cxa_atexit, int, void (*)(void *), void *, void *)
+// NOLINTEND(readability-identifier-naming)
 
 namespace
 {
@@ -33,7 +37,7 @@ namespace
 		/// The high half (second on a little-endian system).
 		uint32_t high;
 		/// The bit used for the lock (the high bit on a little-endian system)
-		static constexpr uint32_t LockBit = uint32_t(1) << 31;
+		static constexpr uint32_t LockBit = static_cast<uint32_t>(1) << 31;
 
 		public:
 		/**
@@ -54,6 +58,8 @@ namespace
 
 		/**
 		 * Acquire the lock.
+		 *
+		 * This is safe only in IRQ-deferred context.
 		 */
 		void lock()
 		{
@@ -62,7 +68,7 @@ namespace
 			{
 				futex_wait(&high, LockBit);
 			}
-			assert(high == 0);
+			Debug::Assert(high == 0, "Corrupt guard word at {}", this);
 			high = LockBit;
 		}
 
@@ -71,9 +77,12 @@ namespace
 		 */
 		void unlock()
 		{
-			assert(high == LockBit);
-			high = 0;
-			futex_wake(&high, std::numeric_limits<uint32_t>::max());
+			Debug::Assert(high == LockBit, "Corrupt guard word at {}", this);
+			high    = 0;
+			int res = futex_wake(&high, std::numeric_limits<uint32_t>::max());
+			Debug::Assert(res >= 0,
+			              "futex_wake failed for guard {}; possible deadlock",
+			              this);
 		}
 
 		/**
@@ -109,8 +118,8 @@ int __cxa_guard_acquire(uint64_t *guard)
 void __cxa_guard_release(uint64_t *guard)
 {
 	auto *g = reinterpret_cast<GuardWord *>(guard);
-	assert(!g->is_initialised());
-	assert(g->is_locked());
+	Debug::Assert(!g->is_initialised(), "Releasing uninitialized guard {}", g);
+	Debug::Assert(g->is_locked(), "Releasing unlocked guard {}", g);
 	g->set_initialised();
 	g->unlock();
 }

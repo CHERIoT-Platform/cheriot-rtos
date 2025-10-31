@@ -250,7 +250,7 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 			__always_inline void
 			wait(T            old,
 			     memory_order order = memory_order::seq_cst) const noexcept
-			  requires(sizeof(T) == sizeof(uint32_t))
+			    requires(sizeof(T) == sizeof(uint32_t))
 			{
 				futex_wait(reinterpret_cast<const uint32_t *>(&value),
 				           reinterpret_cast<uint32_t>(as_underlying(old)));
@@ -261,48 +261,56 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 			     T              old,
 			     memory_order   order = memory_order::seq_cst,
 			     FutexWaitFlags flags = FutexNone) const noexcept
-			  requires(sizeof(T) == sizeof(uint32_t))
+			    requires(sizeof(T) == sizeof(uint32_t))
 			{
+				// FIXME: The (1<<5) here should be
+				// __CHERI_CAP_PERMISSION_PERMIT_LOAD__, but currently our
+				// compiler provides the wrong value for this pre-defined macro.
 				return futex_timed_wait(
 				  timeout,
-				  reinterpret_cast<const uint32_t *>(&value),
+				  reinterpret_cast<const uint32_t *>(
+				    __builtin_cheri_perms_and(&value, (1 << 5))),
 				  static_cast<uint32_t>(as_underlying(old)),
 				  flags);
 			}
 
 			__always_inline int
 			wait(Timeout *timeout, T old, FutexWaitFlags flags) const noexcept
-			  requires(sizeof(T) == sizeof(uint32_t))
+			    requires(sizeof(T) == sizeof(uint32_t))
 			{
 				return wait(timeout, old, memory_order::seq_cst, flags);
 			}
 
 			__always_inline void
 			wait(T old, memory_order order = memory_order::seq_cst) const
-			  volatile noexcept requires(sizeof(T) == sizeof(uint32_t))
+			  volatile noexcept
+			    requires(sizeof(T) == sizeof(uint32_t))
 			{
 				const_cast<primitive_atomic<T> *>(this)->wait(old, order);
 			}
 
 			__always_inline void notify_one() noexcept
-			  requires(sizeof(T) == sizeof(uint32_t))
+			    requires(sizeof(T) == sizeof(uint32_t))
 			{
-				futex_wake(reinterpret_cast<uint32_t *>(&value), 1);
+				(void)futex_wake(reinterpret_cast<uint32_t *>(
+				                   __builtin_cheri_perms_and(&value, 0)),
+				                 1);
 			}
 			__always_inline void notify_one() volatile noexcept
-			  requires(sizeof(T) == sizeof(uint32_t))
+			    requires(sizeof(T) == sizeof(uint32_t))
 			{
 				const_cast<primitive_atomic<T> *>(this)->notify_one();
 			}
 
 			__always_inline void notify_all() noexcept
-			  requires(sizeof(T) == sizeof(uint32_t))
+			    requires(sizeof(T) == sizeof(uint32_t))
 			{
-				futex_wake(reinterpret_cast<uint32_t *>(&value),
-				           std::numeric_limits<uint32_t>::max());
+				(void)futex_wake(reinterpret_cast<uint32_t *>(
+				                   __builtin_cheri_perms_and(&value, 0)),
+				                 std::numeric_limits<uint32_t>::max());
 			}
 			__always_inline void notify_all() volatile noexcept
-			  requires(sizeof(T) == sizeof(uint32_t))
+			    requires(sizeof(T) == sizeof(uint32_t))
 			{
 				const_cast<primitive_atomic<T> *>(this)->notify_all();
 			}
@@ -669,7 +677,7 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 			{
 				return *const_cast<locked_atomic<T> *>(this) = desired;
 			}
-			locked_atomic &operator=(const locked_atomic &) = delete;
+			locked_atomic &operator=(const locked_atomic &)          = delete;
 			locked_atomic &operator=(const locked_atomic &) volatile = delete;
 
 			__always_inline void

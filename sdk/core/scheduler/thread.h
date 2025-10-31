@@ -5,18 +5,20 @@
 
 #include "common.h"
 #include <cdefs.h>
+#include <platform-timer.hh>
 #include <priv/riscv.h>
 #include <strings.h>
+#include <tick_macros.h>
 #include <utils.hh>
+
+// Forward declaration of MultiWaiter so that we can use a pointer to it in
+// thread structures.
+class MultiWaiterInternal;
 
 namespace
 {
 	/// The total number of thread priorities.
 	constexpr uint16_t ThreadPrioNum = 32U;
-
-	// Forward declaration of MultiWaiter so that we can use a pointer to it in
-	// thread structures.
-	class MultiWaiterInternal;
 
 	uint64_t expiry_time_for_timeout(uint32_t timeout);
 
@@ -76,7 +78,8 @@ namespace
 		 * sealed capability to the trusted stack of the new thread, ready to be
 		 * installed.
 		 */
-		static TrustedStack *schedule(TrustedStack *tstack)
+		static CHERI_SEALED(TrustedStack *)
+		  schedule(CHERI_SEALED(TrustedStack *) tstack)
 		{
 			ThreadImpl *th = current;
 
@@ -111,6 +114,15 @@ namespace
 					  current->priority,
 					  current->OriginalPriority);
 				}
+				if (current != th)
+				{
+					current->expiryTime = TimerCore::time();
+				}
+#ifdef CLANG_TIDY
+				// The static analyser thinks that `debug_log_message_write` may
+				// assign `nullptr` to `current`.
+				__builtin_assume(current != nullptr);
+#endif
 				return current->tStackPtr;
 			}
 			return schedTStack;
@@ -178,15 +190,17 @@ namespace
 		 * This is also a sealed handle from the switcher, which can only be
 		 * used for comparison.
 		 */
-		static inline TrustedStack *schedTStack;
+		static inline CHERI_SEALED(TrustedStack *) schedTStack;
 
-		ThreadImpl(TrustedStack *tstack, uint16_t threadid, uint16_t priority)
+		ThreadImpl(CHERI_SEALED(TrustedStack *) tstack,
+		           uint16_t threadid,
+		           uint16_t priority)
 		  : threadId(threadid),
 		    priority(priority),
 		    OriginalPriority(priority),
-		    expiryTime(-1),
+
 		    state(ThreadState::Suspended),
-		    isYielding(false),
+
 		    sleepQueue(nullptr),
 		    tStackPtr(tstack)
 		{
@@ -203,10 +217,9 @@ namespace
 		 * the resource disappearing, do some clean-ups.
 		 * @param the reason why this thread is now able to be scheduled
 		 */
-		bool ready(WakeReason reason)
+		void ready(WakeReason reason)
 		{
 			int64_t ticksLeft;
-			bool    schedule = false;
 
 			// We must be suspended.
 			Debug::Assert(state == ThreadState::Suspended,
@@ -229,14 +242,7 @@ namespace
 				if (priority > highestPriority)
 				{
 					highestPriority = priority;
-					schedule        = true;
 				}
-			}
-			// If this is the same priority as the current thread, we may need
-			// to update the timer.
-			if (priority >= highestPriority)
-			{
-				schedule = true;
 			}
 			if (reason == WakeReason::Timer || reason == WakeReason::Delete)
 			{
@@ -244,8 +250,6 @@ namespace
 			}
 			list_insert(&priorityList[priority]);
 			isYielding = false;
-
-			return schedule;
 		}
 
 		/**
@@ -363,6 +367,7 @@ namespace
 		{
 			Debug::log("Thread exited, {} threads remaining", threadCount - 1);
 			current->list_remove(&priorityList[current->priority]);
+			current->priority_map_remove();
 			current->state = ThreadState::Exited;
 			return (--threadCount) == 0;
 		}
@@ -542,6 +547,17 @@ namespace
 			return next != this;
 		}
 
+		/**
+		 * Returns true if the thread has run for a complete tick.  This must
+		 * be called only on the currently running thread.
+		 */
+		bool has_run_for_full_tick()
+		{
+			Debug::Assert(this == current,
+			              "Only the current thread is running");
+			return TimerCore::time() >= expiryTime + TIMERCYCLES_PER_TICK;
+		}
+
 		~ThreadImpl()
 		{
 			// We have static definition of threads. We only create threads in
@@ -563,9 +579,13 @@ namespace
 		///@}
 		/// Pointer to the list of the resource this thread is blocked on.
 		ThreadImpl **sleepQueue;
-		/// If suspended, when will this thread expire. The maximum value is
-		/// special-cased to mean blocked indefinitely.
-		uint64_t expiryTime;
+		/**
+		 * If suspended, when will this thread expire. The maximum value is
+		 * special-cased to mean blocked indefinitely.
+		 *
+		 * When a thread is running, this the time at which it was scheduled.
+		 */
+		uint64_t expiryTime{static_cast<uint64_t>(-1)};
 
 		/// The number of cycles that this thread has been scheduled for.
 		uint64_t cycles;
@@ -600,7 +620,11 @@ namespace
 			 */
 			MultiWaiterInternal *multiWaiter;
 		};
-		TrustedStack *tStackPtr;
+
+		/**
+		 * Sealed pointer to this thread's trusted stack and register-save area.
+		 */
+		CHERI_SEALED(TrustedStack *) tStackPtr;
 
 		private:
 		/**
@@ -653,7 +677,7 @@ namespace
 		 * expires, as long as no other threads are runnable or sleeping with
 		 * shorter timeouts.
 		 */
-		bool isYielding : 1;
+		bool isYielding : 1 {false};
 	};
 
 	using Thread = ThreadImpl<ThreadPrioNum>;

@@ -102,7 +102,8 @@ class FlagLockGeneric
 	 * documentation of `flaglock_priority_inheriting_get_owner_thread_id`
 	 * for more information.
 	 */
-	__always_inline uint16_t get_owner_thread_id() requires(IsPriorityInherited)
+	__always_inline uint16_t get_owner_thread_id()
+	    requires(IsPriorityInherited)
 	{
 		return flaglock_priority_inheriting_get_owner_thread_id(&state);
 	}
@@ -235,18 +236,14 @@ using FlagLock                  = FlagLockGeneric<false>;
 using FlagLockPriorityInherited = FlagLockGeneric<true>;
 
 template<typename T>
-concept Lockable = requires(T l)
-{
-	{l.lock()};
-	{l.unlock()};
+concept Lockable = requires(T l) {
+	{ l.lock() };
+	{ l.unlock() };
 };
 
 template<typename T>
-concept TryLockable = Lockable<T> && requires(T l, Timeout *t)
-{
-	{
-		l.try_lock(t)
-		} -> std::same_as<bool>;
+concept TryLockable = Lockable<T> && requires(T l, Timeout *t) {
+	{ l.try_lock(t) } -> std::same_as<bool>;
 };
 
 static_assert(TryLockable<NoLock>);
@@ -275,8 +272,8 @@ class LockGuard
 	}
 
 	/// Constructor, attempts to acquire the lock with a timeout.
-	[[nodiscard]] explicit LockGuard(Lock &lock, Timeout *timeout) requires(
-	  TryLockable<Lock>)
+	[[nodiscard]] explicit LockGuard(Lock &lock, Timeout *timeout)
+	    requires(TryLockable<Lock>)
 	  : wrappedLock(&lock), isOwned(false)
 	{
 		try_lock(timeout);
@@ -326,7 +323,8 @@ class LockGuard
 	 * it with the specified timeout. This must be called with the lock
 	 * unlocked.  Returns true if the lock has been acquired, false otherwise.
 	 */
-	bool try_lock(Timeout *timeout) requires(TryLockable<Lock>)
+	bool try_lock(Timeout *timeout)
+	    requires(TryLockable<Lock>)
 	{
 		LockDebug::Assert(!isOwned, "Trying to lock an already-locked lock");
 		isOwned = wrappedLock->try_lock(timeout);
@@ -362,6 +360,24 @@ class LockGuard
 	operator bool()
 	{
 		return isOwned;
+	}
+
+	/**
+	 * Drop and reacquire the lock around a yield
+	 */
+	int yield(Timeout *t, uint32_t ticks = 1)
+	{
+		unlock();
+
+		Timeout smallSleep{ticks};
+		if (int sleepRes = thread_sleep(&smallSleep); sleepRes < 0)
+		{
+			return sleepRes;
+		}
+
+		t->elapse(smallSleep.elapsed);
+
+		return try_lock(t);
 	}
 };
 

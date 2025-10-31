@@ -14,6 +14,7 @@
 #	include <atomic>
 #	define _Atomic(T) std::atomic<T>
 #else
+#	include <cdefs.h>
 #	include <stddef.h>
 #	include <stdint.h>
 enum memory_order

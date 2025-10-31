@@ -1,6 +1,7 @@
 #pragma once
 #include <cdefs.h>
 #include <stdint.h>
+#include <utils.hh>
 
 /**
  * An enum representing each of the Sonata's RGB LEDs.
@@ -14,7 +15,7 @@ enum class SonataRgbLed
 /**
  * A driver for the Sonata's RGB LED Controller
  */
-struct SonataRgbLedController
+struct SonataRgbLedController : private utils::NoCopyNoMove
 {
 	/**
 	 * Registers for setting the 8-bit red, green, and blue values
@@ -33,23 +34,25 @@ struct SonataRgbLedController
 	uint32_t status;
 
 	/// Control Register Fields
-	enum [[clang::flag_enum]] ControlFields : uint32_t{
-	  /// Write 1 to set RGB LEDs to specified colours.
-	  ControlSet = 1 << 0,
-	  /**
-	   * Write 1 to turn off RGB LEDs.
-	   * Write to ControlSet to turn on again.
-	   */
-	  ControlOff = 1 << 1,
+	enum [[clang::flag_enum]] ControlFields : uint32_t
+	{
+		/// Write 1 to set RGB LEDs to specified colours.
+		ControlSet = 1 << 0,
+		/**
+		 * Write 1 to turn off RGB LEDs.
+		 * Write to ControlSet to turn on again.
+		 */
+		ControlOff = 1 << 1,
 	};
 
 	/// Status Register Fields
-	enum [[clang::flag_enum]] StatusFields : uint32_t{
-	  /**
-	   * When asserted controller is idle and new colours can be set,
-	   * otherwise writes to regLed0, regLed1, and control are ignored.
-	   */
-	  StatusIdle = 1 << 0,
+	enum [[clang::flag_enum]] StatusFields : uint32_t
+	{
+		/**
+		 * When asserted controller is idle and new colours can be set,
+		 * otherwise writes to regLed0, regLed1, and control are ignored.
+		 */
+		StatusIdle = 1 << 0,
 	};
 
 	/**

@@ -157,7 +157,7 @@ namespace CHERI
 			 */
 			constexpr Permission operator*()
 			{
-				return Permission(__builtin_ffs(permissions) - 1);
+				return static_cast<Permission>(__builtin_ffs(permissions) - 1);
 			}
 
 			/**
@@ -473,15 +473,104 @@ namespace CHERI
 		       representable_length(size) == size;
 	}
 
+#if __has_extension(cheri_sealed_pointers)
+	// clang-format treats __sealed_capability differently depending on whether
+	// it knows it's a type qualifier or thinks it's an identifier.  Turn off
+	// clang-format here until we've bumped the version in CI.
+	// clang-format off
+	/**
+	 * Type trait to remove sealed from a capability type.
+	 */
+	template<typename T>
+	struct remove_sealed; // NOLINT(readability-identifier-naming)
+
+	/**
+	 * Specialisation to
+	 */
+	template<typename T>
+	struct remove_sealed<T *__sealed_capability>
+	{
+		using type = T *; // NOLINT(readability-identifier-naming)
+	};
+
+	/**
+	 * Type trait for checking if a type is a sealed capability.
+	 */
+	template<typename T>
+	struct is_sealed_capability // NOLINT(readability-identifier-naming)
+	{
+		static constexpr bool value = // NOLINT(readability-identifier-naming)
+		  false;
+	};
+
+	/**
+	 * Type trait for checking if a type is a sealed capability.
+	 */
+	template<typename T>
+	struct is_sealed_capability<T *__sealed_capability>
+	{
+		static constexpr bool value = // NOLINT(readability-identifier-naming)
+		  true;
+	};
+
+	// clang-format on
+#else
+
+	// Fallback versions for when the compiler doesn't know something is
+	// sealed.
+
+	/**
+	 * Type trait to remove sealed from a capability type.
+	 */
+	template<typename T>
+	struct remove_sealed; // NOLINT(readability-identifier-naming)
+
+	/**
+	 * Specialisation to
+	 */
+	template<typename T>
+	struct remove_sealed<T *>
+	{
+		using type = T *; // NOLINT(readability-identifier-naming)
+	};
+
+	/**
+	 * Type trait for checking if a type is a sealed capability.
+	 */
+	template<typename T>
+	struct is_sealed_capability // NOLINT(readability-identifier-naming)
+	{
+		static constexpr bool value = // NOLINT(readability-identifier-naming)
+		  false;
+	};
+
+#endif
+
+	/**
+	 * Helper that provides the type of an unsealed capability from a sealed
+	 * capability.
+	 */
+	template<typename T>
+	using remove_sealed_t = // NOLINT(readability-identifier-naming)
+	  remove_sealed<T>::type;
+
+	/**
+	 * Helper to check that a type is a sealed capability.
+	 */
+	template<typename T>
+	constexpr bool
+	  is_sealed_capability_v = // NOLINT(readability-identifier-naming)
+	  is_sealed_capability<T>::value;
+
 	/**
 	 * Helper class for accessing capability properties on pointers.
 	 */
-	template<typename T>
+	template<typename T, bool IsSealed = false>
 	class Capability
 	{
 		protected:
 		/// The capability that this class wraps.
-		T *ptr;
+		std::conditional_t<IsSealed, CHERI_SEALED(T *), T *> ptr;
 
 		private:
 		/**
@@ -521,7 +610,7 @@ namespace CHERI
 			/**
 			 * Returns the capability's pointer.
 			 */
-			[[nodiscard]] T *ptr() const
+			[[nodiscard]] auto ptr() const
 			{
 				return cap.ptr;
 			}
@@ -610,9 +699,14 @@ namespace CHERI
 			 */
 			operator ptrdiff_t() const
 			{
+#if __has_builtin(__builtin_cheri_top_get)
+				return __builtin_cheri_top_get(ptr()) -
+				       __builtin_cheri_address_get(ptr());
+#else
 				return __builtin_cheri_length_get(ptr()) -
 				       (__builtin_cheri_address_get(ptr()) -
 				        __builtin_cheri_base_get(ptr()));
+#endif
 			}
 
 			/**
@@ -828,33 +922,14 @@ namespace CHERI
 		/// Default constructor, initialises with a null pointer.
 		constexpr Capability() : ptr(nullptr) {}
 		/// Constructor, takes an existing pointer to wrap
-		constexpr Capability(T *p) : ptr(p) {}
+		constexpr Capability(decltype(ptr) p) : ptr(p) {}
 		/// Copy constructor, aliases the object that is pointed to by `ptr`.
-		constexpr Capability(const Capability &other) : ptr(other.ptr) {}
-		/// Move constructor.
-		constexpr Capability(Capability &&other) : ptr(other.ptr)
-		{
-			other.ptr = nullptr;
-		}
+		constexpr Capability(const Capability &other) = default;
 
 		/**
 		 * Replace the pointer that this capability wraps with another.
 		 */
-		Capability &operator=(const Capability &other)
-		{
-			ptr = other.ptr;
-			return *this;
-		}
-
-		/**
-		 * Transfer the pointer that this capability wraps from .
-		 */
-		Capability &operator=(Capability &&other)
-		{
-			ptr       = other.ptr;
-			other.ptr = nullptr;
-			return *this;
-		}
+		Capability &operator=(const Capability &other) = default;
 
 		/**
 		 * Access the address of the capability.
@@ -883,11 +958,9 @@ namespace CHERI
 		/**
 		 * Return the bounds as an integer.
 		 */
-		[[nodiscard]] ptrdiff_t bounds() const
+		[[nodiscard]] __always_inline ptrdiff_t bounds() const
 		{
-			return __builtin_cheri_length_get(ptr) -
-			       (__builtin_cheri_address_get(ptr()) -
-			        __builtin_cheri_base_get(ptr()));
+			return top() - address();
 		}
 
 		/**
@@ -904,6 +977,20 @@ namespace CHERI
 		[[nodiscard]] PermissionSet permissions() const
 		{
 			return permission_set_from_pointer(ptr);
+		}
+
+		/**
+		 * Remove some permissions from this capability.
+		 *
+		 * Because this function computes the permission mask by clearing bits
+		 * in the PermissionSet::omnipotent() all-ones mask, rather than from
+		 * the set of permissions currently held by this Capability, it is safe
+		 * to use to clear Global permission on a sealed capability.
+		 */
+		template<std::same_as<Permission>... Permissions>
+		void without_permissions(Permissions... drop)
+		{
+			permissions() &= PermissionSet::omnipotent().without(drop...);
 		}
 
 		/**
@@ -941,7 +1028,15 @@ namespace CHERI
 		}
 
 		/**
-		 * Returns the tag bit indicating whether this is a valid capability.
+		 * Returns the tag bit indicating whether this is a valid
+		 * capability.
+		 *
+		 * This returns a value subject to Common Subexpression
+		 * Elimination (CSE): multiple calls to `is_valid` on the same
+		 * capability may be optimized by the compiler into a single
+		 * call. This may lead to stale results if the tag bit was
+		 * cleared between the calls. See `is_valid_temporal` for a
+		 * non-CSEable alternative.
 		 */
 		[[nodiscard]] bool is_valid() const
 		{
@@ -963,6 +1058,26 @@ namespace CHERI
 		void invalidate()
 		{
 			ptr = __builtin_cheri_tag_clear(ptr);
+		}
+
+		/**
+		 * Returns the tag bit indicating whether this is a valid
+		 * capability.
+		 *
+		 * This variant of `is_valid` is not subject to CSE.
+		 */
+		[[nodiscard]] bool is_valid_temporal() const
+		{
+			// The clang static analyser doesn't yet know that null is untagged
+			// and so warns of possible null dereferences after this method
+			// returns true.  Explicitly assume that a tagged thing is non-null
+			// to fix this.
+			if (__builtin_cheri_tag_get_temporal(ptr))
+			{
+				__builtin_assume(ptr != nullptr);
+				return true;
+			}
+			return false;
 		}
 
 		/**
@@ -1003,7 +1118,11 @@ namespace CHERI
 		 */
 		[[nodiscard]] ptraddr_t top() const
 		{
+#if __has_builtin(__builtin_cheri_top_get)
+			return __builtin_cheri_top_get(ptr);
+#else
 			return base() + length();
+#endif
 		}
 
 		/**
@@ -1078,10 +1197,21 @@ namespace CHERI
 		}
 
 		/**
-		 * Implicit cast to the raw pointer type.
+		 * Implicit cast to the raw pointer type (unsealed version).
 		 */
 		template<typename U = T>
-		requires(!std::same_as<U, void>) operator U *()
+		    requires(!std::same_as<U, void> && !IsSealed)
+		operator U *()
+		{
+			return ptr;
+		}
+
+		/**
+		 * Implicit cast to the raw pointer type (sealed version)
+		 */
+		template<typename U = T>
+		    requires(!std::same_as<U, void> && IsSealed)
+		operator CHERI_SEALED(U *)()
 		{
 			return ptr;
 		}
@@ -1114,7 +1244,8 @@ namespace CHERI
 		 * Dereference operator.
 		 */
 		template<typename U = T>
-		requires(!std::same_as<U, void>) U &operator*()
+		    requires(!std::same_as<U, void> && !IsSealed)
+		U &operator*()
 		{
 			return *ptr;
 		}
@@ -1123,9 +1254,11 @@ namespace CHERI
 		 * Cast this capability to some other type.
 		 */
 		template<typename U>
-		Capability<U> cast()
+		Capability<U, IsSealed> cast()
 		{
-			return {static_cast<U *>(ptr)};
+			return {
+			  static_cast<std::conditional_t<IsSealed, CHERI_SEALED(U *), U *>>(
+			    ptr)};
 		}
 
 		/**
@@ -1134,7 +1267,7 @@ namespace CHERI
 		 * all other cases.
 		 */
 		template<typename U>
-		bool is_subset_of(Capability<U> other)
+		bool is_subset_of(Capability<U, IsSealed> other)
 		{
 			return __builtin_cheri_subset_test(other.ptr, ptr);
 		}
@@ -1142,39 +1275,36 @@ namespace CHERI
 		/**
 		 * Seal this capability with the given key.
 		 */
-		Capability<T> &seal(void *key)
+		[[nodiscard]] Capability<T, true> seal(void *key)
+		    requires(!IsSealed)
 		{
-			ptr = static_cast<T *>(__builtin_cheri_seal(ptr, key));
-			return *this;
+			return {reinterpret_cast<CHERI_SEALED(T *)>(
+			  __builtin_cheri_seal(ptr, key))};
 		}
 
 		/**
 		 * Unseal this capability with the given key.
 		 */
-		Capability<T> &unseal(void *key)
+		[[nodiscard]] Capability<T, false> unseal(void *key)
+		    requires(IsSealed)
 		{
-#ifdef FLUTE
-			// Flute still throws exceptions on invalid use.  As a temporary
-			// work-around, add a quick check that this thing has the sealing
-			// type and don't unseal if it hasn't.  This isn't a complete test,
-			// it's just sufficient to get the tests passing on Flute.
-			if (type() != __builtin_cheri_address_get(key))
-			{
-				ptr = nullptr;
-			}
-			else
+#if __has_extension(cheri_sealed_pointers) &&                                  \
+  defined(CHERIOT_NO_SEALED_POINTERS)
+			// clang-format off
+			return {static_cast<T *>(__builtin_cheri_unseal(
+			  reinterpret_cast<void *__sealed_capability>(ptr), key))};
+			// clang-format on
+#else
+			return {static_cast<T *>(__builtin_cheri_unseal(ptr, key))};
 #endif
-			{
-				ptr = static_cast<T *>(__builtin_cheri_unseal(ptr, key));
-			}
-			return *this;
 		}
 
 		/**
 		 * Subscript operator.
 		 */
 		template<typename U = T>
-		requires(!std::same_as<U, void>) U &operator[](size_t index)
+		    requires(!std::same_as<U, void>)
+		U &operator[](size_t index)
 		{
 			return ptr[index];
 		}
@@ -1207,6 +1337,24 @@ namespace CHERI
 		}
 	};
 
+	template<typename T>
+	Capability(T *) -> Capability<T, false>;
+
+#if __has_extension(cheri_sealed_pointers) &&                                  \
+  !defined(CHERIOT_NO_SEALED_POINTERS)
+	template<typename T>
+	Capability(CHERI_SEALED(T *)) -> Capability<T, true>;
+#endif
+
+	/*
+	 * Partially ensure that CHERI::Capability<>s can be housed in registers
+	 * rather than needing to go via memory.  This is an attempt to capture some
+	 * of C++'s [class.temporary]p3 requirements, but I don't know how to
+	 * capture all of them in the existing metaprogramming library.
+	 */
+	static_assert(std::is_trivially_copy_constructible_v<Capability<void>> &&
+	              std::is_trivially_destructible_v<Capability<void>>);
+
 	/**
 	 * Concept that matches pointers.
 	 */
@@ -1220,20 +1368,13 @@ namespace CHERI
 	 * library smart pointers, etc.
 	 */
 	template<typename T>
-	concept IsSmartPointerLike = requires(T b)
-	{
-		{
-			b.get()
-			} -> IsPointer;
-	}
-	&&requires(T b)
-	{
-		b = b.get();
-	};
+	concept IsSmartPointerLike = requires(T b) {
+		{ b.get() } -> IsPointer;
+	} && requires(T b) { b = b.get(); };
 
 	/**
 	 * Checks that `ptr` is valid, unsealed, has at least `Permissions`,
-	 * and has at least `Space` bytes after the current offset.
+	 * and has at least `space` bytes after the current offset.
 	 *
 	 * `ptr` can be a pointer, or a smart pointer, i.e., any class that
 	 * supports a `get` method returning a pointer, and `operator=`. This
@@ -1245,9 +1386,14 @@ namespace CHERI
 	 * library) by passing `false` for `CheckStack`.
 	 *
 	 * If `EnforceStrictPermissions` is set to `true`, this will also set
-	 * the permissions of passed capability reference to `Permissions`, and
+	 * the permissions of the passed capability reference to `Permissions`, and
 	 * its bounds to `space`. This is useful for detecting cases where
-	 * compartments ask for less permissions than they actually require.
+	 * compartments ask for fewer permissions than they actually require and
+	 * callers happen to provide the required permissions.  Similarly, if you
+	 * are calling `check_pointer` in a function that wraps untrusted code such
+	 * as a third-party library, this lets you detect cases where your callers
+	 * are failing to remove permissions that the untrusted code should not
+	 * have.
 	 *
 	 * This function is provided as a wrapper for the `::check_pointer` C
 	 * API. It is always inlined. For each call site, it materialises the
@@ -1257,15 +1403,11 @@ namespace CHERI
 	template<PermissionSet Permissions = PermissionSet{Permission::Load},
 	         bool          CheckStack  = true,
 	         bool          EnforceStrictPermissions = false>
-	__always_inline inline bool check_pointer(
-	  auto  &ptr,
-	  size_t space = sizeof(
-	    std::remove_pointer<
-	      decltype(ptr)>)) requires(std::
-	                                  is_pointer_v<
-	                                    std::remove_cvref_t<decltype(ptr)>> ||
-	                                IsSmartPointerLike<
-	                                  std::remove_cvref_t<decltype(ptr)>>)
+	__always_inline inline bool
+	  check_pointer(auto  &ptr,
+	                size_t space = sizeof(std::remove_pointer<decltype(ptr)>))
+	    requires(std::is_pointer_v<std::remove_cvref_t<decltype(ptr)>> ||
+	             IsSmartPointerLike<std::remove_cvref_t<decltype(ptr)>>)
 	{
 		// We can skip a stack check if we've asked for Global because the
 		// stack does not have this permission.
@@ -1318,7 +1460,7 @@ namespace CHERI
 	 * Invokes the passed callable object with interrupts disabled.
 	 */
 	template<typename T>
-	[[cheri::interrupt_state(disabled)]] auto with_interrupts_disabled(T &&fn)
+	[[cheriot::interrupt_state(disabled)]] auto with_interrupts_disabled(T &&fn)
 	{
 		return fn();
 	}
@@ -1383,7 +1525,7 @@ namespace CHERI
 	};
 
 	/**
-	 * Register numbers as reported in cap idx field of  `mtval` CSR when
+	 * Register numbers as reported in thee cap idx field of `mtval` CSR when
 	 * a CHERI exception is taken. Values less than 32 refer to general
 	 * purpose registers and others to SCRs (of these, only PCC can actually
 	 * cause an exception).
@@ -1424,6 +1566,7 @@ namespace CHERI
 		/**
 		 * `$c6` / `$ct1` used by the ABI as temporary register.
 		 * Not preserved across calls.
+		 * Used by cross-compartment call as target import entry.
 		 */
 		CT1 = CheriRegisterNumberCT1,
 		/**

@@ -1,0 +1,12 @@
+// Copyright Microsoft and CHERIoT Contributors.
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
+#include <cdefs.h>
+
+__BEGIN_DECLS
+
+@test_header@
+
+__END_DECLS

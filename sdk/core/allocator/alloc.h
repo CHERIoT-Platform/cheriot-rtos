@@ -157,27 +157,21 @@ namespace displacement_proxy
 {
 
 	template<auto F, typename D>
-	concept Decoder = requires(D d)
-	{
-		{
-			F(d)
-			} -> std::same_as<size_t>;
+	concept Decoder = requires(D d) {
+		{ F(d) } -> std::same_as<size_t>;
 	};
 
 	template<auto F, typename D>
-	concept Encoder = requires(size_t s)
-	{
-		{
-			F(s)
-			} -> std::same_as<D>;
+	concept Encoder = requires(size_t s) {
+		{ F(s) } -> std::same_as<D>;
 	};
 
 	/**
-	 * Equipped with a context for bounds, a reference to a displacement can be
-	 * a proxy for a pointer.
+	 * Equipped with a context for bounds and a base address, a reference to a
+	 * (coded) displacement relative to that base can be a proxy for a pointer.
 	 */
 	template<typename T, typename D, bool Positive, auto Decode, auto Encode>
-	requires Decoder<Decode, D> && Encoder<Encode, D>
+	    requires Decoder<Decode, D> && Encoder<Encode, D>
 	class Proxy
 	{
 		CHERI::Capability<void> ctx;
@@ -287,7 +281,7 @@ namespace displacement_proxy
  *         or/and the MChunk::ring links present in body().
  */
 struct __packed __aligned(MallocAlignment)
-MChunkHeader
+__cheri_no_subobject_bounds MChunkHeader
 {
 	/**
 	 * Each chunk has a 16-bit metadata field that is used to store a small
@@ -589,8 +583,7 @@ using ChunkFreeLink = ds::linked_list::cell::PtrAddr;
  * feed an unsafe_remove'd MChunk to such a function or to simply build a new
  * MChunk header in the heap.
  */
-class __packed __aligned(MallocAlignment)
-MChunk
+class __packed __aligned(MallocAlignment) MChunk
 {
 	friend class MChunkAssertions;
 	friend class TChunk;
@@ -710,8 +703,7 @@ static inline size_t align_offset(CHERI::Capability<void> a)
  * Since we have enough room (large/tree chunks are at least 65 bytes), we just
  * put full capabilities here, and the format probably won't change, ever.
  */
-class __packed __aligned(MallocAlignment)
-TChunk
+class __packed __aligned(MallocAlignment) TChunk
 {
 	friend class TChunkAssertions;
 	friend class MState;
@@ -1207,11 +1199,12 @@ class MState
 			           "quota is {})",
 			           header->size_get(),
 			           quota);
+			heapFreeSize += header->size_get();
 			mspace_free_internal(header);
 			return AllocationFailureQuotaExceeded{};
 		}
 
-		if constexpr (DEBUG_ALLOCATOR)
+		if constexpr (AllocatorDebugEnabled)
 		{
 			// Periodically sanity check the entire state for this mspace.
 			static size_t           sanityCounter        = 0;
@@ -1329,11 +1322,24 @@ class MState
 					foundSkippedValue = true;
 					continue;
 				}
-				Debug::log("Found safe-to-free object in hazard list: {}", ptr);
 				// Re-derive a pointer to the chunk.
 				Capability heap{heapStart};
 				heap.address() = ptr.address();
 				auto chunk     = MChunkHeader::from_body(heap);
+				if (chunk->claims > 0)
+				{
+					/*
+					 * The chunk was freed but ended up in
+					 * the hazard quarantine due to an
+					 * ephemeral claim. Then it was
+					 * claimed, and so we cannot free it
+					 * anymore. However we can remove it
+					 * from the hazard list since
+					 * `!hazard_pointer_check(ptr)` above.
+					 */
+					continue;
+				}
+				Debug::log("Found safe-to-free object in hazard list: {}", ptr);
 				// We know this isn't in the hazard lists (we just checked!) so
 				// free it without doing any hazard pointer checks checks.
 				mspace_free(*chunk, ptr.length(), true);
@@ -1534,7 +1540,7 @@ class MState
 	 */
 	bool ok_address(ptraddr_t a)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return true;
 		}
@@ -1542,7 +1548,7 @@ class MState
 	}
 	bool ok_address(void *p)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return true;
 		}
@@ -1550,7 +1556,7 @@ class MState
 	}
 	void ok_any_chunk(MChunkHeader *p)
 	{
-		if constexpr (HasTemporalSafety && DEBUG_ALLOCATOR)
+		if constexpr (HasTemporalSafety && AllocatorDebugEnabled)
 		{
 			bool thisShadowBit =
 			  revoker.shadow_bit_get(CHERI::Capability{p}.address());
@@ -1573,7 +1579,7 @@ class MState
 	// Sanity check an in-use chunk.
 	void ok_in_use_chunk(MChunkHeader *p)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1591,7 +1597,7 @@ class MState
 	// Sanity check a free chunk.
 	void ok_free_chunk(MChunkHeader *pHeader)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1649,7 +1655,7 @@ class MState
 	// Sanity check a chunk that was just malloced.
 	void ok_malloced_chunk(MChunkHeader *p, size_t s)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1685,7 +1691,7 @@ class MState
 	 */
 	void ok_tree_next(TChunk *from, TChunk *t)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1725,7 +1731,7 @@ class MState
 	 */
 	void ok_tree(TChunk *from, TChunk *t)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1825,7 +1831,7 @@ class MState
 	// Sanity check the tree at treebin[i].
 	void ok_treebin(BIndex i)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1846,7 +1852,7 @@ class MState
 	// Sanity check smallbin[i].
 	void ok_smallbin(BIndex i)
 	{
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -1880,7 +1886,7 @@ class MState
 		{
 			mspace_bg_revoker_kick();
 		}
-		if constexpr (!DEBUG_ALLOCATOR)
+		if constexpr (!AllocatorDebugEnabled)
 		{
 			return;
 		}
@@ -2083,7 +2089,6 @@ class MState
 	 */
 	void unlink_large_chunk(TChunk *x)
 	{
-		TChunk *xp = x->parent;
 		TChunk *r;
 		if (!ds::linked_list::is_singleton(&x->mchunk.ring))
 		{
@@ -2124,7 +2129,8 @@ class MState
 		}
 		if (!x->is_tree_ring())
 		{
-			TChunk **h = treebin_at(x->index);
+			TChunk  *xp = x->parent;
+			TChunk **h  = treebin_at(x->index);
 			if (x == *h)
 			{
 				if ((*h = r) == nullptr)
@@ -2385,16 +2391,16 @@ class MState
 	 * Move a chunk back onto free lists.
 	 *
 	 * Note that this chunk does not have to come from quarantine, because it
-	 * can come from initialisation or splitting a free chunk.  Assumes that the
-	 * revocation shadow bits are clear in either case.
+	 * can come from initialisation or splitting a free chunk.  Thus, it is
+	 * the caller's responsibility to appropriately account heapFreeSize.
+	 *
+	 * Assumes that the revocation shadow bits are clear in either case.
 	 *
 	 * Initializes the linkages of p.
 	 */
 	void mspace_free_internal(MChunkHeader *p)
 	{
 		ok_in_use_chunk(p);
-
-		heapFreeSize += p->size_get();
 
 		if (!p->is_prev_in_use())
 		{
@@ -2581,6 +2587,7 @@ class MState
 			fore->metadata_clear();
 
 			heapQuarantineSize -= foreHeader->size_get();
+			heapFreeSize += foreHeader->size_get();
 
 			/* Clear the shadow bits that marked this region as quarantined */
 			revoker.shadow_paint_range<false>(foreHeader->body().address(),
@@ -2774,6 +2781,7 @@ class MState
 			 *   mspace_malloc does not displace into the chunk it finds from
 			 *   the free pool, but, in principle, it could.
 			 */
+			// This chunk is already free; do not adjust heapFreeSpace
 			mspace_free_internal(p);
 			p = r;
 		}
@@ -2796,6 +2804,7 @@ class MState
 			 *   to trim our tail, so it may well have trimmed the chunk
 			 *   it used to satisfy our request.
 			 */
+			// This chunk is already free; do not adjust heapFreeSpace
 			mspace_free_internal(r);
 		}
 
@@ -2807,4 +2816,179 @@ class MState
 	{
 		ABORT();
 	}
+
+#if HEAP_RENDER
+	public:
+	/**
+	 * "Render" the heap for debugging.
+	 */
+	template<bool Asserts = true, bool Chatty = true>
+	void render()
+	{
+		using RenderDebug = ConditionalDebug<Chatty, "Allocator heap">;
+
+		size_t measuredAllocated = 0, measuredFree = 0, measuredQuarantined = 0;
+
+		auto toAddr = [](void *p) {
+			return static_cast<ptraddr_t>(CHERI::Capability{p}.address());
+		};
+
+		auto header =
+		  static_cast<MChunkHeader *>(static_cast<void *>(heapStart));
+
+		RenderDebug::log("Dumping MState={} start={} end={}",
+		                 toAddr(this),
+		                 toAddr(heapStart),
+		                 heapStart.top());
+
+		if (!hazard_quarantine_is_empty())
+		{
+			RenderDebug::log("  hazard quarantine:");
+			for (size_t i = 0; i < hazardQuarantineOccupancy; i++)
+			{
+				RenderDebug::log("   {}", Capability{hazardQuarantine[i]});
+			}
+		}
+		else
+		{
+			RenderDebug::log("  hazard quarantine empty");
+		}
+
+		while (toAddr(header) != heapStart.top())
+		{
+			RenderDebug::log(
+			  "  header {}: size={} inuse={} pinuse={} owner={} claims={}",
+			  toAddr(header),
+			  header->size_get(),
+			  header->isCurrInUse,
+			  header->isPrevInUse,
+			  header->ownerID,
+			  header->claims);
+
+			if (!header->is_in_use())
+			{
+				measuredFree += header->size_get();
+
+				auto chunk = MChunk::from_header(header);
+				if (!ds::linked_list::is_singleton(&chunk->ring))
+				{
+					RenderDebug::log(
+					  "   free ring <{},{}>",
+					  toAddr(MChunk::from_ring(chunk->ring.cell_prev())),
+					  toAddr(MChunk::from_ring(chunk->ring.cell_next())));
+				}
+				else
+				{
+					RenderDebug::log("   free ring empty");
+				}
+
+				if (!is_small(header->size_get()))
+				{
+					auto t = TChunk::from_mchunk(chunk);
+
+					if (t->is_tree_ring())
+					{
+						RenderDebug::log("   tree ring, index={}", t->index);
+					}
+					else
+					{
+						RenderDebug::log(
+						  "   tree, index={} parent={} children=[{},{}]",
+						  t->index,
+						  toAddr(t->parent),
+						  toAddr(t->child[0]),
+						  toAddr(t->child[1]));
+					}
+				}
+			}
+			else
+			{
+				measuredAllocated += header->size_get();
+			}
+
+			header = header->cell_next();
+		}
+
+		auto showQuarantineRing = [&](ChunkFreeLink *&p) {
+			auto header = MChunkHeader::from_body(MChunk::from_ring(p));
+			RenderDebug::log(
+			  "   quarantined {} size={}", toAddr(header), header->size_get());
+			measuredQuarantined += header->size_get();
+			if constexpr (Asserts)
+			{
+				RenderDebug::invariant(ds::linked_list::is_well_formed(p),
+				                       "Quarantine list node malformed");
+			}
+			return false;
+		};
+
+		{
+			decltype(quarantinePendingRing)::Ix head = 0, tail = 0;
+
+			quarantinePendingRing.head_get(head);
+			quarantinePendingRing.tail_get(tail);
+			RenderDebug::log(" Quarantine status: empty={} head={} tail={}",
+			                 quarantinePendingRing.is_empty(),
+			                 head,
+			                 tail);
+		}
+
+		if (quarantineFinishedSentinel.is_empty())
+		{
+			RenderDebug::log("  finished ring empty");
+		}
+		else
+		{
+			RenderDebug::log("  finished ring <{},{}>:",
+			                 toAddr(quarantineFinishedSentinel.last()),
+			                 toAddr(quarantineFinishedSentinel.first()));
+			quarantine_finished_get()->search(showQuarantineRing);
+		}
+
+		for (size_t ix = 0; ix < QuarantineRings; ix++)
+		{
+			if (quarantinePendingChunks[ix].is_empty())
+			{
+				RenderDebug::log(
+				  "  ring {} epoch={} empty", ix, quarantinePendingEpoch[ix]);
+			}
+			else
+			{
+				RenderDebug::log(
+				  "  ring {} epoch={}:", ix, quarantinePendingEpoch[ix]);
+				quarantine_pending_get(ix)->search(showQuarantineRing);
+			}
+		}
+
+		auto measuredTotal = measuredAllocated + measuredFree;
+
+		RenderDebug::log(
+		  "Sizes: alloc={} free={} (expect {}) quar={} (expect {}) "
+		  "total={} (expect {})",
+		  measuredAllocated,
+		  measuredFree,
+		  heapFreeSize,
+		  measuredQuarantined,
+		  heapQuarantineSize,
+		  measuredTotal,
+		  heapTotalSize);
+
+		if constexpr (Asserts)
+		{
+			RenderDebug::invariant(measuredFree == heapFreeSize,
+			                       "Bad accounting in free size: {} {}",
+			                       std::make_tuple(measuredFree, heapFreeSize));
+
+			RenderDebug::invariant(
+			  measuredQuarantined == heapQuarantineSize,
+			  "Bad accounting in quarantine size: {} {}",
+			  std::make_tuple(measuredQuarantined, heapQuarantineSize));
+
+			RenderDebug::invariant(
+			  measuredTotal == heapTotalSize,
+			  "Bad accounting in total size: {} {}",
+			  std::make_tuple(measuredTotal, heapTotalSize));
+		}
+	}
+#endif
 };

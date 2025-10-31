@@ -31,8 +31,8 @@ find_llvm_tool() {
 find_llvm_tool_required() {
 	LLVM_TOOL=$(find_llvm_tool $1)
 
-	if [ ! -x ${LLVM_TOOL} ] ; then
-		echo Unable to locate $1, please set TOOLS_PATH to the directory containing the LLVM toolchain.
+	if ! command -v ${LLVM_TOOL} >/dev/null 2>&1 ; then
+		echo Unable to locate $1, please set TOOLS_PATH to the directory containing the LLVM toolchain. >&2
 		exit 1
 	fi
 

@@ -67,11 +67,14 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		DebugErrorHandler::log("Unhandled error {} at {}", mcause, frame->pcc);
 	}
 
-	simulation_exit(1);
+#ifdef SIMULATION
 	/*
-	 * simulation_exit may fail (say, we're not on a simulator or there isn't
+	 * simulation exit may fail (say, we're not on a simulator or there isn't
 	 * enough stack space to invoke the function.  In that case, just fall back
 	 * to forcibly unwinding.
 	 */
+	(void)scheduler_simulation_exit(1);
+#endif
+
 	return ErrorRecoveryBehaviour::ForceUnwind;
 }

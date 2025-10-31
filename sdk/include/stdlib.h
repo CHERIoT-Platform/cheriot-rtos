@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <__cheri_sealed.h>
 #include <cdefs.h>
 #include <compartment-macros.h>
 #include <riscvreg.h>
@@ -40,7 +41,10 @@ struct AllocatorCapabilityState
 	uintptr_t reserved[2];
 };
 
-struct SObjStruct;
+/**
+ * Type for allocator capabilities.
+ */
+typedef CHERI_SEALED(struct AllocatorCapabilityState *) AllocatorCapability;
 
 /**
  * Helper macro to forward declare an allocator capability.
@@ -55,7 +59,7 @@ struct SObjStruct;
  */
 #define DEFINE_ALLOCATOR_CAPABILITY(name, quota)                               \
 	DEFINE_STATIC_SEALED_VALUE(struct AllocatorCapabilityState,                \
-	                           alloc,                                          \
+	                           allocator,                                      \
 	                           MallocKey,                                      \
 	                           name,                                           \
 	                           (quota),                                        \
@@ -85,12 +89,12 @@ DECLARE_ALLOCATOR_CAPABILITY(__default_malloc_capability)
  */
 DEFINE_ALLOCATOR_CAPABILITY(__default_malloc_capability, MALLOC_QUOTA)
 #	endif
-#endif
 
 /**
  * Helper macro to look up the default malloc capability.
  */
-#define MALLOC_CAPABILITY STATIC_SEALED_VALUE(__default_malloc_capability)
+#	define MALLOC_CAPABILITY STATIC_SEALED_VALUE(__default_malloc_capability)
+#endif
 
 #ifndef MALLOC_WAIT_TICKS
 /**
@@ -113,32 +117,33 @@ static inline void __dead2 panic()
 	}
 }
 
-enum [[clang::flag_enum]] AllocateWaitFlags{
-  /**
-   * Non-blocking mode. This is equivalent to passing a timeout with no time
-   * remaining.
-   */
-  AllocateWaitNone = 0,
-  /**
-   * If there is enough memory in the quarantine to fulfil the allocation, wait
-   * for the revoker to free objects from the quarantine.
-   */
-  AllocateWaitRevocationNeeded = (1 << 0),
-  /**
-   * If the quota of the passed heap capability is exceeded, wait for other
-   * threads to free allocations.
-   */
-  AllocateWaitQuotaExceeded = (1 << 1),
-  /**
-   * If the heap memory is exhausted, wait for any other thread of the system
-   * to free allocations.
-   */
-  AllocateWaitHeapFull = (1 << 2),
-  /**
-   * Block on any of the above reasons. This is the default behavior.
-   */
-  AllocateWaitAny = (AllocateWaitRevocationNeeded | AllocateWaitQuotaExceeded |
-                     AllocateWaitHeapFull),
+enum [[clang::flag_enum]] AllocateWaitFlags
+{
+	/**
+	 * Non-blocking mode. This is equivalent to passing a timeout with no time
+	 * remaining.
+	 */
+	AllocateWaitNone = 0,
+	/**
+	 * If there is enough memory in the quarantine to fulfil the allocation,
+	 * wait for the revoker to free objects from the quarantine.
+	 */
+	AllocateWaitRevocationNeeded = (1 << 0),
+	/**
+	 * If the quota of the passed heap capability is exceeded, wait for other
+	 * threads to free allocations.
+	 */
+	AllocateWaitQuotaExceeded = (1 << 1),
+	/**
+	 * If the heap memory is exhausted, wait for any other thread of the system
+	 * to free allocations.
+	 */
+	AllocateWaitHeapFull = (1 << 2),
+	/**
+	 * Block on any of the above reasons. This is the default behavior.
+	 */
+	AllocateWaitAny = (AllocateWaitRevocationNeeded |
+	                   AllocateWaitQuotaExceeded | AllocateWaitHeapFull),
 };
 
 /**
@@ -155,31 +160,38 @@ enum [[clang::flag_enum]] AllocateWaitFlags{
  * Specifically, the `flags` parameter defines on which conditions to wait, and
  * the `timeout` parameter how long to wait.
  *
+ * Returns `-EINVAL` if the provided timeout is invalid, and `-EPERM` if the
+ * heap capability is invalid.
+ *
  * The non-blocking mode (`AllocateWaitNone`, or `timeout` with no time
  * remaining) will return a successful allocation if one can be created
- * immediately, or `nullptr` otherwise.
+ * immediately, `-ENOMEM` for heap full or out-of-quota, `-EAGAIN` if
+ * there is enough memory to satisfy the allocation in quaratine, indicating
+ * that the operation could succeed if retried, or `-EINVAL` if the
+ * allocation cannot succeed under any circumstances.
  *
- * The blocking modes may return `nullptr` if the condition to wait is not
- * fulfiled, if the timeout has expired, or if the allocation cannot be
- * satisfied under any circumstances (for example if `size` is larger than the
- * total heap size).
- *
- * This means that calling this with `AllocateWaitAny` and `UnlimitedTimeout`
- * will only ever return `nullptr` if the allocation cannot be satisfied under
- * any circumstances.
+ * The blocking modes may return error codes if:
+ * - `-EAGAIN`: Revocation needed and flags specify no wait on this condition.
+ * - `-ENOMEM`: The heap is full or provided quota is exceeded, and flags
+ *   specify no wait on this condition
+ * - `-ETIMEDOUT`: The timeout has expired while waiting to acquire the
+ *   allocator lock or while retrying the allocation.
+ * - `-EINVAL`: The allocation cannot be satisfied under any circumstances,
+ *   for example if `size` is larger than the total heap size.
  *
  * In both blocking and non-blocking cases, `-ENOTENOUGHSTACK` may be returned
- * if the stack is insufficiently large to safely run the function. This means
- * that the return value of `heap_allocate` should be checked for the validity
- * of the tag bit *and not* nullptr.
+ * if the stack is insufficiently large to safely run the function.
+ *
+ * The return value of `heap_allocate` should be checked for the validity
+ * of the tag bit *and not* simply compared against `nullptr`.
  *
  * Memory returned from this interface is guaranteed to be zeroed.
  */
-void *__cheri_compartment("alloc")
-  heap_allocate(Timeout           *timeout,
-                struct SObjStruct *heapCapability,
-                size_t             size,
-                uint32_t flags     __if_cxx(= AllocateWaitAny));
+void *__cheri_compartment("allocator")
+  heap_allocate(Timeout            *timeout,
+                AllocatorCapability heapCapability,
+                size_t              size,
+                uint32_t flags      __if_cxx(= AllocateWaitAny));
 
 /**
  * Non-standard allocation API.  Allocates `size` * `nmemb` bytes of memory,
@@ -192,17 +204,21 @@ void *__cheri_compartment("alloc")
  * here if `nmemb` * `size` is larger than the total heap size, or if `nmemb` *
  * `size` overflows.
  *
+ * Returns `-EINVAL` on such an overflow, or when the provided timeout pointer
+ * is invalid. Returns `-EPERM` on an invalid heap capability.
+ *
  * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
- * stack is insufficiently large to run the function. See `heap_allocate`.
+ * stack is insufficiently large to run the function. See `heap_allocate` for
+ * other potential return values.
  *
  * Memory returned from this interface is guaranteed to be zeroed.
  */
-void *__cheri_compartment("alloc")
-  heap_allocate_array(Timeout           *timeout,
-                      struct SObjStruct *heapCapability,
-                      size_t             nmemb,
-                      size_t             size,
-                      uint32_t flags     __if_cxx(= AllocateWaitAny));
+void *__cheri_compartment("allocator")
+  heap_allocate_array(Timeout            *timeout,
+                      AllocatorCapability heapCapability,
+                      size_t              nmemb,
+                      size_t              size,
+                      uint32_t flags      __if_cxx(= AllocateWaitAny));
 
 /**
  * Add a claim to an allocation.  The object will be counted against the quota
@@ -211,34 +227,49 @@ void *__cheri_compartment("alloc")
  *
  * This will return the size of the allocation claimed on success (which may be
  * larger than the size requested in the original `heap_allocate` call; see its
- * documentation for more information), 0 on error (if `heapCapability` or
- * `pointer` is not valid, etc.), or `-ENOTENOUGHSTACK` if the stack is
- * insufficiently large to run the function.
+ * documentation for more information).
+ *
+ * Returns `-EPERM` if `heapCapability` is not valid, `-ENOMEM` if the provided
+ * quota is too small to accomodate the claim, and `-EINVAL` if `pointer` is not
+ * a valid pointer into a live heap allocation.
+ *
+ * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
+ * stack is insufficiently large to run the function. See `heap_allocate`.
  */
-ssize_t __cheri_compartment("alloc")
-  heap_claim(struct SObjStruct *heapCapability, void *pointer);
+ssize_t __cheri_compartment("allocator")
+  heap_claim(AllocatorCapability heapCapability, void *pointer);
 
 /**
- * Interface to the fast claims mechanism.  This claims two pointers using the
- * hazard-pointer-inspired lightweight claims mechanism.  If this function
+ * Interface to the ephemeral claims mechanism.  This claims two pointers using
+ * the hazard-pointer-inspired lightweight claims mechanism.  If this function
  * returns zero then the heap pointers are guaranteed not to become invalid
  * until either the next cross-compartment call or the next call to this
  * function.
  *
  * A null pointer can be used as a not-present value.  This function will treat
  * operations on null pointers as unconditionally successful.  It returns
- * `-ETIMEDOUT` if it failed to claim before the timeout expired, or `EINVAL`
+ * `-ETIMEDOUT` if it failed to claim before the timeout expired, or `-EINVAL`
  * if one or more of the arguments is neither null nor a valid pointer at the
  * end.
  *
  * In the case of failure, neither pointer will have been claimed.
  *
- * This function is provided by the compartment_helpers library, which must be
+ * This function is provided by the `compartment_helpers` library, which must be
  * linked for it to be available.
  */
-int __cheri_libcall heap_claim_fast(Timeout         *timeout,
-                                    const void      *ptr,
-                                    const void *ptr2 __if_cxx(= nullptr));
+int __cheri_libcall heap_claim_ephemeral(Timeout         *timeout,
+                                         const void      *ptr,
+                                         const void *ptr2 __if_cxx(= nullptr));
+
+__attribute__((deprecated("heap_claim_fast was a bad name.  This function has "
+                          "been renamed heap_claim_ephemeral")))
+__always_inline static int
+heap_claim_fast(Timeout         *timeout,
+                const void      *ptr,
+                const void *ptr2 __if_cxx(= nullptr))
+{
+	return heap_claim_ephemeral(timeout, ptr, ptr2);
+}
 
 /**
  * Free a heap allocation.
@@ -247,8 +278,8 @@ int __cheri_libcall heap_claim_fast(Timeout         *timeout,
  * of a live heap allocation, or `-ENOTENOUGHSTACK` if the stack size is
  * insufficiently large to safely run the function.
  */
-int __cheri_compartment("alloc")
-  heap_free(struct SObjStruct *heapCapability, void *ptr);
+int __cheri_compartment("allocator")
+  heap_free(AllocatorCapability heapCapability, void *ptr);
 
 /**
  * Free all allocations owned by this capability.
@@ -257,42 +288,76 @@ int __cheri_compartment("alloc")
  * capability, or `-ENOTENOUGHSTACK` if the stack size is insufficiently large
  * to safely run the function.
  */
-ssize_t __cheri_compartment("alloc")
-  heap_free_all(struct SObjStruct *heapCapability);
+ssize_t __cheri_compartment("allocator")
+  heap_free_all(AllocatorCapability heapCapability);
 
 /**
- * Returns 0 if the allocation can be freed with the given capability, a
- * negated errno value otherwise.
+ * Returns 0 if the allocation can be freed with the given capability,
+ * `-EPERM` if `heapCapability` is not valid or it cannot free the provided
+ * allocation (such as when `heapCapability` does not own the allocation,
+ * and holds no claim on it), and `-EINVAL` if `ptr` is not a valid pointer
+ * into a live heap allocation.
  */
-int __cheri_compartment("alloc")
-  heap_can_free(struct SObjStruct *heapCapability, void *ptr);
+int __cheri_compartment("allocator")
+  heap_can_free(AllocatorCapability heapCapability, void *ptr);
 
 /**
- * Returns the space available in the given quota. This will return -1 if
- * `heapCapability` is not valid or if the stack is insufficient to run the
- * function.
+ * Returns the space available in the given quota. This will return `-EPERM` if
+ * `heapCapability` is not valid or `-ENOTENOUGHSTACK` if the stack is
+ * insufficient to run the function.
  */
-ssize_t __cheri_compartment("alloc")
-  heap_quota_remaining(struct SObjStruct *heapCapability);
+ssize_t __cheri_compartment("allocator")
+  heap_quota_remaining(AllocatorCapability heapCapability);
 
 /**
- * Block until the quarantine is empty.
+ * Try to empty the quarantine and defragment the heap.
  *
- * This should be used only in testing, to place the system in a quiesced
- * state.  It can block indefinitely if another thread is allocating and
- * freeing memory while this runs.
+ * This will (finish and then) run a revocation sweep and try to empty the
+ * quarantine.  In normal operation, the allocator will remove a small number of
+ * allocations from quarantine on each allocation.  Allocations are not
+ * coalesced until they are moved from quarantine, so this can cause
+ * fragmentation.  If you have just freed a lot of memory (for example, after
+ * resetting a compartment and calling `heap_free_all`), especially if you have
+ * freed a lot of small allocations, then calling this function will likely
+ * reduce fragmentation.
+ *
+ * Calling this function will ensure that all objects freed before the call are
+ * out of quarantine (unless a timeout occurs).  Objects freed concurrently (by
+ * another thread) may remain in quarantine, so this does not guarantee that
+ * the quarantine is empty, only that everything freed by this thread is
+ * removed from quarantine.
+ *
+ * Returns 0 on success, a compartment invocation failure indication
+ * (`-ENOTENOUGHSTACK`, `-ENOTENOUGHTRUSTEDSTACK`) if it cannot be invoked, or
+ * possibly `-ECOMPARTMENTFAIL` if the allocator compartment is damaged.
+ *
+ * Returns `-ETIMEDOUT` if the timeout expires or `-EINVAL` if the timeout is
+ * not valid.
  */
-void __cheri_compartment("alloc") heap_quarantine_empty(void);
+__attribute__((overloadable)) int __cheri_compartment("allocator")
+  heap_quarantine_flush(Timeout *timeout);
+
+/**
+ * Run `heap_quarantine_flush` with unlimited timeout.
+ *
+ * This is guaranteed to terminate (barring bugs), but, as with most
+ * unlimited-timeout operation, should be confined to debug or test code.
+ */
+static int heap_quarantine_empty(void)
+{
+	Timeout t = {0, UnlimitedTimeout};
+	return heap_quarantine_flush(&t);
+}
 
 /**
  * Returns true if `object` points to a valid heap address, false otherwise.
  * Note that this does *not* check that this is a valid pointer.  This should
- * be used in conjunction with check_pointer to check validity.  The principle
- * use of this function is checking whether an object needs to be claimed.  If
- * this returns false but the pointer has global permission, it must be a
- * global and so does not need to be claimed.  If the pointer lacks global
- * permission then it cannot be claimed, but if this function returns false
- * then it is guaranteed not to go away for the duration of the call.
+ * be used in conjunction with `check_pointer` to check validity.  The
+ * principle use of this function is checking whether an object needs to be
+ * claimed.  If this returns false but the pointer has global permission, it
+ * must be a global and so does not need to be claimed.  If the pointer lacks
+ * global permission then it cannot be claimed, but if this function returns
+ * false then it is guaranteed not to go away for the duration of the call.
  */
 __if_c(static) inline _Bool heap_address_is_valid(const void *object)
 {
@@ -306,6 +371,15 @@ __if_c(static) inline _Bool heap_address_is_valid(const void *object)
 	ptraddr_t address = __builtin_cheri_base_get(object);
 	return (address >= heap_start) && (address < heap_end);
 }
+
+/**
+ * Dump a textual rendering of the heap's structure to the debug console.
+ *
+ * If the RTOS is not built with --allocator-rendering=y, this is a no-op.
+ *
+ * Returns zero on success, non-zero on error (e.g. compartment call failure).
+ */
+int __cheri_compartment("allocator") heap_render();
 
 static inline void __dead2 abort()
 {
@@ -328,7 +402,7 @@ static inline void *calloc(size_t nmemb, size_t size)
 {
 	Timeout t   = {0, MALLOC_WAIT_TICKS};
 	void   *ptr = heap_allocate_array(
-	    &t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitRevocationNeeded);
+      &t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitRevocationNeeded);
 	if (!__builtin_cheri_tag_get(ptr))
 	{
 		ptr = NULL;
@@ -341,10 +415,37 @@ static inline int free(void *ptr)
 }
 #endif
 
-size_t __cheri_compartment("alloc") heap_available(void);
+size_t __cheri_compartment("allocator") heap_available(void);
 
 static inline void yield(void)
 {
 	__asm volatile("ecall" ::: "memory");
 }
+
+/**
+ * Convert an ASCII string into a signed long.
+ *
+ * This function, and indeed the CHERIoT-RTOS in general, has no notion of
+ * locale.
+ *
+ * While prototyped here, it is available as part of a dedicated 'strtol'
+ * library, which may be omitted from firmware builds if the implementation is
+ * not required.
+ */
+long __cheri_libcall strtol(const char *nptr, char **endptr, int base);
+
+/**
+ * Convert an ASCII string into an unsigned long.
+ *
+ * This function, and indeed the CHERIoT-RTOS in general, has no notion of
+ * locale.
+ *
+ * While prototyped here, it is available as part of a dedicated 'strtol'
+ * library, which may be omitted from firmware builds if the implementation is
+ * not required.
+ */
+unsigned long __cheri_libcall strtoul(const char *nptr,
+                                      char      **endptr,
+                                      int         base);
+
 __END_DECLS

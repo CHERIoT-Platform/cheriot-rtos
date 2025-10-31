@@ -25,6 +25,7 @@ int test_futex()
 {
 	static uint32_t futex;
 	int             ret;
+	int             sleeps;
 	// Make sure that waking a futex with no sleepers doesn't crash!
 	ret = futex_wake(&futex, 1);
 	TEST(ret == 0, "Waking a futex with no sleepers should return 0");
@@ -32,7 +33,7 @@ int test_futex()
 	// has been set to 1.
 	async([]() {
 		futex = 1;
-		futex_wake(&futex, 1);
+		(void)futex_wake(&futex, 1);
 	});
 	debug_log("Calling blocking futex_wait");
 	ret = futex_wait(&futex, 0);
@@ -81,11 +82,8 @@ int test_futex()
 	fcap.permissions() &=
 	  PermissionSet::omnipotent().without(Permission::Store);
 	ret = futex_wake(fcap, 1);
-	TEST(ret == -EINVAL,
-	     "futex_wake returned {} when called without store permission, "
-	     "expected {}",
-	     ret,
-	     -EINVAL);
+	TEST_EQUAL(
+	  ret, 0, "futex_wake returned when called without store permission");
 
 #ifdef SAIL
 	// If we're targeting Sail, also do some basic tests of the interrupt
@@ -123,7 +121,7 @@ int test_futex()
             while (state != 1)
             {
                 Timeout t{3};
-                thread_sleep(&t);
+                TEST_SUCCESS(thread_sleep(&t));
             }
             debug_log("Consuming all CPU on medium-priority thread");
             state = 2;
@@ -144,27 +142,31 @@ int test_futex()
             debug_log("Low-priority thread finished, unlocking");
             state = 4;
             futex = 0;
-            futex_wake(&futex, 1);
+            TEST_SUCCESS(futex_wake(&futex, 1));
         }
 	};
 	async(priorityBug);
 	async(priorityBug);
 	debug_log("Waiting for background threads to enter the right state");
-	while (state != 2)
+	for (sleeps = 0; (sleeps < 100) && (state != 2); sleeps++)
 	{
-		Timeout t{3};
-		thread_sleep(&t);
+		TEST(sleep(3) >= 0, "Failed to sleep");
 	}
+	TEST(sleeps < 100, "Waited too long for background threads");
 	debug_log("High-priority thread attempting to acquire futex owned by "
 	          "low-priority thread without priority propagation");
 	state       = 3;
 	t.remaining = 1;
-	futex_timed_wait(&t, &futex, futex, FutexNone);
+	TEST_EQUAL(futex_timed_wait(&t, &futex, futex, FutexNone),
+	           -ETIMEDOUT,
+	           "futex_timed_wait failed");
 	TEST(futex != 0, "Made progress surprisingly!");
 	debug_log("High-priority thread attempting to acquire futex owned by "
 	          "low-priority thread with priority propagation");
 	t.remaining = 4;
-	futex_timed_wait(&t, &futex, futex, FutexPriorityInheritance);
+	TEST_EQUAL(futex_timed_wait(&t, &futex, futex, FutexPriorityInheritance),
+	           0,
+	           "futex_timed_wait failed");
 	TEST(futex == 0, "Failed to make progress!");
 
 	futex       = 1234;

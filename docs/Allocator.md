@@ -11,7 +11,7 @@ Allocator capabilities
 ----------------------
 
 Allocating memory requires a capability that authorises memory allocation.
-These are created by the `DECLARE_AND_DEFINE_DEFINE_ALLOCATOR_CAPABILITY` macro, which takes two arguments.
+These are created by the `DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY` macro, which takes two arguments.
 The first is the name of the capability, the second is the amount of memory that this capability authorises the holder to allocate.
 This capability may then be accessed with the `STATIC_SEALED_VALUE` macro, which takes the name as the argument.
 If you wish to refer to the same capability from multiple C compilation units, you can use the separate `DECLARE_` and `DEFINE_` versions of this combined macro.
@@ -29,10 +29,10 @@ When inspecting the linker audit report for a firmware image, you will see an en
           "contents": "00001000 00000000 00000000 00000000 00000000 00000000",
           "kind": "SealedObject",
           "sealing_type": {
-            "compartment": "alloc",
+            "compartment": "allocator",
             "key": "MallocKey",
             "provided_by": "build/cheriot/cheriot/release/cherimcu.allocator.compartment",
-            "symbol": "__export.sealing_type.alloc.MallocKey"
+            "symbol": "__export.sealing_type.allocator.MallocKey"
           }
         },
 ```
@@ -102,7 +102,8 @@ Handling of failure
 All `heap_` allocator APIs can fail with `-ENOTENOUGHSTACK`, which indicates that the stack space available was insufficient for the allocator to safely execute.
 This is because executing the allocator on insufficient stack space may allow attackers to trigger arbitrary failures in the allocator through carefully setting the size of the stack.
 
-This implies an important difference of semantics between `heap_allocate` and the C stdlib `malloc`: upon failure `heap_allocate` may return a `(void*) -ENOTENOUGHSTACK` pointer as well as a `NULL` pointer.
+This implies an important difference of semantics between `heap_allocate` and the C stdlib `malloc`: upon failure `heap_allocate` may return a `(void*) -ENOTENOUGHSTACK` pointer.
+Additionally, other failure modes of this function return other error values, instead of a `NULL` pointer.
 Success of `heap_allocate` must thus be checked by querying the tag bit of the returned capability, instead of comparing with a `NULL` pointer.
 
 A correct usage of `heap_allocate` with the C++ API looks like the following:

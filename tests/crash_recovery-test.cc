@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cheri.hh>
 #include <errno.h>
+#include <priv/riscv.h>
 
 int               crashes = 0;
 std::atomic<bool> expectFault;
@@ -37,11 +38,8 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 	}
 	debug_log("Test saw error for PCC {}", frame->pcc);
 	debug_log("Error cause: {}, mtval: {}", mcause, mtval);
-	TEST((mcause == 0x1c) && (mtval == 0),
-	     "mcause should be 0x1c (CHERI), is {}, mtval should be 0 (force "
-	     "unwind), is {})",
-	     mcause,
-	     mtval);
+	TEST_EQUAL(mcause, priv::MCAUSE_CHERI, "mcause not CHERI");
+	TEST_EQUAL(mtval, 0, "mtval not 0 (force unwind)");
 	debug_log("Resuming test at failure location");
 	return ErrorRecoveryBehaviour::InstallContext;
 }
@@ -49,7 +47,7 @@ compartment_error_handler(struct ErrorState *frame, size_t mcause, size_t mtval)
 int test_crash_recovery()
 {
 	debug_log("Calling crashy compartment indirectly");
-	test_crash_recovery_outer(0);
+	TEST_EQUAL(test_crash_recovery_outer(0), 0, "Indirect crash failed");
 	check_stack();
 	TEST(crashes == 0, "Ran crash handler for outer compartment");
 	debug_log("Compartment with no error handler returned normally after "

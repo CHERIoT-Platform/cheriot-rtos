@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <__cheri_sealed.h>
 #include <cdefs.h>
 #include <stdbool.h>
 
@@ -22,7 +23,7 @@
 		__asm(".ifndef " mangledName "\n"                                      \
 		      "  .type     " mangledName ",@object\n"                          \
 		      "  .section  .compartment_imports." #name                        \
-		      ",\"awG\",@progbits," #name ",comdat\n"                          \
+		      ",\"awG\",@progbits," mangledName ",comdat\n"                    \
 		      "  .globl    " mangledName "\n"                                  \
 		      "  .p2align  3\n" mangledName ":\n"                              \
 		      "  .word " #prefix #name "\n"                                    \
@@ -149,7 +150,7 @@
  */
 #define CHERIOT_EMIT_STATIC_SEALING_TYPE(name)                                 \
 	({                                                                         \
-		SKey ret; /* NOLINT(bugprone-macro-parentheses) */                     \
+		TokenKey ret; /* NOLINT(bugprone-macro-parentheses) */                 \
 		__asm(                                                                 \
 		  ".ifndef __import." name "\n"                                        \
 		  "  .type     __import." name ",@object\n"                            \
@@ -206,15 +207,43 @@
  *
  * The object created with this macro can be accessed only by code that has
  * access to the sealing key.
+ *
+ * Unlike `DECLARE_STATIC_SEALED_VALUE`, this allows the type that value should
+ * be read as to be different to the type used to initialise it.  The type of
+ * the value in `STATIC_SEALED_VALUE` will be `CHERI_SEALED(valueType*)`.  This
+ * is useful for variable length arrays at the end of the structure.
  */
-#define DECLARE_STATIC_SEALED_VALUE(type, compartment, keyName, name)          \
-	struct __##name##_type; /* NOLINT(bugprone-macro-parentheses) */           \
+#define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                             \
+  type, valueType, compartment, keyName, name)                                 \
+	/* Implementation detail: This declaration in the reserved namespace       \
+	 * exists only so that __typeof__ can be used later to determine the       \
+	 * original type.  This will be removed once the compiler understands      \
+	 * static sealed objects natively. */                                      \
+	extern valueType __sealed_type_placeholder_##name;                         \
 	extern __if_cxx("C") struct __##name##_type                                \
 	{                                                                          \
 		uint32_t key;                                                          \
 		uint32_t padding;                                                      \
 		type     body;                                                         \
-	} name /* NOLINT(bugprone-macro-parentheses) */
+	}(name);                                                                   \
+	/* Make sure the type that we're casting this to is not bigger than the    \
+	 * value that we've emitted. */                                            \
+	_Static_assert(sizeof(__sealed_type_placeholder_##name) <=                 \
+	               sizeof((name).body))
+
+/**
+ * Forward-declare a static sealed object.  This declares an object of type
+ * `type` that can be referenced with the `STATIC_SEALED_VALUE` macro using
+ * `name`.  The pointer returned by the latter macro will be sealed with the
+ * sealing key exported from `compartment` as `keyName` with the
+ * `STATIC_SEALING_TYPE` macro.
+ *
+ * The object created with this macro can be accessed only by code that has
+ * access to the sealing key.
+ */
+#define DECLARE_STATIC_SEALED_VALUE(type, compartment, keyName, name)          \
+	DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                                 \
+	  type, type, compartment, keyName, name)
 
 /**
  * Define a static sealed object.  This creates an object of type `type`,
@@ -230,8 +259,8 @@
   type, compartment, keyName, name, initialiser, ...)                          \
 	extern __if_cxx("C") int __sealing_key_##compartment##_##keyName __asm(    \
 	  "__export.sealing_type." #compartment "." #keyName);                     \
-	__attribute__((section(".sealed_objects"), used))                          \
-	__if_cxx(inline) struct __##name##_type                                    \
+	__attribute__((section(".sealed_objects"), used)) __if_cxx(                \
+	  inline) struct __##name##_type                                           \
 	  name = /* NOLINT(bugprone-macro-parentheses) */                          \
 	  {(uint32_t)&__sealing_key_##compartment##_##keyName,                     \
 	   0,                                                                      \
@@ -239,11 +268,18 @@
 
 /**
  * Helper macro that declares and defines a sealed value.
+ *
+ * Unlike `DECLARE_AND_DEFINE_STATIC_SEALED_VALUE`, this allows the type that
+ * value should be read as to be different to the type used to initialise it.
+ * The type of the value in `STATIC_SEALED_VALUE` will be
+ * `CHERI_SEALED(valueType*)`.  This is useful for variable length arrays at
+ * the end of the structure.
  */
-#define DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(                                \
-  type, compartment, keyName, name, initialiser, ...)                          \
-	DECLARE_STATIC_SEALED_VALUE(                                               \
+#define DECLARE_AND_DEFINE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                  \
+  type, valueType, compartment, keyName, name, initialiser, ...)               \
+	DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                                 \
 	  type,                                                                    \
+	  valueType,                                                               \
 	  compartment,                                                             \
 	  keyName,                                                                 \
 	  name); /* NOLINT(bugprone-macro-parentheses) */                          \
@@ -256,17 +292,26 @@
 	  ##__VA_ARGS__); /* NOLINT(bugprone-macro-parentheses) */
 
 /**
+ * Helper macro that declares and defines a sealed value.
+ */
+#define DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(                                \
+  type, compartment, keyName, name, initialiser, ...)                          \
+	DECLARE_AND_DEFINE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                      \
+	  type, type, compartment, keyName, name, initialiser, ##__VA_ARGS__)
+
+/**
  * Returns a sealed capability to the named object created with
  * `DECLARE_STATIC_SEALED_VALUE`.
  */
 #define STATIC_SEALED_VALUE(name)                                              \
 	({                                                                         \
-		struct SObjStruct *ret; /* NOLINT(bugprone-macro-parentheses) */       \
+		CHERI_SEALED(__typeof__(__sealed_type_placeholder_##name) *)           \
+		ret; /* NOLINT(bugprone-macro-parentheses) */                          \
 		__asm(".ifndef __import.sealed_object." #name "\n"                     \
 		      "  .type     __import.sealed_object." #name ",@object\n"         \
 		      "  .section  .compartment_imports." #name                        \
-		      ",\"awG\",@progbits," #name ",comdat\n"                          \
-		      "  .globl    __import.sealed_object." #name "\n"                 \
+		      ",\"awG\",@progbits," #name "\n"                                 \
+		      "  .weak    __import.sealed_object." #name "\n"                  \
 		      "  .p2align  3\n"                                                \
 		      "__import.sealed_object." #name ":\n"                            \
 		      "  .word " #name "\n"                                            \

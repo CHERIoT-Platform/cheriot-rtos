@@ -33,12 +33,12 @@ struct EventGroup
 	EventWaiter waiters[];
 };
 
-int eventgroup_create(Timeout     *timeout,
-                      SObjStruct  *heapCapability,
-                      EventGroup **outGroup)
+int eventgroup_create(Timeout            *timeout,
+                      AllocatorCapability heapCapability,
+                      EventGroup        **outGroup)
 {
 	auto threads = thread_count();
-	if (threads == uint16_t(-1))
+	if (threads == static_cast<uint16_t>(-1))
 	{
 		return -ERANGE;
 	}
@@ -71,7 +71,7 @@ int eventgroup_wait(Timeout    *timeout,
 		return (waitForAll ? ((bitsWanted & bits) == bitsWanted)
 		                   : ((bitsWanted & bits) != 0));
 	};
-	auto    &waiter = group->waiters[thread_id_get()];
+	auto    &waiter = group->waiters[thread_id_get() - 1];
 	uint32_t bitsSeen;
 	// Set up our state for the waiter with the lock held.
 	if (LockGuard g{group->lock, timeout})
@@ -177,7 +177,8 @@ int eventgroup_get(EventGroup *group, uint32_t *outBits)
 	return 0;
 }
 
-int eventgroup_destroy_force(SObjStruct *heapCapability, EventGroup *group)
+int eventgroup_destroy_force(AllocatorCapability heapCapability,
+                             EventGroup         *group)
 {
 	group->lock.upgrade_for_destruction();
 	// Force all waiters to wake.
@@ -191,11 +192,10 @@ int eventgroup_destroy_force(SObjStruct *heapCapability, EventGroup *group)
 		waiter.bitsSeen   = bits;
 		waiter.bitsSeen.notify_one();
 	}
-	heap_free(heapCapability, group);
-	return 0;
+	return heap_free(heapCapability, group);
 }
 
-int eventgroup_destroy(SObjStruct *heapCapability, EventGroup *group)
+int eventgroup_destroy(AllocatorCapability heapCapability, EventGroup *group)
 {
 	group->lock.lock();
 	return eventgroup_destroy_force(heapCapability, group);

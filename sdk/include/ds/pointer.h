@@ -47,40 +47,31 @@ namespace ds::pointer
 		 */
 		template<typename P, typename T>
 		concept Proxies = std::same_as<T, typename P::Type> &&
-		  requires(P &proxy, P &proxy2, T *ptr)
-		{
-			/* Probe for operator=(T*) */
-			{
-				proxy = ptr
-				} -> std::same_as<P &>;
+		                  requires(P &proxy, P &proxy2, T *ptr) {
+			                  /* Probe for operator=(T*) */
+			                  { proxy = ptr } -> std::same_as<P &>;
 
-			/* Probe for operator T*() */
-			{
-				ptr == proxy
-				} -> std::same_as<bool>;
+			                  /* Probe for operator T*() */
+			                  { ptr == proxy } -> std::same_as<bool>;
 
-			/* TODO: How to probe for operator-> ? */
+			                  /* TODO: How to probe for operator-> ? */
 
-			/* Probe for operator==(T*) */
-			{
-				proxy == ptr
-				} -> std::same_as<bool>;
+			                  /* Probe for operator==(T*) */
+			                  { proxy == ptr } -> std::same_as<bool>;
 
-			/* Probe for operator==(P&) */
-			{
-				proxy == proxy2
-				} -> std::same_as<bool>;
+			                  /* Probe for operator==(P&) */
+			                  { proxy == proxy2 } -> std::same_as<bool>;
 
-			/* Probe for operator<=>(T*) */
-			{
-				proxy <=> ptr
-				} -> std::same_as<std::strong_ordering>;
+			                  /* Probe for operator<=>(T*) */
+			                  {
+				                  proxy <=> ptr
+			                  } -> std::same_as<std::strong_ordering>;
 
-			/* Probe for operator<=>(P) */
-			{
-				proxy <=> proxy2
-				} -> std::same_as<std::strong_ordering>;
-		};
+			                  /* Probe for operator<=>(P) */
+			                  {
+				                  proxy <=> proxy2
+			                  } -> std::same_as<std::strong_ordering>;
+		                  };
 
 		/**
 		 * Pointer references are pointer proxies, shockingly enough.
@@ -113,7 +104,7 @@ namespace ds::pointer
 
 			__always_inline Pointer<T> &operator=(Pointer const &p)
 			{
-				ref = p.ref;
+				ref = static_cast<T *>(p.ref);
 				return *this;
 			}
 

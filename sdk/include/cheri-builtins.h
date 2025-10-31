@@ -1,8 +1,9 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
-#ifndef _CHERI_BUILTINS_
-#define _CHERI_BUILTINS_
+#pragma once
+
+#include <__cheri_sealed.h>
 
 #define CHERI_PERM_GLOBAL (1U << 0)
 #define CHERI_PERM_LOAD_GLOBAL (1U << 1)
@@ -19,109 +20,216 @@
 
 #define CHERI_OTYPE_BITS 3
 
-#ifndef __cplusplus
+#ifdef __cplusplus
+#	include <cdefs.h>
+#	include <stddef.h>
+
+static inline __always_inline ptraddr_t cheri_address_get(void *x)
+{
+	return __builtin_cheri_address_get(x);
+}
+
+static inline __always_inline auto cheri_address_set(auto *x, ptrdiff_t y)
+{
+	return __builtin_cheri_address_set(x, y);
+}
+
+static inline __always_inline auto cheri_address_increment(auto *x, ptrdiff_t y)
+{
+	return __builtin_cheri_address_increment(x, y);
+}
+
+static inline __always_inline ptraddr_t cheri_base_get(void *x)
+{
+	return __builtin_cheri_base_get(x);
+}
+
+static inline __always_inline ptraddr_t cheri_top_get(void *x)
+{
+	return __builtin_cheri_top_get(x);
+}
+
+static inline __always_inline ptraddr_t cheri_length_get(void *x)
+{
+	return __builtin_cheri_length_get(x);
+}
+
+static inline __always_inline auto cheri_tag_clear(void *x)
+{
+	return __builtin_cheri_tag_clear(x);
+}
+
+static inline __always_inline auto cheri_tag_get(void *x)
+{
+	return __builtin_cheri_tag_clear(x);
+}
+
+static inline __always_inline bool cheri_is_valid(void *x)
+{
+	return cheri_tag_get(x);
+}
+
+static inline __always_inline bool cheri_is_invalid(void *x)
+{
+	return !cheri_tag_get(x);
+}
+
+static inline __always_inline bool cheri_is_equal_exact(void *x, void *y)
+{
+	return __builtin_cheri_equal_exact(x, y);
+}
+
+static inline __always_inline bool cheri_is_subset(void *x, void *y)
+{
+	return __builtin_cheri_subset_test(x, y);
+}
+
+static inline __always_inline auto cheri_permissions_get(void *x)
+{
+	return __builtin_cheri_perms_get(x);
+}
+
+static inline __always_inline auto cheri_permissions_and(void *x, unsigned y)
+{
+	return __builtin_cheri_perms_and(x, y);
+}
+
+static inline __always_inline auto cheri_type_get(void *x)
+{
+	return __builtin_cheri_type_get(x);
+}
+
+static inline __always_inline auto cheri_seal(auto *x, auto *y)
+{
+	return __builtin_cheri_seal(x, y);
+}
+
+static inline __always_inline auto cheri_unseal(CHERI_SEALED(auto *) x, auto *y)
+{
+	return __builtin_cheri_unseal(x, y);
+}
+
+static inline __always_inline auto cheri_bounds_set(auto *a, size_t b)
+{
+	return __builtin_cheri_bounds_set(a, b);
+}
+
+static inline __always_inline auto cheri_bounds_set_exact(auto *a, size_t b)
+{
+	return __builtin_cheri_bounds_set_exact(a, b);
+}
+
+static inline __always_inline auto cheri_subset_test(void *a, void *b)
+{
+	return __builtin_cheri_subset_test(a, b);
+}
+
+static inline __always_inline auto
+cheri_representable_alignment_mask(size_t len)
+{
+	return __builtin_cheri_representable_alignment_mask(len);
+}
+
+static inline __always_inline auto cheri_round_representable_length(size_t len)
+{
+	return __builtin_cheri_round_representable_length(len);
+}
+
+#else
 #	ifndef __ASSEMBLER__
 
 #		include <stddef.h>
 #		include <stdint.h>
 
-#		define cr_read(name)                                                  \
-			({                                                                 \
-				void *val;                                                     \
-				__asm __volatile("cmove %0, " #name : "=C"(val));              \
-				val;                                                           \
-			})
-
-#		define cr_write(name, val)                                            \
-			({ __asm __volatile("cmove " #name ", %0" ::"C"(val)); })
-
-static inline void mem_cpy64(volatile uint64_t *dst, volatile uint64_t *p)
-{
-	volatile void **_dst = (volatile void **)dst;
-	volatile void **_p   = (volatile void **)p;
-
-	*_dst = *_p;
-}
-
+// Old deprecated macros.  Here for compatibility, hopefully we can remove them
+// soon.
 #		define cgetlen(foo) __builtin_cheri_length_get(foo)
+#		pragma clang deprecated(cgetlen, "use cheri_length_get instead")
+
 #		define cgetperms(foo) __builtin_cheri_perms_get(foo)
+#		pragma clang deprecated(cgetperms, "use cheri_permissions_get instead")
+
 #		define cgettype(foo) __builtin_cheri_type_get(foo)
+#		pragma clang deprecated(cgettype, "use cheri_type_get instead")
+
 #		define cgettag(foo) __builtin_cheri_tag_get(foo)
-#		define cgetoffset(foo) __builtin_cheri_offset_get(foo)
-#		define csetoffset(a, b) __builtin_cheri_offset_set((a), (b))
+#		pragma clang deprecated(cgettag, "use cheri_tag_get instead")
+
 #		define cincoffset(a, b) __builtin_cheri_offset_increment((a), (b))
+#		pragma clang deprecated(cincoffset,                                   \
+		                         "use cheri_address_increment instead")
+
 #		define cgetaddr(a) __builtin_cheri_address_get(a)
+#		pragma clang deprecated(cgetaddr, "use cheri_address_get instead")
+
 #		define csetaddr(a, b) __builtin_cheri_address_set((a), (b))
+#		pragma clang deprecated(csetaddr, "use cheri_address_set instead")
+
 #		define cgetbase(foo) __builtin_cheri_base_get(foo)
+#		pragma clang deprecated(cgetbase, "use cheri_base_get instead")
+
 #		define candperms(a, b) __builtin_cheri_perms_and((a), (b))
+#		pragma clang deprecated(candperms, "use cheri_permissions_and instead")
+
 #		define cseal(a, b) __builtin_cheri_seal((a), (b))
-#		ifdef FLUTE
-#			define cunseal(a, b)                                              \
-				({                                                             \
-					__auto_type __a   = (a);                                   \
-					__auto_type __b   = (b);                                   \
-					__auto_type __ret = __builtin_cheri_tag_clear(__a);        \
-					if (__builtin_cheri_tag_get(__a) &&                        \
-						__builtin_cheri_tag_get(__b) &&                        \
-						__builtin_cheri_type_get(__a) &&                       \
-						!__builtin_cheri_type_get(__b))                        \
-					{                                                          \
-						__auto_type __type = __builtin_cheri_type_get(__a);    \
-						__auto_type __base = __builtin_cheri_base_get(__b);    \
-						if ((__type >= __base) &&                              \
-							(__type <                                          \
-							 (__base + __builtin_cheri_length_get(__b))))      \
-						{                                                      \
-							__ret = __builtin_cheri_unseal((a), (b));          \
-						}                                                      \
-					}                                                          \
-					__ret;                                                     \
-				})
-#		else
-#			define cunseal(a, b) __builtin_cheri_unseal((a), (b))
-#		endif
+#		pragma clang deprecated(cseal, "use cheri_seal instead")
+
+#		define cunseal(a, b) __builtin_cheri_unseal((a), (b))
+#		pragma clang deprecated(cunseal, "use cheri_unseal instead")
+
 #		define csetbounds(a, b) __builtin_cheri_bounds_set((a), (b))
+#		pragma clang deprecated(csetbounds, "use cheri_bounds_set instead")
+
 #		define csetboundsext(a, b) __builtin_cheri_bounds_set_exact((a), (b))
-#		define ccheckperms(a, b) __builtin_cheri_perms_check((a), (b))
-#		define cchecktype(a, b) __builtin_cheri_type_check((a), (b))
-#		define cbuildcap(a, b) __builtin_cheri_cap_build((a), (b))
-#		define ccopytype(a, b) __builtin_cheri_cap_type_copy((a), (b))
-#		define ccseal(a, b) __builtin_cheri_conditional_seal((a), (b))
+#		pragma clang deprecated(csetboundsext,                                \
+		                         "use cheri_bounds_set_exact instead")
+
 #		define cequalexact(a, b) __builtin_cheri_equal_exact((a), (b))
+#		pragma clang deprecated(cequalexact,                                  \
+		                         "use cheri_is_equal_exact instead")
 
-static inline size_t ctestsubset(void *a, void *b)
-{
-	size_t val;
-	__asm volatile("ctestsubset %0, %1, %2 " : "=r"(val) : "C"(a), "C"(b));
-	return val;
-}
+#		define ctestsubset(a, b) __builtin_cheri_subset_test(a, b)
+#		pragma clang deprecated(ctestsubset, "use cheri_subset_test instead")
 
-static inline size_t creplenalignmask(size_t len)
-{
-	size_t ret;
-	__asm volatile("cram %0, %1" : "=r"(ret) : "r"(len));
-	return ret;
-}
+#		define creplenalignmask(len)                                          \
+			__builtin_cheri_representable_alignment_mask(len)
+#		pragma clang deprecated(                                              \
+		  creplenalignmask, "use cheri_representable_alignment_mask instead")
 
-static inline size_t croundreplen(size_t len)
-{
-	size_t ret;
-	__asm volatile("crrl %0, %1" : "=r"(ret) : "r"(len));
-	return ret;
-}
+#		define croundreplen(len)                                              \
+			__builtin_cheri_round_representable_length(len)
+#		pragma clang deprecated(                                              \
+		  croundreplen, "use cheri_round_representable_length instead")
 
-#		define cspecial_write(csr, val)                                       \
-			({ __asm __volatile("cspecialw " #csr ", %0" ::"C"(val)); })
-
-#		define cspecial_read(csr)                                             \
-			({                                                                 \
-				void *val;                                                     \
-				__asm __volatile("cspecialr %0, " #csr : "=C"(val));           \
-				val;                                                           \
-			})
+#		define cheri_address_get(x) __builtin_cheri_address_get(x)
+#		define cheri_address_set(x, y) __builtin_cheri_address_set((x), (y))
+#		define cheri_address_increment(x, y)                                  \
+			__builtin_cheri_offset_increment((x), (y))
+#		define cheri_base_get(x) __builtin_cheri_base_get(x)
+#		define cheri_top_get(x) __builtin_cheri_top_get(x)
+#		define cheri_length_get(x) __builtin_cheri_length_get(x)
+#		define cheri_tag_clear(x) __builtin_cheri_tag_clear(x)
+#		define cheri_tag_get(x) __builtin_cheri_tag_get(x)
+#		define cheri_is_valid(x) __builtin_cheri_tag_get(x)
+#		define cheri_is_invalid(x) (!__builtin_cheri_tag_get(x))
+#		define cheri_is_equal_exact(x, y) __builtin_cheri_equal_exact((x), (y))
+#		define cheri_is_subset(x, y) __builtin_cheri_subset_test((x), (y))
+#		define cheri_permissions_get(x) __builtin_cheri_perms_get(x)
+#		define cheri_permissions_and(x, y) __builtin_cheri_perms_and((x), (y))
+#		define cheri_type_get(x) __builtin_cheri_type_get(x)
+#		define cheri_seal(a, b)                                               \
+			(CHERI_SEALED((__typeof__((a)))) __builtin_cheri_seal((a), (b)))
+#		define cheri_unseal(a, b)                                             \
+			((__typeof__(*(a)) *)__builtin_cheri_unseal((a), (b)))
+#		define cheri_bounds_set(a, b) __builtin_cheri_bounds_set((a), (b))
+#		define cheri_bounds_set_exact(a, b)                                   \
+			__builtin_cheri_bounds_set_exact((a), (b))
+#		define cheri_subset_test(a, b) __builtin_cheri_subset_test(a, b)
+#		define cheri_representable_alignment_mask(len)                        \
+			__builtin_cheri_representable_alignment_mask(len)
+#		define cheri_round_representable_length(len)                          \
+			__builtin_cheri_round_representable_length(len)
 
 #	endif // __ASSEMBLER__
 
 #endif
-
-#endif // _CHERI_BUILTINS_

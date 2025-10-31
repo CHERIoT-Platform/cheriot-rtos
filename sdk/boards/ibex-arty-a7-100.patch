@@ -1,0 +1,77 @@
+{
+  "base": "ibex-safe-simulator",
+  "patch": [
+    {
+      "op": "add",
+      "path": "/devices/gpio_led0",
+      "value": {
+        "start": 0x8f00f000,
+        "length": 0x800
+      }
+    },
+    {
+      "op": "add",
+      "path": "/devices/kunyan_ethernet",
+      "value": {
+        "start": 0x14004000,
+        "end": 0x14008000
+      }
+    },
+    {
+      "op": "add",
+      "path": "/interrupts/1",
+      "value": {
+        "name": "UARTInterrupt",
+        "number": 2,
+        "priority": 3,
+        "edge_triggered": true
+      }
+    },
+    {
+      "op": "add",
+      "path": "/interrupts/2",
+      "value": {
+        "name": "EthernetTransmitInterrupt",
+        "number": 3,
+        "priority": 3
+      }
+    },
+    {
+      "op": "add",
+      "path": "/interrupts/3",
+      "value": {
+        "name": "EthernetReceiveInterrupt",
+        "number": 4,
+        "priority": 3
+      }
+    },
+    {
+      "op": "add",
+      "path": "/driver_includes/0",
+      "value": "${sdk}/include/platform/synopsis"
+    },
+    {
+      "op": "add",
+      "path": "/driver_includes/0",
+      "value": "${sdk}/include/platform/arty-a7"
+    },
+    {
+      "op": "replace",
+      "path": "/timer_hz",
+      "value": 33000000
+    },
+    {
+      "op": "replace",
+      "path": "/tickrate_hz",
+      "value": 100
+    },
+    {
+      "op": "remove",
+      "path": "/simulation"
+    },
+    {
+      "op": "remove",
+      "path": "/run_command"
+    }
+  ]
+}

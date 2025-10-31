@@ -3,6 +3,7 @@
 
 #include <cdefs.h>
 #include <stddef.h>
+#include <string.h>
 
 char *__cheri_libcall strncpy(char *dest, const char *src, size_t n)
 {

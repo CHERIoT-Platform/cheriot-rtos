@@ -5,13 +5,11 @@
 #include <__debug.h>
 #include <cheri.hh>
 #include <compartment.h>
-#include <concepts>
 #include <cstddef>
 #include <platform-uart.hh>
 #include <string.h>
 #include <switcher.h>
 
-#include <array>
 #include <string_view>
 #include <type_traits>
 
@@ -27,11 +25,8 @@ namespace DebugConcepts
 
 	/// Concept for something that can be lazily called to produce a bool.
 	template<typename T>
-	concept LazyAssertion = requires(T v)
-	{
-		{
-			v()
-			} -> IsBool;
+	concept LazyAssertion = requires(T v) {
+		{ v() } -> IsBool;
 	};
 
 	template<typename T>
@@ -80,6 +75,58 @@ struct DebugWriter
 	 * Write a 64-bit signed integer.
 	 */
 	virtual void write(int64_t) = 0;
+	/**
+	 * Write a single byte as hex with no leading 0x.
+	 */
+	virtual void write_hex_byte(uint8_t) = 0;
+	/**
+	 * Write a single-precision floating-point value.
+	 *
+	 * If floating-point support is not compiled into the debug library, this
+	 * may print a placeholder.
+	 */
+	virtual void write(float) = 0;
+	/**
+	 * Write a double-precision floating-point value.
+	 *
+	 * If floating-point support is not compiled into the debug library, this
+	 * may print a placeholder.
+	 */
+	virtual void write(double) = 0;
+	/**
+	 * Write an integer as hex.
+	 */
+	template<typename T>
+	__always_inline void write_hex(T x)
+	    requires(std::integral<T>)
+	{
+		if constexpr (sizeof(T) <= 4)
+		{
+			write(static_cast<uint32_t>(x));
+		}
+		else
+		{
+			write(static_cast<uint64_t>(x));
+		}
+	}
+	/**
+	 * Write an integer as decimal.
+	 */
+	template<typename T>
+	__always_inline void write_decimal(T x)
+	    requires(std::integral<T>)
+	{
+		if constexpr (sizeof(T) <= 4)
+		{
+			write(
+			  static_cast<int32_t>(static_cast<std::make_unsigned_t<T>>(x)));
+		}
+		else
+		{
+			write(
+			  static_cast<int64_t>(static_cast<std::make_unsigned_t<T>>(x)));
+		}
+	}
 };
 
 /**
@@ -87,12 +134,12 @@ struct DebugWriter
  * magic_enum to provide a string and then a numeric value.
  */
 template<typename T>
-void debug_enum_helper(uintptr_t    value,
-                       DebugWriter &writer) requires DebugConcepts::IsEnum<T>
+void debug_enum_helper(uintptr_t value, DebugWriter &writer)
+    requires DebugConcepts::IsEnum<T>
 {
 	writer.write(magic_enum::enum_name<T>(static_cast<T>(value)));
 	writer.write('(');
-	writer.write(uint32_t(value));
+	writer.write(static_cast<uint32_t>(value));
 	writer.write(')');
 }
 
@@ -254,6 +301,29 @@ struct DebugFormatArgumentAdaptor<int64_t>
 	}
 };
 
+template<>
+struct DebugFormatArgumentAdaptor<float>
+{
+	__always_inline static DebugFormatArgument construct(float value)
+	{
+		uintptr_t fudgedValue = 0;
+		memcpy(&fudgedValue, &value, sizeof(value));
+		return {fudgedValue, DebugFormatArgumentKind::DebugFormatArgumentFloat};
+	}
+};
+
+template<>
+struct DebugFormatArgumentAdaptor<double>
+{
+	__always_inline static DebugFormatArgument construct(double value)
+	{
+		uintptr_t fudgedValue = 0;
+		memcpy(&fudgedValue, &value, sizeof(value));
+		return {fudgedValue,
+		        DebugFormatArgumentKind::DebugFormatArgumentDouble};
+	}
+};
+
 /**
  * C string specialisation, prints the string as-is.
  */
@@ -352,7 +422,8 @@ struct DebugFormatArgumentAdaptor<T>
 {
 	__always_inline static DebugFormatArgument construct(T value)
 	{
-		return {reinterpret_cast<uintptr_t>(value),
+		return {reinterpret_cast<uintptr_t>(
+		          reinterpret_cast<const volatile void *>(value)),
 		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
 	}
 };
@@ -361,11 +432,11 @@ struct DebugFormatArgumentAdaptor<T>
  * Specialisation for the CHERI capability wrapper class, prints the capability
  * in the same format as bare pointers.
  */
-template<typename T>
-struct DebugFormatArgumentAdaptor<CHERI::Capability<T>>
+template<typename T, bool Sealed>
+struct DebugFormatArgumentAdaptor<CHERI::Capability<T, Sealed>>
 {
 	__always_inline static DebugFormatArgument
-	construct(CHERI::Capability<T> value)
+	construct(CHERI::Capability<T, Sealed> value)
 	{
 		return {reinterpret_cast<uintptr_t>(value.get()),
 		        DebugFormatArgumentKind::DebugFormatArgumentPointer};
@@ -411,7 +482,7 @@ __always_inline inline void map_debug_argument(DebugFormatArgument *arguments,
  */
 template<typename... Args>
 __always_inline inline void
-make_debug_arguments_list(DebugFormatArgument *arguments, Args... args)
+make_debug_arguments_list(DebugFormatArgument *arguments, Args &...args)
 {
 	if constexpr (sizeof...(Args) > 0)
 	{
@@ -540,40 +611,185 @@ namespace
 	};
 
 	/**
+	 * Debug level.
+	 */
+	enum class DebugLevel
+	{
+		/**
+		 * This is informative and may be helpful for debugging.
+		 */
+		Information,
+		/**
+		 * This is probably wrong but the component issuing the warning can
+		 * recover.  For example, you called an API with an invalid argument.
+		 */
+		Warning,
+		/**
+		 * This is definitely wrong and may cause problems but the rest of the
+		 * system is not impacted.  For example, you have called an API in a
+		 * way that caused the compartment to raise an error, but the
+		 * compartment has some form of isolation between callers and so this
+		 * doesn't affect anyone else.
+		 */
+		Error,
+		/**
+		 * Something is completely broken.  For example, a compartment with
+		 * state shared between callers has detected internal consistency
+		 * errors and may not be able to proceed at all.
+		 */
+		Critical,
+		/**
+		 * No debugging information should be reported.
+		 */
+		None,
+	};
+
+	/**
+	 * Compatibility wrapper that can be constructed from a boolean or a
+	 * `DebugLevel`.
+	 */
+	struct DebugLevelTemplateArgument
+	{
+		/**
+		 * The `DebugLevel` that this encapsulates.
+		 */
+		const DebugLevel Value;
+
+		/**
+		 * Construct from a boolean, enables all debug reporting for `true`.
+		 */
+		consteval DebugLevelTemplateArgument(bool enabled)
+		  : Value(enabled ? DebugLevel::Information : DebugLevel::None)
+		{
+		}
+
+		/**
+		 * Construct from a `DebugLevel`, captures the argument.
+		 */
+		consteval DebugLevelTemplateArgument(DebugLevel level) : Value(level) {}
+
+		consteval operator DebugLevel() const
+		{
+			return Value;
+		}
+	};
+
+	/**
+	 * Comparison operator to determine whether a provided debug level is above
+	 * the threshold at which it should be reported.
+	 */
+	consteval std::strong_ordering operator<=>(const DebugLevel Level,
+	                                           const DebugLevel Threshold)
+	{
+		return static_cast<int>(Level) <=> static_cast<int>(Threshold);
+	}
+
+	/**
 	 * Conditional debug class.  Used to control conditional output and
-	 * assertion checking.  Enables debug log messages and assertions if
-	 * `Enabled` is true.  Uses `Context` to print additional detail on debug
-	 * lines.  Each line is prefixed with the context string in magenta to make
-	 * it easy to see debug output from different subsystems in the same trace.
+	 * assertion checking.  The first template parameter is a threshold for
+	 * reporting. Log messages will be printed if they are at or above this
+	 * threshold.
+	 *
+	 * By default, assertions will be checked if the threshold is Warning or
+	 * lower.  This can be overridden by passing `true` or `false` as the third
+	 * template argument, to explicitly enable or disable assertions.
+	 *
+	 * Invariants are always checked but, by default, will log a message only if
+	 * the threshold is warning or lower. This can be overridden by passing
+	 * `true` or `false` as the fourth template argument, to explicitly enable
+	 * or disable verbose messages on invariant failure.
+	 *
+	 * If you wish to reduce verbosity of log messages but still have verbose
+	 * error messages for invariant failure, you can pass `true` as the third
+	 * template argument.  This will unconditionally enable assertions and
+	 * verbose messages from invariants, even if
+	 *
+	 * Uses `Context` to print additional detail on debug lines.  Each line is
+	 * prefixed with the context string in magenta to make it easy to see debug
+	 * output from different subsystems in the same trace.
 	 *
 	 * This class is expected to be used as a type alias, something like:
 	 *
 	 * ```c++
-	 * constexpr bool DebugFoo = DEBUG_FOO;
-	 * using Debug = ConditionalDebug<DebugFoo, "Foo">;
+	 * using Debug = ConditionalDebug<DEBUG_FOO, "Foo">;
 	 * ```
+	 *
+	 * The xmake build system exposes `debugOption` and `debugLevelOption`
+	 * values to define these macros.  If `debugOption(foo)` is used, the
+	 * option will be exposed as `--debug-foo=[y,n]`, where setting the option
+	 * to true defines the threshold as `Information` and false (the default)
+	 * as `None`.  If `debugLevelOption(foo)` is used, the user can specify any
+	 * level from `none` to `critical` on the command line.
 	 */
-	template<bool Enabled, DebugContext Context>
+	template<DebugLevelTemplateArgument Threshold,
+	         DebugContext               Context,
+	         bool EnableAssertions  = (Threshold <= DebugLevel::Warning),
+	         bool VerboseInvariants = (Threshold <= DebugLevel::Warning)>
 	class ConditionalDebug
 	{
 		public:
 		/**
 		 * Log a message.
 		 *
-		 * This function does nothing if the `Enabled` condition is false.
+		 * This function does nothing if the level is less than the threshold.
 		 */
-		template<typename... Args>
-		static void log(const char *fmt, Args... args)
+		template<DebugLevel Level = DebugLevel::Information>
+		static void log(const char *fmt, auto... args)
 		{
-			if constexpr (Enabled)
+			static_assert(
+			  Level != DebugLevel::None,
+			  "None is valid only as a threshold, not as a reporting level");
+			if constexpr (Level >= Threshold)
 			{
 				asm volatile("" ::: "memory");
-				DebugFormatArgument arguments[sizeof...(Args)];
-				make_debug_arguments_list(arguments, args...);
 				const char *context = Context;
-				debug_log_message_write(
-				  context, fmt, arguments, sizeof...(Args));
+				// Don't create a zero-length on-stack allocation if there are
+				// no arguments.
+				if constexpr (sizeof...(args) == 0)
+				{
+					debug_log_message_write(context, fmt, nullptr, 0);
+				}
+				else
+				{
+					DebugFormatArgument arguments[sizeof...(args)];
+					make_debug_arguments_list(arguments, args...);
+					debug_log_message_write(
+					  context, fmt, arguments, sizeof...(args));
+				}
 				asm volatile("" ::: "memory");
+			}
+		}
+
+		template<DebugLevel Level = DebugLevel::Information>
+		static __always_inline void
+		log_if(bool condition, const char *fmt, auto... args)
+		{
+			static_assert(
+			  Level != DebugLevel::None,
+			  "None is valid only as a threshold, not as a reporting level");
+			if constexpr (Level >= Threshold)
+			{
+				if (condition)
+				{
+					log<Level>(fmt, args...);
+				}
+			}
+		}
+
+		template<DebugLevel                   Level = DebugLevel::Information,
+		         DebugConcepts::LazyAssertion Condition>
+		static __always_inline void
+		log_if(Condition condition, const char *fmt, auto... args)
+		{
+			static_assert(
+			  Level != DebugLevel::None,
+			  "None is valid only as a threshold, not as a reporting level");
+			if constexpr (Level >= Threshold)
+			{
+				if (condition())
+				{
+					log<Level>(fmt, args...);
+				}
 			}
 		}
 
@@ -608,7 +824,8 @@ namespace
 		 * ConditionalDebug::Invariant(someCondition, "A message...", ...);
 		 *
 		 * Invariants are checked unconditionally but will log a verbose
-		 * message only if `Enabled` is true.
+		 * message only if `VerboseInvariants` is true (by default, if the
+		 * threshold is less than or equal to `Warning`).
 		 */
 		template<typename... Args>
 		struct Invariant
@@ -624,7 +841,7 @@ namespace
 			{
 				if (__predict_false(!condition))
 				{
-					if constexpr (Enabled)
+					if constexpr (VerboseInvariants)
 					{
 						report_failure("Invariant",
 						               loc.file_name(),
@@ -637,13 +854,15 @@ namespace
 				}
 			}
 		};
+
 		/**
 		 * Function-like class for assertions that is expected to be used via
 		 * the deduction guide as:
 		 *
 		 * ConditionalDebug::Assert(someCondition, "A message...", ...);
 		 *
-		 * Assertions are checked only if `Enabled` is true.
+		 * Assertions are checked only if `EnableAssertions` is true (by
+		 * default, if the threshold is lower than or equal to `Warning`).
 		 */
 		template<typename... Args>
 		struct Assert
@@ -652,13 +871,14 @@ namespace
 			 * Constructor, performs the assertion check.
 			 */
 			template<typename T>
-			requires DebugConcepts::IsBool<T> __always_inline
+			    requires DebugConcepts::IsBool<T>
+			__always_inline
 			Assert(T           condition,
 			       const char *fmt,
 			       Args... args,
 			       SourceLocation loc = SourceLocation::current())
 			{
-				if constexpr (Enabled)
+				if constexpr (EnableAssertions)
 				{
 					if (__predict_false(!condition))
 					{
@@ -683,13 +903,14 @@ namespace
 			 * where the assertion condition has side effects.
 			 */
 			template<typename T>
-			requires DebugConcepts::LazyAssertion<T> __always_inline
+			    requires DebugConcepts::LazyAssertion<T>
+			__always_inline
 			Assert(T         &&condition,
 			       const char *fmt,
 			       Args... args,
 			       SourceLocation loc = SourceLocation::current())
 			{
-				if constexpr (Enabled)
+				if constexpr (EnableAssertions)
 				{
 					if (__predict_false(!condition()))
 					{
@@ -713,6 +934,27 @@ namespace
 		Invariant(T, const char *, Ts &&...) -> Invariant<Ts...>;
 
 		/**
+		 * Overt wrapper function around Invariant.  Sometimes template
+		 * deduction guides just don't cut it.  At the cost of a
+		 * std::make_tuple at the call site, we can still take advantage
+		 * of much of the machinery here.
+		 */
+		template<typename T, typename... Args>
+		__always_inline static void
+		invariant(T                   condition,
+		          const char         *fmt,
+		          std::tuple<Args...> args = std::make_tuple(),
+		          SourceLocation      loc  = SourceLocation::current())
+		{
+			std::apply(
+			  [&](Args... iargs) {
+				  Invariant<Args...>(
+				    condition, fmt, std::forward<Args>(iargs)..., loc);
+			  },
+			  args);
+		}
+
+		/**
 		 * Deduction guide, allows `Assert` to be used as if it were a
 		 * function.
 		 */
@@ -725,12 +967,35 @@ namespace
 		 */
 		template<typename... Ts>
 		Assert(auto, const char *, Ts &&...) -> Assert<Ts...>;
+
+		/**
+		 * Overt wrapper function around Assert.  Sometimes template
+		 * deduction guides just don't cut it.  At the cost of a
+		 * std::make_tuple at the call site, we can still take advantage
+		 * of much of the machinery here.
+		 */
+		template<typename T, typename... Args>
+		__always_inline static void
+		assertion(T                   condition,
+		          const char         *fmt,
+		          std::tuple<Args...> args = std::make_tuple(),
+		          SourceLocation      loc  = SourceLocation::current())
+		{
+			std::apply(
+			  [&](Args... iargs) {
+				  Assert<Args...>(
+				    condition, fmt, std::forward<Args>(iargs)..., loc);
+			  },
+			  args);
+		}
 	};
 
 	enum class StackCheckMode
 	{
 		Disabled,
+		LoggingMonotonic,
 		Logging,
+		AssertingMonotonic,
 		Asserting,
 	};
 
@@ -801,12 +1066,36 @@ namespace
 				ptraddr_t highest =
 				  CHERI::Capability{__builtin_cheri_stack_get()}.top();
 				size_t used = highest - lowest;
-				if (used > stackUsage)
+
+				bool tripped = false;
+				if constexpr ((Mode == StackCheckMode::LoggingMonotonic) ||
+				              (Mode == StackCheckMode::AssertingMonotonic))
 				{
-					stackUsage = used;
-					ConditionalDebug<true, Fn>::log("Stack used: {} bytes",
-					                                stackUsage);
-					if constexpr (Mode == StackCheckMode::Asserting)
+					if (used > stackUsage)
+					{
+						tripped    = true;
+						stackUsage = used;
+					}
+				}
+				else if constexpr ((Mode == StackCheckMode::Logging) ||
+				                   (Mode == StackCheckMode::Asserting))
+				{
+					if (used > Expected)
+					{
+						tripped = true;
+					}
+					if (used > stackUsage)
+					{
+						stackUsage = used;
+					}
+				}
+
+				if (tripped)
+				{
+					ConditionalDebug<true, Fn>::log(
+					  "Stack used: {} bytes (max {})", used, stackUsage);
+					if constexpr ((Mode == StackCheckMode::Asserting) ||
+					              (Mode == StackCheckMode::AssertingMonotonic))
 					{
 						__builtin_trap();
 					}

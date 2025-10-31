@@ -70,5 +70,10 @@ int test_eventgroup()
 	ret = eventgroup_clear(&t, group, &bits, 0b100);
 	TEST(ret == 0, "Failed to clear event group bits: {}", ret);
 	TEST(bits == 0b1000, "Bits should be 0b1000, but is {}", bits);
+
+	TEST_EQUAL(eventgroup_destroy_force(MALLOC_CAPABILITY, group),
+	           0,
+	           "Failed to destroy event group");
+
 	return 0;
 }

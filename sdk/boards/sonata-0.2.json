@@ -68,12 +68,12 @@
     ],
     "defines" : [
         "IBEX",
+        "SONATA=200",
         "SUNBURST",
-        "SUNBURST_SHADOW_BASE=0x30000000",
-        "SUNBURST_SHADOW_SIZE=0x4000",
         "DEFAULT_UART_BAUD_RATE=115200",
         "ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM=1",
-        "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM=1"
+        "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM=1",
+        "CHERIOT_NO_SAIL_83"
     ],
     "driver_includes" : [
         "../include/platform/sunburst/v0.2",
@@ -84,6 +84,7 @@
     "tickrate_hz" : 100,
     "revoker" : "software",
     "stack_high_water_mark" : true,
-    "simulator" : "${sdk}/../scripts/run-sonata.sh",
-    "simulation": false
+    "run_command" : "${sdk}/../scripts/run-sonata.sh",
+    "simulation": false,
+    "cxflags": "-mcpu=cheriot-ibex"
 }

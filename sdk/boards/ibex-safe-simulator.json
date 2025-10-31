@@ -32,7 +32,8 @@
         {
             "name": "RevokerInterrupt",
             "number": 1,
-            "priority": 2
+            "priority": 2,
+            "edge_triggered": true
         }
     ],
     "defines" : [
@@ -48,5 +49,6 @@
     "revoker" : "hardware",
     "stack_high_water_mark" : true,
     "simulation": true,
-    "simulator" : "${sdk}/../scripts/run-ibex-safe-sim.sh"
+    "run_command" : "${sdk}/../scripts/run-ibex-safe-sim.sh",
+    "cxflags": "-mcpu=cheriot-ibex"
 }

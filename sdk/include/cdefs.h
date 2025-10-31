@@ -1,8 +1,7 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
-#ifndef __CDEFS_H__
-#define __CDEFS_H__
+#pragma once
 
 /*
  * Testing against Clang-specific extensions.
@@ -68,14 +67,22 @@ using _Bool = bool;
 	  "cheriot_minimum_stack attribute not supported, please update your compiler"
 #	define __cheriot_minimum_stack(x)
 #endif
+#define __cheri_no_subobject_bounds __attribute__((cheri_no_subobject_bounds))
 
 // When running clang-tidy, we use the same compile flags for everything and so
 // will get errors about things being defined in the wrong compartment, so
 // define away the compartment name and pretend everything is local for now.
 #if defined(CLANG_TIDY) || defined(__CHERIOT_BAREMETAL__)
 #	define __cheri_compartment(x)
+#	define __cheriot_compartment(x)
 #else
-#	define __cheri_compartment(x) __attribute__((cheri_compartment(x)))
+#	if __has_attribute(cheriot_compartment)
+#		define __cheri_compartment(x) __attribute__((cheriot_compartment(x)))
+#		define __cheriot_compartment(x) __attribute__((cheriot_compartment(x)))
+#	else
+#		define __cheri_compartment(x) __attribute__((cheri_compartment(x)))
+#		define __cheriot_compartment(x) __attribute__((cheri_compartment(x)))
+#	endif
 #endif
 
 // Define the CHERIoT calling-convention attributes macros to nothing if we're
@@ -83,18 +90,24 @@ using _Bool = bool;
 // RTOS.
 #ifdef __CHERIOT_BAREMETAL__
 #	define __cheri_libcall
+#	define __cheriot_libcall
 #	define __cheri_callback
+#	define __cheriot_callback
 #else
-#	define __cheri_libcall __attribute__((cheri_libcall))
-#	define __cheri_callback __attribute__((cheri_ccallback))
-
-/**
- * Define the symbol for the libcall that the compiler will expand the `strlen`
- * builtin to.  This builtin is used internally in libc++ (and possibly in
- * other places) to avoid the namespace pollution from including `string.h` but
- * is either constant folded in the front end or expanded to a libcall.
- */
-unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
+#	if __has_attribute(cheriot_libcall)
+#		define __cheri_libcall __attribute__((cheriot_libcall))
+#		define __cheriot_libcall __attribute__((cheriot_libcall))
+#	else
+#		define __cheri_libcall __attribute__((cheri_libcall))
+#		define __cheriot_libcall __attribute__((cheri_libcall))
+#	endif
+#	if __has_attribute(cheriot_libcall)
+#		define __cheri_callback __attribute__((cheriot_ccallback))
+#		define __cheriot_callback __attribute__((cheriot_ccallback))
+#	else
+#		define __cheri_callback __attribute__((cheri_ccallback))
+#		define __cheriot_callback __attribute__((cheri_ccallback))
+#	endif
 #endif
 
 #define offsetof(a, b) __builtin_offsetof(a, b)
@@ -129,4 +142,19 @@ unsigned __builtin_strlen(const char *str) __asm__("_Z6strlenPKc");
 #	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
 #endif
 
-#endif // _CDEFS_H_
+#if (defined(__CHERIOT__) && __CHERIOT__ < 20250113) ||                        \
+  (defined(__CHERIOT_BAREMETAL__) && __CHERIOT_BAREMETAL__ < 20250113)
+#	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
+#endif
+
+#define CHERIOT_VERSION_TRIPLE(major, minor, patch)                            \
+	((major * 10000) + (minor * 100) + (patch))
+
+/**
+ * Helper for declaring standard library functions that should be exported
+ * as __cheri_libcall, but which should not have their names mangled. This
+ * is needed to enable LLVM optimizations to trigger on standard library
+ * functions.
+ */
+#define CHERIOT_DECLARE_STANDARD_LIBCALL(name, ret, ...)                       \
+	__cheri_libcall ret name(__VA_ARGS__) __asm__(#name);

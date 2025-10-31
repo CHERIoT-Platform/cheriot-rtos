@@ -22,10 +22,10 @@ namespace
 
 } // namespace
 
-int thread_pool_async(ThreadPoolCallback fn, void *data)
+int thread_pool_async(ThreadPoolCallback fn, CHERI_SEALED(void *) data)
 {
-	Capability<void> fnCap{reinterpret_cast<void *>(fn)};
-	Capability<void> dataCap{data};
+	Capability<void>       fnCap{reinterpret_cast<void *>(fn)};
+	Capability<void, true> dataCap{data};
 	// The function must be sealed with the type used for export table entries
 	// for us to be able to invoke it.  The data capability doesn't *have* to
 	// be sealed, but it's a bad idea if it is unsealed because it adds the
@@ -33,7 +33,8 @@ int thread_pool_async(ThreadPoolCallback fn, void *data)
 	// We want to avoid this being able to make us trap and so we validate that
 	// the function is cross-compartment entry point and both can be stored in
 	// the message queue.
-	if (!fnCap.is_valid() || (fnCap.type() != 9) ||
+	if (!fnCap.is_valid() ||
+	    (fnCap.type() != CheriSealTypeSealedImportTableEntries) ||
 	    !fnCap.permissions().contains(Permission::Global) ||
 	    (dataCap.is_valid() && !dataCap.is_sealed()) ||
 	    (dataCap.is_valid() &&
@@ -47,7 +48,7 @@ int thread_pool_async(ThreadPoolCallback fn, void *data)
 	return 0;
 }
 
-void __cheri_compartment("thread_pool") thread_pool_run()
+int __cheri_compartment("thread_pool") thread_pool_run()
 {
 	while (true)
 	{

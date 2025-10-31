@@ -10,6 +10,7 @@
 #define __cheri_libcall
 #include <string.h>
 
+#include "../allocator/token_types.h"
 #include "../switcher/tstack.h"
 #include "constants.h"
 #include "debug.hh"
@@ -45,7 +46,7 @@ namespace
 
 	__BEGIN_DECLS
 	static_assert(CheckSize<CHERIOT_LOADER_TRUSTED_STACK_SIZE,
-	                        sizeof(TrustedStackGeneric<0>)>::value,
+	                        sizeof(TrustedStackGeneric<0>)>::Value,
 	              "Boot trusted stack sizes do not match.");
 	// It must also be aligned sufficiently for trusted stacks, so ensure that
 	// we've captured that requirement above.
@@ -58,7 +59,7 @@ namespace
 	__END_DECLS
 
 	static_assert(
-	  CheckSize<sizeof(ThreadLoaderInfo), BOOT_THREADINFO_SZ>::value);
+	  CheckSize<sizeof(ThreadLoaderInfo), BOOT_THREADINFO_SZ>::Value);
 
 	/**
 	 * Reserved sealing types.
@@ -147,20 +148,21 @@ namespace
 	// The switcher assembly includes the types of import table entries and
 	// trusted stacks.  This enumeration and the assembly must be kept in sync.
 	// This will fail if the enumeration value changes.
-	static_assert(int(SealedImportTableEntries) == 9,
+	static_assert(static_cast<int>(SealedImportTableEntries) == 9,
 	              "If this fails, update switcher/entry.S to the new value");
-	static_assert(int(SealedTrustedStacks) == 10,
+	static_assert(static_cast<int>(SealedTrustedStacks) == 10,
 	              "If this fails, update switcher/entry.S to the new value");
 
 	// The allocator and static sealing types must be contiguous so that the
 	// token library can hold a permit-unseal capability for both.
-	static_assert(int(Allocator) + 1 == int(StaticToken),
+	static_assert(static_cast<int>(Allocator) + 1 ==
+	                static_cast<int>(StaticToken),
 	              "Allocator and StaticToken must be consecutive");
 
 	// The token library includes the types for allocator and statically sealed
 	// objects.  This enumeration and the assembly must be kept in sync.  This
 	// will fail if the enumeration value changes.
-	static_assert(int(Allocator) == 11,
+	static_assert(static_cast<int>(Allocator) == 11,
 	              "If this fails, update token_unseal.S to the new value");
 
 	// We currently have a 3-bit hardware otype, with different sealing spaces
@@ -185,7 +187,7 @@ namespace
 	constexpr auto StoreLPerm = Root::Permissions<Root::Type::RWStoreL>;
 	/// PCC permissions for the switcher.
 	constexpr auto SwitcherPccPermissions =
-	  Root::Permissions<Root::Type::Execute>;
+	  Root::Permissions<Root::Type::Execute>.without(Permission::Global);
 	/// PCC permissions for unprivileged compartments
 	constexpr auto UserPccPermissions =
 	  Root::Permissions<Root::Type::Execute>.without(
@@ -248,7 +250,8 @@ namespace
 	         Root::Type    Type        = Root::Type::RWGlobal,
 	         PermissionSet Permissions = Root::Permissions<Type>,
 	         bool          Precise     = true>
-	Capability<T> build(auto &&range) requires(RawAddressRange<decltype(range)>)
+	Capability<T> build(auto &&range)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		return build<T, Type, Permissions, Precise>(range.start(),
 		                                            range.size());
@@ -258,12 +261,12 @@ namespace
 	 * Build a capability to an object of type `T` from a range (start and size
 	 * address).
 	 */
-	template<typename T                = void,
-	         Root::Type    Type        = Root::Type::RWGlobal,
+	template<typename T      = void,
+	         Root::Type Type = Root::Type::RWGlobal,
+	         // NOLINTNEXTLINE(google-readability-casting)
 	         PermissionSet Permissions = Root::Permissions<Type>>
-	Capability<T>
-	build(auto    &&range,
-	      ptraddr_t address) requires(RawAddressRange<decltype(range)>)
+	Capability<T> build(auto &&range, ptraddr_t address)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		return build<T, Type, Permissions>(
 		  range.start(), range.size(), address);
@@ -347,13 +350,14 @@ namespace
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc99-designator"
 		constexpr SealingType Sentries[] = {
-		  [int(InterruptStatus::Enabled)]   = SentryEnabling,
-		  [int(InterruptStatus::Disabled)]  = SentryDisabling,
-		  [int(InterruptStatus::Inherited)] = SentryInheriting};
+		  [static_cast<int>(InterruptStatus::Enabled)]   = SentryEnabling,
+		  [static_cast<int>(InterruptStatus::Disabled)]  = SentryDisabling,
+		  [static_cast<int>(InterruptStatus::Inherited)] = SentryInheriting};
 #pragma clang diagnostic pop
-		Debug::Invariant(
-		  unsigned(status) < 3, "Invalid interrupt status {}", int(status));
-		size_t otype = size_t{Sentries[int(status)]};
+		Debug::Invariant(static_cast<unsigned>(status) < 3,
+		                 "Invalid interrupt status {}",
+		                 static_cast<int>(status));
+		size_t otype = size_t{Sentries[static_cast<int>(status)]};
 		void  *key   = build<void, Root::Type::Seal>(otype, 1);
 		return ptr.seal(key);
 	}
@@ -367,10 +371,11 @@ namespace
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc99-designator"
 		constexpr SealingType Sentries[] = {
-		  [int(InterruptStatus::Enabled)]  = ReturnSentryEnabling,
-		  [int(InterruptStatus::Disabled)] = ReturnSentryDisabling};
+		  [static_cast<int>(InterruptStatus::Enabled)] = ReturnSentryEnabling,
+		  [static_cast<int>(InterruptStatus::Disabled)] =
+		    ReturnSentryDisabling};
 #pragma clang diagnostic pop
-		size_t otype = size_t{Sentries[int(Status)]};
+		size_t otype = size_t{Sentries[static_cast<int>(Status)]};
 		void  *key   = build<void, Root::Type::Seal>(otype, 1);
 		return ptr.seal(key);
 	}
@@ -379,9 +384,8 @@ namespace
 	 * Helper to determine whether an object, given by a start address and size,
 	 * is completely contained within a specified range.
 	 */
-	bool contains(const auto &range,
-	              ptraddr_t   addr,
-	              size_t      size) requires(RawAddressRange<decltype(range)>)
+	bool contains(const auto &range, ptraddr_t addr, size_t size)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		return (range.start() <= addr) &&
 		       (range.start() + range.size() >= addr + size);
@@ -393,8 +397,8 @@ namespace
 	 * object must be completely contained within the range.
 	 */
 	template<typename T = char>
-	bool contains(const auto &range,
-	              ptraddr_t   addr) requires(RawAddressRange<decltype(range)>)
+	bool contains(const auto &range, ptraddr_t addr)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		return contains(range, addr, sizeof(T));
 	}
@@ -444,8 +448,8 @@ namespace
 	 * of type `T` from a virtual address range.
 	 */
 	template<typename T, bool Precise = true>
-	ContiguousPtrRange<T>
-	build_range(const auto &range) requires(RawAddressRange<decltype(range)>)
+	ContiguousPtrRange<T> build_range(const auto &range)
+	    requires(IsAddressRange<decltype(range)>)
 	{
 		Capability<T> start = build<T,
 		                            Root::Type::RWGlobal,
@@ -555,6 +559,12 @@ namespace
 			auto ret = build(entry.address, entry.size());
 			// Remove any permissions that shouldn't be held here.
 			ret.permissions() &= entry.permissions();
+
+			Debug::Invariant(ret.is_valid(),
+			                 "MMIO construction {}--{} is not valid",
+			                 entry.address,
+			                 entry.address + entry.size());
+
 			return ret;
 		};
 
@@ -567,8 +577,10 @@ namespace
 			                   (interruptStatus == InterruptStatus::Disabled),
 			                 "Functions exported from compartments must have "
 			                 "an explicit interrupt posture");
-			return build(compartment.exportTable, entry.address)
-			  .seal(exportSealingKey);
+
+			exportEntry.without_permissions(Permission::Store);
+
+			return exportEntry.seal(exportSealingKey);
 		};
 
 		// If the low bit is 1, then this is either an MMIO region or direct
@@ -668,8 +680,8 @@ namespace
                             auto exportEntry = build<ExportEntry>(
                               compartment.exportTable, typeAddress);
                             Debug::Invariant(
-							   exportEntry->is_sealing_type(),
-							   "Sealed object points to invalid sealing type");
+                              exportEntry->is_sealing_type(),
+                              "Sealed object points to invalid sealing type");
                             *sealingType = exportEntry->functionStart;
                             return true;
                         }
@@ -689,10 +701,11 @@ namespace
 					                 "Invalid sealed object {}",
 					                 typeAddress);
 				}
-				Capability sealedObject = build(entry.address, entry.size());
-				// Seal with the allocator's sealing key
-				sealedObject.seal(
-				  build<void, Root::Type::Seal>(StaticToken, 1));
+				// Seal with the static token sealing key
+				Capability object = build(entry.address, entry.size());
+				object.address() += sizeof(TokenObjectHeader);
+				Capability sealedObject =
+				  object.seal(build<void, Root::Type::Seal>(StaticToken, 1));
 				Debug::log("Static sealed object: {}", sealedObject);
 				return sealedObject;
 			}
@@ -863,8 +876,7 @@ namespace
 		for (size_t i = 0; const auto &config : image.threads())
 		{
 			Debug::log("Creating thread {}", i);
-			auto findCompartment = [&]() -> auto &
-			{
+			auto findCompartment = [&]() -> auto & {
 				for (auto &compartment : image.compartments())
 				{
 					Debug::log("Looking in export table {}+{}",
@@ -880,10 +892,10 @@ namespace
 				__builtin_unreachable();
 			};
 			const auto &compartment = findCompartment();
+			auto        entry       = build<ExportEntry>(config.entryPoint);
 			Debug::log("Creating thread in compartment {}", &compartment);
 			auto pcc = build_pcc(compartment);
-			pcc.address() +=
-			  build<ExportEntry>(config.entryPoint)->functionStart;
+			pcc.address() += entry->functionStart;
 			Debug::log("New thread's pcc will be {}", pcc);
 			void *cgp = build_cgp(compartment);
 			Debug::log("New thread's cgp will be {}", cgp);
@@ -949,6 +961,13 @@ namespace
 			threadTStack->mstatus =
 			  (priv::MSTATUS_MPIE |
 			   (priv::MSTATUS_PRV_M << priv::MSTATUS_MPP_SHIFT));
+			// If this entry point is interrupt disabled, clear the previous
+			// interrupt-enabled bit (after mret, interrupts will not be
+			// enabled)
+			if (entry->interrupt_status() == InterruptStatus::Disabled)
+			{
+				threadTStack->mstatus &= ~MSTATUS_MPIE;
+			}
 #ifdef CONFIG_MSHWM
 			threadTStack->mshwm  = stack.top();
 			threadTStack->mshwmb = stack.base();
@@ -966,9 +985,7 @@ namespace
 
 			Debug::log("Thread's trusted stack is {}", threadTStack);
 
-			threadTStack.seal(trustedStackKey);
-
-			threadInfo[i].trustedStack = threadTStack;
+			threadInfo[i].trustedStack = threadTStack.seal(trustedStackKey);
 			threadInfo[i].priority     = config.priority;
 			i++;
 		}
@@ -1000,8 +1017,7 @@ namespace
 
 		// Find the library compartment that contains an address in its code or
 		// data section.
-		auto findCompartment = [&](ptraddr_t address) -> auto &
-		{
+		auto findCompartment = [&](ptraddr_t address) -> auto & {
 			Debug::log("Capreloc address is {}", address);
 			for (auto &compartment : image.libraries_and_compartments())
 			{
@@ -1098,25 +1114,13 @@ namespace
 } // namespace
 
 // The parameters are passed by the boot assembly sequence.
-// XXX: arguments have capptr templates, 4 roots
-extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
-                                                 void         *almightyPCC,
-                                                 void         *almightySeal,
-                                                 void         *almightyRW)
+// XXX: root arguments might want better types
+extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
+                                   const ImgHdr       &imgHdr,
+                                   void               *almightyPCC,
+                                   void               *almightySeal,
+                                   void               *almightyRW)
 {
-	// This relies on a slightly surprising combination of two C++ features:
-	// - Flexible array members (C99, not technically part of C++ but supported
-	//   basically everywhere).
-	// - Guaranteed return copy elision (C++17).
-	//
-	// This means that the caller can allocate a variable-sized structure and
-	// this definition will refer to the space allocated by the caller.  In a
-	// CHERI system, the caller will also set bounds, and so this is actually a
-	// safe thing to do, on any other system it is a terrible idea.  This means
-	// that `ret` points to the space on the stack that was set up by the
-	// caller and which can subsequently be passed to the scheduler.
-	SchedulerEntryInfo ret;
-
 	// Populate the 4 roots from system registers.
 	Root::install_root<Root::ISAType::Execute>(almightyPCC);
 	Root::install_root<Root::ISAType::Seal>(almightySeal);
@@ -1247,9 +1251,6 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 		  auto key =
 		    CHERI::Capability{build<void, Root::Type::Seal>(lower, length)};
 		  key.permissions() &= permissions;
-		  // FIXME: Some compartments need only permit-unseal (e.g. the
-		  // compartment switcher).  Drop permit-seal and keep only
-		  // permit-unseal once these are separated.
 		  Debug::log("Sealing key: {}", key);
 		  *location = key;
 		  return key;
@@ -1293,15 +1294,19 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	              2 * sizeof(void *),
 	              PermissionSet{Permission::Global, Permission::Unseal});
 
-	constexpr size_t DynamicSealingLength =
-	  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
-	setSealingKey(imgHdr.allocator(), Allocator);
-	setSealingKey(imgHdr.allocator(),
-	              FirstDynamicSoftware,
-	              DynamicSealingLength,
-	              sizeof(void *));
+	if (imgHdr.allocator().code.size() != 0)
+	{
+		constexpr size_t DynamicSealingLength =
+		  std::numeric_limits<ptraddr_t>::max() - FirstDynamicSoftware + 1;
+		setSealingKey(imgHdr.allocator(), Allocator);
+		setSealingKey(imgHdr.allocator(),
+		              FirstDynamicSoftware,
+		              DynamicSealingLength,
+		              sizeof(void *));
+	}
 
 	// Set up export tables
+	Debug::log("Populating export tables' PCC/CGP");
 
 	// Helper to construct a writeable pointer to an export table.
 	auto getExportTableHeader = [](const auto &range) {
@@ -1314,6 +1319,12 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 
 	for (auto &compartment : imgHdr.privilegedCompartments)
 	{
+		if (compartment.exportTable.size() == 0)
+		{
+			Debug::log("Skipping privileged compartment without export table");
+			continue;
+		}
+
 		auto expTablePtr = getExportTableHeader(compartment.exportTable);
 		Debug::log("Error handler for compartment is {}",
 		           expTablePtr->errorHandler);
@@ -1364,7 +1375,13 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	  build<ExportEntry>(
 	    imgHdr.scheduler().exportTable,
 	    LA_ABS(
-	      __export_sched__ZN5sched15exception_entryEP19TrustedStackGenericILj0EEjjj))
+#if __has_extension(cheri_sealed_pointers) &&                                  \
+  !defined(CHERIOT_NO_SEALED_POINTERS)
+	      __export_scheduler__Z15exception_entryU19__sealed_capabilityP19TrustedStackGenericILj0EEjjj
+#else
+	      __export_scheduler__Z15exception_entryP15TokenObjectTypejjj
+#endif
+	      ))
 	    ->functionStart;
 	auto schedExceptionEntry = build_pcc(imgHdr.scheduler());
 	schedExceptionEntry.address() += exceptionEntryOffset;
@@ -1392,57 +1409,43 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	  csp);
 
 #ifdef SOFTWARE_REVOKER
-	// If we are using a software revoker then we need to provide it with three
+	// If we are using a software revoker then we need to provide it with some
 	// terrifyingly powerful capabilities.  These break some of the rules that
-	// we enforce for everything else, especially the last one, which is a
-	// stack capability that is reachable from a global.  The only code that
+	// we enforce for everything else (e.g. they may point to stacks
+	// but are reachable from a global).  The only code that
 	// accesses these in the revoker is very small and amenable to auditing
 	// (the only memory accesses are a load and a store back at the same
 	// location, with interrupts disabled, to trigger the load barrier).
-	//
-	// We use imprecise set-bounds operations here because we need to ensure
-	// that the regions are completely scanned and scanning slightly more is
+
+	// The scary capabilities are stored at the beginning of the software
+	// revoker compartment. At the moment we only need one.
+	auto scaryCapabilities = build<Capability<void>,
+	                               Root::Type::RWStoreL,
+	                               Root::Permissions<Root::Type::RWStoreL>,
+	                               /* Precise: */ true>(
+	  imgHdr.privilegedCompartments.software_revoker().code.start(),
+	  sizeof(void *));
+	Debug::log("Writing scary capabilities for software revoker to {}",
+	           scaryCapabilities);
+	// Construct a capability to all RW globals, stacks and heap.
+	// We use an imprecise set-bounds operation here because we need to ensure
+	// that the region is completely scanned and scanning slightly more is
 	// not a problem unless the revoker is compromised.  The software revoker
 	// already has a terrifying set of rights, so this doesn't really make
 	// things worse and is another good reason to use a hardware revoker.
 	// Given that hardware revokers are lower power, faster, and more secure,
 	// there's little reason for the software revoker to be used for anything
 	// other than testing.
-	auto scaryCapabilities = build<Capability<void>,
-	                               Root::Type::RWStoreL,
-	                               Root::Permissions<Root::Type::RWStoreL>,
-	                               /* Precise: */ false>(
-	  imgHdr.privilegedCompartments.software_revoker().code.start(),
-	  3 * sizeof(void *));
-	// Read-write capability to all globals.  This is scary because a bug in
-	// the revoker could violate compartment isolation.
-	Debug::log("Writing scary capabilities for software revoker to {}",
-	           scaryCapabilities);
-	scaryCapabilities[0] =
-	  build(LA_ABS(__compart_cgps),
-	        LA_ABS(__compart_cgps_end) - LA_ABS(__compart_cgps));
+	scaryCapabilities[0] = build<void,
+	                             Root::Type::RWStoreL,
+	                             Root::Permissions<Root::Type::RWStoreL>,
+	                             /* Precise: */ false>(
+	  LA_ABS(__revoker_scan_start),
+	  LA_ABS(__export_mem_heap_end) - LA_ABS(__revoker_scan_start));
 	scaryCapabilities[0].address() = scaryCapabilities[0].base();
-	Debug::log("Wrote scary capability {}", scaryCapabilities[0]);
-	// Read-write capability to the whole heap.  This is scary because a bug in
-	// the revoker could violate heap safety.
-	scaryCapabilities[1] =
-	  build<void,
-	        Root::Type::RWGlobal,
-	        Root::Permissions<Root::Type::RWGlobal>,
-	        false>(LA_ABS(__export_mem_heap),
-	               LA_ABS(__export_mem_heap_end) - LA_ABS(__export_mem_heap));
-	scaryCapabilities[1].address() = scaryCapabilities[1].base();
-	Debug::log("Wrote scary capability {}", scaryCapabilities[1]);
-	// Read-write capability to the entire stack.  This is scary because a bug
-	// in the revoker could violate thread isolation.
-	scaryCapabilities[2] =
-	  build<void,
-	        Root::Type::RWStoreL,
-	        Root::Permissions<Root::Type::RWStoreL>,
-	        false>(LA_ABS(__stack_space_start),
-	               LA_ABS(__stack_space_end) - LA_ABS(__stack_space_start));
-	scaryCapabilities[2].address() = scaryCapabilities[2].base();
-	Debug::log("Wrote scary capability {}", scaryCapabilities[2]);
+	Debug::log("Wrote scary cap[0]={} requested_start={}",
+	           scaryCapabilities[0],
+	           LA_ABS(__revoker_scan_start));
 #endif
 
 	// Set up the exception entry point
@@ -1460,19 +1463,19 @@ extern "C" SchedulerEntryInfo loader_entry_point(const ImgHdr &imgHdr,
 	// invoke the exception entry point.
 	auto exportEntry = build<ExportEntry>(
 	  imgHdr.scheduler().exportTable,
-	  LA_ABS(__export_sched__ZN5sched15scheduler_entryEPK16ThreadLoaderInfo));
+	  LA_ABS(__export_scheduler__Z15scheduler_entryPK16ThreadLoaderInfo));
 	schedPCC.address() += exportEntry->functionStart;
 
 	Debug::log("Will return to scheduler entry point: {}", schedPCC);
 
 	ret.schedPCC = schedPCC;
 	ret.schedCGP = schedCGP;
-	return ret;
 }
 
 /**
  * a dumb implementation, assuming no overlap and no capabilities
  */
+// NOLINTBEGIN(clang-analyzer-cheri.CapabilityCopy)
 void *memcpy(void *dst, const void *src, size_t n)
 {
 	char       *dst0 = static_cast<char *>(dst);
@@ -1485,3 +1488,4 @@ void *memcpy(void *dst, const void *src, size_t n)
 
 	return dst0;
 }
+// NOLINTEND(clang-analyzer-cheri.CapabilityCopy)

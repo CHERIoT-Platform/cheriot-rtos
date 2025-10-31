@@ -247,7 +247,7 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<Move> = export_move;
+	constexpr auto ExportedFn<Move> = export_move;
 
 	/**
 	 * Load a capability into the destination register.
@@ -260,7 +260,7 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<LoadCapability> = export_load;
+	constexpr auto ExportedFn<LoadCapability> = export_load;
 
 	/**
 	 * Load and return an integer.
@@ -273,7 +273,7 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<LoadInt> = export_load_int;
+	constexpr auto ExportedFn<LoadInt> = export_load_int;
 
 	/**
 	 * Store a capability from a register at a specified location.
@@ -286,7 +286,7 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<Store> = export_store;
+	constexpr auto ExportedFn<Store> = export_store;
 
 	/**
 	 * Returns the address of the capability in the specified register.
@@ -298,7 +298,7 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<GetAddress> = export_get_address;
+	constexpr auto ExportedFn<GetAddress> = export_get_address;
 
 	/**
 	 * Set the address of the capability in the specified register.
@@ -311,7 +311,7 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<SetAddress> = export_set_address;
+	constexpr auto ExportedFn<SetAddress> = export_set_address;
 
 	/**
 	 * Return the base address of the capability in the specified register.
@@ -323,7 +323,7 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<GetBase> = export_get_base;
+	constexpr auto ExportedFn<GetBase> = export_get_base;
 
 	/**
 	 * Return the length of the capability in the specified register.
@@ -335,7 +335,7 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<GetLength> = export_get_length;
+	constexpr auto ExportedFn<GetLength> = export_get_length;
 
 	/**
 	 * Return the permissions of the capability in the specified register.
@@ -347,10 +347,10 @@ namespace
 	}
 
 	template<>
-	constexpr static auto ExportedFn<GetPermissions> = export_get_permissions;
+	constexpr auto ExportedFn<GetPermissions> = export_get_permissions;
 
 	template<>
-	constexpr static auto ExportedFn<CheckSecret> = check_secret;
+	constexpr auto ExportedFn<CheckSecret> = check_secret;
 
 	/**
 	 * Base template for exported functions.  Forwards to the function defined

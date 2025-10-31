@@ -2,53 +2,30 @@
 #include <cdefs.h>
 #include <debug.hh>
 #include <stdint.h>
+#include <utils.hh>
 
-/**
- * A Simple Driver for the Sonata's SPI.
- *
- * Documentation source can be found at:
- * https://github.com/lowRISC/sonata-system/blob/1a59633d2515d4fe186a07d53e49ff95c18d9bbf/doc/ip/spi.md
- *
- * Rendered documentation is served from:
- * https://lowrisc.org/sonata-system/doc/ip/spi.html
- */
-struct SonataSpi
+namespace SonataSpi
 {
-	/**
-	 * The Sonata SPI block doesn't currently have support for interrupts.
-	 * The following registers are reserved for future use.
-	 */
-	uint32_t interruptState;
-	uint32_t interruptEnable;
-	uint32_t interruptTest;
-	/**
-	 * Configuration register. Controls how the SPI block transmits and
-	 * receives data. This register can be modified only whilst the SPI block
-	 * is idle.
-	 */
-	uint32_t configuration;
-	/**
-	 * Controls the operation of the SPI block. This register can
-	 * be modified only whilst the SPI block is idle.
-	 */
-	uint32_t control;
-	/// Status information about the SPI block
-	uint32_t status;
-	/**
-	 * Writes to this begin an SPI operation.
-	 * Writes are ignored when the SPI block is active.
-	 */
-	uint32_t start;
-	/**
-	 * Data from the receive FIFO. When read the data is popped from the FIFO.
-	 * If the FIFO is empty data read is undefined.
-	 */
-	uint32_t receiveFifo;
-	/**
-	 * Bytes written here are pushed to the transmit FIFO. If the FIFO is full
-	 * writes are ignored.
-	 */
-	uint32_t transmitFifo;
+	/// Sonata SPI Interrupts
+	typedef enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Raised when a SPI operation completes and the block has become idle.
+		InterruptComplete = 1 << 4,
+		/*
+		 * Asserted whilst the transmit FIFO level is at or below the
+		 * transmit watermark.
+		 */
+		InterruptTransmitWatermark = 1 << 3,
+		/// Asserted whilst the transmit FIFO is empty.
+		InterruptTransmitEmpty = 1 << 2,
+		/*
+		 * Asserted whilst the receive FIFO level is at or above the receive
+		 * watermark.
+		 */
+		InterruptReceiveWatermark = 1 << 1,
+		/// Asserted whilst the receive FIFO is full.
+		InterruptReceiveFull = 1 << 0,
+	} Interrupt;
 
 	/// Configuration Register Fields
 	enum : uint32_t
@@ -110,6 +87,14 @@ struct SonataSpi
 		 * interrupt will trigger at different points
 		 */
 		ControlReceiveWatermarkMask = 0xf << 8,
+		/**
+		 * Internal loopback function enabled when set to 1.
+		 */
+		ControlInternalLoopback = 1 << 30,
+		/**
+		 * Software reset performed when written as 1.
+		 */
+		ControlSoftwareReset = 1u << 31,
 	};
 
 	/// Status Register Fields
@@ -140,96 +125,289 @@ struct SonataSpi
 		StartByteCountMask = 0x7ffu,
 	};
 
-	/// Flag set when we're debugging this driver.
-	static constexpr bool DebugSonataSpi = false;
-
-	/// Helper for conditional debug logs and assertions.
-	using Debug = ConditionalDebug<DebugSonataSpi, "Sonata SPI">;
+	/// Info Register Fields
+	enum : uint32_t
+	{
+		/// Maximum number of items in the transmit FIFO.
+		InfoTxFifoDepth = 0xffu << 0,
+		/// Maximum number of items in the receive FIFO.
+		InfoRxFifoDepth = 0xffu << 8,
+	};
 
 	/**
-	 * Initialises the SPI block
+	 * A driver for the Sonata's SPI device block.
 	 *
-	 * @param ClockPolarity When false, the clock is low when idle and the
-	 *        leading edge is positive. When true, the opposite behaviour is
-	 *        set.
-	 * @param ClockPhase When false, data is sampled on the leading edge and
-	 *        changes on the trailing edge. When true, the opposite behaviour is
-	 *        set.
-	 * @param MsbFirst When true, the first bit of each byte sent is the most
-	 *        significant bit, as oppose to the least significant bit.
-	 * @param HalfClockPeriod The length of a half period of the SPI clock,
-	 *        measured in system clock cycles reduced by 1.
+	 * Documentation source can be found at:
+	 * https://github.com/lowRISC/sonata-system/blob/1a59633d2515d4fe186a07d53e49ff95c18d9bbf/doc/ip/spi.md
+	 *
+	 * Rendered documentation is served from:
+	 * https://lowrisc.org/sonata-system/doc/ip/spi.html
 	 */
-	void init(const bool     ClockPolarity,
-	          const bool     ClockPhase,
-	          const bool     MsbFirst,
-	          const uint16_t HalfClockPeriod) volatile
+	template<size_t NumChipSelects = 4>
+	struct Generic : private utils::NoCopyNoMove
 	{
-		configuration = (ClockPolarity ? ConfigurationClockPolarity : 0) |
-		                (ClockPhase ? ConfigurationClockPhase : 0) |
-		                (MsbFirst ? ConfigurationMSBFirst : 0) |
-		                (HalfClockPeriod & ConfigurationHalfClockPeriodMask);
-	}
+		/// The current state of the SPI interrupts.
+		uint32_t interruptState;
+		/// Controls which interrupts are enabled.
+		uint32_t interruptEnable;
+		/// Allows one to manually trigger an interrupt for testing.
+		uint32_t interruptTest;
+		/**
+		 * Configuration register. Controls how the SPI block transmits and
+		 * receives data. This register can be modified only whilst the SPI
+		 * block is idle.
+		 */
+		uint32_t configuration;
+		/**
+		 * Controls the operation of the SPI block. This register can
+		 * be modified only whilst the SPI block is idle.
+		 */
+		uint32_t control;
+		/// Status information about the SPI block
+		uint32_t status;
+		/**
+		 * Writes to this begin an SPI operation.
+		 * Writes are ignored when the SPI block is active.
+		 */
+		uint32_t start;
+		/**
+		 * Data from the receive FIFO. When read the data is popped from the
+		 * FIFO. If the FIFO is empty data read is undefined.
+		 */
+		uint32_t receiveFifo;
+		/**
+		 * Bytes written here are pushed to the transmit FIFO. If the FIFO is
+		 * full writes are ignored.
+		 */
+		uint32_t transmitFifo;
+		/**
+		 * Information about the SPI controller. This register reports the
+		 * depths of the transmit and receive FIFOs within the controller.
+		 */
+		uint32_t info;
+		/**
+		 * Chip Select lines; each bit controls a chip select line.
+		 * When a bit set to zero, a chip select line is pulled low.
+		 * Multiple chip select lines can be pulled low at a time.
+		 */
+		uint32_t chipSelects;
 
-	/// Waits for the SPI device to become idle
-	void wait_idle() volatile
-	{
-		// Wait whilst IDLE field in STATUS is low
-		while ((status & StatusIdle) == 0) {}
-	}
+		/// Flag set when we're debugging this driver.
+		static constexpr bool DebugSonataSpi = false;
 
-	/**
-	 * Sends `len` bytes from the given `data` buffer,
-	 * where `len` is at most `0x7ff`.
-	 */
-	void blocking_write(const uint8_t data[], uint16_t len) volatile
-	{
-		Debug::Assert(len <= 0x7ff,
-		              "You can't transfer more than 0x7ff bytes at a time.");
-		len &= StartByteCountMask;
+		/// Helper for conditional debug logs and assertions.
+		using Debug = ConditionalDebug<DebugSonataSpi, "Sonata SPI">;
 
-		wait_idle();
-		control = ControlTransmitEnable;
-		start   = len;
-
-		uint32_t transmitAvailable = 0;
-		for (uint32_t i = 0; i < len; ++i)
+		/// Enable the given interrupt(s).
+		inline void interrupt_enable(Interrupt interrupt) volatile
 		{
-			if (transmitAvailable == 0)
+			interruptEnable = interruptEnable | interrupt;
+		}
+
+		/// Disable the given interrupt(s).
+		inline void interrupt_disable(Interrupt interrupt) volatile
+		{
+			interruptEnable = interruptEnable & ~interrupt;
+		}
+
+		/**
+		 * Initialises the SPI block
+		 *
+		 * @param ClockPolarity When false, the clock is low when idle and the
+		 *        leading edge is positive. When true, the opposite behaviour is
+		 *        set.
+		 * @param ClockPhase When false, data is sampled on the leading edge and
+		 *        changes on the trailing edge. When true, the opposite
+		 * behaviour is set.
+		 * @param MsbFirst When true, the first bit of each byte sent is the
+		 * most significant bit, as oppose to the least significant bit.
+		 * @param HalfClockPeriod The length of a half period of the SPI clock,
+		 *        measured in system clock cycles reduced by 1.
+		 */
+		void init(const bool     ClockPolarity,
+		          const bool     ClockPhase,
+		          const bool     MsbFirst,
+		          const uint16_t HalfClockPeriod) volatile
+		{
+			configuration =
+			  (ClockPolarity ? ConfigurationClockPolarity : 0) |
+			  (ClockPhase ? ConfigurationClockPhase : 0) |
+			  (MsbFirst ? ConfigurationMSBFirst : 0) |
+			  (HalfClockPeriod & ConfigurationHalfClockPeriodMask);
+
+			// Ensure that FIFOs are emptied of any stale data and the
+			// controller core has returned to Idle if it is presently active
+			// (eg. an incomplete previous operation, perhaps one that was
+			// interrupted/failed).
+			//
+			// Note: although, from a logical perspective, the three operations
+			// (i) tx clear, (ii) core reset and (iii) rx clear should be
+			// performed in that order, presently the implementation supports
+			// performing them as a single write.
+			control =
+			  ControlTransmitClear | ControlSoftwareReset | ControlReceiveClear;
+		}
+
+		/// Waits for the SPI device to become idle
+		void wait_idle() volatile
+		{
+			// Wait whilst IDLE field in STATUS is low
+			while ((status & StatusIdle) == 0) {}
+		}
+
+		/**
+		 * Sends `len` bytes from the given `data` buffer,
+		 * where `len` is at most `0x7ff`.
+		 */
+		void blocking_write(const uint8_t data[], uint16_t len) volatile
+		{
+			Debug::Assert(
+			  len <= StartByteCountMask,
+			  "You can't transfer more than 0x7ff bytes at a time.");
+			len &= StartByteCountMask;
+
+			wait_idle();
+			// Do not attempt a zero-byte transfer; not supported by the
+			// controller.
+			if (len)
 			{
-				while (transmitAvailable < 64)
+				control = ControlTransmitEnable;
+				start   = len;
+
+				uint32_t transmitAvailable = 0;
+				for (uint32_t i = 0; i < len; ++i)
 				{
-					// Read number of bytes in TX FIFO to calculate space
-					// available for more bytes
-					transmitAvailable = 64 - (status & StatusTxFifoLevel);
+					while (!transmitAvailable)
+					{
+						// Read number of bytes in TX FIFO to calculate space
+						// available for more bytes
+						transmitAvailable = 8 - (status & StatusTxFifoLevel);
+					}
+					transmitFifo = data[i];
+					transmitAvailable--;
 				}
 			}
-			transmitFifo = data[i];
-			transmitAvailable--;
 		}
-	}
 
-	/*
-	 * Receives `len` bytes and puts them in the `data` buffer,
-	 * where `len` is at most `0x7ff`.
-	 *
-	 * This method will block until the requested number of bytes
-	 * has been seen. There is currently no timeout.
-	 */
-	void blocking_read(uint8_t data[], uint16_t len) volatile
-	{
-		Debug::Assert(len <= 0x7ff,
-		              "You can't receive more than 0x7ff bytes at a time.");
-		len &= StartByteCountMask;
-		wait_idle();
-		control = ControlReceiveEnable;
-		start   = len;
-
-		for (uint32_t i = 0; i < len; ++i)
+		/*
+		 * Receives `len` bytes and puts them in the `data` buffer,
+		 * where `len` is at most `0x7ff`.
+		 *
+		 * This method will block until the requested number of bytes
+		 * has been seen. There is currently no timeout.
+		 */
+		void blocking_read(uint8_t data[], uint16_t len) volatile
 		{
-			// Wait for at least one byte to be available in the RX FIFO
-			while ((status & StatusRxFifoLevel) == 0) {}
-			data[i] = static_cast<uint8_t>(receiveFifo);
+			Debug::Assert(len <= StartByteCountMask,
+			              "You can't receive more than 0x7ff bytes at a time.");
+			len &= StartByteCountMask;
+			wait_idle();
+			// Do not attempt a zero-byte transfer; not supported by the
+			// controller.
+			if (len)
+			{
+				control = ControlReceiveEnable;
+				start   = len;
+
+				for (uint32_t i = 0; i < len; ++i)
+				{
+					// Wait for at least one byte to be available in the RX FIFO
+					while ((status & StatusRxFifoLevel) == 0) {}
+					data[i] = static_cast<uint8_t>(receiveFifo);
+				}
+			}
 		}
-	}
-};
+
+		/**
+		 * Asserts/de-asserts a given chip select.
+		 *
+		 * Note, SPI chip selects are active low signals, so the register bit is
+		 * zero when asserted and one when de-asserted.
+		 *
+		 * @tparam Index The index of the chip select to be set.
+		 * @tparam DeassertOthers Whether to de-assert all other chip selects.
+		 * @param Assert Whether to assert (true) or de-assert (false).
+		 */
+		template<uint8_t Index, bool DeassertOthers = true>
+		inline void chip_select_assert(const bool Assert = true) volatile
+		{
+			static_assert(Index < NumChipSelects,
+			              "SPI chip select index out of bounds");
+
+			const uint32_t State =
+			  DeassertOthers ? (1 << NumChipSelects) - 1 : chipSelects;
+
+			const uint32_t Bit = (1 << Index);
+			chipSelects        = Assert ? State & ~Bit : State | Bit;
+		}
+	};
+
+	/// A specialised driver for the SPI device connected to the Ethernet MAC.
+	class EthernetMac : public Generic<2>
+	{
+		enum : uint8_t
+		{
+			ChipSelectLine = 0,
+			ResetLine      = 1,
+		};
+
+		public:
+		/**
+		 * Assert the chip select line.
+		 * @param Assert Whether to assert (true) or de-assert (false) the chip
+		 * select line.
+		 */
+		inline void chip_select_assert(const bool Assert) volatile
+		{
+			this->Generic<2>::chip_select_assert<ChipSelectLine, false>(Assert);
+		}
+		/**
+		 * Assert the reset line.
+		 * @param Assert Whether to assert (true) or de-assert (false) the reset
+		 * line.
+		 */
+		inline void reset_assert(const bool Assert = true) volatile
+		{
+			this->Generic<2>::chip_select_assert<ResetLine, false>(Assert);
+		}
+	};
+
+	/// A specialised driver for the SPI device connected to the LCD screen.
+	class Lcd : public Generic<3>
+	{
+		enum : uint8_t
+		{
+			ChipSelectLine  = 0,
+			DataCommandLine = 1,
+			ResetLine       = 2,
+		};
+
+		public:
+		/**
+		 * Assert the chip select line.
+		 * @param Assert Whether to assert (true) or de-assert (false) the chip
+		 * select line.
+		 */
+		inline void chip_select_assert(const bool Assert) volatile
+		{
+			this->Generic<3>::chip_select_assert<ChipSelectLine, false>(Assert);
+		}
+		/**
+		 * Assert the chip select line.
+		 * @param Assert Whether to assert (true) or de-assert (false) the reset
+		 * line.
+		 */
+		inline void reset_assert(const bool Assert = true) volatile
+		{
+			this->Generic<3>::chip_select_assert<ResetLine, false>(Assert);
+		}
+		/**
+		 * Set the data/command line.
+		 * @param high Whether to set high (true) or low (false).
+		 */
+		inline void data_command_set(const bool High) volatile
+		{
+			this->Generic<3>::chip_select_assert<DataCommandLine, false>(!High);
+		}
+	};
+} // namespace SonataSpi

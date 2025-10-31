@@ -25,8 +25,8 @@ __attribute__((section(".sealing_key1"))) void *allocatorSealingKey;
 /**
  * The root for the software sealing key.
  */
-__attribute__((section(".sealing_key2"))) Capability<SKeyStruct>
-  softwareSealingKey;
+__attribute__((section(".sealing_key2"))) Capability<TokenKeyType>
+                                          softwareSealingKey;
 
 using namespace CHERI;
 
@@ -187,11 +187,12 @@ namespace
 	 *
 	 */
 	template<typename T = Revocation::Revoker>
-	bool wait_for_background_revoker(
-	  Timeout                   *timeout,
-	  uint32_t                   epoch,
-	  LockGuard<decltype(lock)> &g,
-	  T &r = revoker) requires(Revocation::SupportsInterruptNotification<T>)
+	bool wait_for_background_revoker(Timeout                   *timeout,
+	                                 uint32_t                   epoch,
+	                                 LockGuard<decltype(lock)> &g,
+	                                 T                         &r = revoker)
+	    requires(Revocation::SupportsInterruptNotification<T> &&
+	             Revocation::Revoker::IsAsynchronous)
 	{
 		// Release the lock before sleeping
 		g.unlock();
@@ -212,21 +213,37 @@ namespace
 	 *
 	 */
 	template<typename T = Revocation::Revoker>
-	bool wait_for_background_revoker(
-	  Timeout                   *timeout,
-	  uint32_t                   epoch,
-	  LockGuard<decltype(lock)> &g,
-	  T &r = revoker) requires(!Revocation::SupportsInterruptNotification<T>)
+	bool wait_for_background_revoker(Timeout                   *timeout,
+	                                 uint32_t                   epoch,
+	                                 LockGuard<decltype(lock)> &g,
+	                                 T                         &r = revoker)
+	    requires(!Revocation::SupportsInterruptNotification<T> ||
+	             !Revocation::Revoker::IsAsynchronous)
 	{
-		// Yield while until a revocation pass has finished.
-		while (!revoker.has_revocation_finished_for_epoch<true>(epoch))
+		/*
+		 * Yield and poll until a revocation pass has finished.
+		 *
+		 * In the case of a synchronouse revoker, this amounts to doing
+		 * synchronous unit of work (usually one, sometimes two) per tick so
+		 * that we avoid monopolizing the allocator lock.
+		 */
+		while (!r.has_revocation_finished_for_epoch(epoch))
 		{
-			// Release the lock before sleeping
-			g.unlock();
-			Timeout smallSleep{1};
-			thread_sleep(&smallSleep);
-			if (!reacquire_lock(timeout, g, smallSleep.elapsed))
+			/*
+			 * If we have finished an epoch and aren't yet done with the target
+			 * epoch, kick off another round of revocation.  The synchronous
+			 * revoker might take this opportunity to do another unit of work
+			 * (in addition to the one it will do in the call to
+			 * has_revocation_finished_for_epoch above).
+			 */
+			if ((r.system_epoch_get() & 1) == 0)
 			{
+				r.system_bg_revoker_kick();
+			}
+
+			if (g.yield(timeout) < 0)
+			{
+				/* Unable to sleep; bail out */
 				return false;
 			}
 		}
@@ -243,7 +260,7 @@ namespace
 	 *
 	 * The lock guard own the lock on entry. It will drop the lock if a
 	 * transient error occurs and attempt to reacquire it. If the lock cannot be
-	 * reacquired during the permitted timeout then this returns nullptr.
+	 * reacquired during the permitted timeout then this returns -ETIMEDOUT.
 	 *
 	 * If `isSealedAllocation` is true, then the allocation is marked as sealed
 	 * and excluded during `heap_free_all`.
@@ -267,11 +284,10 @@ namespace
 			{
 				return std::get<Capability<void>>(ret);
 			}
-			// If the call is non-blocking (`flags` is
-			// `AllocateWaitNone`, or `timeout` is 0), fail now.
-			if (flags == AllocateWaitNone || !may_block(timeout))
+			// Check for permanent allocation failures first.
+			if (std::holds_alternative<MState::AllocationFailurePermanent>(ret))
 			{
-				return nullptr;
+				return reinterpret_cast<void *>(-EINVAL);
 			}
 			// If there is enough memory in the quarantine to fulfil this
 			// allocation, try dequeing some things and retry.
@@ -281,9 +297,14 @@ namespace
 			{
 				if (!(flags & AllocateWaitRevocationNeeded))
 				{
-					// The flags specify that we should not
-					// wait when revocation is needed.
-					return nullptr;
+					// The flags specify that we should not wait when revocation
+					// is needed. May succeed on retry
+					return reinterpret_cast<void *>(-EAGAIN);
+				}
+
+				if (!may_block(timeout))
+				{
+					return reinterpret_cast<void *>(-ETIMEDOUT);
 				}
 
 				// If we are able to dequeue some objects from quarantine then
@@ -302,22 +323,12 @@ namespace
 
 					revoker.system_bg_revoker_kick();
 
-					if constexpr (Revocation::Revoker::IsAsynchronous)
+					if (!wait_for_background_revoker(
+					      timeout, needsRevocation->waitingEpoch, g))
 					{
-						wait_for_background_revoker(
-						  timeout, needsRevocation->waitingEpoch, g);
-					}
-					else
-					{
-						// Drop and reacquire the lock while yielding.
-						// Sleep for a single tick.
-						g.unlock();
-						Timeout smallSleep{1};
-						thread_sleep(&smallSleep);
-						if (!reacquire_lock(timeout, g, smallSleep.elapsed))
-						{
-							return nullptr;
-						}
+						// Failed to reacquire the lock within the allowed
+						// timeout period
+						return reinterpret_cast<void *>(-ETIMEDOUT);
 					}
 				}
 				continue;
@@ -339,7 +350,7 @@ namespace
 					// The flags specify that we should not
 					// wait when the heap is full and/or
 					// when the quota is exceeded.
-					return nullptr;
+					return reinterpret_cast<void *>(-ENOMEM);
 				}
 
 				Debug::log("Not enough free space to handle {}-byte "
@@ -365,16 +376,14 @@ namespace
 				Debug::log("Woke from futex wake");
 				if (!reacquire_lock(timeout, g))
 				{
-					return nullptr;
+					// Failed to acquire lock within allowed timeout.
+					return reinterpret_cast<void *>(-ETIMEDOUT);
 				}
 				continue;
 			}
-			if (std::holds_alternative<MState::AllocationFailurePermanent>(ret))
-			{
-				return nullptr;
-			}
 		} while (may_block(timeout));
-		return nullptr;
+		// Exhausted the timeout period while retrying the allocation.
+		return reinterpret_cast<void *>(-ETIMEDOUT);
 	}
 
 	/**
@@ -382,28 +391,30 @@ namespace
 	 * is not a heap capability.
 	 */
 	PrivateAllocatorCapabilityState *
-	malloc_capability_unseal(SealedAllocation in)
+	malloc_capability_unseal(AllocatorCapability in)
 	{
-		auto  key = STATIC_SEALING_TYPE(MallocKey);
-		auto *capability =
-		  token_unseal<PrivateAllocatorCapabilityState>(key, in.get());
+		auto  key        = STATIC_SEALING_TYPE(MallocKey);
+		auto *capability = token_unseal<AllocatorCapabilityState>(key, in);
 		if (!capability)
 		{
-			Debug::log("Invalid malloc capability {}", in);
+			Debug::log<DebugLevel::Warning>("Invalid malloc capability {}", in);
 			return nullptr;
 		}
 
+		auto *state =
+		  reinterpret_cast<PrivateAllocatorCapabilityState *>(capability);
+
 		// Assign an identifier if this is the first time that we've seen this.
-		if (capability->identifier == 0)
+		if (state->identifier == 0)
 		{
 			static uint32_t nextIdentifier = 1;
 			if (nextIdentifier >= (1 << MChunkHeader::OwnerIDWidth))
 			{
 				return nullptr;
 			}
-			capability->identifier = nextIdentifier++;
+			state->identifier = nextIdentifier++;
 		}
-		return capability;
+		return state;
 	}
 
 	/**
@@ -686,7 +697,7 @@ namespace
 		{
 			if (owner.quota < size)
 			{
-				Debug::log("quota insufficient");
+				Debug::log<DebugLevel::Warning>("quota insufficient");
 				return false;
 			}
 			owner.quota -= size;
@@ -711,7 +722,7 @@ namespace
 		{
 			owner.quota += size;
 		}
-		Debug::log("Failed to add claim");
+		Debug::log<DebugLevel::Warning>("Failed to add claim");
 		return false;
 	}
 
@@ -808,13 +819,15 @@ namespace
 		return -EPERM;
 	}
 
-	__noinline int
-	heap_free_internal(SObj heapCapability, void *rawPointer, bool reallyFree)
+	__noinline int heap_free_internal(AllocatorCapability heapCapability,
+	                                  void               *rawPointer,
+	                                  bool                reallyFree)
 	{
 		auto *capability = malloc_capability_unseal(heapCapability);
 		if (capability == nullptr)
 		{
-			Debug::log("Invalid heap capability {}", heapCapability);
+			Debug::log<DebugLevel::Warning>("Invalid heap capability {}",
+			                                heapCapability);
 			return -EPERM;
 		}
 		Capability<void> mem{rawPointer};
@@ -839,107 +852,131 @@ namespace
 
 } // namespace
 
-__cheriot_minimum_stack(0x90) ssize_t
-  heap_quota_remaining(struct SObjStruct *heapCapability)
+__cheriot_minimum_stack(0xa0) ssize_t
+  heap_quota_remaining(AllocatorCapability heapCapability)
 {
-	STACK_CHECK(0x90);
+	STACK_CHECK(0xa0);
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
-		return -1;
+		return -EPERM;
 	}
 	return cap->quota;
 }
 
-__cheriot_minimum_stack(0xc0) void heap_quarantine_empty()
+__cheriot_minimum_stack(0xe0) int heap_quarantine_flush(Timeout *timeout)
 {
-	STACK_CHECK(0xc0);
-	LockGuard g{lock};
-	while (gm->heapQuarantineSize > 0)
+	STACK_CHECK(0xe0);
+
+	if (!check_timeout_pointer(timeout))
 	{
-		if (!gm->quarantine_dequeue())
+		return -EINVAL;
+	}
+
+	if (LockGuard g{lock, timeout})
+	{
+		auto epoch = revoker.system_epoch_get();
+		// Round the epoch up.  Odd epoch numbers indicate in-progress epochs.
+		epoch = (epoch + 1) & ~1U;
+		// If we're using an asynchronous revoker, kick it now.  We'll
+		// probably want to kick it later anyway, so we don't lose anything
+		// by starting it early.
+		if constexpr (Revocation::Revoker::IsAsynchronous)
 		{
 			revoker.system_bg_revoker_kick();
 		}
-		g.unlock();
-		yield();
-		g.lock();
+		// Try removing items from quarantine until we've popped all that
+		// we can.  There may still be quarantine things from the previous
+		// epoch.
+		while (gm->quarantine_dequeue()) {}
+		// If we've emptied the quarantine, stop and report success.
+		if (gm->heapQuarantineSize == 0)
+		{
+			return 0;
+		}
+		// Wait for the revocation epoch to expire.
+		if (!wait_for_background_revoker(timeout, epoch, g))
+		{
+			return -ETIMEDOUT;
+		}
+		// Remove everything that was freed with the previous revocation.
+		while (gm->quarantine_dequeue()) {}
+		Debug::log("{} bytes left in quarantine", gm->heapQuarantineSize);
+		return 0;
 	}
+
+	return -ETIMEDOUT;
 }
 
-__cheriot_minimum_stack(0x210) void *heap_allocate(Timeout *timeout,
-                                                   SObj     heapCapability,
-                                                   size_t   bytes,
-                                                   uint32_t flags)
+__cheriot_minimum_stack(0x220) void *heap_allocate(
+  Timeout            *timeout,
+  AllocatorCapability heapCapability,
+  size_t              bytes,
+  uint32_t            flags)
 {
-	STACK_CHECK(0x210);
+	STACK_CHECK(0x220);
 	if (!check_timeout_pointer(timeout))
 	{
-		return nullptr;
+		return reinterpret_cast<void *>(-EINVAL);
 	}
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
-		return nullptr;
-	}
-	if (!check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
-	      timeout))
-	{
-		return nullptr;
+		return reinterpret_cast<void *>(-EPERM);
 	}
 	// Use the default memory space.
 	return malloc_internal(bytes, std::move(g), cap, timeout, false, flags);
 }
 
 __cheriot_minimum_stack(0x1c0) ssize_t
-  heap_claim(SObj heapCapability, void *pointer)
+  heap_claim(AllocatorCapability heapCapability, void *pointer)
 {
 	STACK_CHECK(0x1c0);
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
-		Debug::log("Invalid heap cap");
-		return 0;
+		Debug::log<DebugLevel::Warning>("Invalid heap cap");
+		return -EPERM;
 	}
 	if (!Capability{pointer}.is_valid())
 	{
-		Debug::log("Invalid claimed cap");
-		return 0;
+		Debug::log<DebugLevel::Warning>("Invalid claimed cap");
+		return -EINVAL;
 	}
 	auto *chunk = gm->allocation_start(Capability{pointer}.address());
 	if (chunk == nullptr)
 	{
-		Debug::log("chunk not found");
-		return 0;
+		Debug::log<DebugLevel::Warning>("chunk not found");
+		return -EINVAL;
 	}
 	if (claim_add(*cap, *chunk))
 	{
 		return gm->chunk_body_size(*chunk);
 	}
-	Debug::log("failed to add claim");
-	return 0;
+	Debug::log<DebugLevel::Warning>("failed to add claim");
+	return -ENOMEM;
 }
 
-__cheriot_minimum_stack(0x260) int heap_can_free(SObj  heapCapability,
-                                                 void *rawPointer)
+static constexpr size_t HeapFreeStackUsage = 0x260;
+
+__cheriot_minimum_stack(HeapFreeStackUsage) int heap_can_free(
+  AllocatorCapability heapCapability,
+  void               *rawPointer)
 {
 	// This function requires much less space, but we claim that we require as
 	// much as `heap_free` so that a call to `heap_free` will not fail due to
 	// insufficient stack immediately after `heap_can_free` has said that it's
 	// fine.
-	STACK_CHECK(0x260);
+	STACK_CHECK(HeapFreeStackUsage);
 	LockGuard g{lock};
 	return heap_free_internal(heapCapability, rawPointer, false);
 }
 
-__cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
-                                             void *rawPointer)
+int heap_free_nostackcheck(AllocatorCapability heapCapability, void *rawPointer)
 {
-	// If this value changes, update `heap_can_free` as well.
-	STACK_CHECK(0x260);
 	LockGuard g{lock};
 	int       ret = heap_free_internal(heapCapability, rawPointer, true);
 	if (ret != 0)
@@ -958,14 +995,24 @@ __cheriot_minimum_stack(0x260) int heap_free(SObj  heapCapability,
 	return 0;
 }
 
-__cheriot_minimum_stack(0x190) ssize_t heap_free_all(SObj heapCapability)
+__cheriot_minimum_stack(HeapFreeStackUsage) int heap_free(
+  AllocatorCapability heapCapability,
+  void               *rawPointer)
 {
-	STACK_CHECK(0x190);
+	STACK_CHECK(HeapFreeStackUsage);
+	return heap_free_nostackcheck(heapCapability, rawPointer);
+}
+
+__cheriot_minimum_stack(0x1a0) ssize_t
+  heap_free_all(AllocatorCapability heapCapability)
+{
+	STACK_CHECK(0x1a0);
 	LockGuard g{lock};
 	auto     *capability = malloc_capability_unseal(heapCapability);
 	if (capability == nullptr)
 	{
-		Debug::log("Invalid heap capability {}", heapCapability);
+		Debug::log<DebugLevel::Warning>("Invalid heap capability {}",
+		                                heapCapability);
 		return -EPERM;
 	}
 
@@ -997,33 +1044,29 @@ __cheriot_minimum_stack(0x190) ssize_t heap_free_all(SObj heapCapability)
 	return freed;
 }
 
-__cheriot_minimum_stack(0x210) void *heap_allocate_array(Timeout *timeout,
-                                                         SObj   heapCapability,
-                                                         size_t nElements,
-                                                         size_t elemSize,
-                                                         uint32_t flags)
+__cheriot_minimum_stack(0x230) void *heap_allocate_array(
+  Timeout            *timeout,
+  AllocatorCapability heapCapability,
+  size_t              nElements,
+  size_t              elemSize,
+  uint32_t            flags)
 {
-	STACK_CHECK(0x210);
+	STACK_CHECK(0x230);
 	if (!check_timeout_pointer(timeout))
 	{
-		return nullptr;
+		return reinterpret_cast<void *>(-EINVAL);
 	}
 	LockGuard g{lock};
 	auto     *cap = malloc_capability_unseal(heapCapability);
 	if (cap == nullptr)
 	{
-		return nullptr;
+		return reinterpret_cast<void *>(-EPERM);
 	}
 	// Use the default memory space.
 	size_t req;
 	if (__builtin_mul_overflow(nElements, elemSize, &req))
 	{
-		return nullptr;
-	}
-	if (!check_pointer<PermissionSet{Permission::Load, Permission::Store}>(
-	      timeout))
-	{
-		return nullptr;
+		return reinterpret_cast<void *>(-EINVAL);
 	}
 	return malloc_internal(req, std::move(g), cap, timeout, false, flags);
 }
@@ -1036,32 +1079,28 @@ namespace
 	 */
 	uint32_t nextSealingType = std::numeric_limits<uint32_t>::max();
 
-	/**
-	 * Helper that unseals `in` if it is a valid sealed capability sealed with
-	 * our hardware sealing key.  Returns the unsealed pointer, `nullptr` if it
-	 * cannot be helped.
+	/// A type alias for a sealed capability to a token object.
+	using SealedTokenHandle = CHERI::Capability<TokenObjectType, true>;
+
+	/*
+	 * A type alias for an unsealed capability to a token object.  The template
+	 * parameter distinguishes whether the token object header is in bounds
+	 * (that is, whether this capability must be considered secret).
 	 */
-	SealedAllocation unseal_if_valid(SealedAllocation in)
-	{
-		// The input must be tagged and sealed with our type.
-		// FIXME: At the moment the ISA is still shuffling types around, but
-		// eventually we want to know the type statically and don't need dynamic
-		// instructions.
-		in.unseal(allocatorSealingKey);
-		return in.is_valid() ? in : SealedAllocation{nullptr};
-	}
+	template<bool HeaderInBounds>
+	using TokenHandle = CHERI::Capability<TokenObjectType, false>;
 
 	/**
 	 * Helper that allocates a sealed object and returns the sealed and
 	 * unsealed capabilities to the object.  Requires that the sealing key have
 	 * all of the permissions in `permissions`.
 	 */
-	std::pair<SObj, void *>
-	  __noinline allocate_sealed_unsealed(Timeout      *timeout,
-	                                      SObj          heapCapability,
-	                                      SealingKey    key,
-	                                      size_t        requestedSize,
-	                                      PermissionSet permissions)
+	std::pair<SealedTokenHandle, TokenHandle<false>>
+	  __noinline allocate_sealed_unsealed(Timeout            *timeout,
+	                                      AllocatorCapability heapCapability,
+	                                      SealingKey          key,
+	                                      size_t              requestedSize,
+	                                      PermissionSet       permissions)
 	{
 		if (!check_timeout_pointer(timeout))
 		{
@@ -1070,7 +1109,7 @@ namespace
 
 		if (!permissions.can_derive_from(key.permissions()))
 		{
-			Debug::log(
+			Debug::log<DebugLevel::Warning>(
 			  "Operation requires {}, cannot derive from {}", permissions, key);
 			return {nullptr, nullptr};
 		}
@@ -1083,7 +1122,8 @@ namespace
 		// Very large sizes may be rounded 'up' to zero.  Don't allow this.
 		if (unsealedSize == 0)
 		{
-			Debug::log("Requested size {} is not representable", requestedSize);
+			Debug::log<DebugLevel::Warning>(
+			  "Requested size {} is not representable", requestedSize);
 			return {nullptr, nullptr};
 		}
 
@@ -1092,11 +1132,13 @@ namespace
 		// encodings, so we'll do a tiny bit of extra work here to avoid
 		// accidentally introducing a security vulnerability in a future
 		// encoding.
-		size_t sealedSize = unsealedSize + ObjHdrSize;
-		if (__builtin_add_overflow(ObjHdrSize, unsealedSize, &sealedSize))
+		size_t sealedSize;
+		if (__builtin_add_overflow(
+		      sizeof(TokenObjectHeader), unsealedSize, &sealedSize))
 		{
-			Debug::log("Requested size {} is too large to include header",
-			           requestedSize);
+			Debug::log<DebugLevel::Warning>(
+			  "Requested size {} is too large to include header",
+			  requestedSize);
 			return {nullptr, nullptr};
 		}
 
@@ -1106,15 +1148,20 @@ namespace
 		{
 			return {nullptr, nullptr};
 		}
-		SealedAllocation obj{static_cast<SObj>(malloc_internal(
-		  sealedSize, std::move(g), capability, timeout, true))};
-		if (obj == nullptr)
+		CHERI::Capability underlyingAllocation{
+		  malloc_internal(sealedSize, std::move(g), capability, timeout, true)};
+		if (!underlyingAllocation.is_valid())
 		{
-			Debug::log("Underlying allocation failed for sealed object");
+			Debug::log<DebugLevel::Warning>(
+			  "Underlying allocation failed for sealed object");
 			return {nullptr, nullptr};
 		}
-		obj.address() = obj.top() - sealedSize;
-		// Round down the base to the heap alignment size.
+
+		// Allocate space at the top for the payload.
+		auto headerThenPayload = underlyingAllocation.cast<TokenObjectHeader>();
+		headerThenPayload.address() = headerThenPayload.top() - sealedSize;
+
+		// Round down the base to the heap alignment size, padding the payload.
 		// This ensures that the header is aligned and gives the same alignment
 		// as a normal allocation.  We will already be this aligned for most
 		// requested sizes.  The allocator always aligns the top and bottom of
@@ -1124,20 +1171,29 @@ namespace
 		// the header and the start of the unsealed object.  If the
 		// representable-length rounding of the requested size increased the
 		// requested alignment beyond 8, this will be a no-op.
-		obj.align_down(MallocAlignment);
+		headerThenPayload.align_down(MallocAlignment);
 
-		obj->type   = key.address();
-		auto sealed = obj;
-		sealed.seal(allocatorSealingKey);
-		obj.address() += ObjHdrSize; // Exclude the header.
-		obj.bounds() = obj.top() - obj.address();
-		Debug::Assert(
-		  obj.is_valid(), "Unsealed object {} is not representable", obj);
-		return {sealed, obj};
+		headerThenPayload->type = key.address();
+
+		TokenHandle<true> payloadAfterHeader{
+		  reinterpret_cast<TokenObjectType *>(headerThenPayload.get())};
+		payloadAfterHeader.address() += sizeof(TokenObjectHeader);
+
+		// Sealed points at payload but can access header, at negative offset
+		auto sealed = payloadAfterHeader.seal(allocatorSealingKey);
+
+		// Unsealed points at payload and can access only payload
+		TokenHandle<false> payload{payloadAfterHeader.get()};
+		payload.bounds() = payload.top() - payload.address();
+
+		Debug::Assert(payload.is_valid(),
+		              "Unsealed object {} is not representable",
+		              payload);
+		return {sealed, payload};
 	}
 } // namespace
 
-SKey token_key_new()
+TokenKey token_key_new()
 {
 	// This needs protecting against races but doesn't touch any other data
 	// structures and so can have its own lock.
@@ -1160,37 +1216,46 @@ SKey token_key_new()
 	return nullptr;
 }
 
-__cheriot_minimum_stack(0x280) SObj
-  token_sealed_unsealed_alloc(Timeout *timeout,
-                              SObj     heapCapability,
-                              SKey     key,
-                              size_t   sz,
-                              void   **unsealed)
+__cheriot_minimum_stack(0x290) CHERI_SEALED(void *)
+  token_sealed_unsealed_alloc(Timeout            *timeout,
+                              AllocatorCapability heapCapability,
+                              TokenKey            key,
+                              size_t              sz,
+                              void              **unsealed)
 {
-	STACK_CHECK(0x280);
+	STACK_CHECK(0x290);
 	if (!check_timeout_pointer(timeout))
 	{
-		return INVALID_SOBJ;
+		return nullptr;
 	}
 	auto [sealed, obj] = allocate_sealed_unsealed(
 	  timeout, heapCapability, key, sz, {Permission::Seal, Permission::Unseal});
 	{
+		/*
+		 * Write the unsealed capability through the out parameter, while
+		 * holding the allocator lock.  That's a little heavy-handed, but it
+		 * suffices to ensure that it won't be freed out from under us, so
+		 * if it passes `check_pointer`, then the store won't trap.
+		 */
 		LockGuard g{lock};
 		if (check_pointer<PermissionSet{
 		      Permission::Store, Permission::LoadStoreCapability}>(unsealed))
 		{
 			*unsealed = obj;
-			return sealed;
 		}
 	}
-	heap_free(heapCapability, obj);
-	return INVALID_SOBJ;
+	/*
+	 * Regardless of whether we were able to store the unsealed pointer, return
+	 * the sealed object.
+	 */
+	return sealed;
 }
 
-__cheriot_minimum_stack(0x260) SObj token_sealed_alloc(Timeout *timeout,
-                                                       SObj     heapCapability,
-                                                       SKey     rawKey,
-                                                       size_t   sz)
+__cheriot_minimum_stack(0x260) CHERI_SEALED(void *)
+  token_sealed_alloc(Timeout            *timeout,
+                     AllocatorCapability heapCapability,
+                     TokenKey            rawKey,
+                     size_t              sz)
 {
 	STACK_CHECK(0x260);
 	return allocate_sealed_unsealed(
@@ -1202,33 +1267,48 @@ __cheriot_minimum_stack(0x260) SObj token_sealed_alloc(Timeout *timeout,
  * Helper used to unseal a sealed object with a given key.  Performs all of the
  * relevant checks and returns nullptr if this is not a valid key and object
  * sealed with that key.
+ *
+ * Call with the allocator lock held.
  */
-__noinline static SealedAllocation unseal_internal(SKey rawKey, SObj obj)
+__noinline static TokenHandle<true>
+unseal_internal(TokenKey key, CHERI_SEALED(TokenObjectType *) object)
 {
-	SealingKey key{rawKey};
-	Capability unsealedInner = token_unseal<void>(key, obj);
+	Capability unsealedInner{token_obj_unseal_dynamic(key, object)};
 	if (!unsealedInner.is_valid())
 	{
 		return nullptr;
 	}
 
-	if (!key.permissions().contains(Permission::Unseal))
-	{
-		return nullptr;
-	}
-
-	return unseal_if_valid(obj);
+	/*
+	 * The call to token_obj_unseal_dynamic above has already done this unseal,
+	 * but will not share the result with us.  That said, if we get here, the
+	 * object capability was tagged and unsealed correctly inside that call.
+	 * Since we (by assumption) hold the allocator lock, there is no TOCTTOU and
+	 * it remains tagged and unsealable; it is, in particular, not possible that
+	 * the underlying allocation has been freed between that check and now, so
+	 * we need not check the result of this unseal for validity.
+	 *
+	 * It has also already checked that the key is tagged, has positive length,
+	 * has address equal to its base, and grants unseal (US) permission.  These
+	 * are properties of the capability, which is not subject to revocation, and
+	 * so still hold.
+	 */
+	return Capability{object}.unseal(allocatorSealingKey);
 }
 
-__cheriot_minimum_stack(0x260) int token_obj_destroy(SObj heapCapability,
-                                                     SKey key,
-                                                     SObj object)
+static constexpr size_t TokenObjDestroyStackUsage = 0x270;
+
+__cheriot_minimum_stack(TokenObjDestroyStackUsage) int token_obj_destroy(
+  AllocatorCapability heapCapability,
+  TokenKey            key,
+  CHERI_SEALED(void *) object)
 {
-	STACK_CHECK(0x260);
-	void *unsealed;
+	STACK_CHECK(TokenObjDestroyStackUsage);
+	TokenHandle<true> unsealed;
 	{
 		LockGuard g{lock};
-		unsealed = unseal_internal(key, object);
+		unsealed = unseal_internal(
+		  key, reinterpret_cast<CHERI_SEALED(TokenObjectType *)>(object));
 		if (unsealed == nullptr)
 		{
 			return -EINVAL;
@@ -1239,18 +1319,24 @@ __cheriot_minimum_stack(0x260) int token_obj_destroy(SObj heapCapability,
 		// The key can't be revoked and so there is no race with the key going
 		// away after the check.
 	}
-	return heap_free(heapCapability, unsealed);
+
+	// The sealed pointer was an interior address; move back to the base
+	unsealed.address() = unsealed.base();
+
+	return heap_free_nostackcheck(heapCapability, unsealed);
 }
 
-__cheriot_minimum_stack(0xf0) int token_obj_can_destroy(SObj heapCapability,
-                                                        SKey key,
-                                                        SObj object)
+__cheriot_minimum_stack(TokenObjDestroyStackUsage) int token_obj_can_destroy(
+  AllocatorCapability heapCapability,
+  TokenKey            key,
+  CHERI_SEALED(void *) object)
 {
-	STACK_CHECK(0xf0);
-	void *unsealed;
+	STACK_CHECK(TokenObjDestroyStackUsage);
+	TokenHandle<true> unsealed;
 	{
 		LockGuard g{lock};
-		unsealed = unseal_internal(key, object);
+		unsealed = unseal_internal(
+		  key, reinterpret_cast<CHERI_SEALED(TokenObjectType *)>(object));
 		if (unsealed == nullptr)
 		{
 			return -EINVAL;
@@ -1261,10 +1347,24 @@ __cheriot_minimum_stack(0xf0) int token_obj_can_destroy(SObj heapCapability,
 		// The key can't be revoked and so there is no race with the key going
 		// away after the check.
 	}
+
+	// The sealed pointer was an interior address; move back to the base
+	unsealed.address() = unsealed.base();
+
 	return heap_can_free(heapCapability, unsealed);
 }
 
 size_t heap_available()
 {
 	return gm->heapFreeSize;
+}
+
+[[cheriot::interrupt_state(disabled)]] int heap_render()
+{
+#if HEAP_RENDER
+	LockGuard g{lock};
+	check_gm();
+	gm->render();
+#endif
+	return 0;
 }

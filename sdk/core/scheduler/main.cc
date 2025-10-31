@@ -14,7 +14,6 @@
 #include <futex.h>
 #include <interrupt.h>
 #include <locks.hh>
-#include <new>
 #include <priv/riscv.h>
 #include <riscvreg.h>
 #include <simulator.h>
@@ -31,9 +30,10 @@ using namespace CHERI;
 /**
  * Exit simulation, reporting the error code given as the argument.
  */
-void simulation_exit(uint32_t code)
+int scheduler_simulation_exit(uint32_t code)
 {
 	platform_simulation_exit(code);
+	return -EPROTO;
 }
 #endif
 
@@ -44,6 +44,8 @@ static uint64_t cyclesAtLastSchedulingEvent;
 
 namespace
 {
+	constexpr bool UseMultiwaiters = SCHEDULER_MULTIWAITER;
+
 	/**
 	 * Priority-sorted list of threads waiting for a futex.
 	 */
@@ -121,6 +123,26 @@ namespace
 	 */
 	static constexpr auto UnboundedSleep = std::numeric_limits<uint32_t>::max();
 
+	enum FutexWakeKind
+	{
+		/**
+		 * The futex wake did not make any threads runnable that would be
+		 * scheduled preemptively.
+		 */
+		NoYield,
+		/**
+		 * The futex wake made a thread at the current priority level runnable,
+		 * the caller should ensure that there is a timer interrupt scheduled
+		 * to make the current thread yield later.
+		 */
+		YieldLater,
+		/**
+		 * The futex wake made a thread at a higher priority level runnable,
+		 * the caller should yield to allow the other thread to run immediately.
+		 */
+		YieldNow,
+	};
+
 	/**
 	 * Helper that wakes a set of up to `count` threads waiting on the futex
 	 * whose address is given by the `key` parameter.
@@ -133,11 +155,10 @@ namespace
 	 *    dropped back to the previous priority.
 	 *  - The number of sleeper that were awoken.
 	 */
-	std::tuple<bool, bool, int>
+	std::tuple<bool, int>
 	futex_wake(ptraddr_t key,
 	           uint32_t  count = std::numeric_limits<uint32_t>::max())
 	{
-		bool shouldYield                    = false;
 		bool shouldRecalculatePriorityBoost = false;
 		// The number of threads that we've woken, this is the return value on
 		// success.
@@ -149,28 +170,29 @@ namespace
 			  {
 				  shouldRecalculatePriorityBoost |=
 				    thread->futexPriorityInheriting;
-				  shouldYield = thread->ready(Thread::WakeReason::Futex);
+				  thread->ready(Thread::WakeReason::Futex);
+				  Debug::log("futex_wake woke thread {}", thread->id_get());
 				  count--;
 				  woke++;
 			  }
 		  },
 		  [&]() { return count == 0; });
 
-		if (count > 0)
+		if constexpr (UseMultiwaiters)
 		{
-			auto multiwaitersWoken =
-			  MultiWaiterInternal::wake_waiters(key, count);
-			count -= multiwaitersWoken;
-			woke += multiwaitersWoken;
-			shouldYield |= (multiwaitersWoken > 0);
+			if (count > 0)
+			{
+				auto multiwaitersWoken =
+				  MultiWaiterInternal::wake_waiters(key, count);
+				count -= multiwaitersWoken;
+				woke += multiwaitersWoken;
+			}
+			Debug::log("futex_wake on {} woke {} waiters", key, woke);
 		}
-		return {shouldYield, shouldRecalculatePriorityBoost, woke};
+
+		return {shouldRecalculatePriorityBoost, woke};
 	}
 
-} // namespace
-
-namespace sched
-{
 	using namespace priv;
 
 	/**
@@ -192,30 +214,6 @@ namespace sched
 		return &(reinterpret_cast<Thread *>(threadSpaces))[threadId - 1];
 	}
 
-	[[cheri::interrupt_state(disabled)]] void __cheri_compartment("sched")
-	  scheduler_entry(const ThreadLoaderInfo *info)
-	{
-		Debug::Invariant(Capability{info}.length() ==
-		                   sizeof(*info) * CONFIG_THREADS_NUM,
-		                 "Thread info is {} bytes, expected {} for {} threads",
-		                 Capability{info}.length(),
-		                 sizeof(*info) * CONFIG_THREADS_NUM,
-		                 CONFIG_THREADS_NUM);
-
-		for (size_t i = 0; auto *threadSpace : threadSpaces)
-		{
-			Debug::log("Created thread for trusted stack {}",
-			           info[i].trustedStack);
-			Thread *th = new (threadSpace)
-			  Thread(info[i].trustedStack, i + 1, info[i].priority);
-			th->ready(Thread::WakeReason::Timer);
-			i++;
-		}
-
-		InterruptController::master_init();
-		Timer::interrupt_setup();
-	}
-
 	static void __dead2 sched_panic(size_t mcause, size_t mepc, size_t mtval)
 	{
 		size_t capcause = mtval & 0x1f;
@@ -228,108 +226,15 @@ namespace sched
 		           static_cast<uint32_t>(capcause),
 		           badcap);
 
+#ifdef SIMULATION
 		// If we're in simulation, exit here
-		simulation_exit(1);
+		platform_simulation_exit(1);
+#endif
 
 		for (;;)
 		{
 			wfi();
 		}
-	}
-
-	[[cheri::interrupt_state(disabled)]] TrustedStack *
-	  __cheri_compartment("sched") exception_entry(TrustedStack *sealedTStack,
-	                                               size_t        mcause,
-	                                               size_t        mepc,
-	                                               size_t        mtval)
-	{
-		if constexpr (DebugScheduler)
-		{
-			/* Ensure that we got here from an IRQ-s deferred context */
-			Capability returnAddress{__builtin_return_address(0)};
-			Debug::Assert(
-			  returnAddress.type() == CheriSealTypeReturnSentryDisabling,
-			  "Scheduler exception_entry called from IRQ-enabled context");
-		}
-
-		// The cycle count value the last time the scheduler returned.
-		bool schedNeeded;
-		if constexpr (Accounting)
-		{
-			uint64_t  currentCycles = rdcycle64();
-			auto     *thread        = Thread::current_get();
-			uint64_t &threadCycleCounter =
-			  thread ? thread->cycles : Thread::idleThreadCycles;
-			auto elapsedCycles = currentCycles - cyclesAtLastSchedulingEvent;
-			threadCycleCounter += elapsedCycles;
-		}
-
-		ExceptionGuard g{[=]() { sched_panic(mcause, mepc, mtval); }};
-
-		bool tick = false;
-		switch (mcause)
-		{
-			// Explicit yield call
-			case MCAUSE_ECALL_MACHINE:
-			{
-				schedNeeded           = true;
-				Thread *currentThread = Thread::current_get();
-				tick = currentThread && currentThread->is_ready();
-				break;
-			}
-			case MCAUSE_INTR | MCAUSE_MTIME:
-				schedNeeded = true;
-				tick        = true;
-				break;
-			case MCAUSE_INTR | MCAUSE_MEXTERN:
-				schedNeeded = false;
-				InterruptController::master().do_external_interrupt().and_then(
-				  [&](uint32_t &word) {
-					  // Increment the futex word so that anyone preempted on
-					  // the way into the scheduler sleeping on its old value
-					  // will still see this update.
-					  word++;
-					  // Wake anyone sleeping on this futex.  Interrupt futexes
-					  // are not priority inheriting.
-					  std::tie(schedNeeded, std::ignore, std::ignore) =
-					    futex_wake(Capability{&word}.address());
-				  });
-				tick = schedNeeded;
-				break;
-			case MCAUSE_THREAD_EXIT:
-				// Make the current thread non-runnable.
-				if (Thread::exit())
-				{
-					// If we have no threads left (not counting the idle
-					// thread), exit.
-					simulation_exit(0);
-				}
-				// We cannot continue exiting this thread, make sure we will
-				// pick a new one.
-				schedNeeded  = true;
-				tick         = true;
-				sealedTStack = nullptr;
-				break;
-			default:
-				sched_panic(mcause, mepc, mtval);
-		}
-		if (tick || !Thread::any_ready())
-		{
-			Timer::expiretimers();
-		}
-		auto newContext =
-		  schedNeeded ? Thread::schedule(sealedTStack) : sealedTStack;
-#if 0
-		Debug::log("Thread: {}",
-		           Thread::current_get() ? Thread::current_get()->id_get() : 0);
-#endif
-		Timer::update();
-
-		if constexpr (Accounting)
-		{
-			cyclesAtLastSchedulingEvent = rdcycle64();
-		}
-		return newContext;
 	}
 
 	/**
@@ -342,7 +247,7 @@ namespace sched
 	 * whether to yield at the end.
 	 */
 	template<typename T>
-	int typed_op(void *sealed, auto &&fn)
+	int typed_op(CHERI_SEALED(void *) sealed, auto &&fn)
 	{
 		auto *unsealed = T::template unseal<T>(sealed);
 		// If we can't unseal the sealed capability and have it be of the
@@ -375,29 +280,156 @@ namespace sched
 
 	/// Helper to safely deallocate an instance of `T`.
 	template<typename T>
-	int deallocate(SObjStruct *heapCapability, void *object)
+	int deallocate(AllocatorCapability heapCapability, CHERI_SEALED(T *) object)
 	{
+		static_assert(T::IsDynamic);
+
 		// Acquire the lock and hold it. We need to be careful of two attempts
 		// to free the same object racing, so we cause others to back up behind
 		// this one.  They will then fail in the unseal operation.
 		LockGuard g{deallocLock};
 		return typed_op<T>(object, [&](T &unsealed) {
-			if (int ret = heap_can_free(heapCapability, &unsealed); ret != 0)
+			if (int ret = token_obj_can_destroy(
+			      heapCapability, T::sealing_type(), object);
+			    ret != 0)
 			{
 				return ret;
 			}
 			unsealed.~T();
-			heap_free(heapCapability, &unsealed);
-			return 0;
+			return token_obj_destroy(heapCapability, T::sealing_type(), object);
 		});
 	}
 
-} // namespace sched
+} // namespace
 
-using namespace sched;
+[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+  scheduler_entry(const ThreadLoaderInfo *info)
+{
+	Debug::Invariant(Capability{info}.length() ==
+	                   sizeof(*info) * CONFIG_THREADS_NUM,
+	                 "Thread info is {} bytes, expected {} for {} threads",
+	                 Capability{info}.length(),
+	                 sizeof(*info) * CONFIG_THREADS_NUM,
+	                 CONFIG_THREADS_NUM);
+
+	for (size_t i = 0; auto *threadSpace : threadSpaces)
+	{
+		Debug::log("Created thread for trusted stack {}", info[i].trustedStack);
+		Thread *th = new (threadSpace)
+		  Thread(info[i].trustedStack, i + 1, info[i].priority);
+		th->ready(Thread::WakeReason::Timer);
+		i++;
+	}
+
+	InterruptController::master_init();
+	Timer::interrupt_setup();
+
+	return 0;
+}
+
+[[cheriot::interrupt_state(disabled)]] CHERI_SEALED(TrustedStack *)
+  __cheri_compartment("scheduler")
+    exception_entry(CHERI_SEALED(TrustedStack *) sealedTStack,
+                    size_t mcause,
+                    size_t mepc,
+                    size_t mtval)
+{
+	if constexpr (DebugScheduler)
+	{
+		/* Ensure that we got here from an IRQ-s deferred context */
+		Capability returnAddress{__builtin_return_address(0)};
+		Debug::Assert(
+		  returnAddress.type() == CheriSealTypeReturnSentryDisabling,
+		  "Scheduler exception_entry called from IRQ-enabled context");
+	}
+
+	// The cycle count value the last time the scheduler returned.
+	bool schedNeeded;
+	if constexpr (Accounting)
+	{
+		uint64_t  currentCycles = rdcycle64();
+		auto     *thread        = Thread::current_get();
+		uint64_t &threadCycleCounter =
+		  thread ? thread->cycles : Thread::idleThreadCycles;
+		auto elapsedCycles = currentCycles - cyclesAtLastSchedulingEvent;
+		threadCycleCounter += elapsedCycles;
+	}
+
+	ExceptionGuard g{[=]() { sched_panic(mcause, mepc, mtval); }};
+
+	bool tick = false;
+	switch (mcause)
+	{
+		// Explicit yield call
+		case MCAUSE_ECALL_MACHINE:
+		{
+			schedNeeded           = true;
+			Thread *currentThread = Thread::current_get();
+			tick                  = currentThread && currentThread->is_ready();
+			break;
+		}
+		case MCAUSE_INTR | MCAUSE_MTIME:
+			schedNeeded = true;
+			tick        = true;
+			break;
+		case MCAUSE_INTR | MCAUSE_MEXTERN:
+			schedNeeded = false;
+			InterruptController::master().do_external_interrupt().and_then(
+			  [&](uint32_t &word) {
+				  // Increment the futex word so that anyone preempted on
+				  // the way into the scheduler sleeping on its old value
+				  // will still see this update.
+				  word++;
+				  // Wake anyone sleeping on this futex.  Interrupt futexes
+				  // are not priority inheriting.
+				  int woke;
+				  Debug::log("Waking waiters on interrupt futex {}", &word);
+				  std::tie(std::ignore, woke) =
+				    futex_wake(Capability{&word}.address());
+				  schedNeeded |= (woke > 0);
+			  });
+			tick = schedNeeded;
+			break;
+		case MCAUSE_THREAD_EXIT:
+			// Make the current thread non-runnable.
+			if (Thread::exit())
+			{
+#ifdef SIMULATION
+				// If we have no threads left (not counting the idle
+				// thread), exit.
+				platform_simulation_exit(0);
+#endif
+			}
+			// We cannot continue exiting this thread, make sure we will
+			// pick a new one.
+			schedNeeded  = true;
+			tick         = true;
+			sealedTStack = nullptr;
+			break;
+		default:
+			sched_panic(mcause, mepc, mtval);
+	}
+	if (tick || !Thread::any_ready())
+	{
+		Timer::expiretimers();
+	}
+	auto newContext =
+	  schedNeeded ? Thread::schedule(sealedTStack) : sealedTStack;
+#if 0
+	Debug::log("Thread: {}",
+				Thread::current_get() ? Thread::current_get()->id_get() : 0);
+#endif
+	Timer::update();
+
+	if constexpr (Accounting)
+	{
+		cyclesAtLastSchedulingEvent = rdcycle64();
+	}
+	return newContext;
+}
 
 // thread APIs
-SystickReturn __cheri_compartment("sched") thread_systemtick_get()
+SystickReturn __cheri_compartment("scheduler") thread_systemtick_get()
 {
 	uint64_t      ticks = Thread::ticksSinceBoot;
 	uint32_t      hi    = ticks >> 32;
@@ -407,7 +439,7 @@ SystickReturn __cheri_compartment("sched") thread_systemtick_get()
 	return ret;
 }
 
-__cheriot_minimum_stack(0x90) int __cheri_compartment("sched")
+__cheriot_minimum_stack(0x90) int __cheri_compartment("scheduler")
   thread_sleep(Timeout *timeout, uint32_t flags)
 {
 	STACK_CHECK(0x90);
@@ -509,16 +541,38 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(Timeout        *timeout,
 	return 0;
 }
 
-__cheriot_minimum_stack(0xa0) int futex_wake(uint32_t *address, uint32_t count)
+__cheriot_minimum_stack(0xd0) int futex_wake(uint32_t *address, uint32_t count)
 {
-	STACK_CHECK(0xa0);
-	if (!check_pointer<PermissionSet{Permission::Store}>(address))
+	STACK_CHECK(0xd0);
+	// Futex wake requires you to have a valid pointer, but doesn't require any
+	// permissions.  This allows some things to trigger spurious wakes, but
+	// ensures that the scheduler never needs a writeable capability to a
+	// futex.  This means that the worst a malicious scheduler can do is
+	// trigger spurious wakes, which the API permits and callers must handle.
+	if (!check_pointer<PermissionSet{}>(address))
 	{
 		return -EINVAL;
 	}
 	ptraddr_t key = Capability{address}.address();
 
-	auto [shouldYield, shouldResetPrioirity, woke] = futex_wake(key, count);
+	auto [shouldResetPrioirity, woke] = futex_wake(key, count);
+
+	FutexWakeKind shouldYield = NoYield;
+
+	if (woke > 0)
+	{
+		auto *thread = Thread::current_get();
+		if (!thread->is_highest_priority())
+		{
+			shouldYield = YieldNow;
+		}
+		else if (thread->has_priority_peers())
+		{
+			shouldYield =
+			  thread->has_run_for_full_tick() ? YieldNow : YieldLater;
+		}
+		Debug::log("futex_wake yielding? {}", shouldYield);
+	}
 
 	// If this futex wake is dropping a priority boost, reset the boost.
 	if (shouldResetPrioirity)
@@ -539,28 +593,36 @@ __cheriot_minimum_stack(0xa0) int futex_wake(uint32_t *address, uint32_t count)
 		  priority_boost_for_thread(currentThread->id_get()));
 		// If we have dropped priority below that of another runnable thread, we
 		// should yield now.
-		shouldYield |= !currentThread->is_highest_priority();
 	}
 
-	if (shouldYield)
+	switch (shouldYield)
 	{
-		yield();
+		case YieldLater:
+			Timer::ensure_tick();
+			break;
+		case YieldNow:
+			yield();
+			break;
+		case NoYield:
+			break;
 	}
 
 	return woke;
 }
 
+#if SCHEDULER_MULTIWAITER != false
+
 __cheriot_minimum_stack(0x60) int multiwaiter_create(
-  Timeout           *timeout,
-  struct SObjStruct *heapCapability,
-  MultiWaiter      **ret,
-  size_t             maxItems)
+  Timeout            *timeout,
+  AllocatorCapability heapCapability,
+  MultiWaiter        *ret,
+  size_t              maxItems)
 {
 	STACK_CHECK(0x60);
 	int error;
 	// Don't bother checking if timeout is valid, the allocator will check for
 	// us.
-	auto mw =
+	Capability mw =
 	  MultiWaiterInternal::create(timeout, heapCapability, maxItems, error);
 	if (!mw)
 	{
@@ -575,16 +637,16 @@ __cheriot_minimum_stack(0x60) int multiwaiter_create(
 	return 0;
 }
 
-__cheriot_minimum_stack(0x70) int multiwaiter_delete(
-  struct SObjStruct *heapCapability,
-  MultiWaiter       *mw)
+__cheriot_minimum_stack(0x90) int multiwaiter_delete(
+  AllocatorCapability heapCapability,
+  MultiWaiter         mw)
 {
-	STACK_CHECK(0x70);
+	STACK_CHECK(0x90);
 	return deallocate<MultiWaiterInternal>(heapCapability, mw);
 }
 
 __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
-                                                   MultiWaiter       *waiter,
+                                                   MultiWaiter        waiter,
                                                    EventWaiterSource *events,
                                                    size_t newEventsCount)
 {
@@ -608,6 +670,11 @@ __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
 		if (!check_timeout_pointer(timeout))
 		{
 			return -EINVAL;
+		}
+		if (mw.size() > 0)
+		{
+			Debug::log("Attempting wait on busy multiwaiter");
+			return -EBUSY;
 		}
 		switch (mw.set_events(events, newEventsCount))
 		{
@@ -643,17 +710,19 @@ __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
 	});
 }
 
+#endif // SCHEDULER_MULTIWAITER
+
 namespace
 {
 	/**
 	 * An interrupt capability.
 	 */
-	struct InterruptCapability : Handle</*IsDynamic=*/false>
+	struct InterruptCapabilityWrapper : Handle</*IsDynamic=*/false>
 	{
 		/**
 		 * Sealing type used by `Handle`.
 		 */
-		static SKey sealing_type()
+		static TokenKey sealing_type()
 		{
 			return STATIC_SEALING_TYPE(InterruptKey);
 		}
@@ -665,12 +734,12 @@ namespace
 	};
 } // namespace
 
-[[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
-  0x30) const uint32_t *interrupt_futex_get(struct SObjStruct *sealed)
+[[cheriot::interrupt_state(disabled)]] __cheriot_minimum_stack(
+  0x30) const uint32_t *interrupt_futex_get(InterruptCapability sealed)
 {
 	STACK_CHECK(0x30);
 	auto *interruptCapability =
-	  InterruptCapability::unseal<InterruptCapability>(sealed);
+	  InterruptCapabilityWrapper::unseal<InterruptCapabilityWrapper>(sealed);
 	uint32_t *result = nullptr;
 	if (interruptCapability && interruptCapability->state.mayWait)
 	{
@@ -678,6 +747,7 @@ namespace
 		  .futex_word_for_source(interruptCapability->state.interruptNumber)
 		  .and_then([&](uint32_t &word) {
 			  Capability capability{&word};
+			  capability.bounds() = sizeof(uint32_t);
 			  capability.permissions() &=
 			    {Permission::Load, Permission::Global};
 			  result = capability.get();
@@ -686,12 +756,12 @@ namespace
 	return result;
 }
 
-[[cheri::interrupt_state(disabled)]] __cheriot_minimum_stack(
-  0x20) int interrupt_complete(struct SObjStruct *sealed)
+[[cheriot::interrupt_state(disabled)]] __cheriot_minimum_stack(
+  0x30) int interrupt_complete(InterruptCapability sealed)
 {
-	STACK_CHECK(0x20);
+	STACK_CHECK(0x30);
 	auto *interruptCapability =
-	  InterruptCapability::unseal<InterruptCapability>(sealed);
+	  InterruptCapabilityWrapper::unseal<InterruptCapabilityWrapper>(sealed);
 	if (interruptCapability && interruptCapability->state.mayComplete)
 	{
 		InterruptController::master().interrupt_complete(
@@ -707,12 +777,12 @@ uint16_t thread_count()
 }
 
 #ifdef SCHEDULER_ACCOUNTING
-[[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
+[[cheriot::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_idle()
 {
 	return Thread::idleThreadCycles;
 }
 
-[[cheri::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_current()
+[[cheriot::interrupt_state(disabled)]] uint64_t thread_elapsed_cycles_current()
 {
 	// Calculate the number of cycles not yet reported to the current thread.
 	uint64_t currentCycles = rdcycle64();

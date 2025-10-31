@@ -27,7 +27,8 @@ using namespace CHERI;
 		  "" instructions "\n"                                                 \
 		  "cjalr ct2\n"                                                        \
 		  : /* no outputs; we're jumping and probably not coming back */       \
-		  : "C"(rfn), "r"(additional_input));                                  \
+		  : "C"(rfn), "r"(additional_input)                                    \
+		  : "ct2");                                                            \
                                                                                \
 		TEST(false, "Should be unreachable");                                  \
 	})
@@ -64,14 +65,16 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
  * Set up the handler expectations.  Takes the caller's error flag and
  * whether the handler is expected as arguments.
  */
-void set_expected_behaviour(bool *outTestFailed, bool handlerExpected)
+int set_expected_behaviour(bool *outTestFailed, bool handlerExpected)
 {
 	expectedHandler       = handlerExpected;
 	threadStackTestFailed = outTestFailed;
 	*outTestFailed        = handlerExpected;
+
+	return 0;
 }
 
-void exhaust_thread_stack()
+int exhaust_thread_stack()
 {
 	/* Move the compartment's stack near its end, in order to
 	 * trigger stack exhaustion while the switcher handles
@@ -92,6 +95,8 @@ void exhaust_thread_stack()
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
+
+	return 0;
 }
 
 /**
@@ -99,8 +104,16 @@ void exhaust_thread_stack()
  * callee-saved state.  The result should simply be an error return, rather than
  * a forced-unwind.
  */
-void exhaust_thread_stack_spill(__cheri_callback void (*fn)())
+int exhaust_thread_stack_spill(__cheri_callback int (*fn)())
 {
+	/*
+	 * The switcher spills five callee-save registers, but only after it checks
+	 * for 16-byte alignment of the stack pointer (and its base).  Leave
+	 * insufficient space for the whole spill while preserving alignment.
+	 */
+	constexpr size_t Stackleft = 2 * sizeof(void *);
+	static_assert((Stackleft & 0xf) == 0);
+
 	register auto      rfn asm("ct1") = fn;
 	register uintptr_t res asm("ca0") = 0;
 
@@ -109,9 +122,9 @@ void exhaust_thread_stack_spill(__cheri_callback void (*fn)())
 	  "cmove     cs0, csp\n"
 
 	  // Shrink the available stack space
-	  "cgetbase  s1, csp\n"
-	  "addi      s1, s1, %[stackleft]\n"
-	  "csetaddr  csp, csp, s1\n"
+	  "cgetbase  t2, csp\n"
+	  "addi      t2, t2, %[stackleft]\n"
+	  "csetaddr  csp, csp, t2\n"
 
 	  // Make the call
 	  "1:\n"
@@ -121,57 +134,77 @@ void exhaust_thread_stack_spill(__cheri_callback void (*fn)())
 
 	  "cmove     csp, cs0\n"
 	  : /* outs */ "+C"(res)
-	  : /* ins */[stackleft] "i"(sizeof(void *))
-	  : /* clobbers */ "ct2", "cs0", "cs1");
+	  : /* ins */[stackleft] "i"(Stackleft)
+	  : /* clobbers */
+	  "cs0" /* scratch in asm above */,
+	  "ct2" /* scratch in asm above */,
+	  "ca1" /* implicitly by the switcher, by .Lhandle_error_in_switcher */);
 
 	*threadStackTestFailed = false;
-	TEST(res == -ENOTENOUGHSTACK, "Bad return {}", res);
+	TEST_EQUAL(res, -ENOTENOUGHSTACK, "Bad return value for stack exhaustion");
+
+	return 0;
 }
 
-void set_csp_permissions_on_fault(PermissionSet newPermissions)
+int set_csp_permissions_on_fault(PermissionSet newPermissions)
 {
 	__asm__ volatile(
 	  "candperm csp, csp, %0\n"
 	  "csh      zero, 0(cnull)\n" ::"r"(newPermissions.as_raw()));
 
 	TEST(false, "Should be unreachable");
+	return -EINVAL;
 }
 
-void set_csp_permissions_on_call(PermissionSet newPermissions,
-                                 __cheri_callback void (*fn)())
+int set_csp_permissions_on_call(PermissionSet newPermissions,
+                                __cheri_callback int (*fn)())
 {
 	CALL_CHERI_CALLBACK(fn, "candperm csp, csp, %1\n", newPermissions.as_raw());
 
 	TEST(false, "Should be unreachable");
+	return -EINVAL;
 }
 
-void test_stack_invalid_on_fault()
+int test_stack_invalid_on_fault()
 {
 	__asm__ volatile("ccleartag     csp, csp\n"
 	                 "csh           zero, 0(cnull)\n");
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
+	return -EINVAL;
 }
 
-void test_stack_invalid_on_call(__cheri_callback void (*fn)())
+int test_stack_invalid_on_call(__cheri_callback int (*fn)())
 {
 	// the `move zero, %1` is a no-op, just to have an operand
 	CALL_CHERI_CALLBACK(fn, "move zero, %1\nccleartag csp, csp\n", 0);
 
 	*threadStackTestFailed = true;
 	TEST(false, "Should be unreachable");
+	return -EINVAL;
 }
 
-void self_recursion(__cheri_callback void (*fn)())
+int test_stack_global_on_call(__cheri_callback int (*fn)())
+{
+	// the `move zero, %1` is a no-op, just to have an operand
+	CALL_CHERI_CALLBACK(fn, "move zero, %1\ncmove csp, cgp\n", 0);
+
+	*threadStackTestFailed = true;
+	TEST(false, "Should be unreachable");
+	return -EINVAL;
+}
+
+int self_recursion(__cheri_callback int (*fn)())
 {
 	(*fn)();
+	return 0;
 }
 
-void exhaust_trusted_stack(__cheri_callback void (*fn)(),
-                           bool *outLeakedSwitcherCapability)
+int exhaust_trusted_stack(__cheri_callback int (*fn)(),
+                          bool *outLeakedSwitcherCapability)
 {
-	self_recursion(fn);
+	return self_recursion(fn);
 }
 
 int test_stack_requirement()

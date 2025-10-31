@@ -1,2 +1,2 @@
 library("crt")
-  add_files("cz.c", "arith64.c")
+  add_files("arith64.c")

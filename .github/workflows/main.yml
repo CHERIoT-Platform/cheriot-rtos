@@ -1,5 +1,15 @@
 name: CHERIoT RTOS Tests
 
+# The following should ensure that the workflow only runs a single set of actions
+# for each PR. But it will not apply this to pushes to the main branch.
+#
+# Shamelessly stolen from https://github.com/microsoft/snmalloc/pull/760 with
+# the addition of ${{ github.workflow }} to the group name; for details, see
+# https://docs.github.com/en/enterprise-cloud@latest/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 on:
   push:
     branches: [ main ]
@@ -7,26 +17,31 @@ on:
     branches: [ main ]
   merge_group:
   workflow_dispatch:
+    inputs:
+      devcontainer:
+        description: 'Set to override default build container'
+        type: string
+        required: false
 
 jobs:
   run-tests:
     strategy:
-      matrix: 
+      matrix:
         build-type: [ debug, release ]
         board: [ sail, ibex-safe-simulator ]
         include:
           - build-type: debug
-            build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=y -m debug
+            build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=information --allocator-rendering=y -m debug  --print-doubles=y --print-floats=n
           - build-type: release
-            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=n -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=n --print-floats=y
       fail-fast: false
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cheriot-platform/devcontainer:latest
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
       options: --user 1001
     steps:
     - name: Checkout repository and submodules
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Build tests
@@ -38,6 +53,58 @@ jobs:
       run: |
         cd tests
         xmake run
+
+  run-tests-sonata:
+    strategy:
+      matrix:
+        testset-flags:
+          - --most-tests=y --test-allocator=n
+          - --most-tests=n --test-allocator=y
+      fail-fast: false
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build tests
+      run: |
+        cd tests
+        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=y --print-floats=y ${{ matrix.testset-flags }}
+        xmake
+    - name: Run tests
+      run: |
+        cd tests
+        xmake run
+
+  run-examples:
+    strategy:
+      matrix:
+        build-type: [ debug, release ]
+        board: [ sail, ibex-safe-simulator ]
+        include:
+          - sonata: false
+          - build-type: debug
+            build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=information --allocator-rendering=y -m debug  --print-doubles=y --print-floats=n
+          - build-type: release
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=n --print-floats=y
+          - board: sonata-simulator
+            build-type: release
+            build-flags: --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=y --print-floats=y
+            sonata: true
+      fail-fast: false
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
     - name: Build examples
       run: |
         set -e
@@ -47,7 +114,7 @@ jobs:
           xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
           xmake
         done
-    - name: Run examples 
+    - name: Run examples
       run: |
         set -e
         for example_dir in $PWD/examples/*/; do
@@ -65,23 +132,79 @@ jobs:
           xmake
         done
 
+  test-bigdata:
+    name: Check that we can build and run the bigdata tests
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build and run a few tests
+      run: |
+        set -e
+        cd $PWD/tests
+        xmake f --board=sail --sdk=/cheriot-tools/ --most-tests=n --test-bigdata=y
+        xmake
+        xmake run
+
+  sonata-sram-hello:
+    name: Check Sonata SRAM-only Hello World
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
+      options: --user 1001
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build and run hello world
+      run: |
+        set -e
+        cd $PWD/examples/03.hello_safe_compartment/
+        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --board-mixins=sonata-1.x-sram-mixin --allocator=false
+        xmake
+        env SONATA_SIMULATOR_BOOT_STUB=/cheriot-tools/elf/sonata_simulator_sram_boot_stub xmake run
+
   check-format:
     name: Check coding conventions
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cheriot-platform/devcontainer:latest
+      image: ${{ inputs.devcontainer || 'ghcr.io/cheriot-platform/devcontainer:latest' }}
       options: --user 1001
     steps:
     - name: Checkout repository and submodules
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         submodules: recursive
+    - name: Generate compiler_commands.json files
+      run: ./scripts/generate_compile_commands.sh
     - name: Run clang-format and clang-tidy
       run: ./scripts/run_clang_tidy_format.sh /cheriot-tools/bin
 
   all-checks:
-    needs: [run-tests, check-format]
+    needs:
+      - run-tests
+      - run-tests-sonata
+      - run-examples
+      - test-bigdata
+      - sonata-sram-hello
+      - check-format
+    # Use a GH Action "object filter" to project the .results of each needs-ed
+    # job, yielding a list of outcomes.  We can then use `jq` to filter that
+    # list for results other than "success" and check that that is the empty
+    # list.  `jq` will return 0, causing this job to succeed, if there are no
+    # non-"success" results, or 1, causing this job to fail, if there are.
     runs-on: ubuntu-latest
+    if: ${{ always() }}
     steps:
-    - name: Dummy step
-      run: true
+    - name: Check that all needed jobs succeeded
+      shell: bash
+      env:
+        NEEDS_RESULTS: ${{ toJSON(needs.*.result) }}
+      run: |
+        jq -e '.|map(select(.!="success"))|(.==[])' <<<"${NEEDS_RESULTS}"

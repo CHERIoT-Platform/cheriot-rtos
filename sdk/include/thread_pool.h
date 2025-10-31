@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <__cheri_sealed.h>
 #include <cdefs.h>
 
 /**
@@ -9,7 +10,7 @@
  * run in the compartment that schedule the work to run, but a different
  * thread.
  */
-typedef __cheri_callback void (*ThreadPoolCallback)(void *);
+typedef __cheri_callback void (*ThreadPoolCallback)(CHERI_SEALED(void *));
 
 /**
  * Message to a thread pool.  This encapsulates a simple closure that will be
@@ -24,7 +25,7 @@ struct ThreadPoolMessage
 	/**
 	 * The data associated with the asynchronous invocation.
 	 */
-	void *data;
+	CHERI_SEALED(void *) data;
 };
 
 __BEGIN_DECLS
@@ -42,17 +43,16 @@ __BEGIN_DECLS
  * Returns 0 on success, -EINVAL if either of the arguments are invalid.
  */
 int __cheri_compartment("thread_pool")
-  thread_pool_async(ThreadPoolCallback fn, void *data);
+  thread_pool_async(ThreadPoolCallback fn, CHERI_SEALED(void *) data);
 
 /**
- * Run a thread pool.  This does not return and can be used as a thread entry
- * point.
+ * Run a thread pool.  This does not return, despite the claimed type, and can
+ * be used as a thread entry point.
  */
-void __cheri_compartment("thread_pool") thread_pool_run(void);
+int __cheri_compartment("thread_pool") thread_pool_run(void);
 __END_DECLS
 
 #ifdef __cplusplus
-#	include <memory>
 #	include <stdlib.h>
 #	include <token.h>
 #	include <type_traits>
@@ -72,9 +72,9 @@ namespace thread_pool
 		 * allocator's token mechanism.
 		 */
 		template<typename T>
-		inline SKey sealing_key_for_type()
+		inline TokenKey sealing_key_for_type()
 		{
-			static SKey key = token_key_new();
+			static TokenKey key = token_key_new();
 			return key;
 		}
 
@@ -85,16 +85,26 @@ namespace thread_pool
 		 * `sealing_key_for_type` helper.
 		 */
 		template<typename T>
-		__cheri_callback void wrap_callback_lambda(void *rawFn)
+		__cheri_callback void wrap_callback_lambda(CHERI_SEALED(void *) rawFn)
 		{
 			auto key = sealing_key_for_type<T>();
-			auto fn  = token_unseal(key, Sealed(static_cast<T *>(rawFn)));
+			auto fn  = token_unseal(
+              key, Sealed<T>(static_cast<CHERI_SEALED(T *)>(rawFn)));
 			if (fn == nullptr)
 			{
 				return;
 			}
 			(*fn)();
-			token_obj_destroy(MALLOC_CAPABILITY, key, static_cast<SObj>(rawFn));
+			/*
+			 * This fails only if the thread pool runner compartment can't make
+			 * cross-compartment calls to the allocator at all, since we're
+			 * in its initial trusted activation frame and near the beginning
+			 * (highest address) of its stack.
+			 *
+			 * Well, mostly.  It can also fail if the allocator has stack usage
+			 * checks compiled in and we have forgotten to bump that value.
+			 */
+			(void)token_obj_destroy(MALLOC_CAPABILITY, key, rawFn);
 		}
 
 		/**
@@ -102,7 +112,7 @@ namespace thread_pool
 		 * callback.
 		 */
 		template<typename Fn>
-		__cheri_callback void wrap_callback_function(void *)
+		__cheri_callback void wrap_callback_function(CHERI_SEALED(void *))
 		{
 			// C++ objects are guaranteed to have unique addresses and so a
 			// zero-sized object is actually 1 byte and using `sizeof(Fn) == 1`
@@ -131,15 +141,18 @@ namespace thread_pool
 	 * Asynchronously invoke a lambda.  This moves the lambda to the heap and
 	 * passes it to the thread pool's queue.  If the lambda copies any stack
 	 * objects by reference then the copy will fail.
+	 *
+	 * Returns 0 on success, or compartment-call failures (ENOTENOUGHSTACK,
+	 * ENOTENOUGHTRUSTEDSTACK) if the thread pool cannot be invoked.
 	 */
 	template<typename T>
-	void async(T &&lambda)
+	int async(T &&lambda)
 	{
 		// If this is a stateless function, just send a callback function
 		// pointer, don't copy zero bytes of state to the heap.
 		if constexpr (std::is_convertible_v<T, void (*)(void)>)
 		{
-			thread_pool_async(
+			return thread_pool_async(
 			  &detail::wrap_callback_function<std::remove_cvref_t<T>>, nullptr);
 		}
 		else
@@ -152,22 +165,28 @@ namespace thread_pool
 			// Allocate a new sealed object with a key that is unique to this
 			// type.
 			Timeout t{UnlimitedTimeout};
-			void   *sealed = token_sealed_unsealed_alloc(
-			    &t,
-			    MALLOC_CAPABILITY,
-			    detail::sealing_key_for_type<LambdaType>(),
-			    sizeof(lambda),
-			    &buffer);
-			// Copy the lambda into the new allocation.
-			// Note: We silence a warning here because we *do* want to
-			// explicitly move, not forward.
+			CHERI_SEALED(void *)
+			sealed = token_sealed_unsealed_alloc(
+			  &t,
+			  MALLOC_CAPABILITY,
+			  detail::sealing_key_for_type<LambdaType>(),
+			  sizeof(lambda),
+			  &buffer);
+			/*
+			 * Copy the lambda into the new allocation.
+			 *
+			 * If the above allocation has failed, this will trap.
+			 *
+			 * Note: We silence a warning here because we *do* want to
+			 * explicitly move, not forward.
+			 */
 			T *copy = new (buffer) T(
 			  std::move(lambda)); // NOLINT(bugprone-move-forwarding-reference)
 			// Create the wrapper that will unseal and invoke the lambda.
 			ThreadPoolCallback invoke =
 			  &detail::wrap_callback_lambda<LambdaType>;
 			// Dispatch it.
-			thread_pool_async(invoke, sealed);
+			return thread_pool_async(invoke, sealed);
 		}
 	}
 } // namespace thread_pool

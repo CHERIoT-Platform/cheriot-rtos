@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <debug.hh>
+#include <float_to_string_helpers.hh>
 #include <thread.h>
 
 using namespace CHERI;
@@ -102,6 +103,85 @@ namespace
 		}
 
 		/**
+		 * Helper to print a floating-point value that has already been
+		 * decomposed.
+		 *
+		 * This is used on both the `float` and `double` paths and so is
+		 * factored out.
+		 */
+		void print_float_parts(FloatParts floatParts)
+		{
+			write(static_cast<int32_t>(floatParts.integral));
+			if (floatParts.decimal)
+			{
+				write('.');
+				std::array<char, 10> buf;
+				const char           Digits[] = "0123456789";
+				auto                 s        = floatParts.decimal;
+				for (int i = static_cast<int>(buf.size() - 1); i >= 0; i--)
+				{
+					buf[static_cast<size_t>(i)] = Digits[s % 10];
+					s /= 10;
+				}
+				for (size_t i = buf.size() - floatParts.decimalPlaces;
+				     i < buf.size();
+				     i++)
+				{
+					write(buf[i]);
+				}
+			}
+			if (floatParts.exponent < 0)
+			{
+				write("e-");
+				write(-floatParts.exponent);
+			}
+			else if (floatParts.exponent > 0)
+			{
+				write('e');
+				write(floatParts.exponent);
+			}
+		}
+
+		template<SupportedFloatingPointType T>
+		void print_float(T value)
+		{
+			if (__builtin_isnan(value))
+			{
+				write("NaN");
+				return;
+			}
+			if (value < 0)
+			{
+				write('-');
+				value = -value;
+			}
+			if (__builtin_isinf(value))
+			{
+				write("Infinity");
+				return;
+			}
+			print_float_parts(decompose_float(value, 8));
+		}
+
+		void write(float value) override
+		{
+#ifdef CHERIOT_NO_FLOAT_PRINTING
+			write("<float value>");
+#else
+			print_float(value);
+#endif
+		}
+
+		void write(double value) override
+		{
+#ifdef CHERIOT_NO_DOUBLE_PRINTING
+			write("<double value>");
+#else
+			print_float(value);
+#endif
+		}
+
+		/**
 		 * Write a signed integer, as a decimal string.
 		 */
 		void write(int32_t s) override
@@ -113,7 +193,7 @@ namespace
 			}
 			std::array<char, 10> buf;
 			const char           Digits[] = "0123456789";
-			for (int i = int(buf.size() - 1); i >= 0; i--)
+			for (int i = static_cast<int>(buf.size() - 1); i >= 0; i--)
 			{
 				buf[static_cast<size_t>(i)] = Digits[s % 10];
 				s /= 10;
@@ -146,7 +226,7 @@ namespace
 			}
 			std::array<char, 20> buf;
 			const char           Digits[] = "0123456789";
-			for (int i = int(buf.size() - 1); i >= 0; i--)
+			for (int i = static_cast<int>(buf.size() - 1); i >= 0; i--)
 			{
 				buf[static_cast<size_t>(i)] = Digits[s % 10];
 				s /= 10;
@@ -168,20 +248,27 @@ namespace
 		}
 
 		/**
+		 * Write a single byte with no prefix.
+		 */
+		void write_hex_byte(uint8_t byte) override
+		{
+			append_hex_word(byte);
+		}
+
+		/**
 		 * Write a 32-bit unsigned integer to the buffer as hex with no prefix.
 		 */
-		void append_hex_word(uint32_t s)
+		void append_hex_word(uint32_t s, bool skipZero = true)
 		{
 			std::array<char, 8> buf;
 			const char          Hexdigits[] = "0123456789abcdef";
 			// Length of string including null terminator
 			static_assert(sizeof(Hexdigits) == 0x11);
-			for (long i = long(buf.size() - 1); i >= 0; i--)
+			for (long i = static_cast<long>(buf.size() - 1); i >= 0; i--)
 			{
 				buf.at(static_cast<size_t>(i)) = Hexdigits[s & 0xf];
 				s >>= 4;
 			}
-			bool skipZero = true;
 			for (auto c : buf)
 			{
 				if (skipZero && (c == '0'))
@@ -220,7 +307,7 @@ namespace
 			{
 				append_hex_word(hi);
 			}
-			append_hex_word(lo);
+			append_hex_word(lo, false);
 		}
 
 		/**
@@ -313,6 +400,22 @@ namespace
 								write(CHERI::PermissionSet::from_raw(
 								  argument.value));
 								break;
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentFloat:
+							{
+								float value;
+								memcpy(&value, &argument.value, sizeof(value));
+								write(value);
+								break;
+							}
+							case DebugFormatArgumentKind::
+							  DebugFormatArgumentDouble:
+							{
+								double value;
+								memcpy(&value, &argument.value, sizeof(value));
+								write(value);
+								break;
+							}
 							default:
 								write("<invalid argument kind>");
 								break;
@@ -367,5 +470,5 @@ debug_report_failure(const char          *kind,
 	printer.write(function);
 	printer.write("\x1b[36m\n");
 	printer.format(format, arguments, argumentCount);
-	printer.write("\n");
+	printer.write("\033[0m\n");
 }

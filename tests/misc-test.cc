@@ -5,6 +5,7 @@
 #include "tests.hh"
 #include <compartment-macros.h>
 #include <ds/pointer.h>
+#include <stdlib.h>
 #include <string.h>
 #include <timeout.h>
 
@@ -12,6 +13,8 @@ using namespace CHERI;
 
 namespace
 {
+	char       largeBuffer[4096];
+	const char LargeConstBuffer[4096] = "This is a large const buffer buffer.";
 
 	/**
 	 * Test timeouts.
@@ -131,6 +134,28 @@ namespace
 	}
 
 	/**
+	 * Test strto{,u}l
+	 */
+	void check_strtol()
+	{
+		const char *p;
+		char       *r;
+
+		debug_log("Test strtol.");
+
+		TEST_EQUAL(strtol("0", nullptr, 10), 0, "strtol 0");
+		TEST_EQUAL(
+		  strtoul("4294967295", nullptr, 10), 4294967295, "strtoul UINT_MAX");
+		TEST_EQUAL(
+		  strtol("-2147483648", nullptr, 10), -2147483648, "strtol INT_MIN");
+		TEST_EQUAL(strtol("-1", nullptr, 0), -1, "strtol -1");
+
+		p = "0x123 45";
+		TEST_EQUAL(strtoul(p, &r, 0), 0x123, "strtoul prefix");
+		TEST_EQUAL(r, p + 5, "strtoul out pointer");
+	}
+
+	/**
 	 * Test pointer utilities.
 	 *
 	 * Not comprehensive, would benefit from being expanded at some point.
@@ -238,15 +263,116 @@ namespace
 		     "This test should never fail but exists to make sure that a "
 		     "comparison result is used");
 	}
+
+	/**
+	 * Test CILS accessors
+	 */
+	void check_cils()
+	{
+		int   x;
+		void *p = &x;
+
+		TEST(__builtin_cheri_equal_exact(nullptr, *invocation_state_slot(0)),
+		     "CILS nonzero pointer 0 on entry");
+
+		TEST(__builtin_cheri_equal_exact(nullptr, *invocation_state_slot(1)),
+		     "CILS nonzero pointer 1 on entry");
+
+		*invocation_state_slot(1) = p;
+		TEST(__builtin_cheri_equal_exact(p, invocation_state<int>()),
+		     "CILS failed to store stack pointer");
+	}
+
+	const char *testString = "Hello world";
+
 } // namespace
+
+volatile decltype(testString) *volatileString = &testString;
+
+void check_sealed_scoping()
+{
+	Capability<void> o{switcher_current_thread()};
+	TEST(o.is_valid() && (o.type() == CheriSealTypeSealedTrustedStacks),
+	     "Shared object cap not as expected: {}",
+	     o);
+
+	// Take the address of the o cap, requiring that it go out to memory.
+	Capability<Capability<void>> oP{&o};
+
+	/*
+	 * Load a copy of our sealed o cap through an authority that lacks
+	 * LoadGlobal permission.  The result should be identical to the original
+	 * but without global permission.
+	 */
+	Capability<Capability<void>> oPNoLoadGlobal = oP;
+	oPNoLoadGlobal.without_permissions(Permission::LoadGlobal);
+	const Capability<void> OLocal1 = *oPNoLoadGlobal;
+
+	TEST(OLocal1.is_valid(),
+	     "Loading global sealed cap through non-LoadGlobal invalid");
+	TEST_EQUAL(OLocal1.type(),
+	           o.type(),
+	           "Loading global sealed cap through non-LoadGlobal bad type");
+	TEST_EQUAL(OLocal1.permissions(),
+	           o.permissions().without(Permission::Global),
+	           "Loading global sealed cap through non-LoadGlobal bad perms");
+
+#ifndef CHERIOT_NO_SAIL_83
+	/*
+	 * Use CAndPerm to shed Global from our o cap.
+	 * Spell this a little oddly to make sure we get CAndPerm with a mask of
+	 * all 1s but Global.  Using oLocal2.permissions().without() would do a
+	 * cgetperm and then candperm.
+	 */
+	Capability<void> oLocal2 = o;
+	oLocal2.without_permissions(Permission::Global);
+
+	TEST_EQUAL(oLocal2, OLocal1, "CAndPerm ~GL gone wrong");
+#else
+	debug_log(
+	  "Skipping test for cheriot-sail#83 because the ISA version is too old.");
+#endif
+}
 
 int test_misc()
 {
+	{
+		// Inspect the return sentry the switcher gave us.  Unlike the one given
+		// to run_tests() (over in the "test_runner" compartment), this one is
+		// not a thread entry vector, and so is computed by cjalr in
+		// compartment_switcher_entry.
+		Capability switcherReturnSentry{__builtin_return_address(0)};
+		TEST(!switcherReturnSentry.permissions().contains(Permission::Global),
+		     "Switcher return sentry should be local");
+	}
+
+	CHERI::Capability largeRW{largeBuffer};
+	CHERI::Capability largeRO{LargeConstBuffer};
+	debug_log("RW: {}", largeRW);
+	debug_log("RO: {}", largeRO);
+	TEST(largeRW.length() == sizeof(largeBuffer),
+	     "Large buffer has the wrong size: {}",
+	     largeRW.length());
+	TEST(largeRO.length() == sizeof(LargeConstBuffer),
+	     "Large const buffer has the wrong size: {}",
+	     largeRO.length());
+	TEST(largeRW.is_valid(), "Large buffer is untagged");
+	TEST(largeRO.is_valid(), "Large const buffer is untagged");
+	TEST(largeRW.permissions().contains(CHERI::Permission::Store),
+	     "Large buffer is not writable: {}",
+	     largeRW);
+	TEST(!largeRO.permissions().contains(CHERI::Permission::Store),
+	     "Large const buffer is writable");
+
 	check_timeouts();
 	check_memchr();
 	check_memrchr();
+	check_strtol();
 	check_pointer_utilities();
 	check_capability_set_inexact_at_most();
+	check_sealed_scoping();
+	check_cils();
+
 	debug_log("Testing shared objects.");
 	check_shared_object("exampleK",
 	                    SHARED_OBJECT(void, exampleK),
@@ -272,5 +398,12 @@ int test_misc()
 	                    4,
 	                    {Permission::Global, Permission::Load});
 	check_odd_memcmp();
+	TEST_EQUAL(strnlen(*volatileString, 3),
+	           3,
+	           "Incorrect length from strnlen with length shorter than string");
+	TEST_EQUAL(
+	  strnlen(*volatileString, SIZE_MAX),
+	  11,
+	  "Incorrect length from strnlen with length longer than the string");
 	return 0;
 }

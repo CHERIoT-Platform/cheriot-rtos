@@ -1,5 +1,6 @@
 #include "helper.h"
-void __cheri_compartment("top") entry()
+int __cheri_compartment("top") entry()
 {
-	asm volatile ("cmove cra, %0; cret" : : "C"(help()));
+	asm volatile("cmove cra, %0; cret" : : "C"(help()));
+	__builtin_unreachable();
 }

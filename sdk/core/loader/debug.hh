@@ -27,11 +27,8 @@ namespace
 
 		/// Concept for something that can be lazily called to produce a bool.
 		template<typename T>
-		concept LazyAssertion = requires(T v)
-		{
-			{
-				v()
-				} -> IsBool;
+		concept LazyAssertion = requires(T v) {
+			{ v() } -> IsBool;
 		};
 	} // namespace DebugConcepts
 
@@ -133,8 +130,8 @@ namespace
 		/**
 		 * Append a capability.
 		 */
-		template<typename T>
-		__always_inline void append(CHERI::Capability<T> capability)
+		template<typename T, bool IsSealed>
+		__always_inline void append(CHERI::Capability<T, IsSealed> capability)
 		{
 			append(static_cast<const void *>(capability.get()));
 		}
@@ -151,7 +148,7 @@ namespace
 			}
 			std::array<char, 10> buf;
 			const char           Digits[] = "0123456789";
-			for (int i = int(buf.size() - 1); i >= 0; i--)
+			for (int i = static_cast<int>(buf.size() - 1); i >= 0; i--)
 			{
 				buf.at(static_cast<size_t>(i)) = Digits[s % 10];
 				s /= 10;
@@ -181,7 +178,7 @@ namespace
 			const char          Hexdigits[] = "0123456789abcdef";
 			// Length of string including null terminator
 			static_assert(sizeof(Hexdigits) == 0x11);
-			for (long i = long(buf.size() - 1); i >= 0; i--)
+			for (long i = static_cast<long>(buf.size() - 1); i >= 0; i--)
 			{
 				buf.at(static_cast<size_t>(i)) = Hexdigits[s & 0xf];
 				s >>= 4;
@@ -248,7 +245,7 @@ namespace
 		 * Append an enumerated type value.
 		 */
 		template<typename T>
-		requires DebugConcepts::IsEnum<T>
+		    requires DebugConcepts::IsEnum<T>
 		void append(T e)
 		{
 			// `magic_enum::enum_name` requires cap relocs, so don't use it in
@@ -482,7 +479,8 @@ namespace
 			 * Constructor, performs the assertion check.
 			 */
 			template<typename T>
-			requires DebugConcepts::IsBool<T> __always_inline
+			    requires DebugConcepts::IsBool<T>
+			__always_inline
 			Assert(T           condition,
 			       const char *fmt,
 			       Args... args,
@@ -513,7 +511,8 @@ namespace
 			 * where the assertion condition has side effects.
 			 */
 			template<typename T>
-			requires DebugConcepts::LazyAssertion<T> __always_inline
+			    requires DebugConcepts::LazyAssertion<T>
+			__always_inline
 			Assert(T         &&condition,
 			       const char *fmt,
 			       Args... args,

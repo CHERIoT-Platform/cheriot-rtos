@@ -24,21 +24,18 @@ namespace
 	using SourceID = uint32_t;
 
 	template<typename T, size_t MaxIntrID, typename SourceID, typename Priority>
-	concept IsPlic = requires(T v, SourceID id, Priority p)
-	{
-		{v.interrupt_enable(id)};
-		{v.interrupt_disable(id)};
-		{v.interrupt_disable(id)};
-		{v.priority_set(id, p)};
-		{
-			v.interrupt_claim()
-			} -> std::same_as<std::optional<SourceID>>;
-		{v.interrupt_complete(id)};
+	concept IsPlic = requires(T v, SourceID id, Priority p) {
+		{ v.interrupt_enable(id) };
+		{ v.interrupt_disable(id) };
+		{ v.interrupt_disable(id) };
+		{ v.priority_set(id, p) };
+		{ v.interrupt_claim() } -> std::same_as<std::optional<SourceID>>;
+		{ v.interrupt_complete(id) };
 	};
 
 	/*
 	 * FIXME: Sail doesn't have an interrupt controller at all, but we pretend
-	 * it does just like FLUTE build to let things compile. We need tons of
+	 * it does just like other builds to let things compile. We need tons of
 	 * #ifdefs or a big rewrite to make the entire external interrupt path
 	 * optional.
 	 *
@@ -142,7 +139,8 @@ namespace
 		{
 			for (size_t i = 0; i < NumberOfInterrupts; i++)
 			{
-				if (ConfiguredInterrupts[i].number == uint32_t(source))
+				if (ConfiguredInterrupts[i].number ==
+				    static_cast<uint32_t>(source))
 				{
 					if constexpr (CompleteInterruptIfEdgeTriggered)
 					{
@@ -151,6 +149,12 @@ namespace
 							master().interrupt_complete(source);
 						}
 					}
+
+					// The returned pointer (reference) will have bounds of the
+					// entire futexWords array.  That's likely fine within the
+					// scheduler and saves us a setbounds on the IRQ handling
+					// path, but it does mean that interrupt_futex_get needs to
+					// do the bounding.
 					return {futexWords[i]};
 				}
 			}

@@ -1,12 +1,11 @@
 #pragma once
-#pragma push_macro("CHERIOT_PLATFORM_CUSTOM_UART")
-#define CHERIOT_PLATFORM_CUSTOM_UART
-#include_next <platform-uart.hh>
-#pragma pop_macro("CHERIOT_PLATFORM_CUSTOM_UART")
 
 #ifndef DEFAULT_UART_BAUD_RATE
 #	define DEFAULT_UART_BAUD_RATE 921'600
 #endif
+
+#include <platform/concepts/uart.hh>
+#include <utils.hh>
 
 /**
  * OpenTitan UART
@@ -17,7 +16,7 @@
  * Rendered register documentation is served at:
  * https://opentitan.org/book/hw/ip/uart/doc/registers.html
  */
-struct OpenTitanUart
+struct OpenTitanUart : private utils::NoCopyNoMove
 {
 	/**
 	 * Interrupt State Register.
@@ -75,36 +74,37 @@ struct OpenTitanUart
 	uint32_t timeoutControl;
 
 	/// OpenTitan UART Interrupts
-	typedef enum [[clang::flag_enum]]
-	: uint32_t{
-	    /// Raised if the transmit FIFO is empty.
-	    InterruptTransmitEmpty = 1 << 8,
-	    /// Raised if the receiver has detected a parity error.
-	    InterruptReceiveParityErr = 1 << 7,
-	    /// Raised if the receive FIFO has characters remaining in the FIFO
-	    /// without being
-	    /// retreived for the programmed time period.
-	    InterruptReceiveTimeout = 1 << 6,
-	    /// Raised if break condition has been detected on receive.
-	    InterruptReceiveBreakErr = 1 << 5,
-	    /// Raised if a framing error has been detected on receive.
-	    InterruptReceiveFrameErr = 1 << 4,
-	    /// Raised if the receive FIFO has overflowed.
-	    InterruptReceiveOverflow = 1 << 3,
-	    /// Raised if the transmit FIFO has emptied and no transmit is ongoing.
-	    InterruptTransmitDone = 1 << 2,
-	    /// Raised if the receive FIFO is past the high-water mark.
-	    InterruptReceiveWatermark = 1 << 1,
-	    /// Raised if the transmit FIFO is past the high-water mark.
-	    InterruptTransmitWatermark = 1 << 0,
-	  } OpenTitanUartInterrupt;
+	typedef enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Raised if the transmit FIFO is empty.
+		InterruptTransmitEmpty = 1 << 8,
+		/// Raised if the receiver has detected a parity error.
+		InterruptReceiveParityErr = 1 << 7,
+		/// Raised if the receive FIFO has characters remaining in the FIFO
+		/// without being
+		/// retreived for the programmed time period.
+		InterruptReceiveTimeout = 1 << 6,
+		/// Raised if break condition has been detected on receive.
+		InterruptReceiveBreakErr = 1 << 5,
+		/// Raised if a framing error has been detected on receive.
+		InterruptReceiveFrameErr = 1 << 4,
+		/// Raised if the receive FIFO has overflowed.
+		InterruptReceiveOverflow = 1 << 3,
+		/// Raised if the transmit FIFO has emptied and no transmit is ongoing.
+		InterruptTransmitDone = 1 << 2,
+		/// Raised if the receive FIFO is past the high-water mark.
+		InterruptReceiveWatermark = 1 << 1,
+		/// Raised if the transmit FIFO is past the high-water mark.
+		InterruptTransmitWatermark = 1 << 0,
+	} OpenTitanUartInterrupt;
 
 	/// FIFO Control Register Fields
-	enum [[clang::flag_enum]] : uint32_t{
-	  /// Reset the transmit FIFO.
-	  FifoControlTransmitReset = 1 << 1,
-	  /// Reset the receive FIFO.
-	  FifoControlReceiveReset = 1 << 0,
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Reset the transmit FIFO.
+		FifoControlTransmitReset = 1 << 1,
+		/// Reset the receive FIFO.
+		FifoControlReceiveReset = 1 << 0,
 	};
 
 	/// Control Register Fields
@@ -246,7 +246,23 @@ struct OpenTitanUart
 		const uint32_t Nco =
 		  ((static_cast<uint64_t>(baudRate) << 20) / CPU_TIMER_HZ);
 		// Set the baud rate and enable transmit & receive
-		control = (Nco << 16) | ControlTransmitEnable | ControlReceiveEnable;
+		control = (Nco << 16) | (control & 0xFFFF) | ControlTransmitEnable |
+		          ControlReceiveEnable;
+	}
+
+	/// Turn off the transceivers
+	void disable() volatile
+	{
+		control &= ~(ControlTransmitEnable | ControlReceiveEnable);
+	}
+
+	/**
+	 * Reset the control register to all zeros.  That disables the transceivers,
+	 * clears any loopbacks, disables parity, and so on.
+	 */
+	void reset() volatile
+	{
+		control = 0;
 	}
 
 	[[gnu::always_inline]] uint16_t transmit_fifo_level() volatile

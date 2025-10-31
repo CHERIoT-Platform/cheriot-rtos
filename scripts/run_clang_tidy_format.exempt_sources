@@ -1,0 +1,6 @@
+/build/
+third_party
+arith64\.c
+strtol\.c
+strtoul\.c
+atomiccap\.c

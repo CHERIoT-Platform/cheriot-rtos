@@ -89,7 +89,7 @@ namespace
 	 * We will set this to a value returned by `token_sealed_alloc` so that we
 	 * have a sealed data capability for use in tests.
 	 */
-	SObj sealedDataCapability = NULL;
+	CHERI_SEALED(void *) sealedDataCapability = NULL;
 
 	/*
 	 * The usual set of permissions associated with globals.

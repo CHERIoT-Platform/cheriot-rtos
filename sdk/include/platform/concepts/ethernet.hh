@@ -11,17 +11,10 @@
  * This is not required to be copyable.
  */
 template<typename T>
-concept ReceivedEthernetFrame = requires(T frame)
-{
-	{
-		frame->length
-		} -> std::convertible_to<uint16_t>;
-	{
-		frame->buffer
-		} -> std::convertible_to<const uint8_t *>;
-	{
-		frame->buffer
-		} -> std::convertible_to<bool>;
+concept ReceivedEthernetFrame = requires(T frame) {
+	{ frame->length } -> std::convertible_to<uint16_t>;
+	{ frame->buffer } -> std::convertible_to<const uint8_t *>;
+	{ frame->buffer } -> std::convertible_to<bool>;
 };
 
 /**
@@ -31,46 +24,37 @@ template<typename T>
 concept EthernetAdaptor = requires(T                      adaptor,
                                    const uint8_t         *buffer,
                                    uint16_t               length,
-                                   std::array<uint8_t, 6> macAddress)
-{
+                                   std::array<uint8_t, 6> macAddress) {
 	/**
 	 * The default MAC address for this adaptor.  Must return a 6-byte array.
 	 */
-	{
-		T::mac_address_default()
-		} -> std::same_as<std::array<uint8_t, 6>>;
+	{ T::mac_address_default() } -> std::same_as<std::array<uint8_t, 6>>;
 	/**
 	 * Is the default MAC address unique?  If the device (e.g. soft MAC)
 	 * doesn't have its own hardware MAC address then callers may prefer to
 	 * generate a locally administered MAC address randomly.
 	 */
-	{
-		T::has_unique_mac_address()
-		} -> std::convertible_to<bool>;
+	{ T::has_unique_mac_address() } -> std::convertible_to<bool>;
 	/**
 	 * Set the MAC address of this adaptor.
 	 */
-	{adaptor.mac_address_set(macAddress)};
+	{ adaptor.mac_address_set(macAddress) };
 	/**
 	 * Set the MAC address of this adaptor to the default value.
 	 */
-	{adaptor.mac_address_set()};
+	{ adaptor.mac_address_set() };
 
 	/**
 	 * Check if PHY link is up.
 	 */
-	{
-		adaptor.phy_link_status()
-		} -> std::convertible_to<bool>;
+	{ adaptor.phy_link_status() } -> std::convertible_to<bool>;
 
 	/**
 	 * Receive a frame.  Returns an optional value (convertible to bool) that
 	 * has a length and a buffer.  The return value owns the buffer for its
 	 * lifetime.
 	 */
-	{
-		adaptor.receive_frame()
-		} -> ReceivedEthernetFrame;
+	{ adaptor.receive_frame() } -> ReceivedEthernetFrame;
 
 	/**
 	 * Send a frame identified by a base and length.  Returns true if the frame
@@ -85,16 +69,14 @@ concept EthernetAdaptor = requires(T                      adaptor,
 		  buffer, length, [](const uint8_t *buffer, uint16_t length) {
 			  return true;
 		  })
-		} -> std::same_as<bool>;
+	} -> std::same_as<bool>;
 
 	/**
 	 * Read the current interrupt counter for receive interrupts.  If this
 	 * device doesn't support interrupts then this can return some other value.
 	 * This is used only with `receive_interrupt_complete`.
 	 */
-	{
-		adaptor.receive_interrupt_value()
-		} -> std::same_as<uint32_t>;
+	{ adaptor.receive_interrupt_value() } -> std::same_as<uint32_t>;
 
 	/**
 	 * Called after `receive_frame` fails to return new frames to block until a
@@ -103,7 +85,5 @@ concept EthernetAdaptor = requires(T                      adaptor,
 	 * TODO: This currently blocks on a single value, this may later be
 	 * augmented with an interface that sets up a multiwaiter.
 	 */
-	{
-		adaptor.receive_interrupt_complete(nullptr, 0)
-		} -> std::same_as<int>;
+	{ adaptor.receive_interrupt_complete(nullptr, 0) } -> std::same_as<int>;
 };

@@ -30,13 +30,13 @@ static auto key()
 /**
  * Create a new identifier holding the specified value.
  */
-Identifier *identifier_create(int value)
+SealedIdentifier identifier_create(int value)
 {
 	// Allocate the identifier object and get back both sealed and unsealed
 	// capabilities.
 	auto [unsealed, sealed] =
 	  blocking_forever<token_allocate<Identifier>>(MALLOC_CAPABILITY, key());
-	if (sealed == nullptr)
+	if (!sealed.is_valid())
 	{
 		return nullptr;
 	}
@@ -51,7 +51,7 @@ Identifier *identifier_create(int value)
 /**
  * Returns the value held in a identifier.
  */
-int identifier_value(Identifier *identifier)
+int identifier_value(SealedIdentifier identifier)
 {
 	// Unseal the identifier.
 	auto *unsealedIdentifier =
@@ -68,9 +68,8 @@ int identifier_value(Identifier *identifier)
 /**
  * Destroy the identifier provided as an argument.
  */
-void identifier_destroy(Identifier *identifier)
+int identifier_destroy(SealedIdentifier identifier)
 {
 	// The allocator does validity checks here, so we can skip them.
-	token_obj_destroy(
-	  MALLOC_CAPABILITY, key(), reinterpret_cast<SObj>(identifier));
+	return token_obj_destroy(MALLOC_CAPABILITY, key(), identifier);
 }

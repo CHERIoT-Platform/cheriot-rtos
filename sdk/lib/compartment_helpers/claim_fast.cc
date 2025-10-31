@@ -7,12 +7,12 @@
 #include <stdlib.h>
 #include <switcher.h>
 
-int heap_claim_fast(Timeout *timeout, const void *ptr, const void *ptr2)
+int heap_claim_ephemeral(Timeout *timeout, const void *ptr, const void *ptr2)
 {
 	void   **hazards = switcher_thread_hazard_slots();
 	auto    *epochCounter{const_cast<
-      cheriot::atomic<uint32_t> *>(SHARED_OBJECT_WITH_PERMISSIONS(
-	     cheriot::atomic<uint32_t>, allocator_epoch, true, false, false, false))};
+	     cheriot::atomic<uint32_t> *>(SHARED_OBJECT_WITH_PERMISSIONS(
+      cheriot::atomic<uint32_t>, allocator_epoch, true, false, false, false))};
 	uint32_t epoch  = epochCounter->load();
 	int      values = 2;
 	// Skip processing pointers that don't refer to heap memory.
@@ -43,10 +43,11 @@ int heap_claim_fast(Timeout *timeout, const void *ptr, const void *ptr2)
 			if (timeout->may_block())
 			{
 				Timeout t{1};
-				futex_timed_wait(&t,
-				                 reinterpret_cast<uint32_t *>(epochCounter),
-				                 epoch,
-				                 FutexPriorityInheritance);
+				(void)futex_timed_wait(
+				  &t,
+				  reinterpret_cast<uint32_t *>(epochCounter),
+				  epoch,
+				  FutexPriorityInheritance);
 				timeout->elapse(t.elapsed);
 			}
 			else

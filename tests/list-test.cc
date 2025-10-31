@@ -174,7 +174,10 @@ int test_list()
 	// we do not use here), not to the removed element.
 	LinkedObject::ObjectRing *removedCell = objects.first();
 	ds::linked_list::remove(objects.first());
-	heap_free(MALLOC_CAPABILITY, LinkedObject::from_ring(removedCell));
+	TEST_EQUAL(
+	  heap_free(MALLOC_CAPABILITY, LinkedObject::from_ring(removedCell)),
+	  0,
+	  "Failed to free removed cell");
 	TEST(LinkedObject::from_ring(objects.first())->data == 1,
 	     "First element of the list is incorrect after removing the first "
 	     "element, expected {}, got {}",
@@ -191,7 +194,8 @@ int test_list()
 	{
 		struct LinkedObject *o = LinkedObject::from_ring(cell);
 		cell                   = cell->cell_next();
-		heap_free(MALLOC_CAPABILITY, o);
+		TEST_EQUAL(
+		  heap_free(MALLOC_CAPABILITY, o), 0, "Failed to free list object");
 		counter++;
 	}
 
@@ -213,7 +217,10 @@ int test_list()
 		  // removed cell. This is great here because we will free the
 		  // object anyways. We could also use `remove` here.
 		  auto l = ds::linked_list::unsafe_remove(cell);
-		  heap_free(MALLOC_CAPABILITY, LinkedObject::from_ring(cell));
+		  TEST_EQUAL(
+		    heap_free(MALLOC_CAPABILITY, LinkedObject::from_ring(cell)),
+		    0,
+		    "Failed to free searched object");
 		  // `l` is the predecessor of `cell` in the residual ring, so
 		  // this does exactly what we want when `::search` iterates.
 		  cell = l;
@@ -221,7 +228,9 @@ int test_list()
 		  return false;
 	  });
 	// `::search` does not visit the element passed (`middle`)
-	heap_free(MALLOC_CAPABILITY, LinkedObject::from_ring(middle));
+	TEST_EQUAL(heap_free(MALLOC_CAPABILITY, LinkedObject::from_ring(middle)),
+	           0,
+	           "Failed to free middle object");
 	counter++;
 
 	TEST(counter == NumberOfListElements - 1,

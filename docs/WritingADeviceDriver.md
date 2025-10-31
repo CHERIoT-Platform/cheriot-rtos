@@ -118,10 +118,10 @@ For example, the above macro expands to this in the final report:
           "contents": "10000101",
           "kind": "SealedObject",
           "sealing_type": {
-            "compartment": "sched",
+            "compartment": "scheduler",
             "key": "InterruptKey",
             "provided_by": "build/cheriot/cheriot/release/example-firmware.scheduler.compartment",
-            "symbol": "__export.sealing_type.sched.InterruptKey"
+            "symbol": "__export.sealing_type.scheduler.InterruptKey"
           }
 ```
 
@@ -194,11 +194,11 @@ Driver code does not *have* to follow any specific structure but there are some 
 ### Platform includes
 
 Each board description contains a set of include paths.
-For example, our Flute prototype platform has this:
+For example, our Ibex prototype platform has this:
 
 ```json
     "driver_includes" : [
-        "../include/platform/flute",
+        "../include/platform/ibex",
         "../include/platform/generic-riscv"
     ],
 ```

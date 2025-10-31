@@ -11,7 +11,7 @@
 #include <thread.h>
 #include <type_traits>
 
-DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(EthernetReceive,
+DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(ethernetReceive,
                                         EthernetReceiveInterrupt,
                                         true,
                                         true);
@@ -247,8 +247,7 @@ class KunyanEthernet
 	 * reserve space for them.
 	 */
 	[[no_unique_address]] std::
-	  conditional_t<DebugDroppedFrames, DroppedFrameCount, Empty>
-	    droppedFrames;
+	  conditional_t<DebugDroppedFrames, DroppedFrameCount, Empty> droppedFrames;
 
 	/**
 	 * Log a message if the dropped-frame counter identified by `Reg` has
@@ -420,10 +419,10 @@ class KunyanEthernet
 	mdio_write(uint8_t phyAddress, PHYRegister registerAddress, uint16_t data)
 	{
 		mdio_wait_for_ready();
-		auto    &mdioAddress = mmio_register<RegisterOffset::MDIOAddress>();
-		auto    &mdioWrite   = mmio_register<RegisterOffset::MDIODataWrite>();
-		uint32_t writeCommand =
-		  (0 << 10) | (phyAddress << 5) | uint32_t(registerAddress);
+		auto    &mdioAddress  = mmio_register<RegisterOffset::MDIOAddress>();
+		auto    &mdioWrite    = mmio_register<RegisterOffset::MDIODataWrite>();
+		uint32_t writeCommand = (0 << 10) | (phyAddress << 5) |
+		                        static_cast<uint32_t>(registerAddress);
 		mdioAddress = writeCommand;
 		mdioWrite   = data;
 		mdio_start_transaction();
@@ -437,7 +436,7 @@ class KunyanEthernet
 		mdio_wait_for_ready();
 		auto    &mdioAddress = mmio_register<RegisterOffset::MDIOAddress>();
 		uint32_t readCommand =
-		  (1 << 10) | (phyAddress << 5) | uint8_t(registerAddress);
+		  (1 << 10) | (phyAddress << 5) | static_cast<uint8_t>(registerAddress);
 		mdioAddress = readCommand;
 		mdio_start_transaction();
 		mdio_wait_for_ready();
@@ -470,7 +469,7 @@ class KunyanEthernet
 		filter_mode_update(FilterMode::AllowIPv4Multicast, false);
 		filter_mode_update(FilterMode::AllowIPv6Multicast, false);
 		receiveInterruptFutex =
-		  interrupt_futex_get(STATIC_SEALED_VALUE(EthernetReceive));
+		  interrupt_futex_get(STATIC_SEALED_VALUE(ethernetReceive));
 		// Enable receive interrupts
 		mmio_register<RegisterOffset::GlobalInterruptEnable>() = 0b10;
 		// Clear pending receive interrupts.
@@ -527,7 +526,7 @@ class KunyanEthernet
 			return 0;
 		}
 		// Acknowledge the interrupt in the scheduler.
-		interrupt_complete(STATIC_SEALED_VALUE(EthernetReceive));
+		interrupt_complete(STATIC_SEALED_VALUE(ethernetReceive));
 		if (*receiveInterruptFutex == lastInterruptValue)
 		{
 			Debug::log("Acknowledged interrupt, sleeping on futex {}",
@@ -755,7 +754,7 @@ class KunyanEthernet
 		// does not check the pointer which is coming from external
 		// untrusted components.
 		Timeout t{10};
-		if ((heap_claim_fast(&t, buffer) < 0) ||
+		if ((heap_claim_ephemeral(&t, buffer) < 0) ||
 		    (!CHERI::check_pointer<CHERI::PermissionSet{
 		       CHERI::Permission::Load}>(buffer, length)))
 		{

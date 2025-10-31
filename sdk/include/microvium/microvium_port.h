@@ -301,16 +301,19 @@ static uint16_t crc16(MVM_LONG_PTR_TYPE lp, uint16_t size)
  */
 #define MVM_CONTEXTUAL_MALLOC(size, context)                                   \
 	({                                                                         \
-		Timeout t = {0, MALLOC_WAIT_TICKS};                                    \
-		void   *ret =                                                          \
-		  heap_allocate(&t, context, size, AllocateWaitRevocationNeeded);      \
+		Timeout t   = {0, MALLOC_WAIT_TICKS};                                  \
+		void   *ret = heap_allocate(&t,                                        \
+                                  (AllocatorCapability)context,              \
+                                  size,                                      \
+                                  AllocateWaitRevocationNeeded);             \
 		if (!__builtin_cheri_tag_get(ret))                                     \
 		{                                                                      \
 			ret = NULL;                                                        \
 		}                                                                      \
 		ret;                                                                   \
 	})
-#define MVM_CONTEXTUAL_FREE(ptr, context) heap_free(context, ptr)
+#define MVM_CONTEXTUAL_FREE(ptr, context)                                      \
+	(void)heap_free((AllocatorCapability)context, ptr)
 
 /**
  * Expose the timeout APIs.

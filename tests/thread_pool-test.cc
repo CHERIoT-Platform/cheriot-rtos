@@ -75,8 +75,7 @@ int test_thread_pool()
 	int sleeps = 0;
 	while (counter < 2)
 	{
-		Timeout t{1};
-		thread_sleep(&t);
+		TEST(sleep(1) >= 0, "Failed to sleep");
 		TEST(sleeps < 100, "Gave up after too many sleeps");
 	}
 	debug_log("Yielded {} times for the thread pool to run our jobs", sleeps);
@@ -86,13 +85,8 @@ int test_thread_pool()
 	free(heapInt);
 
 	async([]() {
-		auto fast = thread_id_get();
-		auto slow = thread_id_get();
-		TEST(fast == slow,
-		     "Thread ID is different in fast ({}) and slow ({}) accessors",
-		     fast,
-		     slow);
-		TEST(fast != 1, "Thread ID for thread pool thread should not be 1");
+		TEST(thread_id_get() != 1,
+		     "Thread ID for thread pool thread should not be 1");
 	});
 
 	CHERI::Capability<void> mainThread{switcher_current_thread()};
@@ -125,8 +119,7 @@ int test_thread_pool()
 	{
 		if (!asyncThread)
 		{
-			Timeout t{1};
-			thread_sleep(&t);
+			TEST(sleep(1) >= 0, "Failed to sleep");
 		}
 	}
 	TEST(asyncThread, "Worker thread did not provide thread pointer");
@@ -134,8 +127,7 @@ int test_thread_pool()
 	bool ret         = switcher_interrupt_thread(asyncThread);
 	interruptStarted = true;
 	TEST(ret, "Interrupting worker thread failed: {}", ret);
-	Timeout t{3};
-	thread_sleep(&t);
+	TEST(sleep(3) >= 0, "Failed to sleep");
 	TEST(interrupted, "Worker thread was not interrupted");
 	return 0;
 	static cheriot::atomic<uint32_t> barrier{3};

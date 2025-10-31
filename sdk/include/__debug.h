@@ -20,6 +20,10 @@ enum DebugFormatArgumentKind : ptraddr_t
 	DebugFormatArgumentSignedNumber64,
 	/// Unsigned 64-bit integer, printed as hexadecimal.
 	DebugFormatArgumentUnsignedNumber64,
+	/// 32-bit floating-point value, printed as decimal.
+	DebugFormatArgumentFloat,
+	/// 64-bit floating-point value, printed as decimal.
+	DebugFormatArgumentDouble,
 	/// Pointer, printed as a full capability.
 	DebugFormatArgumentPointer,
 	/// Special case for permission sets, printed as in the capability

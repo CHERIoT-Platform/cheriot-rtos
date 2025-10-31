@@ -8,6 +8,7 @@
 #include <compartment-macros.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <cheri-builtins.h>
 
 #define PRT_MAX_SIZE (0x80)
 #define EOF (-1)
@@ -28,12 +29,16 @@ typedef volatile void FILE;
 #elif DEVICE_EXISTS(uart)
 #	define stdout MMIO_CAPABILITY(void, uart)
 #	define stdin MMIO_CAPABILITY(void uart)
+#else
+#error No device found for stdout and stderr
 #endif
 
-#if DEVICE_EXISTS(uart1)
+#if DEVICE_EXISTS(uart1) && !STDERR_TO_STDOUT
 #	define stderr MMIO_CAPABILITY(void, uart1)
 #elif defined(stdout)
 #	define stderr stdout
+#else
+#error No device found for stderr
 #endif
 
 int __cheri_libcall vfprintf(FILE *stream, const char *fmt, va_list ap);
@@ -61,10 +66,19 @@ static inline int printf(const char *format, ...)
 #endif
 
 int __cheri_libcall snprintf(char *str, size_t size, const char *format, ...);
-int __cheri_libcall vsnprintf(const char *str,
+int __cheri_libcall vsnprintf(char *str,
                               size_t      size,
                               const char *format,
                               va_list     ap);
+
+static inline int sprintf(char *str, const char *format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	int ret = vsnprintf(str, cheri_top_get(str) - cheri_address_get(str), format, args);
+	va_end(args);
+	return ret;
+}
 __END_DECLS
 
 #endif /* !__STDIO_H__ */

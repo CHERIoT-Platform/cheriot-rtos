@@ -87,9 +87,9 @@ namespace Ibex
 			 * revoke capabilities everywhere from the start of compartment
 			 * globals to the end of the heap.
 			 */
-			extern char __compart_cgps, __export_mem_heap_end;
+			extern char __revoker_scan_start, __export_mem_heap_end;
 
-			auto  base   = LA_ABS(__compart_cgps);
+			auto  base   = LA_ABS(__revoker_scan_start);
 			auto  top    = LA_ABS(__export_mem_heap_end);
 			auto &device = revoker_device();
 			device.base  = base;
@@ -109,6 +109,23 @@ namespace Ibex
 			// Get a pointer to the futex that we use to wait for interrupts.
 			interruptFutex = interrupt_futex_get(
 			  STATIC_SEALED_VALUE(revokerInterruptCapability));
+
+#ifndef CLANG_TIDY
+			{
+				using namespace CHERI;
+
+				auto cap = Capability{interruptFutex};
+
+				Debug::Assert(cap.bounds() == sizeof(uint32_t),
+				              "Interrupt futexes are not properly bounded: {}",
+				              cap);
+				Debug::Assert(
+				  cap.permissions() ==
+				    PermissionSet{Permission::Global, Permission::Load},
+				  "Interrupt futexes are not properly permissioned: {}",
+				  cap);
+			}
+#endif
 		}
 
 		/**
@@ -121,7 +138,11 @@ namespace Ibex
 		}
 
 		/**
-		 * Queries whether the specified revocation epoch has finished.
+		 * Queries whether the specified revocation epoch has finished, or,
+		 * if `AllowPartial` is true, that it has (at least) started.
+		 *
+		 * `epoch` must be even, as memory leaves quarantine only when
+		 * revocation is not in progress.
 		 */
 		template<bool AllowPartial = false>
 		uint32_t has_revocation_finished_for_epoch(uint32_t epoch)
@@ -177,7 +198,7 @@ namespace Ibex
 				// futex word with respect to the read of the revocation epoch.
 				__c11_atomic_signal_fence(__ATOMIC_SEQ_CST);
 				// If the requested epoch has finished, return success.
-				if (has_revocation_finished_for_epoch<true>(epoch))
+				if (has_revocation_finished_for_epoch(epoch))
 				{
 					return true;
 				}
@@ -186,10 +207,12 @@ namespace Ibex
 				// There is a possible race: if the revocation pass finished
 				// before we requested the interrupt, we won't get the
 				// interrupt.  Check again before we wait.
-				if (has_revocation_finished_for_epoch<true>(epoch))
+				if (has_revocation_finished_for_epoch(epoch))
 				{
 					return true;
 				}
+				// Make sure that the revoker is running.
+				system_bg_revoker_kick();
 				// If the epoch hasn't finished, wait for an interrupt to fire
 				// and retry.
 			} while (
@@ -197,6 +220,31 @@ namespace Ibex
 			// Futex wait failed.  This could be a timeout or an invalid
 			// timeout parameter, we fail either way.
 			return false;
+		}
+
+		/**
+		 * Reveal the interrupt futex word.
+		 *
+		 * This is deliberately not part of the core/allocator/revoker.h
+		 * IsHardwareRevokerDevice concept and should be used only in testing
+		 * and other extenuating circumstances.
+		 */
+		const uint32_t *interrupt_futex()
+		{
+			return interruptFutex;
+		}
+
+		/**
+		 * Request the delivery of an IRQ when the revoker finishes its current
+		 * scan.
+		 *
+		 * This is deliberately not part of the core/allocator/revoker.h
+		 * IsHardwareRevokerDevice concept and should be used only in testing
+		 * and other extenuating circumstances.
+		 */
+		void request_interrupt()
+		{
+			revoker_device().interruptRequested = 1;
 		}
 	};
 } // namespace Ibex

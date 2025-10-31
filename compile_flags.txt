@@ -1,8 +1,8 @@
 -xc++-header
--std=c++20
+-std=c++23
 -Qunused-arguments
 -target
-riscv32-unknown-unknown
+riscv32cheriot-unknown-unknown
 -mcpu=cheriot
 -mabi=cheriot
 -mxcheri-rvc
@@ -10,7 +10,8 @@ riscv32-unknown-unknown
 -fshort-wchar
 -nostdinc
 -fomit-frame-pointer
--fno-builtin
+-fno-builtin-setjmp
+-fno-builtin-longjmp
 -fno-exceptions
 -fno-asynchronous-unwind-tables
 -fno-rtti
@@ -20,13 +21,15 @@ riscv32-unknown-unknown
 -Isdk/include/platform/generic-riscv
 -Isdk/include
 -DDEBUG_LOADER=true
--DDEBUG_ALLOCATOR=true
+-DDEBUG_ALLOCATOR=DebugLevel::Information
 -DDEBUG_SCHEDULER=true
+-DDEBUG_CXXRT=true
 -DSAIL
 -DCPU_TIMER_HZ=2000
 -DTICK_RATE_HZ=10
 -DTEMPORAL_SAFETY
 -DSOFTWARE_REVOKER
+-DSCHEDULER_MULTIWAITER=true
 -DSIMULATION
 -DDEVICE_EXISTS_shadow
 -DDEVICE_EXISTS_uart
@@ -39,3 +42,4 @@ riscv32-unknown-unknown
 -DCHERIOT_EXPOSE_FREERTOS_SEMAPHORE
 -DCHERIOT_EXPOSE_FREERTOS_MUTEX
 -DCHERIOT_EXPOSE_FREERTOS_RECURSIVE_MUTEX
+-DCHERIOT_RTOS_GIT_DESCRIPTION="compile_flags"

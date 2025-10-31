@@ -39,7 +39,12 @@ __sealingkey_dynamic:
  * The core of unsealing:
  *
  *   void *token_unseal_internal(
- *     struct SKeyStruct *, struct SObjStruct *, void *);
+ *     struct TokenKey * tokenKey,
+ *     struct TokenObject __sealed_capability * objectPointer,
+ *     struct TokenKey * architectureKey);
+ *
+ * Recall from core/allocator/token.h that the `objectPointer` given is such
+ * that its address is one-past-the-end of a TokenObjectHeader structure.
  */
 .Ltoken_unseal_internal:
   /*
@@ -80,18 +85,20 @@ __sealingkey_dynamic:
 
   /*
    * Load software type tag.  This will not trap, thanks to above tag check and
-   * because IRQs are deferred (see our export entry below)
+   * because IRQs are deferred (see our export entry below), unless the
+   * loader (static objects) or allocator (dynamic) are malicious and/or buggy.
+   *
+   * Note the negative displacement from ca2's cursor.
    */
-  clw a3, TokenSObj_offset_type(ca2)
+  clw a3, (TokenObjectHeader_offset_type - TokenObjectHeader_size)(ca2)
 
   /* Verify that the loaded value matches the address of the key. */
   bne a0, a3, .Lexit_failure
 
-  /* Subset bounds to ->data */
+  /* Subset bounds to ->data; a2 is already pointing there */
   // Get the top into a3
   cgettop         a3, ca2
-  // Move the address to the start of the data, clobber the user's sealing key
-  cincoffset      ca0, ca2, TokenSObj_offset_data
+  cmove           ca0, ca2
   // Subtract the address of the (to-be-returned-unsealed) data from the top to
   // give the length, clobbering our unsealing key.
   sub             a2, a3, a0
@@ -111,14 +118,15 @@ __sealingkey_dynamic:
 /**
  * An in-assembler implementation of
  *
- * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
- * token_obj_unseal(struct SKeyStruct *, struct SObjStruct *);
+ * [[cheriot::interrupt_state(disabled)]] void *__cheri_libcall
+ * token_obj_unseal(struct TokenKeyType *, void* __sealed_capability);
  *
  * The name has been manually mangled as per the C++ rules.
  */
-	.hidden _Z16token_obj_unsealP10SKeyStructP10SObjStruct
-	.globl  _Z16token_obj_unsealP10SKeyStructP10SObjStruct
-_Z16token_obj_unsealP10SKeyStructP10SObjStruct:
+	.hidden _Z16token_obj_unsealP12TokenKeyTypeP15TokenObjectType
+	.globl  _Z16token_obj_unsealP12TokenKeyTypeP15TokenObjectType
+_Z16token_obj_unsealP12TokenKeyTypeP15TokenObjectType:
+_Z16token_obj_unsealP12TokenKeyTypeU19__sealed_capabilityPv:
 	LoadCapPCC ca2, __sealingkey_either
 
 	/*
@@ -134,43 +142,64 @@ _Z16token_obj_unsealP10SKeyStructP10SObjStruct:
 /**
  * An in-assembler implementation of
  *
- * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
- * token_obj_unseal_static(struct SKeyStruct *, struct SObjStruct *);
+ * [[cheriot::interrupt_state(disabled)]] void *__cheri_libcall
+ * token_obj_unseal_static(struct TokenKeyType *, struct TokenObjectType *);
  *
  * The name has been manually mangled as per the C++ rules.
  */
-	.hidden  _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
-	.globl   _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct
-_Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct:
+	.hidden  _Z23token_obj_unseal_staticP12TokenKeyTypeP15TokenObjectType
+	.globl   _Z23token_obj_unseal_staticP12TokenKeyTypeP15TokenObjectType
+_Z23token_obj_unseal_staticP12TokenKeyTypeP15TokenObjectType:
+_Z23token_obj_unseal_staticP12TokenKeyTypeU19__sealed_capabilityPv:
 	LoadCapPCC ca2, __sealingkey_static
 	j          .Ltoken_unseal_internal
 
 /**
  * An in-assembler implementation of
  *
- * [[cheri::interrupt_state(disabled)]] void *__cheri_libcall
- * token_obj_unseal_dynamic(struct SKeyStruct *, struct SObjStruct *);
+ * [[cheriot::interrupt_state(disabled)]] void *__cheri_libcall
+ * token_obj_unseal_dynamic(struct TokenKeyType *, struct TokenObjectType *);
  *
  * The name has been manually mangled as per the C++ rules.
  */
-	.hidden  _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct
-	.globl   _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct
-_Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct:
+	.hidden  _Z24token_obj_unseal_dynamicP12TokenKeyTypeP15TokenObjectType
+	.globl   _Z24token_obj_unseal_dynamicP12TokenKeyTypeP15TokenObjectType
+_Z24token_obj_unseal_dynamicP12TokenKeyTypeP15TokenObjectType:
+_Z24token_obj_unseal_dynamicP12TokenKeyTypeU19__sealed_capabilityPv:
 	LoadCapPCC ca2, __sealingkey_dynamic
 	j          .Ltoken_unseal_internal
 
 /* TODO: Eventually this goes away, when the assembler can generate it for us */
 CHERIOT_EXPORT_LIBCALL \
-  _Z16token_obj_unsealP10SKeyStructP10SObjStruct, \
+  _Z16token_obj_unsealP12TokenKeyTypeP15TokenObjectType, \
   0 /* No stack usage */, \
-  0b00010010 /* IRQs deferred, zero two registers */
+  0b00010010 /* IRQs deferred, two argument registers */
 
 CHERIOT_EXPORT_LIBCALL \
-  _Z23token_obj_unseal_staticP10SKeyStructP10SObjStruct, \
+  _Z23token_obj_unseal_staticP12TokenKeyTypeP15TokenObjectType, \
   0 /* No stack usage */, \
-  0b00010010 /* IRQs deferred, zero two registers */
+  0b00010010 /* IRQs deferred, two argument registers */
 
 CHERIOT_EXPORT_LIBCALL \
-  _Z24token_obj_unseal_dynamicP10SKeyStructP10SObjStruct, \
+  _Z24token_obj_unseal_dynamicP12TokenKeyTypeP15TokenObjectType, \
   0 /* No stack usage */, \
-  0b00010010 /* IRQs deferred, zero two registers */
+  0b00010010 /* IRQs deferred, two argument registers */
+
+// TODO: For now, we export these with both names.  Eventually the ones above
+// can be garbage collected.  This doesn't make much difference because the
+// export table entries use memory that we can reuse for heap later.
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z16token_obj_unsealP12TokenKeyTypeU19__sealed_capabilityPv, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, two argument registers */
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z23token_obj_unseal_staticP12TokenKeyTypeU19__sealed_capabilityPv, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, two argument registers */
+
+CHERIOT_EXPORT_LIBCALL \
+  _Z24token_obj_unseal_dynamicP12TokenKeyTypeU19__sealed_capabilityPv, \
+  0 /* No stack usage */, \
+  0b00010010 /* IRQs deferred, two argument registers */

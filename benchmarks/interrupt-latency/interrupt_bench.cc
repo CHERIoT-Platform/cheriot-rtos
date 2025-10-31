@@ -25,7 +25,7 @@ namespace
  *
  * All of these threads will be waiting for the futex.
  */
-void __cheri_compartment("interrupt_bench") entry_high_priority()
+int __cheri_compartment("interrupt_bench") entry_high_priority()
 {
 	Timeout                 t = {0, UnlimitedTimeout};
 	static TicketLock       lock;
@@ -76,8 +76,11 @@ void __cheri_compartment("interrupt_bench") entry_high_priority()
 		// Other threads sleep forever. we could exit (return) instead but this
 		// seems to trigger a bug sometimes where the low priority thread
 		// doesn't wake up.
-		thread_sleep(&t);
+		Debug::Invariant(thread_sleep(&t) >= 0,
+		                 "Compartment call to thread_sleep failed");
 	}
+
+	return 0;
 }
 
 /**
@@ -89,7 +92,7 @@ void __cheri_compartment("interrupt_bench") entry_high_priority()
  * this until all the higher priority threads have run, with the last one
  * calling exiting.
  */
-void __cheri_compartment("interrupt_bench") entry_low_priority()
+int __cheri_compartment("interrupt_bench") entry_low_priority()
 {
 	while (true)
 	{
@@ -101,4 +104,6 @@ void __cheri_compartment("interrupt_bench") entry_low_priority()
 			event.notify_all();
 		});
 	}
+
+	return 0;
 }

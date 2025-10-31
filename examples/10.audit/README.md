@@ -15,7 +15,7 @@ This tool applies [Rego](https://www.openpolicyagent.org/docs/latest/policy-lang
 Note: For all of the `cheriot-audit` examples, we'll assume that you're running a command something like this:
 
 ```sh
-$ cheriot-audit --board=../../sdk/boards/sail.json --firmware-report=build/cheriot/cheriot/release/caesar_example.json --module=caesar.rego  --query '{query}' | jq
+$ cheriot-audit --board=../../sdk/boards/sail.json --firmware-report=build/cheriot/cheriot/release/audit.json --module=caesar.rego  --query '{query}' | jq
 ```
 
 You may need to specify a full path to cheriot-audit (it is in `/cheriot-tools/bin` in the dev container).

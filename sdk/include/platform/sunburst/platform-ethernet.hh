@@ -9,12 +9,11 @@
 #include <locks.hh>
 #include <optional>
 #include <platform/concepts/ethernet.hh>
-#include <platform/sunburst/platform-gpio.hh>
 #include <platform/sunburst/platform-spi.hh>
 #include <thread.h>
 #include <type_traits>
 
-DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(EthernetInterruptCapability,
+DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(ethernetInterruptCapability,
                                         InterruptName::EthernetInterrupt,
                                         true,
                                         true);
@@ -55,15 +54,6 @@ class Ksz8851Ethernet
 	 */
 	template<typename T>
 	using Capability = CHERI::Capability<T>;
-
-	/**
-	 * GPIO output pins to be used
-	 */
-	enum class GpioPin : uint8_t
-	{
-		EthernetChipSelect = 13,
-		EthernetReset      = 14,
-	};
 
 	/**
 	 * SPI commands
@@ -125,8 +115,8 @@ class Ksz8851Ethernet
 		IndirectAccessDataLow                 = 0xD0,
 		IndirectAccessDataHigh                = 0xD2,
 		PowerManagementEventControl           = 0xD4,
-		GoSleepWakeUp                         = 0xD4,
-		PhyReset                              = 0xD4,
+		GoSleepWakeUp                         = 0xD6,
+		PhyReset                              = 0xD8,
 		Phy1MiiBasicControl                   = 0xE4,
 		Phy1MiiBasicStatus                    = 0xE6,
 		Phy1IdLow                             = 0xE8,
@@ -143,161 +133,201 @@ class Ksz8851Ethernet
 	/**
 	 * Flag bits of the TransmitControl register.
 	 */
-	enum [[clang::flag_enum]] TransmitControl : uint16_t{
-	  TransmitEnable                 = 1 << 0,
-	  TransmitCrcEnable              = 1 << 1,
-	  TransmitPaddingEnable          = 1 << 2,
-	  TransmitFlowControlEnable      = 1 << 3,
-	  FlushTransmitQueue             = 1 << 4,
-	  TransmitChecksumGenerationIp   = 1 << 5,
-	  TransmitChecksumGenerationTcp  = 1 << 6,
-	  TransmitChecksumGenerationIcmp = 1 << 9,
+	enum [[clang::flag_enum]] TransmitControl : uint16_t
+	{
+		TransmitEnable                 = 1 << 0,
+		TransmitCrcEnable              = 1 << 1,
+		TransmitPaddingEnable          = 1 << 2,
+		TransmitFlowControlEnable      = 1 << 3,
+		FlushTransmitQueue             = 1 << 4,
+		TransmitChecksumGenerationIp   = 1 << 5,
+		TransmitChecksumGenerationTcp  = 1 << 6,
+		TransmitChecksumGenerationIcmp = 1 << 8,
 	};
 
 	/**
 	 * Flag bits of the ReceiveControl1 register.
 	 */
-	enum [[clang::flag_enum]] ReceiveControl1 : uint16_t{
-	  ReceiveEnable                                        = 1 << 0,
-	  ReceiveInverseFilter                                 = 1 << 1,
-	  ReceiveAllEnable                                     = 1 << 4,
-	  ReceiveUnicastEnable                                 = 1 << 5,
-	  ReceiveMulticastEnable                               = 1 << 6,
-	  ReceiveBroadcastEnable                               = 1 << 7,
-	  ReceiveMulticastAddressFilteringWithMacAddressEnable = 1 << 8,
-	  ReceiveErrorFrameEnable                              = 1 << 9,
-	  ReceiveFlowControlEnable                             = 1 << 10,
-	  ReceivePhysicalAddressFilteringWithMacAddressEnable  = 1 << 11,
-	  ReceiveIpFrameChecksumCheckEnable                    = 1 << 12,
-	  ReceiveTcpFrameChecksumCheckEnable                   = 1 << 13,
-	  ReceiveUdpFrameChecksumCheckEnable                   = 1 << 14,
-	  FlushReceiveQueue                                    = 1 << 15,
+	enum [[clang::flag_enum]] ReceiveControl1 : uint16_t
+	{
+		ReceiveEnable                                        = 1 << 0,
+		ReceiveInverseFilter                                 = 1 << 1,
+		ReceiveAllEnable                                     = 1 << 4,
+		ReceiveUnicastEnable                                 = 1 << 5,
+		ReceiveMulticastEnable                               = 1 << 6,
+		ReceiveBroadcastEnable                               = 1 << 7,
+		ReceiveMulticastAddressFilteringWithMacAddressEnable = 1 << 8,
+		ReceiveErrorFrameEnable                              = 1 << 9,
+		ReceiveFlowControlEnable                             = 1 << 10,
+		ReceivePhysicalAddressFilteringWithMacAddressEnable  = 1 << 11,
+		ReceiveIpFrameChecksumCheckEnable                    = 1 << 12,
+		ReceiveTcpFrameChecksumCheckEnable                   = 1 << 13,
+		ReceiveUdpFrameChecksumCheckEnable                   = 1 << 14,
+		FlushReceiveQueue                                    = 1 << 15,
 	};
 
 	/**
 	 * Flag bits of the ReceiveControl2 register.
 	 */
-	enum [[clang::flag_enum]] ReceiveControl2 : uint16_t{
-	  ReceiveSourceAddressFiltering            = 1 << 0,
-	  ReceiveIcmpFrameChecksumEnable           = 1 << 1,
-	  UdpLiteFrameEnable                       = 1 << 2,
-	  ReceiveIpv4Ipv6UdpFrameChecksumEqualZero = 1 << 3,
-	  ReceiveIpv4Ipv6FragmentFramePass         = 1 << 4,
-	  DataBurst4Bytes                          = 0b000 << 5,
-	  DataBurst8Bytes                          = 0b001 << 5,
-	  DataBurst16Bytes                         = 0b010 << 5,
-	  DataBurst32Bytes                         = 0b011 << 5,
-	  DataBurstSingleFrame                     = 0b100 << 5,
+	enum [[clang::flag_enum]] ReceiveControl2 : uint16_t
+	{
+		ReceiveSourceAddressFiltering            = 1 << 0,
+		ReceiveIcmpFrameChecksumEnable           = 1 << 1,
+		UdpLiteFrameEnable                       = 1 << 2,
+		ReceiveIpv4Ipv6UdpFrameChecksumEqualZero = 1 << 3,
+		ReceiveIpv4Ipv6FragmentFramePass         = 1 << 4,
+		DataBurst4Bytes                          = 0b000 << 5,
+		DataBurst8Bytes                          = 0b001 << 5,
+		DataBurst16Bytes                         = 0b010 << 5,
+		DataBurst32Bytes                         = 0b011 << 5,
+		DataBurstSingleFrame                     = 0b100 << 5,
 	};
 
 	/**
 	 * Flag bits of the ReceiveFrameHeaderStatus register.
 	 */
-	enum [[clang::flag_enum]] ReceiveFrameHeaderStatus : uint16_t{
-	  ReceiveCrcError                = 1 << 0,
-	  ReceiveRuntFrame               = 1 << 1,
-	  ReceiveFrameTooLong            = 1 << 2,
-	  ReceiveFrameType               = 1 << 3,
-	  ReceiveMiiError                = 1 << 4,
-	  ReceiveUnicastFrame            = 1 << 5,
-	  ReceiveMulticastFrame          = 1 << 6,
-	  ReceiveBroadcastFrame          = 1 << 7,
-	  ReceiveUdpFrameChecksumStatus  = 1 << 10,
-	  ReceiveTcpFrameChecksumStatus  = 1 << 11,
-	  ReceiveIpFrameChecksumStatus   = 1 << 12,
-	  ReceiveIcmpFrameChecksumStatus = 1 << 13,
-	  ReceiveFrameValid              = 1 << 15,
+	enum [[clang::flag_enum]] ReceiveFrameHeaderStatus : uint16_t
+	{
+		ReceiveCrcError                = 1 << 0,
+		ReceiveRuntFrame               = 1 << 1,
+		ReceiveFrameTooLong            = 1 << 2,
+		ReceiveFrameType               = 1 << 3,
+		ReceiveMiiError                = 1 << 4,
+		ReceiveUnicastFrame            = 1 << 5,
+		ReceiveMulticastFrame          = 1 << 6,
+		ReceiveBroadcastFrame          = 1 << 7,
+		ReceiveUdpFrameChecksumStatus  = 1 << 10,
+		ReceiveTcpFrameChecksumStatus  = 1 << 11,
+		ReceiveIpFrameChecksumStatus   = 1 << 12,
+		ReceiveIcmpFrameChecksumStatus = 1 << 13,
+		ReceiveFrameValid              = 1 << 15,
 	};
 
 	/**
 	 * Flag bits of the ReceiveQueueCommand register.
 	 */
-	enum [[clang::flag_enum]] ReceiveQueueCommand : uint16_t{
-	  ReleaseReceiveErrorFrame            = 1 << 0,
-	  StartDmaAccess                      = 1 << 3,
-	  AutoDequeueReceiveQueueFrameEnable  = 1 << 4,
-	  ReceiveFrameCountThresholdEnable    = 1 << 5,
-	  ReceiveDataByteCountThresholdEnable = 1 << 6,
-	  ReceiveDurationTimerThresholdEnable = 1 << 7,
-	  ReceiveIpHeaderTwoByteOffsetEnable  = 1 << 9,
-	  ReceiveFrameCountThresholdStatus    = 1 << 10,
-	  ReceiveDataByteCountThresholdstatus = 1 << 11,
-	  ReceiveDurationTimerThresholdStatus = 1 << 12,
+	enum [[clang::flag_enum]] ReceiveQueueCommand : uint16_t
+	{
+		ReleaseReceiveErrorFrame            = 1 << 0,
+		StartDmaAccess                      = 1 << 3,
+		AutoDequeueReceiveQueueFrameEnable  = 1 << 4,
+		ReceiveFrameCountThresholdEnable    = 1 << 5,
+		ReceiveDataByteCountThresholdEnable = 1 << 6,
+		ReceiveDurationTimerThresholdEnable = 1 << 7,
+		ReceiveIpHeaderTwoByteOffsetEnable  = 1 << 9,
+		ReceiveFrameCountThresholdStatus    = 1 << 10,
+		ReceiveDataByteCountThresholdstatus = 1 << 11,
+		ReceiveDurationTimerThresholdStatus = 1 << 12,
 	};
 
 	/**
 	 * Flag bits of the TransmitQueueCommand register.
 	 */
-	enum [[clang::flag_enum]] TransmitQueueCommand : uint16_t{
-	  ManualEnqueueTransmitQueueFrameEnable = 1 << 0,
-	  TransmitQueueMemoryAvailableMonitor   = 1 << 1,
-	  AutoEnqueueTransmitQueueFrameEnable   = 1 << 2,
+	enum [[clang::flag_enum]] TransmitQueueCommand : uint16_t
+	{
+		ManualEnqueueTransmitQueueFrameEnable = 1 << 0,
+		TransmitQueueMemoryAvailableMonitor   = 1 << 1,
+		AutoEnqueueTransmitQueueFrameEnable   = 1 << 2,
 	};
 
 	/**
 	 * Flag bits of the TransmitFrameDataPointer and ReceiveFrameDataPointer
 	 * register.
 	 */
-	enum [[clang::flag_enum]] FrameDataPointer : uint16_t{
-	  /**
-	   * When this bit is set, the frame data pointer register increments
-	   * automatically on accesses to the data register.
-	   */
-	  FrameDataPointerAutoIncrement = 1 << 14,
+	enum [[clang::flag_enum]] FrameDataPointer : uint16_t
+	{
+		/**
+		 * When this bit is set, the frame data pointer register increments
+		 * automatically on accesses to the data register.
+		 */
+		FrameDataPointerAutoIncrement = 1 << 14,
 	};
 
 	/**
 	 * Flags bits of the InterruptStatus and InterruptEnable registers.
 	 */
-	enum [[clang::flag_enum]] Interrupt : uint16_t{
-	  EnergyDetectInterrupt             = 1 << 2,
-	  LinkupDetectInterrupt             = 1 << 3,
-	  ReceiveMagicPacketDetectInterrupt = 1 << 4,
-	  ReceiveWakeupFrameDetectInterrupt = 1 << 5,
-	  TransmitSpaceAvailableInterrupt   = 1 << 6,
-	  ReceiveProcessStoppedInterrupt    = 1 << 7,
-	  TransmitProcessStoppedInterrupt   = 1 << 8,
-	  ReceiveOverrunInterrupt           = 1 << 11,
-	  ReceiveInterrupt                  = 1 << 13,
-	  TransmitInterrupt                 = 1 << 14,
-	  LinkChangeInterruptStatus         = 1 << 15,
+	enum [[clang::flag_enum]] Interrupt : uint16_t
+	{
+		EnergyDetectInterrupt             = 1 << 2,
+		LinkupDetectInterrupt             = 1 << 3,
+		ReceiveMagicPacketDetectInterrupt = 1 << 4,
+		ReceiveWakeupFrameDetectInterrupt = 1 << 5,
+		TransmitSpaceAvailableInterrupt   = 1 << 6,
+		ReceiveProcessStoppedInterrupt    = 1 << 7,
+		TransmitProcessStoppedInterrupt   = 1 << 8,
+		ReceiveOverrunInterrupt           = 1 << 11,
+		ReceiveInterrupt                  = 1 << 13,
+		TransmitInterrupt                 = 1 << 14,
+		LinkChangeInterruptStatus         = 1 << 15,
+	};
+
+	/**
+	 * Flags bits of the PowerManagementEventControl register.
+	 */
+	enum [[clang::flag_enum]] PowerManagementEventControl : uint16_t
+	{
+		PowerManagementModeNormal       = 0b00 << 0,
+		PowerManagementModeEnergyDetect = 0b01 << 0,
+		PowerManagementModeReserved     = 0b10 << 0,
+		PowerManagementModePowerSaving  = 0b11 << 0,
+		PowerManagementModeMask         = 0b11 << 0,
+
+		WakeUpEventEnergy = 0b0001 << 2,
+		WakeUpEventLinkup = 0b0010 << 2,
+		WakeUpEventMagic  = 0b0100 << 2,
+		WakeUpEventFrame  = 0b1000 << 2,
+		WakeUpEventMask   = 0b1111 << 2,
+
+		WakeUpToNormal = 1 << 6,
+		AutoWakeEnable = 1 << 7,
+
+		WakeOnLanEventPinEnergy = 0b0001 << 8,
+		WakeOnLanEventPinLinkup = 0b0010 << 8,
+		WakeOnLanEventPinMagic  = 0b0100 << 8,
+		WakeOnLanEventPinFrame  = 0b1000 << 8,
+		WakeOnLanEventPinMask   = 0b1111 << 8,
+
+		WakeOnLanEventPinPolarity = 1 << 12,
+		WakeOnLanEventPinDelay    = 1 << 14
 	};
 
 	/**
 	 * Flags bits of the Port1Control register.
 	 */
-	enum [[clang::flag_enum]] Port1Control : uint16_t{
-	  Advertised10BTHalfDuplexCapability  = 1 << 0,
-	  Advertised10BTFullDuplexCapability  = 1 << 1,
-	  Advertised100BTHalfDuplexCapability = 1 << 2,
-	  Advertised100BTFullDuplexCapability = 1 << 3,
-	  AdvertisedFlowControlCapability     = 1 << 4,
-	  ForceDuplex                         = 1 << 5,
-	  ForceSpeed                          = 1 << 6,
-	  AutoNegotiationEnable               = 1 << 7,
-	  ForceMDIX                           = 1 << 9,
-	  DisableAutoMDIMDIX                  = 1 << 10,
-	  RestartAutoNegotiation              = 1 << 13,
-	  TransmitterDisable                  = 1 << 14,
-	  LedOff                              = 1 << 15,
+	enum [[clang::flag_enum]] Port1Control : uint16_t
+	{
+		Advertised10BTHalfDuplexCapability  = 1 << 0,
+		Advertised10BTFullDuplexCapability  = 1 << 1,
+		Advertised100BTHalfDuplexCapability = 1 << 2,
+		Advertised100BTFullDuplexCapability = 1 << 3,
+		AdvertisedFlowControlCapability     = 1 << 4,
+		ForceDuplex                         = 1 << 5,
+		ForceSpeed                          = 1 << 6,
+		AutoNegotiationEnable               = 1 << 7,
+		ForceMDIX                           = 1 << 9,
+		DisableAutoMDIMDIX                  = 1 << 10,
+		RestartAutoNegotiation              = 1 << 13,
+		TransmitterDisable                  = 1 << 14,
+		LedOff                              = 1 << 15,
 	};
 
 	/**
 	 * Flags bits of the Port1Status register.
 	 */
-	enum [[clang::flag_enum]] Port1Status : uint16_t{
-	  Partner10BTHalfDuplexCapability  = 1 << 0,
-	  Partner10BTFullDuplexCapability  = 1 << 1,
-	  Partner100BTHalfDuplexCapability = 1 << 2,
-	  Partner100BTFullDuplexCapability = 1 << 3,
-	  PartnerFlowControlCapability     = 1 << 4,
-	  LinkGood                         = 1 << 5,
-	  AutoNegotiationDone              = 1 << 6,
-	  MDIXStatus                       = 1 << 7,
-	  OperationDuplex                  = 1 << 9,
-	  OperationSpeed                   = 1 << 10,
-	  PolarityReverse                  = 1 << 13,
-	  HPMDIX                           = 1 << 15,
+	enum [[clang::flag_enum]] Port1Status : uint16_t
+	{
+		Partner10BTHalfDuplexCapability  = 1 << 0,
+		Partner10BTFullDuplexCapability  = 1 << 1,
+		Partner100BTHalfDuplexCapability = 1 << 2,
+		Partner100BTFullDuplexCapability = 1 << 3,
+		PartnerFlowControlCapability     = 1 << 4,
+		LinkGood                         = 1 << 5,
+		AutoNegotiationDone              = 1 << 6,
+		MDIXStatus                       = 1 << 7,
+		OperationDuplex                  = 1 << 9,
+		OperationSpeed                   = 1 << 10,
+		PolarityReverse                  = 1 << 13,
+		HPMDIX                           = 1 << 15,
 	};
 
 	/**
@@ -305,18 +335,6 @@ class Ksz8851Ethernet
 	 * receive.
 	 */
 	const uint32_t *receiveInterruptFutex;
-
-	/**
-	 * Set value of a GPIO output.
-	 */
-	inline void set_gpio_output_bit(GpioPin pin, bool value) const
-	{
-		uint32_t shift  = static_cast<uint8_t>(pin);
-		uint32_t output = gpio()->output;
-		output &= ~(1 << shift);
-		output |= value << shift;
-		gpio()->output = output;
-	}
 
 	/**
 	 * Read a register from the KSZ8851.
@@ -350,11 +368,11 @@ class Ksz8851Ethernet
 		           (byteEnable << 2) | (addr >> 6);
 		bytes[1] = (addr << 2) & 0b11110000;
 
-		set_gpio_output_bit(GpioPin::EthernetChipSelect, false);
+		spi()->chip_select_assert(true);
 		spi()->blocking_write(bytes, sizeof(bytes));
 		uint16_t val;
 		spi()->blocking_read(reinterpret_cast<uint8_t *>(&val), sizeof(val));
-		set_gpio_output_bit(GpioPin::EthernetChipSelect, true);
+		spi()->chip_select_assert(false);
 		return val;
 	}
 
@@ -371,11 +389,11 @@ class Ksz8851Ethernet
 		           (byteEnable << 2) | (addr >> 6);
 		bytes[1] = (addr << 2) & 0b11110000;
 
-		set_gpio_output_bit(GpioPin::EthernetChipSelect, false);
+		spi()->chip_select_assert(true);
 		spi()->blocking_write(bytes, sizeof(bytes));
 		spi()->blocking_write(reinterpret_cast<uint8_t *>(&val), sizeof(val));
 		spi()->wait_idle();
-		set_gpio_output_bit(GpioPin::EthernetChipSelect, true);
+		spi()->chip_select_assert(false);
 	}
 
 	/**
@@ -397,20 +415,13 @@ class Ksz8851Ethernet
 	}
 
 	/**
-	 * Helper.  Returns a pointer to the SPI device.
+	 * Helper. Returns a pointer to the SPI device.
 	 */
-	[[nodiscard, gnu::always_inline]] Capability<volatile SonataSpi> spi() const
+	[[nodiscard,
+	  gnu::always_inline]] Capability<volatile SonataSpi::EthernetMac>
+	spi() const
 	{
-		return MMIO_CAPABILITY(SonataSpi, spi2);
-	}
-
-	/**
-	 * Helper.  Returns a pointer to the GPIO device.
-	 */
-	[[nodiscard, gnu::always_inline]] Capability<volatile SonataGPIO>
-	gpio() const
-	{
-		return MMIO_CAPABILITY(SonataGPIO, gpio);
+		return MMIO_CAPABILITY(SonataSpi::EthernetMac, spi_ethmac);
 	}
 
 	/**
@@ -435,10 +446,10 @@ class Ksz8851Ethernet
 	RecursiveMutex receiveBufferMutex;
 
 	/**
-	 * Reads and writes of the GPIO space use the same bits of the MMIO region
-	 * and so need to be protected.
+	 * Lock to protect reads/writes to the SPI Chip Selects, which use the
+	 * same bits of the MMIO region and thus need to be protected.
 	 */
-	FlagLockPriorityInherited gpioLock;
+	FlagLockPriorityInherited chipSelectLock;
 
 	/**
 	 * Buffer used by receive_frame.
@@ -455,9 +466,9 @@ class Ksz8851Ethernet
 		receiveBuffer  = std::make_unique<uint8_t[]>(MaxFrameSize);
 
 		// Reset chip. It needs to be hold in reset for at least 10ms.
-		set_gpio_output_bit(GpioPin::EthernetReset, false);
+		spi()->reset_assert(true);
 		thread_millisecond_wait(20);
-		set_gpio_output_bit(GpioPin::EthernetReset, true);
+		spi()->reset_assert(false);
 
 		uint16_t chipId = register_read(RegisterOffset::ChipIdEnable);
 		Debug::log("Chip ID is {}", chipId);
@@ -523,9 +534,10 @@ class Ksz8851Ethernet
 		// Clear the interrupt status
 		register_write(RegisterOffset::InterruptStatus, 0xFFFF);
 		receiveInterruptFutex =
-		  interrupt_futex_get(STATIC_SEALED_VALUE(EthernetInterruptCapability));
+		  interrupt_futex_get(STATIC_SEALED_VALUE(ethernetInterruptCapability));
 		// Enable Receive interrupt
-		register_write(RegisterOffset::InterruptEnable, ReceiveInterrupt);
+		register_write(RegisterOffset::InterruptEnable,
+		               LinkupDetectInterrupt | ReceiveInterrupt);
 
 		// Enable QMU Transmit.
 		register_set(RegisterOffset::TransmitControl,
@@ -582,7 +594,7 @@ class Ksz8851Ethernet
 		// it will trigger again immediately after we acknowledge it.
 
 		// Acknowledge the interrupt in the scheduler.
-		interrupt_complete(STATIC_SEALED_VALUE(EthernetInterruptCapability));
+		interrupt_complete(STATIC_SEALED_VALUE(ethernetInterruptCapability));
 		if (*receiveInterruptFutex == lastInterruptValue)
 		{
 			Debug::log("Acknowledged interrupt, sleeping on futex {}",
@@ -626,10 +638,18 @@ class Ksz8851Ethernet
 
 	std::optional<Frame> receive_frame()
 	{
-		LockGuard g{gpioLock};
+		LockGuard g{chipSelectLock};
 		if (framesToProcess == 0)
 		{
 			uint16_t isr = register_read(RegisterOffset::InterruptStatus);
+
+			if (isr & LinkupDetectInterrupt)
+			{
+				/* Acknowledge the power management event */
+				register_set(RegisterOffset::PowerManagementEventControl,
+				             PowerManagementEventControl::WakeUpEventLinkup);
+			}
+
 			if (!(isr & ReceiveInterrupt))
 			{
 				return std::nullopt;
@@ -700,7 +720,7 @@ class Ksz8851Ethernet
 
 			// Start receiving via SPI.
 			uint8_t cmd = static_cast<uint8_t>(SpiCommand::ReadDma) << 6;
-			set_gpio_output_bit(GpioPin::EthernetChipSelect, false);
+			spi()->chip_select_assert(true);
 			spi()->blocking_write(&cmd, 1);
 
 			// Initial words are ReceiveFrameHeaderStatus and
@@ -710,7 +730,7 @@ class Ksz8851Ethernet
 
 			spi()->blocking_read(receiveBuffer.get(), paddedLength);
 
-			set_gpio_output_bit(GpioPin::EthernetChipSelect, true);
+			spi()->chip_select_assert(false);
 
 			register_clear(RegisterOffset::ReceiveQueueCommand, StartDmaAccess);
 			framesToProcess -= 1;
@@ -753,7 +773,7 @@ class Ksz8851Ethernet
 		// does not check the pointer which is coming from external
 		// untrusted components.
 		Timeout t{10};
-		if ((heap_claim_fast(&t, buffer) < 0) ||
+		if ((heap_claim_ephemeral(&t, buffer) < 0) ||
 		    (!CHERI::check_pointer<CHERI::PermissionSet{
 		       CHERI::Permission::Load}>(buffer, length)))
 		{
@@ -766,7 +786,7 @@ class Ksz8851Ethernet
 			return false;
 		}
 
-		LockGuard g{gpioLock};
+		LockGuard g{chipSelectLock};
 
 		// Wait for the transmit buffer to be available on the device side.
 		// This needs to include the header.
@@ -782,7 +802,7 @@ class Ksz8851Ethernet
 
 		// Start sending via SPI.
 		uint8_t cmd = static_cast<uint8_t>(SpiCommand::WriteDma) << 6;
-		set_gpio_output_bit(GpioPin::EthernetChipSelect, false);
+		spi()->chip_select_assert(true);
 		spi()->blocking_write(&cmd, 1);
 
 		uint32_t header = static_cast<uint32_t>(length) << 16;
@@ -792,7 +812,7 @@ class Ksz8851Ethernet
 		spi()->blocking_write(transmitBuffer.get(), paddedLength);
 
 		spi()->wait_idle();
-		set_gpio_output_bit(GpioPin::EthernetChipSelect, true);
+		spi()->chip_select_assert(false);
 
 		// Stop QMU DMA transfer operation.
 		register_clear(RegisterOffset::ReceiveQueueCommand, StartDmaAccess);

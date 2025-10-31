@@ -11,7 +11,7 @@
 using Debug = ConditionalDebug<true, "Allocating compartment">;
 
 /// Thread entry point.
-void __cheri_compartment("allocate") entry()
+int __cheri_compartment("allocate") entry()
 {
 	// Simple case
 	{
@@ -22,6 +22,7 @@ void __cheri_compartment("allocate") entry()
 		free(x);
 		// Print the dangling pointer, note that it is no longer a valid pointer
 		// (v:0)
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		Debug::log("Use after free: {}", x);
 	}
 
@@ -65,7 +66,9 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
 		// Add a claim for y - the quota remaining is reduced
-		heap_claim(MALLOC_CAPABILITY, y);
+		Debug::Invariant(heap_claim(MALLOC_CAPABILITY, y) > 0,
+		                 "Compartment call to heap_claim failed");
+
 		Debug::log("heap quota after claim: {}",
 		           heap_quota_remaining(MALLOC_CAPABILITY));
 
@@ -84,9 +87,9 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 	}
 
-	// Sub object with a fast claim
+	// Sub object with an ephemeral claim
 	{
-		Debug::log("----- Sub object with a fast claim -----");
+		Debug::log("----- Sub object with an ephemeral claim -----");
 		void *x = malloc(100);
 
 		CHERI::Capability y{x};
@@ -96,12 +99,12 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("Sub Object: {}", y);
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
-		// Add a fast claim for y
+		// Add an ephemeral claim for y
 		Timeout t{10};
-		heap_claim_fast(&t, y);
+		heap_claim_ephemeral(&t, y);
 
 		// In this freeing x will invalidate both x & y because free
-		// is a cross compartment call, which releases any fast claims.
+		// is a cross compartment call, which releases any ephemeral claims.
 		free(x);
 		Debug::log("After free");
 		Debug::log("Allocated : {}", x);
@@ -119,8 +122,9 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("Allocated : {}", x);
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
-		// Get the claimant compartment to make a fast claim
-		make_claim(x);
+		// Get the claimant compartment to make a ephemeral claim
+		Debug::Invariant(make_claim(x) == 0,
+		                 "Compartment call to make_claim failed");
 
 		// free x.  We get out quota back but x remains valid as
 		// the claimant compartment has a claim on it
@@ -129,19 +133,24 @@ void __cheri_compartment("allocate") entry()
 		Debug::log("heap quota: {}", heap_quota_remaining(MALLOC_CAPABILITY));
 
 		// Get the claimant compartment to show its claim
-		show_claim();
+		Debug::Invariant(show_claim() == 0,
+		                 "Compartment call to show_claim failed");
 
 		// Give the claimant another ptr so it releases the first
 		void *y = malloc(10);
-		make_claim(y);
+		Debug::Invariant(make_claim(y) == 0,
+		                 "Compartment call to make_claim failed");
 		Debug::log("After make claim");
 		Debug::log("x: {}", x);
 		Debug::log("y: {}", y);
 
 		// Get the claimant compartment to show its new claim
-		show_claim();
+		Debug::Invariant(show_claim() == 0,
+		                 "Compartment call to show_claim failed");
 
 		// tidy up
 		free(y);
 	}
+
+	return 0;
 }

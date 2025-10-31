@@ -1,0 +1,20 @@
+{
+  "base": "sonata-1.1",
+  "patch": [
+    {
+      "op": "replace",
+      "path": "/defines/1",
+      "value": "SONATA=10000"
+    },
+    {
+      "op": "add",
+      "path": "/defines/0",
+      "value": "CHERIOT_NO_SAIL_83"
+    },
+    {
+      "op": "add",
+      "path": "/cxflags",
+      "value": "-mllvm -enable-machine-outliner=never"
+    }
+  ]
+}

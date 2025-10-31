@@ -5,6 +5,16 @@ namespace
 	/**
 	 * Read the cycle counter.
 	 */
+	int rdinstret()
+	{
+		int res;
+		__asm__ volatile("csrr %0, minstret" : "=r"(res));
+		return res;
+	}
+
+	/**
+	 * Read the cycle counter.
+	 */
 	int rdcycle()
 	{
 		int cycles;
@@ -12,7 +22,7 @@ namespace
 		// On Sail, report the number of instructions, the cycle count is
 		// meaningless.
 		__asm__ volatile("csrr %0, minstret" : "=r"(cycles));
-#elifdef IBEX
+#elif defined(IBEX)
 		// CHERIoT-Ibex does not yet implement rdcycle, so read the CSR
 		// directly.
 		__asm__ volatile("csrr %0, mcycle" : "=r"(cycles));
@@ -21,6 +31,24 @@ namespace
 #endif
 		return cycles;
 	}
+
+#ifdef IBEX
+
+	static int rd_lsu_stalls()
+	{
+		int res;
+		__asm__ volatile("csrr %0, mhpmcounter3" : "=r"(res));
+		return res;
+	}
+
+	static int rd_ifetch_stalls()
+	{
+		int res;
+		__asm__ volatile("csrr %0, mhpmcounter4" : "=r"(res));
+		return res;
+	}
+
+#endif
 
 	/**
 	 * Utility function to return the size of the current stack based on the

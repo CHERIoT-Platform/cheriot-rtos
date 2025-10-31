@@ -3,6 +3,7 @@
 
 #include <cdefs.h>
 #include <stddef.h>
+#include <string.h>
 
 size_t __cheri_libcall strlen(const char *str)
 {

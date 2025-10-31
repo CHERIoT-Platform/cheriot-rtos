@@ -38,12 +38,12 @@ namespace utils
 	class NoCopyNoMove
 	{
 		public:
-		NoCopyNoMove()                     = default;
-		NoCopyNoMove(const NoCopyNoMove &) = delete;
+		NoCopyNoMove()                                = default;
+		NoCopyNoMove(const NoCopyNoMove &)            = delete;
 		NoCopyNoMove &operator=(const NoCopyNoMove &) = delete;
 		NoCopyNoMove(NoCopyNoMove &&)                 = delete;
-		NoCopyNoMove &operator=(NoCopyNoMove &&) = delete;
-		~NoCopyNoMove()                          = default;
+		NoCopyNoMove &operator=(NoCopyNoMove &&)      = delete;
+		~NoCopyNoMove()                               = default;
 	};
 
 	/**

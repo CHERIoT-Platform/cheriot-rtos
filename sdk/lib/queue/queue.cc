@@ -47,6 +47,21 @@ namespace
 	}
 
 	/**
+	 * Helper for wrapping add.  Adds `addend` to `counter`, wrapping to zero
+	 * if it reaches double `size`.
+	 */
+	constexpr uint32_t
+	add_and_wrap(uint32_t size, uint32_t counter, uint32_t addend)
+	{
+		counter += addend;
+		if (counter >= 2 * size)
+		{
+			counter -= (2 * size);
+		}
+		return counter;
+	}
+
+	/**
 	 * Returns the number of items in the queue for the given size with the
 	 * specified producer and consumer counters.
 	 */
@@ -138,6 +153,21 @@ namespace
 			              "items-remaining calculation is incorrect");
 		}
 
+		template<auto A, auto B>
+		static void constexpr check_equal()
+		{
+			static_assert(A == B);
+		}
+
+		template<uint32_t Expected, uint32_t Counter, uint32_t Addend>
+		static constexpr void check_add_and_wrap()
+		{
+			if constexpr (Counter < 2 * Size)
+			{
+				check_equal<add_and_wrap(Size, Counter, Addend), Expected>();
+			}
+		}
+
 		/**
 		 * For every producer counter value from 0 up to `Size` after a consumer
 		 * counter value, check that it returns the correct value for the
@@ -148,6 +178,7 @@ namespace
 		{
 			constexpr auto Producer = add(Consumer, Displacement);
 			check_items_remaining<Producer, Consumer, Displacement>();
+			check_add_and_wrap<Producer, Consumer, Displacement>();
 			if constexpr (Displacement == 0)
 			{
 				static_assert(is_empty(Producer, Consumer),
@@ -207,17 +238,23 @@ namespace
 	static_assert(CheckIsFullValue<33>, "CheckIsFull failed");
 
 	/**
-	 * Returns a pointer to the element in the queue indicated by `counter`.
+	 * Returns the index of the element in the queue indicated by `counter`.
 	 */
-	Capability<void> buffer_at_counter(struct MessageQueue &handle,
-	                                   uint32_t             counter)
+	size_t index_at_counter(struct MessageQueue &handle, uint32_t counter)
 	{
 		// Handle wrap for the second run around the counter.
-		size_t index =
-		  counter >= handle.queueSize ? counter - handle.queueSize : counter;
-		auto             offset = index * handle.elementSize;
+		return counter >= handle.queueSize ? counter - handle.queueSize
+		                                   : counter;
+	}
+
+	/**
+	 * Returns a pointer into the queue buffer starting at index.
+	 */
+	void *queue_pointer_at_index(struct MessageQueue &handle, size_t index)
+	{
 		Capability<void> pointer{&handle};
-		pointer.address() += sizeof(MessageQueue) + offset;
+		pointer.address() +=
+		  sizeof(MessageQueue) + (index * handle.elementSize);
 		return pointer;
 	}
 
@@ -335,7 +372,7 @@ namespace
 
 } // namespace
 
-int queue_destroy(struct SObjStruct   *heapCapability,
+int queue_destroy(AllocatorCapability  heapCapability,
                   struct MessageQueue *handle)
 {
 	int ret = 0;
@@ -368,12 +405,22 @@ ssize_t queue_allocation_size(size_t elementSize, size_t elementCount)
 {
 	size_t bufferSize;
 	size_t allocSize;
-	bool   overflow =
+
+	// FIXME: clang-tidy produces a false-positive warning for this
+	// sequence because it does not understand that the overflow
+	// builtins always write to their output parameters. The NOLINT
+	// should be removed once this is fixed in clang-tidy.
+	// See https://github.com/llvm/llvm-project/issues/136812
+
+	// NOLINTBEGIN(clang-analyzer-core.CallAndMessage)
+	bool overflow =
 	  __builtin_mul_overflow(elementCount, elementSize, &bufferSize);
 	static constexpr size_t CounterSize = sizeof(uint32_t);
 	// We also need space for the header
 	overflow |=
 	  __builtin_add_overflow(sizeof(MessageQueue), bufferSize, &allocSize);
+	// NOLINTEND(clang-analyzer-core.CallAndMessage)
+
 	if (overflow)
 	{
 		return -EINVAL;
@@ -393,7 +440,7 @@ ssize_t queue_allocation_size(size_t elementSize, size_t elementCount)
 }
 
 int queue_create(Timeout              *timeout,
-                 struct SObjStruct    *heapCapability,
+                 AllocatorCapability   heapCapability,
                  struct MessageQueue **outQueue,
                  size_t                elementSize,
                  size_t                elementCount)
@@ -415,18 +462,21 @@ int queue_create(Timeout              *timeout,
 	return 0;
 }
 
-int queue_send(Timeout *timeout, struct MessageQueue *handle, const void *src)
+int queue_send_multiple(Timeout             *timeout,
+                        struct MessageQueue *handle,
+                        const void          *src,
+                        size_t               count)
 {
 	Debug::log("Send called on: {}", handle);
-	auto *producer   = &handle->producer;
-	auto *consumer   = &handle->consumer;
-	bool  shouldWake = false;
+	auto        *producer   = &handle->producer;
+	auto        *consumer   = &handle->consumer;
+	bool         shouldWake = false;
+	volatile int ret        = 0;
 	{
 		Debug::log("Lock word: {}", producer->load());
 		HighBitFlagLock l{*producer};
 		if (LockGuard g{l, timeout})
 		{
-			volatile int ret = 0;
 			// In an error-handling context, try to add the element to the
 			// queue.  If the permissions on src are invalid, or either `handle`
 			// or `src` is freed concurrently, we will hit the path that returns
@@ -434,56 +484,84 @@ int queue_send(Timeout *timeout, struct MessageQueue *handle, const void *src)
 			// simply leave the queue in the old state.
 			on_error(
 			  [&] {
-				  uint32_t producerCounter = counter_load(producer);
-				  uint32_t consumerValue   = consumer->load();
-				  uint32_t consumerCounter =
-				    consumerValue & ~(HighBitFlagLock::reserved_bits());
-				  Debug::log(
-				    "Producer counter: {}, consumer counter: {}, Size: {}",
-				    producerCounter,
-				    consumerCounter,
-				    handle->queueSize);
-				  while (is_full(
-				    handle->queueSize, producerCounter, consumerCounter))
+				  while (count > 0)
 				  {
-					  // Wait on the value to change.  If we hit this path while
-					  // the consumer lock is held, then the high bits will be
-					  // set.  Make sure that we yield.
-					  if (consumer->wait(timeout, consumerValue) == -ETIMEDOUT)
-					  {
-						  Debug::log("Timed out on futex");
-						  ret = -ETIMEDOUT;
-						  return;
-					  }
-					  consumerValue = consumer->load();
-					  consumerCounter =
+					  uint32_t producerCounter = counter_load(producer);
+					  uint32_t consumerValue   = consumer->load();
+					  uint32_t consumerCounter =
 					    consumerValue & ~(HighBitFlagLock::reserved_bits());
+					  Debug::log(
+					    "Producer counter: {}, consumer counter: {}, Size: {}",
+					    producerCounter,
+					    consumerCounter,
+					    handle->queueSize);
+					  while (is_full(
+					    handle->queueSize, producerCounter, consumerCounter))
+					  {
+						  // Wait on the value to change.  If we hit this path
+						  // while the consumer lock is held, then the high bits
+						  // will be set.  Make sure that we yield.
+						  if (consumer->wait(timeout, consumerValue) ==
+						      -ETIMEDOUT)
+						  {
+							  Debug::log("Timed out on futex (ret: {})", ret);
+							  // If we haven't yet sent anything, report timeout
+							  // failure, otherwise report the number that were
+							  // sent.
+							  if (ret == 0)
+							  {
+								  ret = -ETIMEDOUT;
+							  }
+							  return;
+						  }
+						  consumerValue = consumer->load();
+						  consumerCounter =
+						    consumerValue & ~(HighBitFlagLock::reserved_bits());
+					  }
+					  size_t startIndex =
+					    index_at_counter(*handle, producerCounter);
+					  size_t consumerIndex =
+					    index_at_counter(*handle, consumerCounter);
+
+					  // If the consumer is before the producer, the producer
+					  // can use all of the space from the current space to the
+					  // end.
+					  if (consumerIndex <= startIndex)
+					  {
+						  consumerIndex = handle->queueSize;
+					  }
+					  size_t elementsToCopy =
+					    std::min(count, consumerIndex - startIndex);
+					  Debug::log(
+					    "Send Copying {} elements (count: {}, consumer index: "
+					    "{}, start index: {}",
+					    elementsToCopy,
+					    count,
+					    consumerIndex,
+					    startIndex);
+					  memcpy(queue_pointer_at_index(*handle, startIndex),
+					         static_cast<const char *>(src) +
+					           (ret * handle->elementSize),
+					         elementsToCopy * handle->elementSize);
+					  ret += elementsToCopy;
+					  count -= elementsToCopy;
+					  counter_store(&handle->producer,
+					                add_and_wrap(handle->queueSize,
+					                             producerCounter,
+					                             elementsToCopy));
+					  // Check if the queue was empty before we updated the
+					  // producer counter.  By the time that we reach this
+					  // point, anything on the consumer side will be on the
+					  // path to a futex_wait with the old version of the
+					  // producer counter and so will bounce out again.
+					  shouldWake |=
+					    is_empty(producerCounter, counter_load(consumer));
 				  }
-				  auto entry = buffer_at_counter(*handle, producerCounter);
-				  Debug::log("Send copying {} bytes from {} to {}",
-				             handle->elementSize,
-				             src,
-				             entry);
-				  memcpy(entry, src, handle->elementSize);
-				  counter_store(
-				    &handle->producer,
-				    increment_and_wrap(handle->queueSize, producerCounter));
-				  // Check if the queue was empty before we updated the producer
-				  // counter.  By the time that we reach this point, anything on
-				  // the consumer side will be on the path to a futex_wait with
-				  // the old version of the producer counter and so will bounce
-				  // out again.
-				  shouldWake =
-				    is_empty(producerCounter, counter_load(consumer));
 			  },
 			  [&]() {
 				  ret = -EPERM;
 				  Debug::log("Error in send");
 			  });
-			if (ret != 0)
-			{
-				return ret;
-			}
 		}
 		else
 		{
@@ -495,20 +573,44 @@ int queue_send(Timeout *timeout, struct MessageQueue *handle, const void *src)
 	{
 		handle->producer.notify_all();
 	}
-	return 0;
+	return ret;
 }
 
-int queue_receive(Timeout *timeout, struct MessageQueue *handle, void *dst)
+int queue_send(Timeout *timeout, struct MessageQueue *handle, const void *src)
+{
+	return std::min(0, queue_send_multiple(timeout, handle, src, 1));
+}
+
+int queue_reset(Timeout *timeout, struct MessageQueue *queue)
+{
+	HighBitFlagLock producerLock{queue->producer};
+	HighBitFlagLock consumerLock{queue->consumer};
+	if (LockGuard producerGuard{producerLock, timeout})
+	{
+		if (LockGuard consumerGuard{consumerLock, timeout})
+		{
+			counter_store(&queue->producer, 0);
+			counter_store(&queue->consumer, 0);
+		}
+	}
+	queue->producer.notify_all();
+	return -ETIMEDOUT;
+}
+
+int queue_receive_multiple(Timeout             *timeout,
+                           struct MessageQueue *handle,
+                           void                *dst,
+                           size_t               count)
 {
 	Debug::log("Receive called on: {}", handle);
-	auto *producer   = &handle->producer;
-	auto *consumer   = &handle->consumer;
-	bool  shouldWake = false;
+	auto        *producer   = &handle->producer;
+	auto        *consumer   = &handle->consumer;
+	bool         shouldWake = false;
+	volatile int ret        = 0;
 	{
 		HighBitFlagLock l{*consumer};
 		if (LockGuard g{l, timeout})
 		{
-			volatile int ret = 0;
 			// In an error-handling context, try to add the element to the
 			// queue.  If the permissions on `dst` are invalid, or either
 			// `handle` or `dst` is freed concurrently, we will hit the path
@@ -516,54 +618,88 @@ int queue_receive(Timeout *timeout, struct MessageQueue *handle, void *dst)
 			// failure will simply leave the queue in the old state.
 			on_error(
 			  [&] {
-				  uint32_t producerValue = producer->load();
-				  uint32_t producerCounter =
-				    producerValue & ~(HighBitFlagLock::reserved_bits());
-				  uint32_t consumerCounter = counter_load(consumer);
-				  Debug::log(
-				    "Producer counter: {}, consumer counter: {}, Size: {}",
-				    producerCounter,
-				    consumerCounter,
-				    handle->queueSize);
-				  while (is_empty(producerCounter, consumerCounter))
+				  while (count > 0)
 				  {
-					  // Wait on the value to change.  If we hit this path while
-					  // the producer lock is held, then the high bits will be
-					  // set.  Make sure that we yield.
-					  if (producer->wait(timeout, producerValue) == -ETIMEDOUT)
-					  {
-						  ret = -ETIMEDOUT;
-						  return;
-					  }
-					  producerValue = producer->load();
-					  producerCounter =
+					  uint32_t producerValue = producer->load();
+					  uint32_t producerCounter =
 					    producerValue & ~(HighBitFlagLock::reserved_bits());
+					  uint32_t consumerCounter = counter_load(consumer);
+					  Debug::log(
+					    "Producer counter: {}, consumer counter: {}, Size: {}",
+					    producerCounter,
+					    consumerCounter,
+					    handle->queueSize);
+					  while (is_empty(producerCounter, consumerCounter))
+					  {
+						  // Wait on the value to change.  If we hit this path
+						  // while the producer lock is held, then the high bits
+						  // will be set.  Make sure that we yield.
+						  if (producer->wait(timeout, producerValue) ==
+						      -ETIMEDOUT)
+						  {
+							  Debug::log("Timed out on futex (ret: {})", ret);
+							  // If we haven't yet  anything, report timeout
+							  // failure, otherwise report the number that were
+							  // sent.
+							  if (ret == 0)
+							  {
+								  ret = -ETIMEDOUT;
+							  }
+							  return;
+						  }
+						  producerValue = producer->load();
+						  producerCounter =
+						    producerValue & ~(HighBitFlagLock::reserved_bits());
+					  }
+					  size_t startIndex =
+					    index_at_counter(*handle, consumerCounter);
+					  size_t producerIndex =
+					    index_at_counter(*handle, producerCounter);
+
+					  // If the producer is before the consumer, the producer
+					  // has wrapped and we can read to the end of the buffer.
+					  //
+					  if (producerIndex <= startIndex)
+					  {
+						  producerIndex = handle->queueSize;
+					  }
+					  size_t elementsToCopy =
+					    std::min(count, producerIndex - startIndex);
+					  Debug::log(
+					    "Copying {} elements (count: {}, producer index: "
+					    "{}, start index: {}",
+					    elementsToCopy,
+					    count,
+					    producerIndex,
+					    startIndex);
+					  Debug::log("Send copying {} bytes from {} to {}",
+					             handle->elementSize,
+					             dst,
+					             queue_pointer_at_index(*handle, startIndex));
+					  memcpy(static_cast<char *>(dst) +
+					           (ret * handle->elementSize),
+					         queue_pointer_at_index(*handle, startIndex),
+					         elementsToCopy * handle->elementSize);
+					  ret += elementsToCopy;
+					  count -= elementsToCopy;
+					  counter_store(&handle->consumer,
+					                add_and_wrap(handle->queueSize,
+					                             consumerCounter,
+					                             elementsToCopy));
+					  // Check if the queue was full before we updated the
+					  // consumer counter.  By the time that we reach this
+					  // point, anything on the producer side will be on the
+					  // path to a futex_wait with the old version of the
+					  // consumer counter and so will bounce out again.
+					  shouldWake |= is_full(handle->queueSize,
+					                        counter_load(producer),
+					                        consumerCounter);
 				  }
-				  auto entry = buffer_at_counter(*handle, consumerCounter);
-				  Debug::log("Receive copying {} bytes from {} to {}",
-				             handle->elementSize,
-				             entry,
-				             dst);
-				  memcpy(dst, entry, handle->elementSize);
-				  counter_store(
-				    consumer,
-				    increment_and_wrap(handle->queueSize, consumerCounter));
-				  // Check if the queue was full before we updated the consumer
-				  // counter.  By the time that we reach this point, anything on
-				  // the producer side will be on the path to a futex_wait with
-				  // the old version of the consumer counter and so will bounce
-				  // out again.
-				  shouldWake = is_full(
-				    handle->queueSize, counter_load(producer), consumerCounter);
 			  },
 			  [&]() {
 				  ret = -EPERM;
 				  Debug::log("Error in receive");
 			  });
-			if (ret != 0)
-			{
-				return ret;
-			}
 		}
 		else
 		{
@@ -577,7 +713,12 @@ int queue_receive(Timeout *timeout, struct MessageQueue *handle, void *dst)
 	{
 		handle->consumer.notify_all();
 	}
-	return 0;
+	return ret;
+}
+
+int queue_receive(Timeout *timeout, struct MessageQueue *handle, void *dst)
+{
+	return std::min(0, queue_receive_multiple(timeout, handle, dst, 1));
 }
 
 int queue_items_remaining(struct MessageQueue *handle, size_t *items)

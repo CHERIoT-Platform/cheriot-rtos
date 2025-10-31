@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include "common.h"
 #include "plic.h"
 #include "thread.h"
+#include <libdivide/libdivide.h>
 #include <platform-timer.hh>
 #include <stdint.h>
 #include <tick_macros.h>
@@ -16,10 +18,10 @@ namespace
 	 * Concept for the interface to setting the system timer.
 	 */
 	template<typename T>
-	concept IsTimer = requires(uint32_t cycles)
-	{
-		{T::init()};
-		{T::setnext(cycles)};
+	concept IsTimer = requires(uint32_t cycles) {
+		{ T::init() };
+		{ T::setnext(cycles) };
+		{ T::next() } -> std::same_as<uint64_t>;
 	};
 
 	static_assert(
@@ -103,6 +105,21 @@ namespace
 		}
 
 		/**
+		 * Ensure that a timer tick is scheduled for the current thread.
+		 */
+		static void ensure_tick()
+		{
+			auto *thread = Thread::current_get();
+			Debug::Assert(thread != nullptr,
+			              "Ensure tick called with no running thread");
+			auto tickTime = thread->expiryTime + TIMERCYCLES_PER_TICK;
+			if (tickTime < TimerCore::next())
+			{
+				setnext(tickTime);
+			}
+		}
+
+		/**
 		 * Wake any threads that were sleeping until a timeout before the
 		 * current time.  This also wakes yielded threads if there are no
 		 * runnable threads.
@@ -111,9 +128,14 @@ namespace
 		 */
 		static void expiretimers()
 		{
-			uint64_t now = time();
-			Thread::ticksSinceBoot =
-			  (now - zeroTickTime) / TIMERCYCLES_PER_TICK;
+			// We compute a branch-free multiplicative inverse at compile time
+			// so that we can guarantee a fixed cycle overhead during
+			// interrupts.
+			constexpr libdivide::divider<uint64_t> FastDivisor(
+			  TIMERCYCLES_PER_TICK);
+
+			uint64_t now           = time();
+			Thread::ticksSinceBoot = (now - zeroTickTime) / FastDivisor;
 			if (Thread::waitingList == nullptr)
 			{
 				return;
@@ -156,7 +178,8 @@ namespace
 					{
 						Debug::log("Woke thread {} {} cycles early",
 						           head->id_get(),
-						           int64_t(head->expiryTime) - now);
+						           static_cast<int64_t>(head->expiryTime) -
+						             now);
 						head->ready(Thread::WakeReason::Timer);
 					}
 				}
@@ -170,6 +193,7 @@ namespace
 		{
 			return -1;
 		}
-		return Timer::time() + (timeout * TIMERCYCLES_PER_TICK);
+		return Timer::time() +
+		       (static_cast<uint64_t>(timeout) * TIMERCYCLES_PER_TICK);
 	}
 } // namespace

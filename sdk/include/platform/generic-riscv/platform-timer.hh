@@ -52,34 +52,52 @@ class StandardClint : private utils::NoCopyNoMove
 			timeHigh = *timerHigh;
 			timeLow  = *pmtimer;
 		} while (timeHigh != *timerHigh);
-		return (uint64_t(timeHigh) << 32) | timeLow;
+		return (static_cast<uint64_t>(timeHigh) << 32) | timeLow;
 	}
 
 	/**
-	 * Set the timer up for the next timer interrupt. We need to:
-	 * 1. read the current MTIME,
-	 * 2. add tick amount of cycles to the current time,
-	 * 3. write back the new value to MTIMECMP for the next interrupt.
-	 * Because MTIMECMP is 64-bit and we are a 32-bit CPU, we need to:
-	 * 1. ensure the high 32 bits are stable when we read the low 32 bits
-	 * 2. ensure we write both halves in a way that will not produce
-	 *    spurious interrupts.
+	 * Set the timer comparison for next interrupt to given value.
 	 * Note that CLINT does not need any action to acknowledge the
-	 * interrupt. Writing to any half is enough to clear the interrupt,
-	 * which is also why 2. is important.
+	 * interrupt. Writing to it is enough to clear the interrupt.
+	 * Interrupts must be disabled when calling this function.
 	 */
 	static void setnext(uint64_t nextTime)
 	{
 		/// the high 32 bits of the 64-bit MTIME register
 		volatile uint32_t *pmtimercmphigh = pmtimercmp + 1;
-		uint32_t           curmtimehigh, curmtime, curmtimenew;
 
+		// Attempt to prevent spurious interrupts by writing -1 to mtimeh. The
+		// RISC-V spec actually says to do this by writing to the low 32-bits,
+		// but writing -1 to the high bits also works if we assume that mtimeh
+		// will never reach its maximum value, which it had better not because
+		// the >= comparison makes it impossible to handle wrap around of the
+		// mtime counter anyway. This may be unnecessary given that that we
+		// should have interrupts disabled anyway...
+		*pmtimercmphigh = -1;
 		// Write the new MTIMECMP value, at which the next interrupt fires.
-		*pmtimercmphigh = -1; // Prevent spurious interrupts.
 		*pmtimercmp     = nextTime;
 		*pmtimercmphigh = nextTime >> 32;
 	}
 
+	/**
+	 * Returns the time at which the next timer is scheduled.
+	 */
+	static uint64_t next()
+	{
+		volatile uint32_t *pmtimercmphigh = pmtimercmp + 1;
+		uint64_t           nextTimer      = *pmtimercmphigh;
+		nextTimer <<= 32;
+		nextTimer |= *pmtimercmp;
+		return nextTimer;
+	}
+
+	/**
+	 * Set the timer comparator to a value that should never trigger an
+	 * interrupt.
+	 *
+	 * Note: we rely on the fact that mtimeh should never reach maximum value in
+	 * plausible time-frame.
+	 */
 	static void clear()
 	{
 		volatile uint32_t *pmtimercmphigh = pmtimercmp + 1;

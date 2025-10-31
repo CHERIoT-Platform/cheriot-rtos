@@ -17,7 +17,7 @@ class SonataAnalogueDigitalConverter : private utils::NoCopyNoMove
 	/**
 	 * Flag to set when debugging the driver for UART log messages.
 	 */
-	static constexpr bool DebugDriver = true;
+	static constexpr bool DebugDriver = false;
 
 	/**
 	 * Helper for conditional debug logs and assertions.

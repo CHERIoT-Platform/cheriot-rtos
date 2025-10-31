@@ -1,6 +1,7 @@
 #pragma once
 #include <__debug.h>
 #include <__macro_map.h>
+#include <string.h>
 
 #ifndef __cplusplus
 
@@ -10,20 +11,34 @@
  *
  * Should not be used directly.
  */
-#	define CHERIOT_DEBUG_MAP_ARGUMENT(x)                                                \
-		{                                                                                \
-			(uintptr_t)(x), _Generic((x),                                              \
-                    _Bool: DebugFormatArgumentBool,                                               \
-                    char: DebugFormatArgumentCharacter,                                           \
-                    short: DebugFormatArgumentSignedNumber32,                                \
-                    unsigned short: DebugFormatArgumentUnsignedNumber32,                            \
-                    int: DebugFormatArgumentSignedNumber32,                                \
-                    unsigned int: DebugFormatArgumentUnsignedNumber32,                            \
-                    signed long long: DebugFormatArgumentSignedNumber64,                          \
-                    unsigned long long: DebugFormatArgumentUnsignedNumber64,                      \
-                    char *: DebugFormatArgumentCString, \
-					default: DebugFormatArgumentPointer) \
-		}
+#	define CHERIOT_DEBUG_MAP_ARGUMENT(x)                                      \
+		{_Generic((x),                                                         \
+		   double: ({                                                          \
+			          typeof(x) __tmp = (x);                                   \
+			          uintptr_t __return;                                      \
+			          memcpy(&__return, &__tmp, sizeof(double));               \
+			          __return;                                                \
+		          }),                                                          \
+		   float: ({                                                           \
+			          typeof(x) __tmp = (x);                                   \
+			          uintptr_t __return;                                      \
+			          memcpy(&__return, &__tmp, sizeof(float));                \
+			          __return;                                                \
+		          }),                                                          \
+		   default: (uintptr_t)(x)),                                           \
+		 _Generic((x),                                                         \
+		   _Bool: DebugFormatArgumentBool,                                     \
+		   char: DebugFormatArgumentCharacter,                                 \
+		   short: DebugFormatArgumentSignedNumber32,                           \
+		   unsigned short: DebugFormatArgumentUnsignedNumber32,                \
+		   int: DebugFormatArgumentSignedNumber32,                             \
+		   float: DebugFormatArgumentFloat,                                    \
+		   double: DebugFormatArgumentDouble,                                  \
+		   unsigned int: DebugFormatArgumentUnsignedNumber32,                  \
+		   signed long long: DebugFormatArgumentSignedNumber64,                \
+		   unsigned long long: DebugFormatArgumentUnsignedNumber64,            \
+		   char *: DebugFormatArgumentCString,                                 \
+		   default: DebugFormatArgumentPointer)}
 
 /**
  * Helper to map a list of arguments to an initialiser for a
