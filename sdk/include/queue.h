@@ -24,11 +24,11 @@
 
 #include "cdefs.h"
 #include <multiwaiter.h>
-#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <timeout.h>
+#include <token.h>
 
 /**
  * Structure representing a queue.  This structure represents the queue
@@ -64,6 +64,25 @@ struct MessageQueue
 #endif
 };
 
+/**
+ * Permissions on message queue handles.
+ */
+enum [[clang::flag_enum]] MessageQueuePermission
+{
+	/**
+	 * This handle may be used to send messages.
+	 */
+	MessageQueuePermitSend = (1 << 0),
+	/**
+	 * This handle may be used to receive messages.
+	 */
+	MessageQueuePermitReceive = (1 << 1),
+	/**
+	 * This handle may be used to deallocate the queue.
+	 */
+	MessageQueuePermitDestroy = (1 << 2),
+};
+
 _Static_assert(sizeof(struct MessageQueue) % sizeof(void *) == 0,
                "MessageQueue structure must end correctly aligned for storing "
                "capabilities.");
@@ -96,6 +115,17 @@ int __cheri_libcall queue_create(Timeout              *timeout,
                                  struct MessageQueue **outQueue,
                                  size_t                elementSize,
                                  size_t                elementCount);
+
+/**
+ * Stops the queue.  This prevents any future send and receive calls from
+ * working, as a prelude to destruction.  Queues allocated by the library
+ * should use `queue_destroy` instead of this API, this exists to support
+ * deadlock-free deallocation of queues embedded in other structures or where
+ * the memory is managed externally in some other way.
+ *
+ * Returns 0 on success.
+ */
+int __cheriot_libcall queue_stop(struct MessageQueue *handle);
 
 /**
  * Destroys a queue. This wakes up all threads waiting to produce or consume,
@@ -207,11 +237,11 @@ int __cheri_compartment("message_queue")
 int __cheri_libcall queue_reset(Timeout *timeout, struct MessageQueue *queue);
 
 /**
- * Destroy a queue handle.  If this is called on a restricted endpoint
- * (returned either from `queue_receive_handle_create_sealed` or from
- * `queue_send_handle_create_sealed`), this frees only the handle.  If called
- * with the queue handle returned from `queue_create_sealed`, this will destroy
- * the queue.
+ * Destroy a queue.  This requires a handle with `MessageQueuePermitDestroy`
+ * permission.
+ *
+ * Returns 0 on success, `-EINVAL` if `queueHandle` is not a valid queue handle
+ * or lacks the relevant permissions.
  */
 int __cheri_compartment("message_queue")
   queue_destroy_sealed(Timeout            *timeout,
@@ -321,6 +351,28 @@ int __cheri_compartment("message_queue")
                                        handle);
 
 /**
+ * Returns the permissions held by this message queue handle.  This is a
+ * bitmask of `MessageQueuePermission` values.
+ */
+static inline int queue_permissions(CHERI_SEALED(struct MessageQueue *) handle)
+{
+	return token_permissions_get(handle);
+}
+
+/**
+ * Returns a copy of `handle` with a subset of permissions.  The `permissions`
+ * argument is a bitmask of `MessageQueuePermission` values.  The returned
+ * handle has only the permissions that are both already present on `handle`
+ * and enumerated in `permissions`.
+ */
+static inline CHERI_SEALED(struct MessageQueue *)
+  queue_permissions_and(CHERI_SEALED(struct MessageQueue *) handle,
+                        int permissions)
+{
+	return token_permissions_and(handle, permissions);
+}
+
+/**
  * Convert a queue handle returned from `queue_create_sealed` into one that can
  * be used *only* for receiving.
  *
@@ -328,12 +380,18 @@ int __cheri_compartment("message_queue")
  * `outHandle`.  Returns `-ENOMEM` on allocation failure or `-EINVAL` if the
  * handle is not valid.
  */
-int __cheri_compartment("message_queue")
-  queue_receive_handle_create_sealed(struct Timeout     *timeout,
-                                     AllocatorCapability heapCapability,
-                                     CHERI_SEALED(struct MessageQueue *) handle,
-                                     CHERI_SEALED(struct MessageQueue *) *
-                                       outHandle);
+static inline int __attribute__((
+  deprecated("Restricted handles have been replaced by permissions on queue "
+             "capabilities, controlled with queue_permissions_and")))
+queue_receive_handle_create_sealed(struct Timeout     *timeout,
+                                   AllocatorCapability heapCapability,
+                                   CHERI_SEALED(struct MessageQueue *) handle,
+                                   CHERI_SEALED(struct MessageQueue *) *
+                                     outHandle)
+{
+	*outHandle = queue_permissions_and(handle, MessageQueuePermitReceive);
+	return 0;
+}
 
 /**
  * Convert a queue handle returned from `queue_create_sealed` into one that can
@@ -343,11 +401,16 @@ int __cheri_compartment("message_queue")
  * `outHandle`.  Returns `-ENOMEM` on allocation failure or `-EINVAL` if the
  * handle is not valid.
  */
-int __cheri_compartment("message_queue")
-  queue_send_handle_create_sealed(struct Timeout     *timeout,
-                                  AllocatorCapability heapCapability,
-                                  CHERI_SEALED(struct MessageQueue *) handle,
-                                  CHERI_SEALED(struct MessageQueue *) *
-                                    outHandle);
+static inline int __attribute__((
+  deprecated("Restricted handles have been replaced by permissions on queue "
+             "capabilities, controlled with queue_permissions_and")))
+queue_send_handle_create_sealed(struct Timeout     *timeout,
+                                AllocatorCapability heapCapability,
+                                CHERI_SEALED(struct MessageQueue *) handle,
+                                CHERI_SEALED(struct MessageQueue *) * outHandle)
+{
+	*outHandle = queue_permissions_and(handle, MessageQueuePermitSend);
+	return 0;
+}
 
 __END_DECLS

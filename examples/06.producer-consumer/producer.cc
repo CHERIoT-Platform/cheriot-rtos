@@ -23,9 +23,11 @@ int __cheri_compartment("producer") run()
 	Debug::Invariant(result == 0,
 	                 "Compartment call to queue_create_sealed failed: {}",
 	                 result);
-	// Pass the queue handle to the consumer.
-	Debug::Invariant(set_queue(queue) == 0,
-	                 "Compartment call to set_queue failed");
+	// Pass the queue handle to the consumer.  The receiver has permission to
+	// receive only, not to send or deallocate.
+	Debug::Invariant(
+	  set_queue(queue_permissions_and(queue, MessageQueuePermitReceive)) == 0,
+	  "Compartment call to set_queue failed");
 	Debug::log("Starting producer loop");
 	// Loop, sending some numbers to the other thread.
 	for (int i = 1; i < 200; i++)

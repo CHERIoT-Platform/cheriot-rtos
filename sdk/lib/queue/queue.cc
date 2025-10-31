@@ -372,6 +372,17 @@ namespace
 
 } // namespace
 
+int queue_stop(struct MessageQueue *handle)
+{
+	HighBitFlagLock producerLock{handle->producer};
+	producerLock.upgrade_for_destruction();
+
+	HighBitFlagLock consumerLock{handle->consumer};
+	consumerLock.upgrade_for_destruction();
+
+	return 0;
+}
+
 int queue_destroy(AllocatorCapability  heapCapability,
                   struct MessageQueue *handle)
 {
@@ -385,11 +396,7 @@ int queue_destroy(AllocatorCapability  heapCapability,
 		return ret;
 	}
 
-	HighBitFlagLock producerLock{handle->producer};
-	producerLock.upgrade_for_destruction();
-
-	HighBitFlagLock consumerLock{handle->consumer};
-	consumerLock.upgrade_for_destruction();
+	queue_stop(handle);
 
 	// This should not fail because of the `heap_can_free` check, unless we
 	// run out of stack.

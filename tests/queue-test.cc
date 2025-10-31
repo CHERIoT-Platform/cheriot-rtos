@@ -183,6 +183,9 @@ void test_queue_sealed()
 	int  ret =
 	  queue_create_sealed(&t, MALLOC_CAPABILITY, &queue, ItemSize, MaxItems);
 	TEST(ret == 0, "MessageQueue creation failed with {}", ret);
+
+	// The next APIs are deprecated.  Make sure that we haven't broken them.
+	__clang_ignored_warning_push("-Wdeprecated");
 	ret = queue_receive_handle_create_sealed(
 	  &t, MALLOC_CAPABILITY, queue, &receiveHandle);
 	TEST(
@@ -190,6 +193,7 @@ void test_queue_sealed()
 	ret = queue_send_handle_create_sealed(
 	  &t, MALLOC_CAPABILITY, queue, &sendHandle);
 	TEST(ret == 0, "MessageQueue send endpoint creation failed with {}", ret);
+	__clang_ignored_warning_pop();
 
 	t   = UnlimitedTimeout;
 	ret = queue_send_sealed(&t, receiveHandle, Message[1]);
@@ -235,14 +239,21 @@ void test_queue_sealed()
 	TEST(
 	  ret == 0, "Sending with valid buffer should return 0, returned {}", ret);
 
+	sendHandle = queue_permissions_and(sendHandle, MessageQueuePermitSend);
+
 	t   = 1;
 	ret = queue_destroy_sealed(&t, MALLOC_CAPABILITY, sendHandle);
-	TEST(ret == 0, "MessageQueue send destruction failed with {}", ret);
+	TEST_EQUAL(ret,
+	           -EINVAL,
+	           "MessageQueue send destruction should have failed with -EINVAL");
 
 	t   = 1;
-	ret = queue_destroy_sealed(&t, MALLOC_CAPABILITY, receiveHandle);
-	TEST(ret == 0, "MessageQueue receive destruction failed with {}", ret);
+	ret = queue_destroy_sealed(&t, nullptr, queue);
+	TEST_EQUAL(ret,
+	           -EPERM,
+	           "MessageQueue send destruction should have failed with -EPERM");
 
+	t   = 1;
 	ret = queue_destroy_sealed(&t, MALLOC_CAPABILITY, queue);
 	TEST(ret == 0, "MessageQueue destruction failed with {}", ret);
 
