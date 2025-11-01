@@ -483,14 +483,22 @@ namespace
 		     storeData,
 		     capToIntPointer);
 		// Check whether the store happened and, if it did, what it stored.
-		Capability targetAfterStore {myGlobalIntPointer[0]};
-		if (expectCrash) {
-			TEST_EQUAL(targetAfterStore, NULL, "target memory modified after faulting store");
-		} else {
+		Capability targetAfterStore{myGlobalIntPointer[0]};
+		if (expectCrash)
+		{
+			TEST_EQUAL(targetAfterStore,
+			           NULL,
+			           "target memory modified after faulting store");
+		}
+		else
+		{
 			// all tests expect the tag to be cleared even if the store doesn't
 			// fault, so invalidate storeData before comparing with the result.
 			storeData.invalidate();
-			TEST_EQUAL(targetAfterStore, storeData, "target memory did not match expected after non-faulting store");
+			TEST_EQUAL(
+			  targetAfterStore,
+			  storeData,
+			  "target memory did not match expected after non-faulting store");
 		}
 	}
 
@@ -513,8 +521,8 @@ namespace
 		                                              Permission::Store}>);
 
 		debug_log("Attempt to store capability via too small bounds");
-		do_store_test(CauseCode::BoundsViolation, restrict_bounds_filter,
-		              clear_tag_filter);
+		do_store_test(
+		  CauseCode::BoundsViolation, restrict_bounds_filter, clear_tag_filter);
 
 		debug_log("Attempt to store capability via misaligned pointer");
 		do_store_test(std::nullopt,
