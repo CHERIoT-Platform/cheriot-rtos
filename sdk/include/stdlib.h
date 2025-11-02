@@ -191,7 +191,11 @@ void *__cheri_compartment("allocator")
   heap_allocate(Timeout            *timeout,
                 AllocatorCapability heapCapability,
                 size_t              size,
-                uint32_t flags      __if_cxx(= AllocateWaitAny));
+                uint32_t flags      __if_cxx(= AllocateWaitAny))
+#ifdef __cplusplus
+__attribute__((deprecated("Use heap_allocate_cpp", "heap_allocate_cpp")))
+#endif
+;
 
 /**
  * Non-standard allocation API.  Allocates `size` * `nmemb` bytes of memory,
@@ -387,6 +391,8 @@ static inline void __dead2 abort()
 }
 
 #ifndef CHERIOT_NO_AMBIENT_MALLOC
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 static inline void *malloc(size_t size)
 {
 	Timeout t = {0, MALLOC_WAIT_TICKS};
@@ -398,6 +404,7 @@ static inline void *malloc(size_t size)
 	}
 	return ptr;
 }
+#pragma clang diagnostic pop
 static inline void *calloc(size_t nmemb, size_t size)
 {
 	Timeout t   = {0, MALLOC_WAIT_TICKS};
