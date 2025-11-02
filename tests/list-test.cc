@@ -4,6 +4,7 @@
 #define TEST_NAME "List"
 #include "tests.hh"
 #include <ds/linked_list.h>
+#include <heap.hh>
 
 using CHERI::Capability;
 
@@ -80,7 +81,8 @@ int test_list()
 	{
 		Timeout       t{UnlimitedTimeout};
 		LinkedObject *o = static_cast<LinkedObject *>(
-		  heap_allocate(&t, MALLOC_CAPABILITY, sizeof(LinkedObject)));
+		  heap_allocate_cpp(&t, MALLOC_CAPABILITY, sizeof(LinkedObject))
+		    .as_pointer());
 		TEST(Capability{o}.is_valid(), "Cannot allocate linked object");
 
 		// Use the object integer as an index.

@@ -222,7 +222,11 @@ void *__cheri_compartment("allocator")
                       AllocatorCapability heapCapability,
                       size_t              nmemb,
                       size_t              size,
-                      uint32_t flags      __if_cxx(= AllocateWaitAny));
+                      uint32_t flags      __if_cxx(= AllocateWaitAny))
+#ifdef __cplusplus
+__attribute__((deprecated("Use heap_allocate_array_cpp", "heap_allocate_array_cpp")))
+#endif
+;
 
 /**
  * Add a claim to an allocation.  The object will be counted against the quota
@@ -404,7 +408,6 @@ static inline void *malloc(size_t size)
 	}
 	return ptr;
 }
-#pragma clang diagnostic pop
 static inline void *calloc(size_t nmemb, size_t size)
 {
 	Timeout t   = {0, MALLOC_WAIT_TICKS};
@@ -416,6 +419,7 @@ static inline void *calloc(size_t nmemb, size_t size)
 	}
 	return ptr;
 }
+#pragma clang diagnostic pop
 static inline int free(void *ptr)
 {
 	return heap_free(MALLOC_CAPABILITY, ptr);

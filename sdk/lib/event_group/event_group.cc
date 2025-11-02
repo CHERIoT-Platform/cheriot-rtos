@@ -1,3 +1,4 @@
+#include "heap.hh"
 #include <atomic>
 #include <cstdlib>
 #include <errno.h>
@@ -42,16 +43,16 @@ int eventgroup_create(Timeout            *timeout,
 	{
 		return -ERANGE;
 	}
-	size_t size = sizeof(EventGroup) + (threads * sizeof(EventWaiter));
-	auto   group =
-	  static_cast<EventGroup *>(heap_allocate(timeout, heapCapability, size));
-	*outGroup = group;
-	if (!__builtin_cheri_tag_get(group))
-	{
-		return -ENOMEM;
-	}
-	group->waiterCount = threads;
-	return 0;
+	size_t size  = sizeof(EventGroup) + (threads * sizeof(EventWaiter));
+	auto   alloc = heap_allocate_cpp(timeout, heapCapability, size);
+	return alloc.either(
+	  [&](CHERI::Capability<void> pointer) {
+		  auto group         = new (pointer) EventGroup();
+		  *outGroup          = group;
+		  group->waiterCount = threads;
+		  return 0;
+	  },
+	  [&](int error) { return error; });
 }
 
 int eventgroup_wait(Timeout    *timeout,
