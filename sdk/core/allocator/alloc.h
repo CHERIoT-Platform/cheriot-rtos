@@ -779,7 +779,7 @@ class __packed __aligned(MallocAlignment) TChunk
 	 * equal-sized nodes.
 	 */
 	template<typename F>
-	bool ring_search(F f)
+	auto ring_search(F f)
 	{
 		return ds::linked_list::search(&mchunk.ring, [&](ChunkFreeLink *&p) {
 			return f(MChunk::from_ring(p));
