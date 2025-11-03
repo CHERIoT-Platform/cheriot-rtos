@@ -52,7 +52,7 @@ int eventgroup_create(Timeout            *timeout,
 		  group->waiterCount = threads;
 		  return 0;
 	  },
-	  [&](int error) { return error; });
+	  [](int error) { return error; });
 }
 
 int eventgroup_wait(Timeout    *timeout,
