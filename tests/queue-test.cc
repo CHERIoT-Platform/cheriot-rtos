@@ -4,6 +4,7 @@
 #include "compartment.h"
 #include "token.h"
 #include <cstdlib>
+#include <errno.h>
 #define TEST_NAME "MessageQueue"
 #include "tests.hh"
 #include <FreeRTOS-Compat/queue.h>
@@ -152,6 +153,22 @@ void test_queue_unsealed()
 	checkSpace(0);
 	rv = queue_destroy(MALLOC_CAPABILITY, queue);
 	TEST(rv == 0, "MessageQueue deletion failed with {}", rv);
+	/* The queue implementation has a size limit due to using the top bits of
+	 * counters as size */
+	TEST_EQUAL(
+	  queue_create(&timeout, MALLOC_CAPABILITY, &queue, 0x1, 0x20000000),
+	  -EINVAL,
+	  "queue_create with too large size not return -EINVAL");
+	/* queue_create should detect 32-bit overflow and fail */
+	TEST_EQUAL(
+	  queue_create(&timeout, MALLOC_CAPABILITY, &queue, 0x10000, 0x10000),
+	  -EINVAL,
+	  "queue_create with 32-bit overflow did not return -EINVAL");
+	/* queue_create should detect signed overflow and fail */
+	TEST_EQUAL(
+	  queue_create(&timeout, MALLOC_CAPABILITY, &queue, 0x10000, 0x8000),
+	  -EINVAL,
+	  "queue_create with signed overflow did not return -EINVAL");
 	debug_log("All queue library tests successful");
 }
 
