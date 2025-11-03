@@ -78,7 +78,7 @@ int test_multiwaiter()
 	t.remaining = 0;
 	ret         = queue_create(&t, MALLOC_CAPABILITY, &queue, sizeof(int), 1);
 
-	TEST(ret == 0, "Queue create failed:", ret);
+	TEST(ret == 0, "Queue create failed: {}", ret);
 	int     val = 0;
 	Timeout noWait{0};
 	ret = queue_send(&noWait, queue, &val);
