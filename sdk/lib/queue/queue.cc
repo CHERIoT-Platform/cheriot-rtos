@@ -448,7 +448,7 @@ int queue_create(Timeout              *timeout,
 	ssize_t allocSize = queue_allocation_size(elementSize, elementCount);
 	if (allocSize < 0)
 	{
-		return allocSize;
+		return -EINVAL;
 	}
 
 	// Allocate the space for the queue.
