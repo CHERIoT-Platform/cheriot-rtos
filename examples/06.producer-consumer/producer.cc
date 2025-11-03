@@ -17,8 +17,12 @@ int __cheri_compartment("producer") run()
 {
 	// Allocate the queue
 	CHERI_SEALED(struct MessageQueue *) queue;
-	non_blocking<queue_create_sealed>(
+	int result = non_blocking<queue_create_sealed>(
 	  MALLOC_CAPABILITY, &queue, sizeof(int), 16);
+	// Check for allocation failure.
+	Debug::Invariant(result == 0,
+	                 "Compartment call to queue_create_sealed failed: {}",
+	                 result);
 	// Pass the queue handle to the consumer.
 	Debug::Invariant(set_queue(queue) == 0,
 	                 "Compartment call to set_queue failed");
