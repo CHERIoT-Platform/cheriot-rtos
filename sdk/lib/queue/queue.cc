@@ -459,7 +459,7 @@ int queue_create(Timeout              *timeout,
 		  *outQueue = new (pointer) MessageQueue(elementSize, elementCount);
 		  return 0;
 	  },
-	  [&](int error) { return error; });
+	  [](int error) { return error; });
 }
 
 int queue_send_multiple(Timeout             *timeout,
