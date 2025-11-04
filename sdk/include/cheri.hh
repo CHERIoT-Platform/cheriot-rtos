@@ -1763,6 +1763,22 @@ namespace CHERI
 		}
 
 		/**
+		 * Variant on `and_then` that returns an int: either the value returned
+		 * by the callback, or the error value held by `*this`. This is useful
+		 * for propagating error values in functions that return an int (e.g.
+		 * where negative values indicate errors and zero or positive values
+		 * indicate success).
+		 */
+		int and_then(auto &&function)
+		    requires std::is_convertible_v<decltype(pointer), T *> &&
+		             std::is_same_v<
+		               std::invoke_result_t<decltype(function), T *>,
+		               int>
+		{
+			return either(function, [](int e) { return e; });
+		}
+
+		/**
 		 * Monadic helper modelled on `std::optional`.  Takes a reference to a
 		 * callable object that accepts an `int`.  The return value for the
 		 * argument should be either `void` (in which case `or_else` returns
