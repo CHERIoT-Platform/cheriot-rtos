@@ -197,17 +197,15 @@ void test_queue_sealed()
 
 	t   = UnlimitedTimeout;
 	ret = queue_send_sealed(&t, receiveHandle, Message[1]);
-	TEST(
-	  ret == -EINVAL,
-	  "Sending with a receive handle should return -EINVAL ({}), returned {}",
-	  EINVAL,
-	  ret);
+	TEST_EQUAL(ret,
+	           -EPERM,
+	           "Sending with a receive handle should have failed with -EPERM");
+
 	ret = queue_receive_sealed(&t, sendHandle, bytes);
-	TEST(
-	  ret == -EINVAL,
-	  "Sending with a receive handle should return -EINVAL ({}), returned {}",
-	  EINVAL,
-	  ret);
+	TEST_EQUAL(
+	  ret,
+	  -EPERM,
+	  "Sending with a receive handle should return -EPERM ({}), returned {}");
 
 	ret = queue_send_sealed(&t, sendHandle, Message[1] + 1);
 	TEST(ret == -EPERM,
@@ -244,8 +242,8 @@ void test_queue_sealed()
 	t   = 1;
 	ret = queue_destroy_sealed(&t, MALLOC_CAPABILITY, sendHandle);
 	TEST_EQUAL(ret,
-	           -EINVAL,
-	           "MessageQueue send destruction should have failed with -EINVAL");
+	           -EPERM,
+	           "MessageQueue send destruction should have failed with -EPERM");
 
 	t   = 1;
 	ret = queue_destroy_sealed(&t, nullptr, queue);
