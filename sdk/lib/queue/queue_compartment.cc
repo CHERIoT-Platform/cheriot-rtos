@@ -79,7 +79,8 @@ int queue_destroy_sealed(Timeout            *timeout,
 {
 	if (MessageQueue *queue = unseal(queueHandle, MessageQueuePermitDestroy))
 	{
-		if (heap_can_free(heapCapability, queueHandle) != 0)
+		if (token_obj_can_destroy(heapCapability, handle_key(), queueHandle) !=
+		    0)
 		{
 			return -EPERM;
 		}
