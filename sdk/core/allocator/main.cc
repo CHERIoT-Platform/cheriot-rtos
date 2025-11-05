@@ -831,14 +831,22 @@ namespace
 			                                heapCapability);
 			return -EPERM;
 		}
+		// Validate the pointer. We do not permit freeing sealed pointers.
 		Capability<void> mem{rawPointer};
-		if (!mem.is_valid())
+		if (!mem.is_valid() || mem.is_sealed())
 		{
 			return -EINVAL;
 		}
 		check_gm();
-		// Find the chunk that corresponds to this allocation.
-		auto *chunk = gm->allocation_start(mem.address());
+		/*
+		 * Find the chunk that corresponds to this allocation.  We use the base
+		 * as it cannot be further than one-past-the-end (because CHERI bounds
+		 * are monotone non-increasing). For us, one-past-the-end is the next
+		 * chunk's header which will have the revocation bit set meaning
+		 * allocation_start would return null. Note: `rawPointer`'s address is
+		 * not used at all!
+		 */
+		auto *chunk = gm->allocation_start(mem.base());
 		if (!chunk)
 		{
 			return -EINVAL;
@@ -943,12 +951,17 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 		Debug::log<DebugLevel::Warning>("Invalid heap cap");
 		return -EPERM;
 	}
-	if (!Capability{pointer}.is_valid())
+	Capability p{pointer};
+	if (!p.is_valid() || p.is_sealed())
 	{
 		Debug::log<DebugLevel::Warning>("Invalid claimed cap");
 		return -EINVAL;
 	}
-	auto *chunk = gm->allocation_start(Capability{pointer}.address());
+	/*
+	 * As with heap_free we use the base to lookup the chunk (see comments in
+	 * heap_free_internal).
+	 */
+	auto *chunk = gm->allocation_start(p.base());
 	if (chunk == nullptr)
 	{
 		Debug::log<DebugLevel::Warning>("chunk not found");

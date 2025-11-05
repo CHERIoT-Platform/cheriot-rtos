@@ -157,7 +157,7 @@ int __cheri_compartment("allocator")
                     CHERI_SEALED(void *));
 
 /**
- * Check whether the pair of a sealing key and a heap capability can unseal a
+ * Check whether the pair of a sealing key and a heap capability can free a
  * sealed object.
  *
  * Returns 0 on success, `-EINVAL` if the key or object is not valid, or one of
