@@ -87,6 +87,62 @@ namespace
 		  "Freed pointer still live; load barrier or revoker out of service?");
 	}
 
+	__noinline void test_heap_free()
+	{
+		debug_log("Testing heap_free edge cases");
+		Timeout          t{5};
+		Capability<void> p1 = heap_allocate(&t, MALLOC_CAPABILITY, 16);
+		TEST(p1.is_valid(), "Unable to make allocation for heap_free tests");
+
+		// Attempt to free a pointer with base and address set just out of
+		// bounds. We can create a length 0 capability with base == top, but as
+		// the base is now outside the allocated region and points to the
+		// allocator's header for the subsequent allocation it might have the
+		// tag cleared by the load filter if it is spilled to memory! As such
+		// this might fail because of a tag check or because the address is not
+		// a valid alloacation.
+		Capability<void> p2 = p1;
+		p2.address()        = p2.top();
+		p2.bounds()         = 0;
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, p2),
+		           -EINVAL,
+		           "attempt to free pointer with base == top did not fail "
+		           "with -EINVAL");
+
+		// Attempt to free a pointer to sub allocation
+		Capability<void> p3 = p1;
+		p3.bounds()         = 8;
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, p3),
+		           -EPERM,
+		           "attempt to free suballocation did not fail with -EPERM");
+		TEST(p3.is_valid_temporal(),
+		     "suballocation pointer invalid after failed free attempt");
+
+		// Attempt to free a pointer to sub allocation with adjusted base
+		Capability<void> p4 = p1;
+		p4.address() += 8;
+		p4.bounds() = 8;
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, p4),
+		           -EPERM,
+		           "attempt to free suballocation did not fail with -EPERM");
+		TEST(p4.is_valid_temporal(),
+		     "suballocation pointer invalid after failed free attempt");
+
+		// Attempt to free a pointer with address != base (should succeed).
+		p1 = p1;
+		p1.address() += 8;
+		TEST_SUCCESS(heap_free(MALLOC_CAPABILITY, p1));
+
+		TEST(!p1.is_valid_temporal(),
+		     "cap still valid after free of interior pointer");
+		TEST(!p2.is_valid_temporal(),
+		     "other cap still valid after free of interior pointer");
+		TEST(!p3.is_valid_temporal(),
+		     "suballocation pointer invalid after free of interior pointer");
+		TEST(!p4.is_valid_temporal(),
+		     "suballocation pointer invalid after free of interior pointer");
+	}
+
 	/**
 	 * Test the revoker by constantly allocating and freeing batches of
 	 * allocations. The total amount of allocations must greatly exceed the heap
@@ -977,6 +1033,38 @@ namespace
 		TEST(!Capability{unsealedCapability}.is_sealed(),
 		     "Failed to allocate sealed capability");
 
+		// It should not be possible to free sealed capabilities
+		TEST_EQUAL(heap_can_free(SECOND_HEAP, sealedPointer),
+		           -EINVAL,
+		           "heap_can_free should return error for sealed capability");
+		TEST_EQUAL(heap_free(SECOND_HEAP, sealedPointer),
+		           -EINVAL,
+		           "heap_free should return error for sealed capability");
+
+		// It should not be possible to free unsealed capabilities to sealed
+		// tokens (because the address doesn't include the TokenObjectType
+		// header)
+		TEST_EQUAL(heap_can_free(SECOND_HEAP, unsealedCapability),
+		           -EPERM,
+		           "heap_can_free should return error for unsealed capability "
+		           "to sealed token");
+		TEST_EQUAL(heap_free(SECOND_HEAP, unsealedCapability),
+		           -EPERM,
+		           "heap_free should return error for unsealed capability to "
+		           "sealed token");
+
+		// It should not be possible to claim the sealed capability
+		TEST_EQUAL(heap_claim(MALLOC_CAPABILITY, sealedPointer),
+		           -EINVAL,
+		           "Claiming sealed capability should return error");
+
+		// However it should be possible to claim the unsealed capability
+		TEST_EQUAL(heap_claim(MALLOC_CAPABILITY, unsealedCapability),
+		           sealedPointer.length(),
+		           "Claiming unsealed capability to sealed token should work");
+		// and then release that claim.
+		TEST_SUCCESS(heap_free(MALLOC_CAPABILITY, unsealedCapability));
+
 		int canFree =
 		  token_obj_can_destroy(SECOND_HEAP, sealingCapability, sealedPointer);
 		TEST(canFree == 0,
@@ -988,6 +1076,11 @@ namespace
 		TEST(canFree != 0,
 		     "Should not be able to free a sealed capability with the wrong "
 		     "malloc capability but succeeded");
+		TEST_EQUAL(
+		  token_obj_destroy(
+		    MALLOC_CAPABILITY, sealingCapability, sealedPointer),
+		  -EPERM,
+		  "Freeing a sealed capability with the wrong allocator succeeded");
 		canFree = token_obj_can_destroy(
 		  SECOND_HEAP, STATIC_SEALING_TYPE(wrongSealingKey), sealedPointer);
 		TEST(canFree != 0,
@@ -1146,6 +1239,8 @@ int test_allocator()
 	debug_log("Heap size is {} bytes", HeapSize);
 
 	test_preflight();
+
+	test_heap_free();
 
 	// Test `heap_quota_remaining` failure value. This is used throughout the
 	// allocator tests, so ensure that we fail correctly.

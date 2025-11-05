@@ -221,9 +221,12 @@ void *__cheri_compartment("allocator")
                       uint32_t flags      __if_cxx(= AllocateWaitAny));
 
 /**
- * Add a claim to an allocation.  The object will be counted against the quota
- * provided by the first argument until a corresponding call to `heap_free`.
- * Note that this can be used with interior pointers.
+ * Add a claim to an allocation.  As with `heap_free` the *base* of the
+ * capability is used to find the allocation, not the address.
+ *
+ * The object will be counted against the quota provided by the first argument
+ * until a corresponding call to `heap_free`. Note that this can be used with
+ * interior pointers.
  *
  * This will return the size of the allocation claimed on success (which may be
  * larger than the size requested in the original `heap_allocate` call; see its
@@ -233,8 +236,8 @@ void *__cheri_compartment("allocator")
  * quota is too small to accomodate the claim, and `-EINVAL` if `pointer` is not
  * a valid pointer into a live heap allocation.
  *
- * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
- * stack is insufficiently large to run the function. See `heap_allocate`.
+ * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the stack
+ * is insufficiently large to run the function. See `heap_allocate`.
  */
 ssize_t __cheri_compartment("allocator")
   heap_claim(AllocatorCapability heapCapability, void *pointer);
@@ -272,11 +275,33 @@ heap_claim_fast(Timeout         *timeout,
 }
 
 /**
- * Free a heap allocation.
+ * Free a heap allocation or release a claim made by `heap_claim`. 
  *
- * Returns 0 on success, `-EINVAL` if `ptr` is not a valid pointer to the start
- * of a live heap allocation, or `-ENOTENOUGHSTACK` if the stack size is
- * insufficiently large to safely run the function.
+ * To free an allocation `ptr` must be a capability to the entire allocation
+ * with the same bounds as returned by `heap_allocate`. Claims, however, may be
+ * released using a capability with reduced bounds, just as we allow
+ * `heap_claim` with such a capability. Note that we actually free / release the
+ * allocation associated with the *base* of `ptr`, not the address. This is
+ * because the base is guaranteed to be within the bounds of the original
+ * allocation due to capability monotonicity, unlike the address (which is
+ * ignored)[1].
+ *
+ * Returns:
+ *  - 0 on success
+ *  - `-EINVAL` if `heapCapability` is invalid or if `ptr` is untagged, is
+ *     sealed, or is not a heap pointer.
+ *  - `-EPERM` if `ptr` is not owned or claimed by `heapCapability`, or if the
+ *     bounds do not correspond to the whole allocation and there is no
+ *     outstanding claim to release.
+ *  - `-ENOTENOUGHSTACK` if the stack size is insufficiently large to safely run
+ *     the function.
+ *
+ * [1]: Technically it is possible to derive a tagged, zero-length capability
+ *     with the base equal to the top of an allocation (i.e. just past the end),
+ *     but such capabilities are liable to have their tag bit cleared if stored
+ *     to memory due to the allocator always setting the revocation bit on the
+ *     header of the next allocation. Attempting to free such a pointer will
+ *     result in -EINVAL.
  */
 int __cheri_compartment("allocator")
   heap_free(AllocatorCapability heapCapability, void *ptr);
