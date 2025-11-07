@@ -1,3 +1,4 @@
+#include "heap.hh"
 #include <cheri.hh>
 #include <cstdlib>
 #include <errno.h>
@@ -459,14 +460,13 @@ int queue_create(Timeout              *timeout,
 	}
 
 	// Allocate the space for the queue.
-	Capability buffer{heap_allocate(timeout, heapCapability, allocSize)};
-	if (!buffer.is_valid())
-	{
-		return -ENOMEM;
-	}
-
-	*outQueue = new (buffer.get()) MessageQueue(elementSize, elementCount);
-	return 0;
+	auto buffer = heap_allocate_cpp(timeout, heapCapability, allocSize);
+	return buffer.either(
+	  [&](Capability<void> pointer) {
+		  *outQueue = new (pointer) MessageQueue(elementSize, elementCount);
+		  return 0;
+	  },
+	  [](int error) { return error; });
 }
 
 int queue_send_multiple(Timeout             *timeout,

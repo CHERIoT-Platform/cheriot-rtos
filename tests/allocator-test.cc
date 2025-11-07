@@ -4,6 +4,8 @@
 #define MALLOC_QUOTA 0x100000
 #define TEST_NAME "Allocator"
 
+#include "../sdk/core/allocator/token.h"
+#include "heap.hh"
 #include "tests.hh"
 #include <cheri.hh>
 #include <cheriot-atomic.hh>
@@ -18,8 +20,6 @@
 #include <thread_pool.h>
 #include <token.h>
 #include <vector>
-
-#include "../sdk/core/allocator/token.h"
 
 using thread_pool::async;
 #define SECOND_HEAP_QUOTA 1024U
@@ -77,13 +77,13 @@ namespace
 	__noinline void test_preflight()
 	{
 		Timeout t{5};
-		void *volatile p = heap_allocate(&t, MALLOC_CAPABILITY, 16);
-		TEST(Capability{p}.is_valid(), "Unable to make first allocation");
+		auto    p = heap_allocate_cpp(&t, MALLOC_CAPABILITY, 16);
+		TEST(!p.is_error(), "Unable to make first allocation");
 
-		int res = heap_free(MALLOC_CAPABILITY, p);
+		int res = heap_free(MALLOC_CAPABILITY, p.as_pointer());
 		TEST_EQUAL(res, 0, "heap_free returned nonzero");
 		TEST(
-		  !Capability{p}.is_valid_temporal(),
+		  !Capability{p.as_pointer()}.is_valid_temporal(),
 		  "Freed pointer still live; load barrier or revoker out of service?");
 	}
 
@@ -257,8 +257,8 @@ namespace
 			for (auto &allocation : allocations)
 			{
 				Timeout       t{AllocTimeout};
-				ErrorOr<void> result{
-				  heap_allocate(&t, MALLOC_CAPABILITY, AllocSize)};
+				ErrorOr<void> result =
+				  heap_allocate_cpp(&t, MALLOC_CAPABILITY, AllocSize);
 				if (result.is_error())
 				{
 					break;
@@ -287,7 +287,8 @@ namespace
 			for (auto &allocation : allocations)
 			{
 				Timeout t{AllocTimeout};
-				ErrorOr result{heap_allocate(&t, MALLOC_CAPABILITY, AllocSize)};
+				ErrorOr result =
+				  heap_allocate_cpp(&t, MALLOC_CAPABILITY, AllocSize);
 				TEST(
 				  !result.is_error(),
 				  "Cannot make allocations anymore. Either the revoker is not "
@@ -373,8 +374,8 @@ namespace
 		bool memoryExhausted = false;
 		for (auto &allocation : allocations)
 		{
-			ErrorOr result{heap_allocate(
-			  &noWait, MALLOC_CAPABILITY, BigAllocSize, AllocateWaitNone)};
+			ErrorOr result = heap_allocate_cpp(
+			  &noWait, MALLOC_CAPABILITY, BigAllocSize, AllocateWaitNone);
 			// here test for `-ENOMEM` (as opposed to the valid tag
 			// bit) because we specifically want to check for OOM
 			if (result.as_error() == -ENOMEM)
@@ -388,33 +389,31 @@ namespace
 		debug_log("Calling heap_render");
 		TEST_EQUAL(heap_render(), 0, "heap_render returned non-zero");
 		debug_log("Trying a non-blocking allocation");
-		TEST_EQUAL(
-		  ErrorOr{heap_allocate(&noWait, MALLOC_CAPABILITY, BigAllocSize)}
-		    .as_error(),
-		  -ETIMEDOUT,
-		  "Non-blocking heap allocation did not fail with memory "
-		  "exhausted");
+		TEST_EQUAL(heap_allocate_cpp(&noWait, MALLOC_CAPABILITY, BigAllocSize)
+		             .as_error(),
+		           -ETIMEDOUT,
+		           "Non-blocking heap allocation did not fail with memory "
+		           "exhausted");
 		debug_log("Checking that the 'heap full' flag works");
 		Timeout forever{UnlimitedTimeout};
 		TEST_EQUAL(
-		  ErrorOr{heap_allocate(&forever,
-		                        MALLOC_CAPABILITY,
-		                        BigAllocSize,
-		                        AllocateWaitRevocationNeeded |
-		                          AllocateWaitQuotaExceeded)}
+		  heap_allocate_cpp(&forever,
+		                    MALLOC_CAPABILITY,
+		                    BigAllocSize,
+		                    AllocateWaitRevocationNeeded |
+		                      AllocateWaitQuotaExceeded)
 		    .as_error(),
 		  -ENOMEM,
 		  "Blocking heap allocation with the heap full flag unset did not "
 		  "fail with memory exhausted");
 		Timeout thirtyticks{30};
-		TEST_EQUAL(ErrorOr{heap_allocate(&thirtyticks,
-		                                 MALLOC_CAPABILITY,
-		                                 BigAllocSize,
-		                                 AllocateWaitHeapFull)}
-		             .as_error(),
-		           -ETIMEDOUT,
-		           "Time-limited blocking allocation did not fail "
-		           "with memory exhausted");
+		TEST_EQUAL(
+		  heap_allocate_cpp(
+		    &thirtyticks, MALLOC_CAPABILITY, BigAllocSize, AllocateWaitHeapFull)
+		    .as_error(),
+		  -ETIMEDOUT,
+		  "Time-limited blocking allocation did not fail "
+		  "with memory exhausted");
 		TEST_EQUAL(
 		  thirtyticks.remaining,
 		  0,
@@ -422,22 +421,20 @@ namespace
 		  "exhausted");
 		debug_log("Checking that the 'quota exhausted' flag works");
 		TEST_EQUAL(
-		  ErrorOr{
-		    heap_allocate(
-		      &forever, EMPTY_HEAP, BigAllocSize, AllocateWaitRevocationNeeded)}
+		  heap_allocate_cpp(
+		    &forever, EMPTY_HEAP, BigAllocSize, AllocateWaitRevocationNeeded)
 		    .as_error(),
 		  -ENOMEM,
 		  "Blocking heap allocation with the quota exhausted flag unset did "
 		  "not fail with memory exhausted");
 		thirtyticks = Timeout{30};
-		TEST_EQUAL(ErrorOr{heap_allocate(&thirtyticks,
-		                                 EMPTY_HEAP,
-		                                 BigAllocSize,
-		                                 AllocateWaitQuotaExceeded)}
-		             .as_error(),
-		           -ETIMEDOUT,
-		           "Time-limited blocking allocation did not fail with "
-		           "memory exhausted");
+		TEST_EQUAL(
+		  heap_allocate_cpp(
+		    &thirtyticks, EMPTY_HEAP, BigAllocSize, AllocateWaitQuotaExceeded)
+		    .as_error(),
+		  -ETIMEDOUT,
+		  "Time-limited blocking allocation did not fail with "
+		  "memory exhausted");
 		TEST_EQUAL(thirtyticks.remaining,
 		           0,
 		           "Allocation with quota exhausted wait flag set did not "
@@ -447,22 +444,21 @@ namespace
 		// `AllocateWaitQuotaExceeded` as this would require to be able
 		// to manipulate the quarantine to be reliably done.
 		debug_log("Trying a huge allocation");
-		TEST_EQUAL(ErrorOr{heap_allocate(
-		                     &forever, MALLOC_CAPABILITY, 1024 * 1024 * 1024)}
-		             .as_error(),
-		           -EINVAL,
-		           "Non-blocking heap allocation did not fail on huge "
-		           "allocation");
+		TEST_EQUAL(
+		  heap_allocate_cpp(&forever, MALLOC_CAPABILITY, 1024 * 1024 * 1024)
+		    .as_error(),
+		  -EINVAL,
+		  "Non-blocking heap allocation did not fail on huge "
+		  "allocation");
 		// Test invalid parameter return values
-		TEST_EQUAL(ErrorOr{heap_allocate(&forever, nullptr, 64)}.as_error(),
+		TEST_EQUAL(heap_allocate_cpp(&forever, nullptr, 64).as_error(),
 		           -EPERM,
 		           "Non-blocking heap allocation did not fail on null "
 		           "heap capability");
-		TEST_EQUAL(
-		  ErrorOr{heap_allocate(nullptr, MALLOC_CAPABILITY, 64)}.as_error(),
-		  -EINVAL,
-		  "Non-blocking heap allocation did not fail on null "
-		  "timeout");
+		TEST_EQUAL(heap_allocate_cpp(nullptr, MALLOC_CAPABILITY, 64).as_error(),
+		           -EINVAL,
+		           "Non-blocking heap allocation did not fail on null "
+		           "timeout");
 		// Wake up the thread that will free memory
 		freeStart = 1;
 		debug_log("Notifying deallocation thread to start with futex {}",
@@ -470,12 +466,12 @@ namespace
 		freeStart.notify_one();
 		debug_log("Entering blocking malloc");
 		Timeout t{AllocTimeout};
-		void   *ptr = heap_allocate(&t, MALLOC_CAPABILITY, BigAllocSize);
-		TEST(__builtin_cheri_tag_get(ptr),
+		auto    ptr = heap_allocate_cpp(&t, MALLOC_CAPABILITY, BigAllocSize);
+		TEST(!ptr.is_error(),
 		     "Failed to make progress on blocking allocation, allocation "
 		     "returned {}",
-		     ptr);
-		free(ptr);
+		     ptr.as_error());
+		free(ptr.as_pointer());
 		// Wait until the background thread has freed everything.
 		freeStart.wait(1);
 		allocations.clear();
@@ -547,8 +543,10 @@ namespace
 		 *  small sample of pointers.
 		 */
 		auto doAlloc = [&](HeapTestState &heap, size_t sz) {
-			CHERI::Capability p{heap_allocate(&t, heap.quota, sz)};
-
+			auto a = heap_allocate_cpp(&t, heap.quota, sz);
+			// TEST(!a.is_error(), "Fuzz allocation failed {}=>{}", sz,
+			// a.as_error());
+			auto p = a.as_raw_capability();
 			if (p.is_valid())
 			{
 				// dlmalloc can give you one granule more.
@@ -699,7 +697,8 @@ namespace
 		size_t allocSize       = 128;
 		auto   mallocQuotaLeft = heap_quota_remaining(MALLOC_CAPABILITY);
 		CHERI::Capability alloc{
-		  heap_allocate(&noWait, MALLOC_CAPABILITY, allocSize)};
+		  heap_allocate_cpp(&noWait, MALLOC_CAPABILITY, allocSize)
+		    .as_raw_capability()};
 		TEST(alloc.is_valid(), "Allocation failed");
 		int  claimCount = 0;
 		auto claim      = [&]() {
@@ -767,7 +766,8 @@ namespace
 		  claimSize);
 
 		CHERI::Capability bigAlloc{
-		  heap_allocate(&noWait, MALLOC_CAPABILITY, 2048U)};
+		  heap_allocate_cpp(&noWait, MALLOC_CAPABILITY, 2048U)
+		    .as_raw_capability()};
 		TEST(bigAlloc.is_valid(), "Allocation failed");
 		claimSize = heap_claim(SECOND_HEAP, bigAlloc);
 		TEST(claimSize == -ENOMEM,
@@ -790,10 +790,10 @@ namespace
 		for (size_t i = 16; i < 256; i <<= 1)
 		{
 			allocated += i;
-			TEST(
-			  __builtin_cheri_tag_get(heap_allocate(&noWait, SECOND_HEAP, i)),
-			  "Allocating {} bytes failed",
-			  i);
+			TEST(__builtin_cheri_tag_get(
+			       heap_allocate_cpp(&noWait, SECOND_HEAP, i).as_pointer()),
+			     "Allocating {} bytes failed",
+			     i);
 		}
 		debug_log("Quota left after allocating {} bytes: {}",
 		          allocated,
@@ -819,11 +819,13 @@ namespace
 		          heap_quota_remaining(SECOND_HEAP));
 		Timeout longTimeout{1000};
 		size_t  allocSize = 16;
-		void   *ptr       = heap_allocate(&longTimeout, SECOND_HEAP, allocSize);
+		void   *ptr =
+		  heap_allocate_cpp(&longTimeout, SECOND_HEAP, allocSize).as_pointer();
 		TEST(__builtin_cheri_tag_get(ptr),
 		     "Failed to allocate {} bytes",
 		     allocSize);
-		void *ptr2 = heap_allocate(&longTimeout, SECOND_HEAP, allocSize);
+		void *ptr2 =
+		  heap_allocate_cpp(&longTimeout, SECOND_HEAP, allocSize).as_pointer();
 		TEST(__builtin_cheri_tag_get(ptr2),
 		     "Failed to allocate {} bytes",
 		     allocSize);
@@ -1179,7 +1181,10 @@ namespace
 		auto s = token_sealed_unsealed_alloc(
 		  &t, SECOND_HEAP, sealingCapability, 16, nullptr);
 
-		auto p1 = heap_allocate(&t, SECOND_HEAP, 16);
+		auto alloc1 = heap_allocate_cpp(&t, SECOND_HEAP, 16);
+		TEST(!alloc1.is_error(), "Failed to allocate pointer");
+
+		auto p1 = alloc1.as_pointer();
 
 		static cheriot::atomic<int> state = 0;
 
@@ -1253,7 +1258,8 @@ int test_allocator()
 	// Make sure that free() accepts delegated (non-global) pointers.
 	{
 		Timeout t{UnlimitedTimeout};
-		void *volatile p = heap_allocate(&t, MALLOC_CAPABILITY, 32);
+		void *volatile p =
+		  heap_allocate_cpp(&t, MALLOC_CAPABILITY, 32).as_pointer();
 		TEST(Capability{p}.is_valid(),
 		     "Could not perform an early allocation: {}",
 		     p);
@@ -1273,7 +1279,8 @@ int test_allocator()
 	// Make sure that free works only on memory owned by the caller.
 	Timeout t{5};
 	test_free_all();
-	void *ptr = heap_allocate(&t, STATIC_SEALED_VALUE(secondHeap), 32);
+	void *ptr =
+	  heap_allocate_cpp(&t, STATIC_SEALED_VALUE(secondHeap), 32).as_pointer();
 	TEST(__builtin_cheri_tag_get(ptr), "Failed to allocate 32 bytes");
 	TEST(heap_address_is_valid(ptr) == true,
 	     "Heap object incorrectly reported as not heap address");
@@ -1299,30 +1306,31 @@ int test_allocator()
 	     "Global object incorrectly reported as heap address");
 
 	t = 5;
-	Capability array{
-	  heap_allocate_array(&t, SECOND_HEAP, SECOND_HEAP_QUOTA + 64, 2)};
-	TEST(
-	  !array.is_valid(), "Allocating too large an array succeeded: {}", array);
+	auto array =
+	  heap_allocate_array_cpp(&t, SECOND_HEAP, SECOND_HEAP_QUOTA + 64, 2);
+	TEST(array.is_error(),
+	     "Allocating too large an array succeeded: {}",
+	     array.as_raw_capability());
 	TEST_EQUAL(
-	  ErrorOr{heap_allocate_array(&t, MALLOC_CAPABILITY, 0x80000004, 2)}
-	    .as_error(),
+	  heap_allocate_array_cpp(&t, MALLOC_CAPABILITY, 0x80000004, 2).as_error(),
 	  -EINVAL,
 	  "Allocating array with size overflow succeeded");
-	TEST_EQUAL(ErrorOr{heap_allocate_array(nullptr, MALLOC_CAPABILITY, 64, 2)}
-	             .as_error(),
-	           -EINVAL,
-	           "Allocating array with null timeout succeeded");
-	TEST_EQUAL(ErrorOr{heap_allocate_array(&t, nullptr, 64, 2)}.as_error(),
+	TEST_EQUAL(
+	  heap_allocate_array_cpp(nullptr, MALLOC_CAPABILITY, 64, 2).as_error(),
+	  -EINVAL,
+	  "Allocating array with null timeout succeeded");
+	TEST_EQUAL(heap_allocate_array_cpp(&t, nullptr, 64, 2).as_error(),
 	           -EPERM,
 	           "Allocating array with null quota succeeded");
-	array = heap_allocate_array(&t, MALLOC_CAPABILITY, 16, 2);
-	TEST(array.is_valid(), "Allocating array failed: {}", array);
+	array = heap_allocate_array_cpp(&t, MALLOC_CAPABILITY, 16, 2);
+	TEST(!array.is_error(), "Allocating array failed: {}", array.as_error());
 	// If there's heap fragmentation, this may be rounded up to 40 because we
 	// can't use the 8 bytes after the end for another object.
-	TEST((array.length() >= 32) && (array.length() <= 40),
+	TEST((array.as_raw_capability().length() >= 32) &&
+	       (array.as_raw_capability().length() <= 40),
 	     "Allocating array returned incorrect length: {}",
-	     array);
-	ret = heap_free(MALLOC_CAPABILITY, array);
+	     array.as_raw_capability().length());
+	ret = heap_free(MALLOC_CAPABILITY, array.as_pointer());
 	TEST(ret == 0, "Freeing array failed: {}", ret);
 
 	test_blocking_allocator(HeapSize);
