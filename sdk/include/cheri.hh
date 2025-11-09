@@ -1104,7 +1104,7 @@ namespace CHERI
 		 */
 		template<typename U = T>
 		    requires(!std::same_as<U, void> && !IsSealed)
-		operator U *()
+		operator U *() const
 		{
 			return ptr;
 		}
@@ -1114,7 +1114,7 @@ namespace CHERI
 		 */
 		template<typename U = T>
 		    requires(!std::same_as<U, void> && IsSealed)
-		operator CHERI_SEALED(U *)()
+		operator CHERI_SEALED(U *)() const
 		{
 			return ptr;
 		}
@@ -1122,7 +1122,7 @@ namespace CHERI
 		/**
 		 * Implicit cast to a raw pointer type.
 		 */
-		operator void *()
+		operator void *() const
 		{
 			return ptr;
 		}
@@ -1130,7 +1130,7 @@ namespace CHERI
 		/**
 		 * Access fields of the target as if this were a raw pointer.
 		 */
-		T *operator->()
+		T *operator->() const
 		{
 			return ptr;
 		}
@@ -1138,7 +1138,7 @@ namespace CHERI
 		/**
 		 * Explicitly get the raw pointer.
 		 */
-		T *get()
+		[[nodiscard]] T *get() const
 		    requires std::is_convertible_v<PointerType, T *>
 		{
 			return ptr;
@@ -1149,7 +1149,7 @@ namespace CHERI
 		 */
 		template<typename U = T>
 		    requires(!std::same_as<U, void> && !IsSealed)
-		U &operator*()
+		U &operator*() const
 		{
 			return *ptr;
 		}
@@ -1158,7 +1158,7 @@ namespace CHERI
 		 * Cast this capability to some other type.
 		 */
 		template<typename U>
-		Capability<U, IsSealed> cast()
+		Capability<U, IsSealed> cast() const
 		{
 			return {
 			  static_cast<std::conditional_t<IsSealed, CHERI_SEALED(U *), U *>>(
@@ -1171,7 +1171,7 @@ namespace CHERI
 		 * all other cases.
 		 */
 		template<typename U>
-		bool is_subset_of(Capability<U, IsSealed> other)
+		bool is_subset_of(Capability<U, IsSealed> other) const
 		{
 			return __builtin_cheri_subset_test(other.ptr, ptr);
 		}
@@ -1179,7 +1179,7 @@ namespace CHERI
 		/**
 		 * Seal this capability with the given key.
 		 */
-		[[nodiscard]] Capability<T, true> seal(void *key)
+		[[nodiscard]] Capability<T, true> seal(void *key) const
 		    requires(!IsSealed)
 		{
 			return {reinterpret_cast<CHERI_SEALED(T *)>(
@@ -1189,7 +1189,7 @@ namespace CHERI
 		/**
 		 * Unseal this capability with the given key.
 		 */
-		[[nodiscard]] Capability<T, false> unseal(void *key)
+		[[nodiscard]] Capability<T, false> unseal(void *key) const
 		    requires(IsSealed)
 		{
 #if __has_extension(cheri_sealed_pointers) &&                                  \
@@ -1208,7 +1208,7 @@ namespace CHERI
 		 */
 		template<typename U = T>
 		    requires(!std::same_as<U, void>)
-		U &operator[](size_t index)
+		U &operator[](size_t index) const
 		{
 			return ptr[index];
 		}
@@ -1217,7 +1217,7 @@ namespace CHERI
 		 * Returns true if the capability is `align`-byte aligned, false
 		 * otherwise.
 		 */
-		bool is_aligned(size_t align)
+		[[nodiscard]] bool is_aligned(size_t align) const
 		{
 			return __builtin_is_aligned(ptr, align);
 		}
