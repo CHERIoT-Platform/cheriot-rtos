@@ -1100,9 +1100,40 @@ namespace
 		     "heap_free_all freed sealed capability: {}",
 		     sealedPointer);
 		TEST(ret == 0, "heap_free_all returned {}, expected 0", ret);
+
+		// Test that emphemeral claims do not work on sealed capabilities
+		static cheriot::atomic<int> state = 0;
+		async([=]() {
+			Timeout t{1};
+			int     claimed = heap_claim_ephemeral(&t, sealedPointer, nullptr);
+			TEST(claimed == 0, "Heap claim failed: {}", claimed);
+			state = 1;
+			while (state.load() == 1)
+			{
+				// This is not a cross-compartment call and so
+				// won't drop the ephemeral claims.
+				yield();
+			}
+			debug_log("Releasing hazard pointers");
+		});
+		// Allow the async function to run and establish hazard
+		int sleeps = 0;
+		while (state.load() != 1)
+		{
+			TEST(sleep(1) >= 0, "Failed to sleep");
+			TEST(sleeps++ < 100,
+			     "Background thread failed to establish hazards");
+		}
+
 		TEST(
 		  token_obj_destroy(SECOND_HEAP, sealingCapability, sealedPointer) == 0,
 		  "Freeing a sealed capability with the correct capabilities failed");
+		TEST(!Capability{sealedPointer}.is_valid_temporal(),
+		     "Ephemeral hazard on sealed capability prevented free: {}",
+		     sealedPointer);
+		state = 2;
+		sleep(2); // Give async time to exit
+
 		TEST(heap_quota_remaining(SECOND_HEAP) == SECOND_HEAP_QUOTA,
 		     "Quota left after allocating sealed objects and cleaning up is "
 		     "{}, expected {}",
