@@ -3,6 +3,7 @@
 
 #define TEST_NAME "List"
 #include "tests.hh"
+#include <allocator.h>
 #include <ds/linked_list.h>
 
 using CHERI::Capability;

@@ -23,6 +23,7 @@
 #pragma once
 
 #include "cdefs.h"
+#include <allocator.h>
 #include <multiwaiter.h>
 #include <stddef.h>
 #include <stdint.h>

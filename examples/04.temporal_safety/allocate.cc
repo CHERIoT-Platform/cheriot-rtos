@@ -1,6 +1,7 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+#include <allocator.h>
 #include <compartment.h>
 #include <debug.hh>
 #include <fail-simulator-on-error.h>

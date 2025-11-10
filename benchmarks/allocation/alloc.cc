@@ -1,4 +1,5 @@
 #include "../timing.h"
+#include <allocator.h>
 #include <compartment.h>
 #include <debug.hh>
 #include <locks.hh>
