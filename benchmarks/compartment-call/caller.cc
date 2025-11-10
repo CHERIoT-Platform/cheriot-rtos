@@ -1,5 +1,6 @@
 #include "../timing.h"
 #include "callee.h"
+#include <allocator.h>
 #include <compartment.h>
 #include <debug.hh>
 #include <locks.hh>
