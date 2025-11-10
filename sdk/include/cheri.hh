@@ -492,7 +492,7 @@ namespace CHERI
 		/**
 		 * Constructs a PermissionSet with the permissions of the given pointer.
 		 */
-		static PermissionSet permission_set_from_pointer(const void *p)
+		static PermissionSet permission_set_from_pointer(const volatile void *p)
 		{
 			auto perms = __builtin_cheri_perms_get(p);
 			auto mask  = PermissionSet::valid_permissions_mask();
