@@ -1,3 +1,4 @@
+#include <allocator.h>
 #include <compartment.h>
 #include <cstdlib>
 #include <debug.hh>

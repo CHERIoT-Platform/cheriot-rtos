@@ -1,3 +1,4 @@
+#include <allocator.h>
 #include <cheri.hh>
 #include <compartment.h>
 #include <cstdlib>

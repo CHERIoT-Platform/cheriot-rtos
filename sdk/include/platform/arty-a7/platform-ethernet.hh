@@ -1,4 +1,5 @@
 #pragma once
+#include <allocator.h>
 #include <array>
 #include <cheri.hh>
 #include <cstddef>
