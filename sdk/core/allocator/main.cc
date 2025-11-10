@@ -5,6 +5,7 @@
 #include "cheri.hh"
 #include "revoker.h"
 #include "token.h"
+#include <allocator.h>
 #include <compartment.h>
 #include <errno.h>
 #include <futex.h>
@@ -15,7 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <thread.h>
-#include <token.h>
 #include <utils.hh>
 
 /**
@@ -388,12 +388,17 @@ namespace
 	}
 
 	/**
-	 * Unseal an allocator capability and return it.  Returns `nullptr` if this
-	 * is not a heap capability.
+	 * Unseal an allocator capability and return it if it has all the given
+	 * permissions. Returns `nullptr` otherwise.
 	 */
 	PrivateAllocatorCapabilityState *
-	malloc_capability_unseal(AllocatorCapability in)
+	malloc_capability_unseal(AllocatorCapability in, int permissions)
 	{
+		if ((allocator_permissions(in) & permissions) != permissions)
+		{
+			return nullptr;
+		}
+
 		auto  key        = STATIC_SEALING_TYPE(MallocKey);
 		auto *capability = token_unseal<AllocatorCapabilityState>(key, in);
 		if (!capability)
@@ -824,7 +829,9 @@ namespace
 	                                  void               *rawPointer,
 	                                  bool                reallyFree)
 	{
-		auto *capability = malloc_capability_unseal(heapCapability);
+		// Freeing an allocation for which we have the handle is always allowed
+		auto *capability =
+		  malloc_capability_unseal(heapCapability, AllocatorPermitNone);
 		if (capability == nullptr)
 		{
 			Debug::log<DebugLevel::Warning>("Invalid heap capability {}",
@@ -866,7 +873,8 @@ __cheriot_minimum_stack(0xa0) ssize_t
 {
 	STACK_CHECK(0xa0);
 	LockGuard g{lock};
-	auto     *cap = malloc_capability_unseal(heapCapability);
+	// Querying quota is always allowed
+	auto *cap = malloc_capability_unseal(heapCapability, AllocatorPermitNone);
 	if (cap == nullptr)
 	{
 		return -EPERM;
@@ -930,7 +938,8 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(
 		return reinterpret_cast<void *>(-EINVAL);
 	}
 	LockGuard g{lock};
-	auto     *cap = malloc_capability_unseal(heapCapability);
+	auto     *cap =
+	  malloc_capability_unseal(heapCapability, AllocatorPermitAllocate);
 	if (cap == nullptr)
 	{
 		return reinterpret_cast<void *>(-EPERM);
@@ -945,7 +954,8 @@ __cheriot_minimum_stack(0x1c0) ssize_t
 {
 	STACK_CHECK(0x1c0);
 	LockGuard g{lock};
-	auto     *cap = malloc_capability_unseal(heapCapability);
+	auto     *cap =
+	  malloc_capability_unseal(heapCapability, AllocatorPermitAllocate);
 	if (cap == nullptr)
 	{
 		Debug::log<DebugLevel::Warning>("Invalid heap cap");
@@ -1023,7 +1033,8 @@ __cheriot_minimum_stack(0x1a0) ssize_t
 {
 	STACK_CHECK(0x1a0);
 	LockGuard g{lock};
-	auto     *capability = malloc_capability_unseal(heapCapability);
+	auto     *capability =
+	  malloc_capability_unseal(heapCapability, AllocatorPermitFreeAll);
 	if (capability == nullptr)
 	{
 		Debug::log<DebugLevel::Warning>("Invalid heap capability {}",
@@ -1072,7 +1083,8 @@ __cheriot_minimum_stack(0x230) void *heap_allocate_array(
 		return reinterpret_cast<void *>(-EINVAL);
 	}
 	LockGuard g{lock};
-	auto     *cap = malloc_capability_unseal(heapCapability);
+	auto     *cap =
+	  malloc_capability_unseal(heapCapability, AllocatorPermitAllocate);
 	if (cap == nullptr)
 	{
 		return reinterpret_cast<void *>(-EPERM);
@@ -1159,7 +1171,8 @@ namespace
 		}
 
 		LockGuard g{lock};
-		auto     *capability = malloc_capability_unseal(heapCapability);
+		auto     *capability =
+		  malloc_capability_unseal(heapCapability, AllocatorPermitAllocate);
 		if (capability == nullptr)
 		{
 			return {nullptr, nullptr};

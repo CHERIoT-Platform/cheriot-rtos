@@ -161,7 +161,7 @@ enum [[clang::flag_enum]] AllocateWaitFlags
  * the `timeout` parameter how long to wait.
  *
  * Returns `-EINVAL` if the provided timeout is invalid, and `-EPERM` if the
- * heap capability is invalid.
+ * heap capability does not have permission to perform this allocation.
  *
  * The non-blocking mode (`AllocateWaitNone`, or `timeout` with no time
  * remaining) will return a successful allocation if one can be created
@@ -205,7 +205,8 @@ void *__cheri_compartment("allocator")
  * `size` overflows.
  *
  * Returns `-EINVAL` on such an overflow, or when the provided timeout pointer
- * is invalid. Returns `-EPERM` on an invalid heap capability.
+ * is invalid. Returns `-EPERM` if `heapCapability` does not have permission to
+ * perform this allocation.
  *
  * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
  * stack is insufficiently large to run the function. See `heap_allocate` for
@@ -275,7 +276,7 @@ heap_claim_fast(Timeout         *timeout,
 }
 
 /**
- * Free a heap allocation or release a claim made by `heap_claim`. 
+ * Free a heap allocation or release a claim made by `heap_claim`.
  *
  * To free an allocation `ptr` must be a capability to the entire allocation
  * with the same bounds as returned by `heap_allocate`. Claims, however, may be
