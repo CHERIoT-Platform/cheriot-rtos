@@ -62,7 +62,8 @@ int heap_claim_ephemeral(Timeout *timeout, const void *ptr, const void *ptr2)
 		epoch      = epochCounter->load();
 	} while (epoch != oldEpoch);
 	auto isValidOrNull = [](CHERI::Capability<const void> pointer) {
-		return pointer.is_valid() || (pointer == nullptr);
+		return (pointer.is_valid() && !pointer.is_sealed()) ||
+		       (pointer == nullptr);
 	};
 	if (isValidOrNull(ptr) && isValidOrNull(ptr2))
 	{

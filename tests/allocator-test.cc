@@ -1106,7 +1106,9 @@ namespace
 		async([=]() {
 			Timeout t{1};
 			int     claimed = heap_claim_ephemeral(&t, sealedPointer, nullptr);
-			TEST(claimed == 0, "Heap claim failed: {}", claimed);
+			TEST_EQUAL(claimed,
+			           -EINVAL,
+			           "heap_claim_ephemeral succeeded on sealed capability");
 			state = 1;
 			while (state.load() == 1)
 			{
