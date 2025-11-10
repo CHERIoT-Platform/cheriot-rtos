@@ -373,10 +373,10 @@ enum CHERISealingType
  * To reduce code size, this function is provided as part of the compartment
  * helper library.
  */
-bool __cheri_libcall check_pointer(const void *ptr,
-                                   size_t      space,
-                                   uint32_t    rawPermissions,
-                                   bool        checkStackNeeded);
+bool __cheri_libcall check_pointer(const volatile void *ptr,
+                                   size_t               space,
+                                   uint32_t             rawPermissions,
+                                   bool                 checkStackNeeded);
 
 /**
  * Check that the argument is a valid pointer to a `Timeout` structure.  This

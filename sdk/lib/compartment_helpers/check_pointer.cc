@@ -7,14 +7,14 @@ using namespace CHERI;
  *
  * See `cheri.hh` for more information.
  */
-bool check_pointer(const void *ptr,
-                   size_t      space,
-                   uint32_t    rawPermissions,
-                   bool        checkStackNeeded)
+bool check_pointer(const volatile void *ptr,
+                   size_t               space,
+                   uint32_t             rawPermissions,
+                   bool                 checkStackNeeded)
 {
-	auto permissions = PermissionSet::from_raw(rawPermissions);
-	Capability<const void> cap{ptr};
-	bool                   isValid = cap.is_valid() && !cap.is_sealed();
+	auto       permissions = PermissionSet::from_raw(rawPermissions);
+	Capability cap{ptr};
+	bool       isValid = cap.is_valid() && !cap.is_sealed();
 	// Skip the stack check if we're requiring a global capability.  By
 	// construction, such a thing cannot be derived from the stack
 	// pointer.

@@ -42,10 +42,10 @@ enum [[clang::flag_enum]] FutexWaitFlags
  *  - `-ETIMEOUT` if the timeout expires.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  futex_timed_wait(Timeout        *ticks,
-                   const uint32_t *address,
-                   uint32_t        expected,
-                   uint32_t flags  __if_cxx(= FutexNone));
+  futex_timed_wait(Timeout                 *ticks,
+                   const volatile uint32_t *address,
+                   uint32_t                 expected,
+                   uint32_t flags           __if_cxx(= FutexNone));
 
 /**
  * Compare the value at `address` to `expected` and, if they match, sleep the
@@ -56,8 +56,8 @@ enum [[clang::flag_enum]] FutexWaitFlags
  *
  * This returns 0 on success or `-EINVAL` if the arguments are invalid.
  */
-__always_inline static int futex_wait(const uint32_t *address,
-                                      uint32_t        expected)
+__always_inline static int futex_wait(const volatile uint32_t *address,
+                                      uint32_t                 expected)
 {
 	Timeout t = {0, UnlimitedTimeout};
 	return futex_timed_wait(&t, address, expected, FutexNone);
@@ -80,4 +80,4 @@ __always_inline static int futex_wait(const uint32_t *address,
  * woken.  `-EINVAL` is returned for invalid arguments.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  futex_wake(uint32_t *address, uint32_t count);
+  futex_wake(const volatile uint32_t *address, uint32_t count);
