@@ -37,13 +37,35 @@ namespace
 	 * unsealed handle or null if the handle is invalid or lacks the relevant
 	 * permissions.
 	 */
-	MessageQueue *unseal(CHERI_SEALED(MessageQueue *) handle, int permissions)
+	ErrorOr<MessageQueue> unseal(CHERI_SEALED(MessageQueue *) handle,
+	                             int permissions)
 	{
 		if ((queue_permissions(handle) & permissions) != permissions)
 		{
-			return nullptr;
+			return -EPERM;
 		}
-		return token_unseal(handle_key(), Sealed<MessageQueue>{handle});
+		auto queue = token_unseal(handle_key(), Sealed<MessageQueue>{handle});
+		if (queue)
+		{
+			return queue;
+		}
+		return -EINVAL;
+	}
+
+	/**
+	 * Helper to run a function with the unsealed queue if the handle has the
+	 * given permissions.
+	 *
+	 * Returns either:
+	 *  - -EPERM if the handle does not have all the requested permissions
+	 *  - -EINVAL if the handle cannot be unsealed
+	 *  - The return value of `fn` otherwise
+	 */
+	int with_unsealed(CHERI_SEALED(MessageQueue *) handle,
+	                  int    permissions,
+	                  auto &&fn)
+	{
+		return unseal(handle, permissions).and_then(fn);
 	}
 } // namespace
 
@@ -77,29 +99,32 @@ int queue_destroy_sealed(Timeout            *timeout,
                          AllocatorCapability heapCapability,
                          CHERI_SEALED(MessageQueue *) queueHandle)
 {
-	if (MessageQueue *queue = unseal(queueHandle, MessageQueuePermitDestroy))
-	{
-		if (token_obj_can_destroy(heapCapability, handle_key(), queueHandle) !=
-		    0)
-		{
-			return -EPERM;
-		}
-		queue_stop(queue);
-		return token_obj_destroy(heapCapability, handle_key(), queueHandle);
-	}
-	return -EINVAL;
+	// timeout unused?!
+	return with_unsealed(
+	  queueHandle, MessageQueuePermitDestroy, [&](MessageQueue *queue) {
+		  if (token_obj_can_destroy(
+		        heapCapability, handle_key(), queueHandle) != 0)
+		  {
+			  return -EPERM;
+		  }
+
+		  queue_stop(queue);
+
+		  return token_obj_destroy(heapCapability, handle_key(), queueHandle);
+	  });
 }
 
 int queue_send_sealed(Timeout *timeout,
                       CHERI_SEALED(MessageQueue *) handle,
                       const void *src)
 {
-	MessageQueue *queue = unseal(handle, MessageQueuePermitSend);
-	if (!queue || !check_timeout_pointer(timeout))
+	if (!check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
 	}
-	return queue_send(timeout, queue, src);
+	return with_unsealed(handle, MessageQueuePermitSend, [&](MessageQueue *q) {
+		return queue_send(timeout, q, src);
+	});
 }
 
 int queue_send_multiple_sealed(Timeout *timeout,
@@ -107,24 +132,27 @@ int queue_send_multiple_sealed(Timeout *timeout,
                                const void *src,
                                size_t      count)
 {
-	MessageQueue *queue = unseal(handle, MessageQueuePermitSend);
-	if (!queue || !check_timeout_pointer(timeout))
+	if (!check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
 	}
-	return queue_send_multiple(timeout, queue, src, count);
+	return with_unsealed(handle, MessageQueuePermitSend, [&](MessageQueue *q) {
+		return queue_send_multiple(timeout, q, src, count);
+	});
 }
 
 int queue_receive_sealed(Timeout *timeout,
                          CHERI_SEALED(MessageQueue *) handle,
                          void *dst)
 {
-	MessageQueue *queue = unseal(handle, MessageQueuePermitReceive);
-	if (!queue || !check_timeout_pointer(timeout))
+	if (!check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
 	}
-	return queue_receive(timeout, queue, dst);
+	return with_unsealed(
+	  handle, MessageQueuePermitReceive, [&](MessageQueue *q) {
+		  return queue_receive(timeout, q, dst);
+	  });
 }
 
 int queue_receive_multiple_sealed(Timeout *timeout,
@@ -132,51 +160,46 @@ int queue_receive_multiple_sealed(Timeout *timeout,
                                   void  *dst,
                                   size_t count)
 {
-	MessageQueue *queue = unseal(handle, MessageQueuePermitReceive);
-	if (!queue || !check_timeout_pointer(timeout))
+	if (!check_timeout_pointer(timeout))
 	{
 		return -EINVAL;
 	}
-	return queue_receive_multiple(timeout, queue, dst, count);
+	return with_unsealed(
+	  handle, MessageQueuePermitReceive, [&](MessageQueue *q) {
+		  return queue_receive_multiple(timeout, q, dst, count);
+	  });
 }
 
 int multiwaiter_queue_receive_init_sealed(struct EventWaiterSource *source,
                                           CHERI_SEALED(MessageQueue *) handle)
 {
-	MessageQueue *queue = unseal(handle, MessageQueuePermitReceive);
-	if (!queue)
-	{
-		return -EINVAL;
-	}
-	multiwaiter_queue_receive_init(source, queue);
-	return 0;
+	return with_unsealed(
+	  handle, MessageQueuePermitReceive, [&](MessageQueue *q) {
+		  multiwaiter_queue_receive_init(source, q);
+		  return 0;
+	  });
 }
 
 int multiwaiter_queue_send_init_sealed(struct EventWaiterSource *source,
                                        CHERI_SEALED(MessageQueue *) handle)
 {
-	MessageQueue *queue = unseal(handle, MessageQueuePermitSend);
-	if (!queue)
-	{
-		return -EINVAL;
-	}
-	multiwaiter_queue_send_init(source, queue);
-	return 0;
+	return with_unsealed(
+	  handle, MessageQueuePermitSend, [&](MessageQueue *queue) {
+		  multiwaiter_queue_send_init(source, queue);
+		  return 0;
+	  });
 }
 
 int queue_items_remaining_sealed(CHERI_SEALED(MessageQueue *) handle,
                                  size_t *items)
 {
-	MessageQueue *queue = unseal(handle, 0);
 	if ((queue_permissions(handle) &
 	     (MessageQueuePermitSend | MessageQueuePermitReceive)) == 0)
 	{
 		return -EPERM;
 	}
-	if (!queue)
-	{
-		return -EINVAL;
-	}
-	queue_items_remaining(queue, items);
-	return 0;
+	return with_unsealed(handle, 0, [&](MessageQueue *queue) {
+		queue_items_remaining(queue, items);
+		return 0;
+	});
 }

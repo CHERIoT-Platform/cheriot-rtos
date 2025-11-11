@@ -398,15 +398,17 @@ namespace
 			static_assert(TestErrorOr::AsError<decltype(xOk)>);
 			static_assert(TestErrorOr::AsError<decltype(xSealed)>);
 
-			using PtrToErr = decltype([=](int *x) { return xErr; });
-			using PtrToInt = decltype([](int *x) { return 4; });
+			using PtrToErr   = decltype([=](int *x) { return xErr; });
+			using PtrToInt   = decltype([](int *x) { return 4; });
+			using PtrToFloat = decltype([](int *x) { return 4.0f; });
 
 			/*
 			 * Can call ErrorOr<>::and_then() with a callback returning an
-			 * ErrorOr<> but can't with a callback returning an int.
+			 * ErrorOr<> or an int but can't with a callback returning a float.
 			 */
 			static_assert(TestErrorOr::AndThen<decltype(xOk), PtrToErr>);
-			static_assert(!TestErrorOr::AndThen<decltype(xOk), PtrToInt>);
+			static_assert(TestErrorOr::AndThen<decltype(xOk), PtrToInt>);
+			static_assert(!TestErrorOr::AndThen<decltype(xOk), PtrToFloat>);
 
 			/*
 			 * Can't call ErrorOr<T, true>::and_then(), because we refuse to
