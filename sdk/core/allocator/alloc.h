@@ -1283,7 +1283,7 @@ class MState
 		for (size_t i = 0; i < pointers; i++)
 		{
 			Capability hazardPointer{hazards[i]};
-			if (hazardPointer.is_valid() &&
+			if (hazardPointer.is_valid() && !hazardPointer.is_sealed() &&
 			    hazardPointer.is_subset_of(allocation))
 			{
 				Debug::log("Found hazard pointer for {} (thread: {})",
