@@ -1,10 +1,10 @@
 #include "cheri.hh"
 #include "compartment-macros.h"
+#include <allocator.h>
 #include <cheriot-atomic.hh>
 #include <compartment.h>
 #include <errno.h>
 #include <futex.h>
-#include <stdlib.h>
 #include <switcher.h>
 
 int heap_claim_ephemeral(Timeout *timeout, const void *ptr, const void *ptr2)
