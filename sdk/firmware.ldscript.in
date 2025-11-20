@@ -28,10 +28,3 @@ SECTIONS
 	INCLUDE @firmware_high_ldscript@
 	.loadhigh_post_stub : ALIGN(4) { }
 }
-
-# No symbols should be exported
-VERSION {
-	VERSION_1 {
-		local: *;
-	};
-};
