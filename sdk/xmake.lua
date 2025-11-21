@@ -138,7 +138,7 @@ testCheckOption("model-output")
 
 -- Force -Oz irrespective of build config.  At -O0, we blow out our stack and
 -- require much stronger alignment.
-set_optimize("Oz")
+set_optimize("smallest")
 
 --Capture the directory containing this script for later use.  We need this to
 --find the location of the linker scripts and so on.
