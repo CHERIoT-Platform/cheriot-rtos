@@ -1,8 +1,6 @@
 # Copyright Microsoft and CHERIoT Contributors.
 # SPDX-License-Identifier: MIT
 
-@mmio@
-
 PHDRS
 {
 	headers PT_PHDR PHDRS ;

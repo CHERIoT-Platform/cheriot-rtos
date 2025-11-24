@@ -7,6 +7,7 @@ option("board")
     set_default("ibex-safe-simulator")
 
 compartment("top")
+    add_rules("cheriot.board.define.revokable_memory")
     add_files("top.cc")
 
 firmware("top_compartment")
