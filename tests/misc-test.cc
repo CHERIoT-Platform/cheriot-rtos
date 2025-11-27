@@ -534,22 +534,30 @@ int test_misc()
 	                     Permission::Load,
 	                     Permission::Store,
 	                     Permission::LoadStoreCapability,
-	                     Permission::LoadMutable});
+	                     Permission::LoadMutable,
+	                     Permission::LoadGlobal});
 	check_shared_object(
 	  "exampleK",
-	  SHARED_OBJECT_WITH_PERMISSIONS(void, exampleK, true, true, false, false),
+	  SHARED_OBJECT_WITH_PERMISSIONS(
+	    void, exampleK, true, true, false, false, false),
 	  1024,
 	  {Permission::Global, Permission::Load, Permission::Store});
 	check_shared_object(
 	  "test_word",
-	  SHARED_OBJECT_WITH_PERMISSIONS(void, test_word, true, false, true, false),
+	  SHARED_OBJECT_WITH_PERMISSIONS(
+	    void, test_word, true, false, true, false, false),
 	  4,
 	  {Permission::Global, Permission::Load, Permission::LoadStoreCapability});
 	check_shared_object("test_word",
 	                    SHARED_OBJECT_WITH_PERMISSIONS(
-	                      void, test_word, true, false, false, false),
+	                      void, test_word, true, false, false, false, false),
 	                    4,
 	                    {Permission::Global, Permission::Load});
+	check_shared_object(
+	  "test_word data",
+	  SHARED_OBJECT_WITH_DATA_PERMISSIONS(void, test_word, true, false),
+	  4,
+	  {Permission::Global, Permission::Load});
 	check_odd_memcmp();
 	TEST_EQUAL(strnlen(*volatileString, 3),
 	           3,
