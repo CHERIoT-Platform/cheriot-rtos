@@ -834,9 +834,11 @@ rule("cheriot.firmware")
 				"\n\t\tSHORT(.thread_${thread_id}_trusted_stack_end - .thread_${thread_id}_trusted_stack_start);" ..
 				"\n\n"
 
-		-- Stacks must be less than this size or truncating them in compartment
-		-- switch may encounter precision errors.
-		local stack_size_limit = 8176
+		-- Stacks must be less than this size or we cannot express them in the
+		-- loader metadata.  The checks in lld for valid stacks currently
+		-- reject anything larger than this, so provide a helpful error here,
+		-- rather than an unhelpful one later.
+		local stack_size_limit = 65280
 
 		-- Initial pass through thread sequence to derive values within each
 		local thread_priorities_set = {}

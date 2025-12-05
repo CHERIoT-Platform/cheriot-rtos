@@ -451,13 +451,18 @@ __Z26compartment_switcher_entryz:
 	cgetbase           s1, csp
 	csetaddr           csp, csp, s1
 	sub                s1, s0, s1
-	csetboundsexact    ct2, csp, s1
+	csetboundsrounddown ct2, csp, s1
+	cgettop            s0, ct2
+	// Round down the top address to make sure it is still 16-byte aligned.
+	// This is *probably* not needed, but we need to do a proof on the
+	// csetboundsrounddown behaviour before removing this.  If it is removed,
+	// please link to the proof and leave the following line commented out.
+	andi               s0, s0, 0xfffffff0
 	csetaddr           csp, ct2, s0
 	/*
 	 * Atlas:
-	 *  s0: address of stack boundary between caller and callee frames, that is,
-	 *      the lowest address of the register spill from
-	 *      .Lswitch_entry_first_spill)
+	 *  s0: address of stack boundary between caller and callee frames,
+	 *      possibly rounded down to preserve alignment.
 	 *  sp: pointer to stack, with its limit and address set to the address in
 	 *      s0.  The base and permissions have not been altered from sp at
 	 *      entry, and the tag remains set since all manipulations have been
