@@ -19,6 +19,7 @@ includes(
 	"locks",
 	"microvium",
 	"queue",
+	"randombytes",
 	"softfloat",
 	"stdio",
 	"string",
