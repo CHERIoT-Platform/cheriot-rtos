@@ -310,6 +310,8 @@ end)
 rule("cheriot.component")
 	add_deps("cheriot.toolchain")
 
+	add_deps("cheriot.rust", "cheriot.rust.crate")
+
 	-- Set some default config values for all cheriot components.
 	on_load(function (target)
 		-- Treat this as a static library, though we will replace the default linking steps.
@@ -1519,34 +1521,6 @@ end
 -- It expects the user to pass a CHERIoT-enabled `rustc` with the `--rc` flag to `xmake config`.
 rule("cheriot.rust", function()
 	set_extensions(".rs")
-	on_config(function(target)
-		local rc = target:compiler("rc")
-		local outdata, errdata = os.iorunv(rc:program(), { "--print=target-list" })
-		assert(not errdata or errdata == "", "failed to run `" .. rc:program() .. " --print=target-list':\n" .. errdata)
-
-		local cheriot_target = "riscv32cheriot-unknown-cheriotrtos"
-		local cheriot_target_needle = string.gsub(cheriot_target, "%-", "%%-")
-		local result = string.match(outdata:trim(), cheriot_target_needle)
-
-		cprintf(
-			"Checking if rustc has support for CHERIoT ... %s\n",
-			result and "${color.success}${text.success}" or "${color.nothing}${text.nothing}"
-		)
-
-		if not result then
-			print(outdata:trim())
-			raise(
-				"The selected rust compiler ('"
-					.. rc:program()
-					.. "') does not support the '"
-					.. cheriot_target
-					.. "' target!"
-			)
-		end
-
-		target:set("rcflags", { "--target=" .. cheriot_target }, { force = true })
-	end)
-
 	on_build_file(function(target, sourcefile, opt)
 		-- imports
 		import("core.base.option")
@@ -1581,7 +1555,9 @@ rule("cheriot.rust", function()
 		dependinfo.files = {}
 		local flags = table.join("--crate-type=staticlib", compflags, "-o", targetfile, sourcefile)
 		if is_mode("release") then
-			table.insert(flags, "--release")
+			table.insert(flags, "-Copt-level=z")
+		else
+			table.insert(flags, "-Copt-level=0")
 		end
 
 		vprint("%s %s", compinst:program(), table.concat(flags, " "))
@@ -1612,43 +1588,6 @@ end)
 -- library to the object files to link to produce the final target.
 rule("cheriot.rust.crate", function()
 	set_sourcekinds("cheriot_rust_crate")
-
-	-- Check that `cargo` exists and that the given `rustc` supports CHERIoT.
-	on_config(function(target)
-		import("lib.detect.find_tool")
-
-		local cargo = find_tool("cargo")
-		if not cargo then
-			raise(
-				"No `cargo` binary was found. Please install `cargo`: https://doc.rust-lang.org/cargo/getting-started/installation.html"
-			)
-		end
-		local rc = target:compiler("rc")
-		local outdata, errdata = os.iorunv(rc:program(), { "--print=target-list" })
-		assert(not errdata or errdata == "", "failed to run `" .. rc:program() .. " --print=target-list':\n" .. errdata)
-
-		local cheriot_target = "riscv32cheriot-unknown-cheriotrtos"
-		local cheriot_target_needle = string.gsub(cheriot_target, "%-", "%%-")
-		local result = string.match(outdata:trim(), cheriot_target_needle)
-
-		cprintf(
-			"Checking if rustc has support for CHERIoT ... %s\n",
-			result and "${color.success}${text.success}" or "${color.nothing}${text.nothing}"
-		)
-
-		if not result then
-			print(outdata:trim())
-			raise(
-				"The selected rust compiler ('"
-					.. rc:program()
-					.. "') does not support the '"
-					.. cheriot_target
-					.. "' target!"
-			)
-		end
-
-		target:set("rcflags", { "--target=" .. cheriot_target }, { force = true })
-	end)
 
 	-- Invoke `cargo` to build the crate with the given manifest path using the selected `rustc` compiler.
 	-- Then, add the resulting static library file as an object file for the target, which will be picked up during linking.
