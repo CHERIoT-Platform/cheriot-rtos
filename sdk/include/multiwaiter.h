@@ -93,7 +93,7 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
  *  - On success, this function returns `0`.
  *  - If the arguments are invalid, this function returns `-EINVAL`.
  *  - If the timeout is reached without any events being triggered then this
- *    returns `-ETIMEOUT`.
+ *    returns `-ETIMEDOUT`.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   multiwaiter_wait(Timeout                  *timeout,

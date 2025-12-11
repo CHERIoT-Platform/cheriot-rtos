@@ -147,7 +147,7 @@ int __cheri_libcall queue_destroy(AllocatorCapability  heapCapability,
  * to copy the number of bytes specified by `elementSize` when the queue was
  * created from `src`.
  *
- * Returns 0 on success.  On failure, returns `-ETIMEOUT` if the timeout was
+ * Returns 0 on success.  On failure, returns `-ETIMEDOUT` if the timeout was
  * exhausted, `-EINVAL` on invalid arguments.
  *
  * This expects to be called with a valid queue handle.  It does not validate
@@ -163,7 +163,7 @@ int __cheri_libcall queue_send(Timeout             *timeout,
  * when the queue was created from `src`.
  *
  * Returns the number of elements sent on success.  On failure, returns
- * `-ETIMEOUT` if the timeout was exhausted, `-EINVAL` on invalid arguments.
+ * `-ETIMEDOUT` if the timeout was exhausted, `-EINVAL` on invalid arguments.
  *
  * This expected to be called with a valid queue handle.  It does not validate
  * that this is correct.
@@ -179,7 +179,7 @@ int __cheri_libcall queue_send_multiple(Timeout             *timeout,
  * copied to `dst`, which must have sufficient permissions and space to hold
  * the message.
  *
- * Returns 0 on success, `-ETIMEOUT` if the timeout was exhausted, `-EINVAL` on
+ * Returns 0 on success, `-ETIMEDOUT` if the timeout was exhausted, `-EINVAL` on
  * invalid arguments.
  */
 int __cheri_libcall queue_receive(Timeout             *timeout,
@@ -192,7 +192,7 @@ int __cheri_libcall queue_receive(Timeout             *timeout,
  * `elementSize` when the queue was created to `dst`.
  *
  * Returns the number of elements sent on success.  On failure, returns
- * `-ETIMEOUT` if the timeout was exhausted, `-EINVAL` on invalid arguments.
+ * `-ETIMEDOUT` if the timeout was exhausted, `-EINVAL` on invalid arguments.
  *
  * This expected to be called with a valid queue handle.  It does not validate
  * that this is correct.
