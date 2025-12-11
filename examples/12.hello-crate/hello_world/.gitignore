@@ -1,0 +1,4 @@
+/build/
+/target/
+/cheriot-rtos/
+/.xmake/
