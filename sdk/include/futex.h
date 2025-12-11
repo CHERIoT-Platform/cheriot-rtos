@@ -39,7 +39,7 @@ enum [[clang::flag_enum]] FutexWaitFlags
  *  - 0 on success: either `*address` and `expected` differ or a wake is
  *    received.
  *  - `-EINVAL` if the arguments are invalid.
- *  - `-ETIMEOUT` if the timeout expires.
+ *  - `-ETIMEDOUT` if the timeout expires.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   futex_timed_wait(Timeout                 *ticks,
