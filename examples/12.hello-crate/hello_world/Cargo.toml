@@ -1,0 +1,19 @@
+[workspace]
+members = []
+
+[package]
+name = "hello_world"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.release]
+panic = 'abort'
+
+[profile.dev]
+panic = 'abort'
+
+[dependencies]
+rand = { version = "0.9.1", default-features = false, features = ["small_rng"] }
