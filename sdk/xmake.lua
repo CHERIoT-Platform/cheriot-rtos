@@ -198,6 +198,9 @@ toolchain("cheriot-clang")
 		toolchain:add("cflags", "-std=c23")
 		-- Assembly flags
 		toolchain:add("asflags", default_flags)
+		-- Rust flags
+		
+		toolchain:add("rcflags", { "--target=riscv32cheriot-unknown-cheriotrtos" }, { force = true })
 	end)
 toolchain_end()
 
