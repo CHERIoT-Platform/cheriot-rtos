@@ -228,6 +228,13 @@ toolchain("cheriot-clang", function ()
 		self:add("cxflags", default_clang_flags)
 		-- Assembly flags
 		self:add("asflags", default_clang_flags)
+
+		-- Rust flags
+		local default_rc_flags = {
+			"--target=" .. target,
+			"-Ctarget-cpu=" .. cpu,
+		}
+		self:add("rcflags", default_rc_flags)
 	end)
 end)
 
@@ -309,6 +316,8 @@ end)
 -- Common rules for any CHERIoT component (library or compartment)
 rule("cheriot.component")
 	add_deps("cheriot.toolchain")
+
+	add_deps("cheriot.rust", "cheriot.rust.crate")
 
 	-- Set some default config values for all cheriot components.
 	on_load(function (target)
@@ -1512,5 +1521,164 @@ function compartment(name)
 		add_deps("cheriot.board.interrupts")
 end
 
-includes("lib/")
+-- Rules for standalone Rust source files.
+-- Note that to make the implementation of this rule not too complex single source files are compiled to static libraries,
+-- which will also contain the the parts of Rust's standard library that CHERIoT supports.
+--
+-- It expects the user to pass a CHERIoT-enabled `rustc` with the `--rc` flag to `xmake config`.
+rule("cheriot.rust", function()
+	set_extensions(".rs")
+	on_build_file(function(target, sourcefile, opt)
+		-- imports
+		import("core.base.option")
+		import("core.base.hashset")
+		import("core.tool.compiler")
+		import("core.project.depend")
+		import("utils.progress")
+		import("core.base.json")
+		import("core.project.config")
 
+		local dependfile = target:dependfile(sourcefile)
+
+		-- path/to/rust.rs -> libpath_to_rust
+		local libname = "lib" .. string.gsub(sourcefile:sub(1, #sourcefile - 3), "//", "_")
+		local targetfile = target:objectfile(libname)
+		-- <buildir>/libpath_to_rust.o -> <buildir>/libpath_to_rust.a
+		local targetfile = targetfile:sub(1, #targetfile - 1) .. "a"
+		table.insert(target:objectfiles(), targetfile)
+
+		local compinst = compiler.load("rc", { target = target })
+		local compflags = compinst:compflags({ target = target })
+
+		local dependinfo = option.get("rebuild") and {} or (depend.load(dependfile) or {})
+
+		local depvalues = { compinst:program(), compflags, sourcefile }
+		if not depend.is_changed(dependinfo, { lastmtime = os.mtime(targetfile), values = depvalues }) then
+			return
+		end
+
+		progress.show(opt.progress, "${color.build.object}compiling %s", path.filename(sourcefile))
+
+		io.flush()
+
+		dependinfo.files = {}
+		local flags = table.join("-Copt-level=z", "--crate-type=staticlib", compflags, "-o", targetfile, sourcefile)
+
+		vprint("%s %s", compinst:program(), table.concat(flags, " "))
+		local outdata, errdata = os.iorunv(compinst:program(), flags)
+
+		assert(errdata == nil or errdata == "" or errdata:match("Finished") or (not errdata:match("error")),
+			"failed to compile  " .. sourcefile .. ":\n" .. errdata)
+
+		dependinfo.values = depvalues
+		table.insert(dependinfo.files, sourcefile)
+		depend.save(dependinfo, dependfile)
+	end)
+end)
+
+-- Hack to override the default rule for Rust, which is not sensible for our use-case.
+rule("rust", function()
+	add_deps("cheriot.rust")
+end)
+
+-- Rule for Rust crates. As for standalone Rust source files, it instructs the Rust compiler
+-- to produce static libraries, so that all the relevant parts of Rust's standard library
+-- that CHERIoT supports are bundled.
+--
+-- It requires the user to have `cargo` in the $PATH and to provide a CHERIoT-enabled `rustc`
+-- with  the `--rc` flag to `xmake config`.
+--
+-- Internally, it "just" calls `cargo` passing the path to the Cargo.toml relative to this rule,
+-- makes it compile the crate to a static library and wires up the target to add the resulting
+-- library to the object files to link to produce the final target.
+rule("cheriot.rust.crate", function()
+	set_sourcekinds("cheriot_rust_crate")
+
+	-- Invoke `cargo` to build the crate with the given manifest path using the selected `rustc` compiler.
+	-- Then, add the resulting static library file as an object file for the target, which will be picked up during linking.
+	on_build_file(function(target, sourcefile, opt)
+		import("lib.detect.find_tool")
+		import("utils.progress")
+		import("core.base.json")
+		import("core.project.config")
+
+		local cargo = find_tool("cargo")
+		assert(
+			cargo,
+			"No `cargo` binary was found. Please install `cargo`: https://doc.rust-lang.org/cargo/getting-started/installation.html"
+		)
+
+		local rc = target:compiler("rc")
+		assert(rc, "No `rustc` compiler was set.")
+
+		-- We won't check for depfiles here: cargo will take care of that for us.
+		local manifest_path = path.absolute(sourcefile)
+
+		local flags = { "metadata", "--no-deps", "--format-version=1", "--manifest-path=" .. manifest_path }
+		local cmd = cargo.program .. table.concat(flags, " ")
+		local crate_metadata, errdata = os.iorunv(cargo.program, flags)
+
+		assert(not errdata or errdata == "", "failed to run `" .. cmd .. " :\n" .. errdata)
+
+		local crate_metadata = json.decode(crate_metadata:trim())
+		assert(crate_metadata["packages"], "Invalid Cargo.toml format. Does it have a `[package]` section?")
+
+		local crate_name = nil
+		for _, v in ipairs(crate_metadata["packages"]) do
+			local name = v["name"]
+			if name then
+				crate_name = name
+				break
+			end
+		end
+
+		assert(
+			crate_name,
+			"Invalid Cargo.toml format. Does it have a `[package]` section with a `name = ` for the package?"
+		)
+		local build_dir = path.join(path.directory(target:objectfile("foo")), crate_name)
+
+		progress.show(opt.progress, "${color.build.object}compiling.$(mode) crate %s", crate_name)
+
+		local rustflags = rc:compflags()
+		local cargoflags = { "build", "--lib", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path }
+		local crate_build_mode
+
+		if is_mode("release") then
+			table.insert(cargoflags, "--release")
+			crate_build_mode = "release"
+		else
+			crate_build_mode = "debug"
+		end
+
+		local rustflags_str = table.concat(rustflags, " ")
+		local cmd = string.format(
+			'RUSTC="%s" RUSTFLAGS="%s" %s %s',
+			rc:program(),
+			rustflags_str,
+			cargo.program,
+			table.concat(cargoflags, " ")
+		)
+
+		vprint(cmd)
+
+		local outdata, errdata =
+				os.iorunv(cargo.program, cargoflags, { envs = { RUSTC = rc:program(), RUSTFLAGS = rustflags_str } })
+
+		assert(
+			errdata == nil or errdata == "" or errdata:match("Finished") or (not errdata:match("error")),
+			"failed to compile  " .. sourcefile .. ":\n" .. errdata
+		)
+
+		-- Add the resulting static library to the objectfiles() of the target and remove any Cargo.toml.o that might appear there.
+		local library_path = path.join(build_dir, crate_build_mode, "lib" .. crate_name .. ".a")
+		table.insert(target:objectfiles(), library_path)
+		for i, v in ipairs(target:objectfiles()) do
+			if v:match("Cargo.toml.o") then
+				target:objectfiles()[i] = nil
+			end
+		end
+	end)
+end)
+
+includes("lib/")
