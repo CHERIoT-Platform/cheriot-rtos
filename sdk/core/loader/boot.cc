@@ -1047,6 +1047,35 @@ namespace
 		{
 			Debug::log(
 			  "Capreloc address: {}, base: {}", reloc.addr, reloc.base);
+
+#if defined DEBUG_LOADER && DEBUG_LOADER
+			auto error = false;
+			for (auto &pC : image.privilegedCompartments)
+			{
+				if (contains(pC.code, reloc.addr) ||
+				    contains(pC.data, reloc.addr))
+				{
+					error = true;
+					Debug::log("Capreloc with address {} should be applied to "
+					           "a privileged compartment with code region: {} "
+					           "- {} and data region: ",
+					           reloc.addr,
+					           pC.code.start(),
+					           pC.code.start() + pC.code.size(),
+					           pC.data.start(),
+					           pC.data.start() + pC.data.size());
+				}
+			}
+
+			if (error)
+			{
+				Debug::Invariant(false,
+				                 "Encountered forbidden relocations to "
+				                 "privileged compartment(s)");
+				__builtin_unreachable();
+			}
+#endif
+
 			// Find the compartment that this relocation applies to.
 			const auto &compartment = findCompartment(reloc.addr);
 
