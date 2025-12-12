@@ -1048,7 +1048,7 @@ namespace
 			Debug::log(
 			  "Capreloc address: {}, base: {}", reloc.addr, reloc.base);
 
-			if constexpr (DEBUG_LOADER)
+			if constexpr (DebugLoader)
 			{
 				auto error = false;
 				for (auto &pC : image.privilegedCompartments)
