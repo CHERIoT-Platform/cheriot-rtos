@@ -199,7 +199,6 @@ toolchain("cheriot-clang")
 		-- Assembly flags
 		toolchain:add("asflags", default_flags)
 		-- Rust flags
-		
 		toolchain:add("rcflags", { "--target=riscv32cheriot-unknown-cheriotrtos" }, { force = true })
 	end)
 toolchain_end()
@@ -1736,6 +1735,14 @@ function compartment(name)
 		add_deps("cheriot.board.interrupts")
 end
 
+-- Helper to synthesize cpu-specific Rust flags for the given board.
+local rust_flags_for_board = function(board)
+	if board:match("sonata") or board:match("ibex") then
+		return { "+b" }
+	end
+
+	return nil
+end
 -- Rules for standalone Rust source files.
 -- Note that to make the implementation of this rule not too complex single source files are compiled to static libraries,
 -- which will also contain the the parts of Rust's standard library that CHERIoT supports.
@@ -1762,6 +1769,11 @@ rule("cheriot.rust", function()
 
 		local compinst = compiler.load("rc", { target = target })
 		local compflags = compinst:compflags({ target = target })
+		local board = target:get("cheriot.board_file")
+		local cpu_flags = rust_flags_for_board(board)
+		if cpu_flags then
+			table.insert(compflags, "-Ctarget-feature=" .. table.concat(cpu_flags, ","))
+		end
 
 		local dependinfo = option.get("rebuild") and {} or (depend.load(dependfile) or {})
 
@@ -1856,7 +1868,13 @@ rule("cheriot.rust.crate", function()
 
 		progress.show(opt.progress, "${color.build.object}compiling.$(mode) crate %s", crate_name)
 
-		local rustflags = table.join(rc:compflags())
+		local rustflags = rc:compflags()
+		local board = target:get("cheriot.board_file")
+		local cpu_flags = rust_flags_for_board(board)
+		if cpu_flags then
+			table.insert(rustflags, "-Ctarget-feature=" .. table.concat(cpu_flags, ","))
+		end
+
 		local cargoflags = { "build", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path }
 		local crate_build_mode
 
