@@ -1050,17 +1050,17 @@ namespace
 
 			if constexpr (DebugLoader)
 			{
-				auto error = false;
+				auto hasSeenForbiddenCapRelocs = false;
 				for (auto &pC : image.privilegedCompartments)
 				{
 					if (contains(pC.code, reloc.addr) ||
 					    contains(pC.data, reloc.addr))
 					{
-						error = true;
+						hasSeenForbiddenCapRelocs = true;
 						Debug::log(
 						  "Capreloc with address {} should be applied to "
 						  "a privileged compartment with code region: {} "
-						  "- {} and data region: ",
+						  "- {} and data region: {} - {}",
 						  reloc.addr,
 						  pC.code.start(),
 						  pC.code.start() + pC.code.size(),
@@ -1069,10 +1069,9 @@ namespace
 					}
 				}
 
-				Debug::Invariant(!error,
+				Debug::Invariant(!hasSeenForbiddenCapRelocs,
 				                 "Encountered forbidden relocations to "
 				                 "privileged compartment(s)");
-				__builtin_unreachable();
 			}
 
 			// Find the compartment that this relocation applies to.
