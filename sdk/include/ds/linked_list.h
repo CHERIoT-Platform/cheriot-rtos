@@ -613,10 +613,13 @@ namespace ds::linked_list
 			};
 
 			/**
-			 * Encode a linked list cons cell as a pair of addresses (but
-			 * present an interface in terms of pointers).  CHERI bounds on the
-			 * returned pointers are inherited from the pointer to `this` cons
-			 * cell.
+			 * Encode a linked list cons cell as a pair of displaced addresses
+			 * (but present an interface in terms of pointers).  CHERI bounds on
+			 * the returned pointers are inherited from the pointer to `this`
+			 * cons cell.
+			 *
+			 * The template paramter `Offset` is the constant displacement
+			 * applied to addresses.
 			 */
 			template<typename Type, ptrdiff_t Offset>
 			class OffsetPtrAddr
