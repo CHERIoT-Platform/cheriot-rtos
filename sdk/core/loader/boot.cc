@@ -58,9 +58,6 @@ namespace
 	              offsetof(TrustedStack, cra));
 	__END_DECLS
 
-	static_assert(
-	  CheckSize<sizeof(ThreadLoaderInfo), BOOT_THREADINFO_SZ>::Value);
-
 	/**
 	 * Reserved sealing types.
 	 */

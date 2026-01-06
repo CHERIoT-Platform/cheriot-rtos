@@ -301,7 +301,15 @@ rule("cheriot.component")
 		-- Link using the compartment's linker script.
 		batchcmds:show_progress(opt.progress, "linking " .. target:get("cheriot.type") .. ' ' .. target:filename())
 		batchcmds:mkdir(target:targetdir())
-		batchcmds:vrunv(target:tool("ld"), table.join({"--script=" .. linkerscript, "--compartment", "--gc-sections", "--relax", "-o", target:targetfile()}, target:objectfiles()), opt)
+		batchcmds:vrunv(target:tool("ld"),
+			table.join({
+				"--script=" .. linkerscript,
+				"--compartment",
+				"--gc-sections",
+				"--relax",
+				"-o", target:targetfile()
+			}, target:get("ldflags") or {}, target:objectfiles()),
+			opt)
 		-- This depends on all of the object files and the linker script.
 		batchcmds:add_depfiles(linkerscript)
 		batchcmds:add_depfiles(target:objectfiles())
@@ -1630,21 +1638,27 @@ rule("cheriot.define-rtos-git-description")
 
 -- Common aspects of the CHERIoT loader target
 rule("cheriot.loader.base")
-	add_deps("cheriot.component-debug",
+	add_deps("cheriot.component",
+             "cheriot.component-debug",
 	         "cheriot.baremetal-abi",
 	         "cheriot.subobject-bounds")
 
 	on_load(function (target)
-		target:set("kind", "object")
 		target:set("default", false)
+
+		target:set("cheriot.type", "privileged library")
+		target:set('cheriot.debug-name', "loader")
+
+		target:set("extension", ".loader.o")
+		target:set("cheriot.ldscript", "loader.ldscript")
 
 		target:add("deps", "cheriot.board")
 
 		target:add("defines",
 		           "CHERIOT_AVOID_CAPRELOCS",
 		           "CHERIOT_NO_AMBIENT_MALLOC")
+		target:add("ldflags", "-r")
 
-		target:set('cheriot.debug-name', "loader")
 	end)
 
 	after_load(function (target)
