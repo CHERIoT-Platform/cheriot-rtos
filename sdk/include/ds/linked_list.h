@@ -12,6 +12,7 @@
 
 #include <concepts>
 #include <ds/pointer.h>
+#include <optional>
 
 namespace ds::linked_list
 {
@@ -324,16 +325,76 @@ namespace ds::linked_list
 	/**
 	 * Search through a span of a ring, inclusively from `from` through
 	 * exclusively to `to`, applying `f` to each cons cell in turn.  If `f`
-	 * returns `true`, the search stops early and returns `true`; otherwise,
-	 * search returns `false`.  To (side-effectfully) visit every node in the
+	 * returns `true`, the search stops early and returns an optional carrying a
+	 * pointer to the Cell just scrutinized; otherwise, search returns an empty
+	 * option.  To (side-effectfully) visit every node in the
 	 * span, have `f` always return false.
+	 *
+	 * The callback may take the Cell pointer by reference and so
+	 * side-effectfully influence iteration by updating that reference and
+	 * returning false.  The callback may also update that reference when
+	 * returning true, which will impact the return value of this call, but that
+	 * is unlikely to be the intended outcome.
+	 *
+	 * In order to guarantee termination, `to` must always remain reachable from
+	 * the iterator.  This is usually trivially satisfied, but matters if, for
+	 * example, `from` and `to` are the same element and the iterator is
+	 * removing visited elements (though in that case, one might prefer
+	 * search_safe).
 	 */
-	template<cell::HasCellOperations Cell, typename F>
-	__always_inline bool search(Cell *from, Cell *to, F f)
+	template<bool Reverse = false, cell::HasCellOperations Cell, typename F>
+	__always_inline std::optional<Cell *> search(Cell *from, Cell *to, F f)
 	{
 		Cell *elem;
-		for (elem = from; elem != to; elem = elem->cell_next())
+		for (elem = from; elem != to;
+		     elem = Reverse ? elem->cell_prev() : elem->cell_next())
 		{
+			if (f(elem))
+			{
+				return {elem};
+			}
+		}
+		return {};
+	}
+
+	/**
+	 * Search through all elements of a ring *except* `elem`.  If `elem` is the
+	 * sentinel of a ring, then this is, as one expects, a `search` over all
+	 * non-sentinel members of the ring.
+	 *
+	 * In order to guarantee termination, `elem` must always remain reachable
+	 * from the iterator.
+	 */
+	template<bool Reverse = false, cell::HasCellOperations Cell, typename F>
+	__always_inline auto search(Cell *elem, F f)
+	{
+		return search<Reverse>(static_cast<Cell *>(elem->cell_next()), elem, f);
+	}
+
+	/**
+	 * Like `search`, but this form caches the next pointer across the callback
+	 * invocation, making it safe to modify the linkages of, or even free, the
+	 * element provided to the callback.
+	 *
+	 * While the callback could, like search, take the Cell pointer by
+	 * reference, because this form caches the next pointer, updating that
+	 * reference would serve no purpose.
+	 *
+	 * Because this form is useful for elementwise destruction, unlike `search`,
+	 * it simply returns a boolean indicating whether the search was successful.
+	 *
+	 * In order to guarantee termination, `to` must always remain reachable from
+	 * the iterator.  This is usually trivially satisfied, but matters if `from`
+	 * and `to are the same element.
+	 */
+	template<bool Reverse = false, cell::HasCellOperations Cell, typename F>
+	__always_inline bool search_safe(Cell *from, Cell *to, F f)
+	{
+		Cell *elem = from;
+		Cell *next;
+		for (elem = from; elem != to; elem = next)
+		{
+			next = Reverse ? elem->cell_prev() : elem->cell_next();
 			if (f(elem))
 			{
 				return true;
@@ -343,14 +404,18 @@ namespace ds::linked_list
 	}
 
 	/**
-	 * Search through all elements of a ring *except* `elem`.  If `elem` is the
-	 * sentinel of a ring, then this is, as one expects, a `search` over all
+	 * search_safe through all elements of a ring *except* `elem`.  If `elem` is
+	 * the sentinel of a ring, then this is, as one expects, a `search` over all
 	 * non-sentinel members of the ring.
+	 *
+	 * In order to guarantee termination, `elem` must always remain reachable
+	 * from the iterator.
 	 */
-	template<cell::HasCellOperations Cell, typename F>
-	__always_inline bool search(Cell *elem, F f)
+	template<bool Reverse = false, cell::HasCellOperations Cell, typename F>
+	__always_inline auto search_safe(Cell *elem, F f)
 	{
-		return search(static_cast<Cell *>(elem->cell_next()), elem, f);
+		return search_safe<Reverse>(
+		  static_cast<Cell *>(elem->cell_next()), elem, f);
 	}
 
 	/**
@@ -400,6 +465,11 @@ namespace ds::linked_list
 			linked_list::insert_before(elem, &sentinel);
 		}
 
+		__always_inline void prepend_emplace(Cell *elem)
+		{
+			linked_list::emplace_after(&sentinel, elem);
+		}
+
 		__always_inline Cell *first()
 		{
 			return sentinel.cell_next();
@@ -424,143 +494,295 @@ namespace ds::linked_list
 			return p;
 		}
 
-		template<typename F>
-		__always_inline bool search(F f)
+		/**
+		 * Like linked_list::search, this applies the callback to each object
+		 * on the ring, stopping early with a pointer to the indicated object
+		 * if the callback returns true.
+		 *
+		 * However, unlike linked_list::search, the callback may not change the
+		 * object pointer it is given (that is, even if it takes the pointer by
+		 * reference, updates will be ignored).  This is done to discourage
+		 * accidentally treating the sentinel's Cell as within an Object, which
+		 * it usually is not.  Most such cases were for destructive traversal
+		 * and reset the cursor to the previous Cell; as such, these can use
+		 * search_safe() instead.  If fancier manipulations are required, the
+		 * untyped raw Cell interface is probably a better choice!
+		 */
+		template<bool Reverse = false, typename F>
+		__always_inline auto search(F f)
 		{
-			return linked_list::search(&sentinel, f);
+			return linked_list::search<Reverse>(&sentinel,
+			                                    [f](Cell *c) { return f(c); });
+		}
+
+		template<bool Reverse = false, typename F>
+		__always_inline auto search_safe(F f)
+		{
+			return linked_list::search_safe<Reverse>(
+			  &sentinel, [f](Cell *c) { return f(c); });
+		}
+	};
+
+	/**
+	 * Convenience wrapper for a sentinel cons cell, encapsulating some common
+	 * patterns and communicating in terms of objects that contain a cell rather
+	 * than the cell itself.
+	 */
+	template<typename Object,
+	         typename Cell,
+	         Cell *(Object::*ObjectCellF)(),
+	         Object *(*CellObjectF)(Cell *)>
+	struct TypedSentinel
+	{
+		ds::linked_list::Sentinel<Cell> untyped;
+
+		__always_inline void reset()
+		{
+			untyped.reset();
+		}
+
+		__always_inline bool is_empty()
+		{
+			return untyped.is_empty();
+		}
+
+		__always_inline void append(Object *elem)
+		{
+			untyped.append((elem->*ObjectCellF)());
+		}
+
+		__always_inline void append_emplace(Object *elem)
+		{
+			untyped.append_emplace((elem->*ObjectCellF)());
+		}
+
+		__always_inline void prepend(Object *elem)
+		{
+			untyped.prepend((elem->*ObjectCellF)());
+		}
+
+		__always_inline void prepend_emplace(Object *elem)
+		{
+			untyped.prepend_emplace((elem->*ObjectCellF)());
+		}
+
+		__always_inline Object *first()
+		{
+			return CellObjectF(untyped.first());
+		}
+
+		__always_inline Object *last()
+		{
+			return CellObjectF(untyped.last());
+		}
+
+		__always_inline Object *unsafe_take_first()
+		{
+			return CellObjectF(untyped.unsafe_take_first());
+		}
+
+		__always_inline Object *take_all()
+		{
+			return CellObjectF(untyped.take_all());
+		}
+
+		/**
+		 * Like the (untyped) Sentinel::search, this applies the callback to
+		 * each object on the ring, stopping early with a pointer to the
+		 * indicated object if the callback returns true.  It also has the same
+		 * limitation on callback behavior: even if the object pointer is taken
+		 * by reference, updates will be ignored.
+		 */
+		template<bool Reverse = false, typename F>
+		__always_inline auto search(F f)
+		{
+			auto vCell = untyped.template search<Reverse>(
+			  [f](Cell *c) { return f(CellObjectF(c)); });
+
+			// vCell.transform() once we have it
+			if (vCell.has_value())
+			{
+				return std::optional{CellObjectF(vCell.value())};
+			}
+			return std::optional<Object *>{};
+		}
+
+		template<bool Reverse = false, typename F>
+		__always_inline auto search_safe(F f)
+		{
+			return untyped.template search_safe<Reverse>(
+			  [f](Cell *c) { return f(CellObjectF(c)); });
 		}
 	};
 
 	namespace cell
 	{
 
-		/** Cons cell using two pointers */
-		class Pointer
+		namespace functor
 		{
-			Pointer *prev, *next;
 
-			public:
-			Pointer()
+			/** Cons cell using two pointers */
+			template<typename Type>
+			class Pointer
 			{
-				this->cell_reset();
-			}
+				Type *prev, *next;
 
-			__always_inline void cell_reset()
-			{
-				prev = next = this;
-			}
+				public:
+				Pointer()
+				{
+					this->cell_reset();
+				}
 
-			__always_inline auto cell_next()
-			{
-				return ds::pointer::proxy::Pointer(next);
-			}
+				__always_inline void cell_reset()
+				{
+					prev = next = static_cast<Type *>(this);
+				}
 
-			__always_inline auto cell_prev()
+				__always_inline auto cell_next()
+				{
+					return ds::pointer::proxy::Pointer(next);
+				}
+
+				__always_inline auto cell_prev()
+				{
+					return ds::pointer::proxy::Pointer(prev);
+				}
+			};
+
+			/**
+			 * Encode a linked list cons cell as a pair of addresses (but
+			 * present an interface in terms of pointers).  CHERI bounds on the
+			 * returned pointers are inherited from the pointer to `this` cons
+			 * cell.
+			 */
+			template<typename Type>
+			class __cheri_no_subobject_bounds PtrAddr
 			{
-				return ds::pointer::proxy::Pointer(prev);
-			}
+				ptraddr_t prev, next;
+
+				__always_inline Type *self()
+				{
+					return static_cast<Type *>(this);
+				}
+
+				public:
+				PtrAddr()
+				{
+					this->cell_reset();
+				}
+				/* Primops */
+
+				__always_inline void cell_reset()
+				{
+					prev = next = CHERI::Capability{self()}.address();
+				}
+
+				__always_inline auto cell_next()
+				{
+					return ds::pointer::proxy::PtrAddr(self(), next);
+				}
+
+				__always_inline auto cell_prev()
+				{
+					return ds::pointer::proxy::PtrAddr(self(), prev);
+				}
+
+				/*
+				 * Specialized implementations that may be slightly fewer
+				 * instructions than the generic approaches in terms of the
+				 * primops.
+				 */
+
+				__always_inline bool cell_is_singleton()
+				{
+					return prev == CHERI::Capability{self()}.address();
+				}
+
+				__always_inline bool cell_is_doubleton()
+				{
+					return prev == next;
+				}
+			};
+
+			/**
+			 * Encode a linked list cons cell as a pair of displaced addresses
+			 * (but present an interface in terms of pointers).  CHERI bounds on
+			 * the returned pointers are inherited from the pointer to `this`
+			 * cons cell.
+			 *
+			 * The template paramter `Offset` is the constant displacement
+			 * applied to addresses.
+			 */
+			template<typename Type, ptrdiff_t Offset>
+			class OffsetPtrAddr
+			{
+				ptraddr_t prev, next;
+
+				__always_inline Type *self()
+				{
+					return static_cast<Type *>(this);
+				}
+
+				public:
+				OffsetPtrAddr()
+				{
+					this->cell_reset();
+				}
+
+				/* Primops */
+
+				__always_inline void cell_reset()
+				{
+					prev = next = CHERI::Capability{self()}.address() - Offset;
+				}
+
+				__always_inline auto cell_next()
+				{
+					return ds::pointer::proxy::OffsetPtrAddr<Offset, Type>(
+					  self(), next);
+				}
+
+				__always_inline auto cell_prev()
+				{
+					return ds::pointer::proxy::OffsetPtrAddr<Offset, Type>(
+					  self(), prev);
+				}
+
+				/*
+				 * Specialized implementations that may be slightly fewer
+				 * instructions than the generic approaches in terms of the
+				 * primops.
+				 */
+
+				__always_inline bool cell_is_singleton()
+				{
+					return prev == CHERI::Capability{self()}.address() - Offset;
+				}
+
+				__always_inline bool cell_is_doubleton()
+				{
+					return prev == next;
+				}
+			};
+
+		} // namespace functor
+
+		struct Pointer : public functor::Pointer<Pointer>
+		{
 		};
 		static_assert(HasCellOperationsReset<Pointer>);
 
-		/**
-		 * Encode a linked list cons cell as a pair of addresses (but present an
-		 * interface in terms of pointers).  CHERI bounds on the returned
-		 * pointers are inherited from the pointer to `this` cons cell.
-		 */
-		class __cheri_no_subobject_bounds PtrAddr
+		struct PtrAddr : public functor::PtrAddr<PtrAddr>
 		{
-			ptraddr_t prev, next;
-
-			public:
-			PtrAddr()
-			{
-				this->cell_reset();
-			}
-			/* Primops */
-
-			__always_inline void cell_reset()
-			{
-				prev = next = CHERI::Capability{this}.address();
-			}
-
-			__always_inline auto cell_next()
-			{
-				return ds::pointer::proxy::PtrAddr(this, next);
-			}
-
-			__always_inline auto cell_prev()
-			{
-				return ds::pointer::proxy::PtrAddr(this, prev);
-			}
-
-			/*
-			 * Specialized implementations that may be slightly fewer
-			 * instructions than the generic approaches in terms of the primops.
-			 */
-
-			__always_inline bool cell_is_singleton()
-			{
-				return prev == CHERI::Capability{this}.address();
-			}
-
-			__always_inline bool cell_is_doubleton()
-			{
-				return prev == next;
-			}
 		};
 		static_assert(HasCellOperationsReset<PtrAddr>);
 		static_assert(HasIsSingleton<PtrAddr>);
 		static_assert(HasIsDoubleton<PtrAddr>);
 
-		/**
-		 * Encode a linked list cons cell as a pair of addresses (but present an
-		 * interface in terms of pointers).  CHERI bounds on the returned
-		 * pointers are inherited from the pointer to `this` cons cell.
-		 */
 		template<ptrdiff_t Offset>
-		class OffsetPtrAddr
+		struct OffsetPtrAddr
+		  : public functor::OffsetPtrAddr<OffsetPtrAddr<Offset>, Offset>
 		{
-			ptraddr_t prev, next;
-
-			public:
-			OffsetPtrAddr()
-			{
-				this->cell_reset();
-			}
-
-			/* Primops */
-
-			__always_inline void cell_reset()
-			{
-				prev = next = CHERI::Capability{this}.address() - Offset;
-			}
-
-			__always_inline auto cell_next()
-			{
-				return ds::pointer::proxy::OffsetPtrAddr<Offset, OffsetPtrAddr>(
-				  this, next);
-			}
-
-			__always_inline auto cell_prev()
-			{
-				return ds::pointer::proxy::OffsetPtrAddr<Offset, OffsetPtrAddr>(
-				  this, prev);
-			}
-
-			/*
-			 * Specialized implementations that may be slightly fewer
-			 * instructions than the generic approaches in terms of the primops.
-			 */
-
-			__always_inline bool cell_is_singleton()
-			{
-				return prev == CHERI::Capability{this}.address() - Offset;
-			}
-
-			__always_inline bool cell_is_doubleton()
-			{
-				return prev == next;
-			}
 		};
 		static_assert(HasCellOperationsReset<OffsetPtrAddr<0>>);
 		static_assert(HasIsSingleton<OffsetPtrAddr<0>>);
