@@ -344,24 +344,6 @@ namespace loader
 		              "ShiftedAddressRange should be an address range");
 
 		/**
-		 * The loader metadata.  This is simply the PCC and GDC ranges and is
-		 * accessed only by the assembly stub that initialises the C++
-		 * environment.
-		 */
-		struct __packed
-		{
-			/**
-			 * The range for the loader's PCC.
-			 */
-			ShiftedAddressRange<0> code;
-
-			/**
-			 * The range for the loader's globals.
-			 */
-			ShiftedAddressRange<0> data;
-		} loader;
-
-		/**
 		 * The header for the switcher.  This is not a full compartment, it has
 		 * no state other than its code, which contains read-only globals for a
 		 * sealing key and the capabilities required to enter the scheduler.

@@ -30,10 +30,16 @@ local function option_check_dep(raise, option, dep)
 	end
 end
 
+option("board")
+	set_description("Board JSON description file")
+	set_showmenu(true)
+	set_category("board")
+
 option("board-mixins")
 	set_default("")
 	set_description("Comma separated list of board mixin patch files");
 	set_showmenu(true)
+	set_category("board")
 
 option("allocator")
 	set_description("Build with the shared heap allocator compartment")
@@ -235,6 +241,40 @@ set_defaultarchs("cheriot")
 set_defaultplat("cheriot")
 set_languages("c23", "cxx23")
 
+
+-- Helper to visit all dependencies of a specified target exactly once and call
+-- a callback.
+local function visit_all_dependencies_of(target, callback)
+	local visited = {}
+	local function visit(target)
+		if not visited[target:name()] then
+			visited[target:name()] = true
+			callback(target)
+			for _, d in table.orderpairs(target:deps()) do
+				visit(d)
+			end
+		end
+	end
+	visit(target)
+end
+
+-- Write contents to path if it would create or update the contents
+local function maybe_writefile(xmake_io, xmake_try, path, contents)
+	xmake_try
+	{ function()
+		-- Try reading the file and comparing
+		local old_contents = xmake_io.readfile(path)
+		if old_contents == contents then return end
+		xmake_io.writefile(path, contents)
+	  end
+	, { catch = function()
+		-- If that threw an exception, just write the file
+		xmake_io.writefile(path, contents)
+	  end
+	} }
+end
+
+
 -- Common rules for any CHERI MCU component (library or compartment)
 rule("cheriot.component")
 
@@ -248,7 +288,7 @@ rule("cheriot.component")
 		target:set("prefixname", "")
 	end)
 	before_build(function (target)
-		if not target:get("cheriot.board_file") then
+		if not target:get("cheriot.reachable") then
 			raise("target " .. target:name() .. " is being built but does not " ..
 			"appear to be connected to a firmware image.  Please either use " ..
 			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
@@ -269,6 +309,18 @@ rule("cheriot.component")
 		-- This depends on all of the object files and the linker script.
 		batchcmds:add_depfiles(linkerscript)
 		batchcmds:add_depfiles(target:objectfiles())
+	end)
+
+-- Rule for marking all reflexive, transitive dependencies of a target as
+-- reachable.  See the check for "cheriot.reachable" in the "cheriot.component"
+-- rule's before_build hook, above.
+rule("cheriot.reachability_root")
+	-- Run in on_config, specifically after after_load, so that other rules
+	-- on this target get a chance to add to the dependency graph.
+	on_config(function (target)
+		visit_all_dependencies_of(target, function (target)
+			target:set("cheriot.reachable", true)
+		end)
 	end)
 
 -- CHERI MCU libraries are currently built as compartments, without a
@@ -322,10 +374,24 @@ rule("cheriot.privileged-library")
 		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 	end)
 
+rule("cheriot.generated-source")
+	on_load(function(target)
+		target:set("cheriot.type", "generated source")
+
+		-- Generated source targets get used during compilation, and not just
+		-- linking, phases of dependent targets, so tell xmake about that.
+		--
+		-- XXX: If/when we can mandate xmake v3 or later, apparently the
+		-- preferred mechanism is that such generated code targets use the newer
+		-- {before,on,after}_prepare phase rather than ..._build.
+		target:set("policy", "build.fence", true)
+	end)
+
 -- Build the switcher as an object file that we can import into the final
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
 target("cheriot.switcher")
+	set_default(false)
 	set_kind("object")
 	add_files(path.join(coredir, "switcher/entry.S"))
 
@@ -336,15 +402,28 @@ target("cheriot.switcher")
 -- having an allocator (or into providing a different allocator for a
 -- particular application)
 target("cheriot.allocator")
-	add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks", "cheriot.subobject-bounds")
+	set_default(false)
+	add_rules("cheriot.privileged-compartment",
+		"cheriot.component-debug",
+		"cheriot.component-stack-checks",
+		"cheriot.subobject-bounds",
+		"cheriot.board.define.revokable_memory")
 	add_files(path.join(coredir, "allocator/main.cc"))
 	add_deps("locks")
 	add_deps("compartment_helpers")
+	add_deps("cheriot.board")
 	set_default(false)
 	on_load(function (target)
 		target:set("cheriot.compartment", "allocator")
 		target:set('cheriot.debug-name', "allocator")
 		target:add('defines', "HEAP_RENDER=" .. tostring(get_config("allocator-rendering")))
+	end)
+	after_load(function (target)
+		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+		if board.revoker and board.revoker ~= "software" then
+			target:add("deps", "cheriot.board.interrupts")
+		end
+		target:add("defines", board.rtos_defines and board.rtos_defines.allocator)
 	end)
 
 -- Add the allocator to the firmware image if enabled.
@@ -360,6 +439,7 @@ rule("cheriot.conditionally_link_allocator")
 	end)
 
 target("cheriot.token_library")
+	set_default(false)
 	add_rules("cheriot.privileged-library", "cheriot.component-debug")
 	add_files(path.join(coredir, "token_library/token_unseal.S"))
 	on_load(function (target)
@@ -377,34 +457,25 @@ target("cheriot.software_revoker")
 	end)
 
 -- Helper to find a board file given either the name of a board file or a path.
-local function board_file_for_name(boardName)
-	local boardfile = boardName
+local function board_file_for_name(boardName, searchDir)
+	-- ${sdkboards} for absolute references
+	local boardfile = string.gsub(boardName, "${(%w*)}",
+		{ sdkboards=path.join(scriptdir, "boards") })
 	-- The directory containing the board file.
 	local boarddir = path.directory(boardfile);
-	-- If this isn't a path, look in the boards directory
+	-- If this isn't a path, look in searchDir
 	if not os.isfile(boardfile) then
-		boarddir = path.join(scriptdir, "boards")
+		boarddir = searchDir
 		local fullBoardPath = path.join(boarddir, boardfile .. '.json')
 		if not os.isfile(fullBoardPath) then
 			fullBoardPath = path.join(boarddir, boardfile .. '.patch')
 		end
 		if not os.isfile(fullBoardPath) then
-			print("unable to find board file " .. boardfile .. ".  Try specifying a full path")
 			return nil
 		end
 		boardfile = fullBoardPath
 	end
 	return boarddir, boardfile
-end
-
--- Helper to get the board file for a given target
-local function board_file_for_target(target)
-	local boardName = target:values("board")
-	if not boardName then
-		print("target " .. target:name() .. " does not define a board name")
-		return nil
-	end
-	return board_file_for_name(boardName)
 end
 
 -- If a string value is a number, return it as number, otherwise return it
@@ -454,14 +525,14 @@ local function isarray(t)
 end
 
 
-local function patch_board(json, base, patches)
+local function patch_board(base, patches, xmakeJson)
 	for _, p in ipairs(patches) do
 		if not p.op then
-			print("missing op in "..json.encode(p))
+			print("missing op in "..xmakeJson.encode(p))
 			return nil
 		end
 		if not p.path or (type(p.path) ~= "string") then
-			print("missing or invalid path in "..json.encode(p))
+			print("missing or invalid path in "..xmakeJson.encode(p))
 			return nil
 		end
 
@@ -478,7 +549,7 @@ local function patch_board(json, base, patches)
 		end
 
 		if #objectPath < 1 then
-			print("invalid path in "..json.encode(p))
+			print("invalid path in "..xmakeJson.encode(p))
 			return nil
 		end
 
@@ -492,7 +563,7 @@ local function patch_board(json, base, patches)
 		for _, pathComponent in ipairs(objectPath) do
 			if isarray(nodeToModify) then
 				if type(pathComponent) ~= "number" then
-					print("invalid non-numeric index into array in "..json.encode(p))
+					print("invalid non-numeric index into array in "..xmakeJson.encode(p))
 					return nil
 				end
 				pathComponent = pathComponent + 1
@@ -515,7 +586,7 @@ local function patch_board(json, base, patches)
 		-- Handle the operation
 		if (p.op == "replace") or (p.op == "add") then
 			if not p.value then
-				print(tostring(p.op).. " requires a value, missing in ", json.encode(p))
+				print(tostring(p.op).. " requires a value, missing in ", xmakeJson.encode(p))
 				return nil
 			end
 			if isArrayOperation and p.op == "add" then
@@ -526,7 +597,7 @@ local function patch_board(json, base, patches)
 		elseif p.op == "remove" then
 			nodeToModify[nodeName] = nil
 		else
-			print(tostring(p.op) .. " is not a valid operation in ", json.encode(p))
+			print(tostring(p.op) .. " is not a valid operation in ", xmakeJson.encode(p))
 			return nil
 		end
 	end
@@ -535,31 +606,35 @@ end
 -- Helper to load a board file.  This must be passed the json object provided
 -- by import("core.base.json") because import does not work in helper
 -- functions at the top level.
-local function load_board_file_inner(json, boardFile)
+local function load_board_file_inner(boardDir, boardFile, xmakeJson)
 	if path.extension(boardFile) == ".json" then
-		return json.loadfile(boardFile)
+		return xmakeJson.loadfile(boardFile)
 	end
 	if path.extension(boardFile) ~= ".patch" then
 		print("unknown extension for board file: " .. boardFile)
 		return nil
 	end
-	local patch = json.loadfile(boardFile)
+	local patch = xmakeJson.loadfile(boardFile)
 	if not patch.base then
 		print("Board file " .. boardFile .. " does not specify a base")
 		return nil
 	end
-	local _, baseFile = board_file_for_name(patch.base)
-	local base = load_board_file_inner(json, baseFile)
+	local baseDir, baseFile = board_file_for_name(patch.base, boardDir)
+	if not baseDir then
+		print("unable to find board file " .. patch.name .. ".  Try specifying a full path")
+		return nil
+	end
+	local base = load_board_file_inner(baseDir, baseFile, xmakeJson)
 
-	patch_board(json, base, patch.patch)
+	patch_board(base, patch.patch, xmakeJson)
 
 	return base
 end
 
 -- Load a board (patch) file (recursively) and then apply the configuration's
 -- mixins as well.
-local function load_board_file(json, boardFile, xmakeConfig)
-	local base = load_board_file_inner(json, boardFile)
+local function load_board_file(boardDir, boardFile, xmakeJson, xmakeConfig)
+	local base = load_board_file_inner(boardDir, boardFile, xmakeJson)
 
 	local mixinString = xmakeConfig.get("board-mixins")
 	if not mixinString or mixinString == "" then
@@ -567,87 +642,367 @@ local function load_board_file(json, boardFile, xmakeConfig)
 	end
 
 	for mixinName in mixinString:gmatch("([^,]*),?") do
-		local _, mixinFile = board_file_for_name(mixinName)
+		-- Initially, look next to the board file
+		local mixinDir, mixinFile = board_file_for_name(mixinName, boardDir)
+		if not mixinDir then
+			-- Fall back to looking in the SDK/ boards dir (which might be the same thing)
+			mixinDir, mixinFile = board_file_for_name(mixinName, path.join(scriptdir, "boards"))
+		end
+		if not mixinDir then
+			print("unable to find board mixin " .. mixinName .. ".  Try specifying a full path")
+			return nil
+		end
 
 		-- XXX this *ought* to return nil, error on error, but it just throws.
-		local mixinTree, err = json.loadfile(mixinFile)
+		local mixinTree, err = xmakeJson.loadfile(mixinFile)
 		if not mixinTree then
 			error ("Could not process mixin %q: %s"):format(mixinName, err)
 		end
 
 		print(("Patching board with %q"):format(mixinFile))
 
-		patch_board(json, base, mixinTree)
+		patch_board(base, mixinTree, xmakeJson)
 	end
 
 	return base
 end
 
--- Helper to visit all dependencies of a specified target exactly once and call
--- a callback.
-local function visit_all_dependencies_of(target, callback)
-	local visited = {}
-	local function visit(target)
-		if not visited[target:name()] then
-			visited[target:name()] = true
-			callback(target)
-			for _, d in table.orderpairs(target:deps()) do
-				visit(d)
+target("cheriot.board")
+	set_kind("phony")
+	set_default(false)
+
+	on_load(function (target)
+		import("core.base.json")
+		import("core.project.config")
+
+		local boarddir, boardfile = board_file_for_name(get_config("board"), path.join(scriptdir, "boards"))
+		if not boarddir then
+			raise("unable to find board file " .. get_config("board") .. ".  Try specifying a full path")
+		end
+		local board = load_board_file(boarddir, boardfile, json, config)
+
+		-- Normalize memory extents within the board to have either both an end
+		-- and length or neither.
+		local function normalize_extent(jsonpath, extent)
+			local start = extent.start
+			local stop = extent["end"]
+			local length = extent.length
+			if not stop and not length then
+				raise(table.concat({
+					"Memory extent",
+					table.concat(jsonpath,"."),
+					"does not specify a length or an end"}, " "))
+			elseif not stop then
+				extent["end"] = start + length
+			elseif not length then
+				extent.length = stop - start
+			elseif start + length ~= stop then
+				raise(table.concat({
+					"Memory extent",
+					table.concat(jsonpath,"/"),
+					"specifies inconsistent length and end"}, " "))
 			end
 		end
-	end
-	visit(target)
-end
+		local jsonpath = {"devices"}
+		for name, extent in table.orderpairs(board.devices) do
+			jsonpath[2] = name
+			normalize_extent(jsonpath, extent)
+		end
+		normalize_extent({"instruction_memory"}, board.instruction_memory)
+		if board.data_memory then
+			normalize_extent({"data_memory"}, board.data_memory)
+		end
+		local jsonpath = {"ldscript_fragments"}
+		for name, fragment in table.orderpairs(board.ldscript_fragments) do
+			-- XXX: ldscript fragments don't always know where they end?
+			if type(name) == "string" and (fragment["end"] or fragment.length) then
+				jsonpath[2] = name
+				normalize_extent(jsonpath, fragment)
+			end
+		end
 
--- Rule for defining a firmware image.
-rule("cheriot.firmware")
-	on_run(function (target)
-		import("core.base.json")
-		import("core.project.config")
-		local boarddir, boardfile = board_file_for_target(target)
-		local board = load_board_file(json, boardfile, config)
-		if (not board.run_command) and (not board.simulator) then
-			raise("board description " .. boardfile .. " does not define a run command")
-		end
-		local simulator = board.run_command or board.simulator
-		simulator = string.gsub(simulator, "${(%w*)}", { sdk=scriptdir, board=boarddir })
-		local firmware = target:targetfile()
-		local directory = path.directory(firmware)
-		firmware = path.filename(firmware)
-		local run = function(simulator)
-			local simargs = { firmware }
-			os.execv(simulator, simargs, { curdir = directory })
-		end
-		-- Try executing the simulator from the sdk directory, if it's there.
-		local tools_directory = config.get("sdk")
-		local simpath = path.join(tools_directory, simulator)
-		if os.isexec(simpath) then
-			run(simpath)
-			return
-		end
-		simpath = path.join(path.join(tools_directory, "bin"), simulator)
-		if os.isexec(simpath) then
-			run(simpath)
-			return
-		end
-		-- Otherwise, hope that it's in the path
-		run(simulator)
+		target:set("cheriot.board_dir", boarddir)
+		target:set("cheriot.board_file", boardfile)
+		target:set("cheriot.board_info", { board })
+
+		-- The size of a register spill frame in a trusted stack is a function
+		-- of the board.  While *most* of the system gets this from
+		-- core/switcher/trusted-stack-assembly.h, we need it when sizing
+		-- thread trusted stacks over in the generated linker scripts.  The
+		-- loader component asserts that this value matches what the rest of
+		-- the system sees.
+		target:set("cheriot.trusted_spill_size",
+			board.stack_high_water_mark and 192 or 176)
 	end)
 
-	-- Set up the thread defines and the information for the linker script.
-	-- This must be after load so that dependencies are resolved.
-	after_load(function (target)
-		import("core.base.json")
-		import("core.project.config")
+target("cheriot.board.file")
+	set_kind("binary")
+	set_default(false)
+	set_targetdir("$(buildir)")
+	set_filename("board.json")
 
+	add_rules("cheriot.generated-source")
+
+	add_deps("cheriot.board")
+
+	on_build(function(target)
+		import("core.base.json")
+
+		print(format("Patched board file will be saved as %q",
+			path.absolute(target:targetfile())))
+
+		maybe_writefile(io, try, target:targetfile(),
+			json.encode(target:dep("cheriot.board"):get("cheriot.board_info")))
+	end)
+
+	on_link(function (target) end)
+
+target("cheriot.board.ldscript.mmio")
+	set_kind("binary")
+	set_default(false)
+	add_deps("cheriot.board")
+	set_targetdir("$(buildir)")
+	set_filename("mmio.ldscript")
+
+	add_rules("cheriot.generated-source")
+
+	on_build(function(target)
+		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+
+		-- Build the MMIO space for the board
+		local mmios = {}
+		local mmio_start = 0xffffffff
+		local mmio_end = 0
+		-- Add start and end markers for all MMIO devices.
+		for name, range in table.orderpairs(board.devices) do
+			local start = range.start
+			local stop = range["end"]
+			mmio_start = math.min(mmio_start, start)
+			mmio_end = math.max(mmio_end, stop)
+			table.insert(mmios, format("__export_mem_%s = 0x%x", name, start))
+			table.insert(mmios, format("__export_mem_%s_end = 0x%x", name, stop))
+		end
+
+		-- For the built-in, named memory segments, provide starts and ends
+		-- See the ldscript generation for others
+		local spans = {}
+		do
+			local imem = board.instruction_memory
+			spans["instruction_memory"] = { imem.start, imem["end"] }
+		end
+		if board.data_memory then
+			local dmem = board.data_memory
+			spans["data_memory"] = { dmem.start, dmem["end"] }
+		end
+
+		-- For named ldscript fragments with starts and ends, do the same.
+		for name, fragment in table.orderpairs(board.ldscript_fragments) do
+			if type(name) == "string" and fragment.start and fragment["end"] then
+				spans[name] = { fragment.start, fragment["end"] }
+			end
+		end
+
+		local span_text = {}
+		for name, range in pairs(spans) do
+			table.insert(span_text,
+				format("__memspan__%s = 0x%x;\n__memspan__%s_end = 0x%x;",
+					name, range[1], name, range[2]))
+		end
+
+		-- Provide the range of the MMIO space and the heap.
+		maybe_writefile(io, try, target:targetfile(),
+			table.concat({
+				format("__mmio_region_start = 0x%x", mmio_start),
+				table.concat(mmios, ";\n"),
+				format("__mmio_region_end = 0x%x", mmio_end),
+				format("__export_mem_heap_end = 0x%x", board.heap["end"]),
+				table.concat(span_text, "\n")
+			}, ";\n"))
+	end)
+
+	on_link(function (target) end)
+
+-- Add a target's configuration directory to its 'cxflags' in a way that xmake
+-- propagates to things that depend on this target.
+rule("cheriot.cxflags.interface.iquote.targetdir")
+	after_load(function (target)
+		target:add('cxflags', format("-iquote%s", target:targetdir()),
+		  {force = true, interface = true})
+	end)
+
+target("cheriot.board.interrupts")
+	set_kind("binary")
+	set_default(false)
+	add_rules("cheriot.cxflags.interface.iquote.targetdir")
+	add_deps("cheriot.board")
+	set_targetdir("$(buildir)")
+	set_filename("board-interrupts.h")
+
+	add_rules("cheriot.generated-source")
+
+	on_build(function (target)
+		local board = target:dep("cheriot.board"):get("cheriot.board_info")
+
+		local interrupt_names_numbers = {}
+		if board.interrupts then
+			for _, interrupt in ipairs(board.interrupts) do
+				table.insert(interrupt_names_numbers, interrupt.name .. "=" .. math.floor(interrupt.number))
+			end
+		else
+			-- don't generate an emtpy enum
+			table.insert(interrupt_names_numbers, "DummyInterrupt=0")
+		end
+
+		local template = io.readfile(path.join(scriptdir, "board-interrupts.h.in"))
+		maybe_writefile(io, try, target:targetfile(),
+			template:gsub("@board_interrupt_enum_body@",
+				table.concat(interrupt_names_numbers, ",\n")))
+	end)
+
+	on_link(function (target) end)
+
+rule("cheriot.board.define.revokable_memory")
+	on_load(function (target)
+		target:add("deps", "cheriot.board")
+	end)
+
+	after_load(function (target)
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+
+		-- Set the start of memory that can be revoked.
+		-- By default, this is the start of code memory but it can be
+		-- explicitly overwritten.
+		local revokable_memory_start = board.instruction_memory.start
+		if board.data_memory then
+			revokable_memory_start = board.data_memory.start
+		end
+		if board.revokable_memory_start then
+			revokable_memory_start = board.revokable_memory_start
+		end
+		target:add("defines",
+			"REVOKABLE_MEMORY_START=" .. format("0x%x", revokable_memory_start))
+	end)
+
+rule("cheriot.board.ldscript.conf")
+	on_load(function (target)
+		target:add("deps", "cheriot.board")
+	end)
+
+	after_load(function (target)
+		local board_target = target:deps()["cheriot.board"]
+		local board = board_target:get("cheriot.board_info")
+		local boarddir = board_target:get("cheriot.board_dir")
+
+		local ldscript_fragments = {}
+		do
+			local fragment = target:get("cheriot.ldfragment.rocode")
+			assert(fragment, "Target must specify cheriot.ldfragment.rocode")
+			assert(fragment.start == nil)
+			assert(fragment.start_string == nil)
+			fragment.start = board.instruction_memory.start
+			table.insert(ldscript_fragments, fragment)
+		end
+		do
+			local fragment = target:get("cheriot.ldfragment.rwdata")
+			if fragment then
+				assert(fragment.start == nil)
+				assert(fragment.start_string == nil)
+				if board.data_memory then
+					fragment.start = board.data_memory.start
+				else
+					fragment.start = ldscript_fragments[#ldscript_fragments].start + 1
+					fragment.start_string = "."
+				end
+				table.insert(ldscript_fragments, fragment)
+			end
+		end
+
+		-- Use a pairs() iterator here so that the board file can choose to
+		-- use arrays or maps.
+		for _, fragment in pairs(board.ldscript_fragments or {}) do
+			if fragment.srcpath then
+				-- Allow ${sdk} to refer to the SDK directory, like includes
+				fragment.srcpath = string.gsub(fragment.srcpath, "${(%w*)}", { sdk=scriptdir })
+				if not path.is_absolute(fragment.srcpath) then
+					fragment.srcpath = path.join(boarddir, fragment.srcpath);
+				end
+			end
+			table.insert(ldscript_fragments, fragment)
+		end
+
+		for _, fragment in ipairs(ldscript_fragments) do
+			fragment.start_string =
+				fragment.start_string or format("0x%x", fragment.start)
+		end
+
+		-- Sort the various ldscripts and work out the top-level PHDRs and SECTIONs
+		table.sort(ldscript_fragments, function(a,b) return a.start < b.start end)
+		local ldscript_top_phdrs = {}
+		local ldscript_top_sections = {}
+		local ldscript_top_phdr_template = "\n\tload${ix} PT_${phtype} ;"
+		-- Sections inherit the most recently set program header, so we can
+		-- create a stub section with no contents to set all subsequent
+		-- sections to map into the right program header.  (The included linker
+		-- scripts do not assign program headers on their sections.)
+		local ldscript_top_section_template =
+			"\n\t.load${ix}_pre_stub : { } :load${ix}" ..
+			"\n\t. = ${start_string} ;" ..
+			"\n\t${body}" ..
+			"\n\t.load${ix}_post_stub : ALIGN(4) { }"
+		for ix, v in ipairs(ldscript_fragments) do
+			v.ix = ix
+			v.phtype = v.phtype or "LOAD"
+
+			-- If this fragment is a configfile, then work out its generated
+			-- path from its name, generate the body for the top-level script,
+			-- add it to the target's configfiles and "cheriot.ldscripts" list.
+			if v.srcpath then
+				if v.genname then
+					assert(v.body == nil, "ldscript with srcpath and body")
+					local genpath = path.join(target:configdir(), v.genname)
+					v.body = format("INCLUDE %q", genpath)
+
+					target:add("cheriot.ldscripts", genpath)
+					target:add("configfiles", v.srcpath,
+						{ pattern = "@(.-)@"
+						, filename = v.genname
+						})
+				else
+					target:add("cheriot.ldscripts", v.srcpath)
+					v.body = format("INCLUDE %q", v.srcpath)
+				end
+			else
+				assert(v.body, "ldscript with neither srcpath nor body")
+				v.body = v.body:gsub("@(.-)@", v)
+			end
+
+			-- The ()s here are not superfluous: gsub returns multiple results,
+			-- and since it's the last argument here, Lua defaults to passing
+			-- all of them to the enclosing call, which isn't what we want.
+			-- (See 5.3's manual's section "3.4 – Expressions".)
+			table.insert(ldscript_top_phdrs,
+				(ldscript_top_phdr_template:gsub("${([_%w]*)}", v)))
+			table.insert(ldscript_top_sections,
+				(ldscript_top_section_template:gsub("${([_%w]*)}", v)))
+		end
+
+		-- Define configuration variables for the target's top-level ldscript.
+		target:set("configvar", "ldscript_top_phdrs", table.concat(ldscript_top_phdrs))
+		target:set("configvar", "ldscript_top_sections", table.concat(ldscript_top_sections, "\n"))
+	end)
+
+-- Do board-directed whole-dependency-tree configuration (defines &c)
+rule("cheriot.board.targets.conf")
+	after_load(function (target)
+		target:add("deps", "cheriot.board")
+	end)
+
+	-- Run this after all the after_load()s have completed, so we have a full
+	-- view of the dependency tree
+	on_config(function (target)
 		local function visit_all_dependencies(callback)
 			visit_all_dependencies_of(target, callback)
 		end
-
-		local boarddir, boardfile = board_file_for_target(target);
-		local board = load_board_file(json, boardfile, config)
-		print("Board file saved as ", target:targetfile()..".board.json")
-		json.savefile(target:targetfile()..".board.json", board)
 
 		-- Add defines to all dependencies.
 		local add_defines_each_dependency = function (defines)
@@ -663,30 +1018,17 @@ rule("cheriot.firmware")
 			end)
 		end
 
-		local software_revoker = false
+		local board_target = target:deps()["cheriot.board"]
+		local boarddir = board_target:get("cheriot.board_dir")
+		local board = board_target:get("cheriot.board_info")
+
 		if board.revoker then
 			local temporal_defines = { "TEMPORAL_SAFETY" }
 			if board.revoker == "software" then
 				temporal_defines[#temporal_defines+1] = "SOFTWARE_REVOKER"
-				software_revoker = true
-				target:add('deps', "cheriot.software_revoker")
 			end
 			add_defines_each_dependency(temporal_defines)
 		end
-
-		-- Check that all dependences have a single board that they're targeting.
-		visit_all_dependencies(function (target)
-			local targetBoardFile = target:get("cheriot.board_file")
-			local targetBoardDir = target:get("cheriot.board_dir")
-			if not targetBoardFile and not targetBoardDir then
-				target:set("cheriot.board_file", boardfile)
-				target:set("cheriot.board_dir", boarddir)
-			else
-				if targetBoardFile ~= boardfile or targetBoardDir ~= boarddir then
-					raise("target " .. target:name() .. " is used in two or more firmware targets with different boards")
-				end
-			end
-		end)
 
 		if board.driver_includes then
 			for _, include_path in ipairs(board.driver_includes) do
@@ -707,8 +1049,6 @@ rule("cheriot.firmware")
 			add_defines_each_dependency(board.defines)
 		end
 
-		local scheduler = target:deps()[target:name() .. ".scheduler"]
-
 		-- If this board defines any cxflags, add them to all targets
 		if board.cxflags then
 			add_cxflags(board.cxflags)
@@ -721,91 +1061,158 @@ rule("cheriot.firmware")
 			add_defines_each_dependency("SIMULATION")
 		end
 
-		local loader = target:deps()['cheriot.loader'];
-
 		if board.stack_high_water_mark then
 			add_defines_each_dependency("CONFIG_MSHWM")
-		else
-			-- If we don't have the stack high watermark, the trusted stack is smaller.
-			loader:set('loader_trusted_stack_size', 176)
 		end
 
 		-- Build the MMIO space for the board
-		local mmio = ""
-		local mmio_start = 0xffffffff
-		local mmio_end = 0
-		-- Add start and end markers for all MMIO devices.
-		for name, range in table.orderpairs(board.devices) do
-			local start = range.start
-			local stop = range["end"]
-			if not stop then
-				if not range.length then
-					raise("Device " .. name .. " does not specify a length or an end)")
-				end
-				stop = start + range.length
-			end
+		for name, _ in table.orderpairs(board.devices) do
 			add_defines_each_dependency("DEVICE_EXISTS_" .. name)
-			mmio_start = math.min(mmio_start, start)
-			mmio_end = math.max(mmio_end, stop)
-			mmio = format("%s__export_mem_%s = 0x%x;\n__export_mem_%s_end = 0x%x;\n",
-				mmio, name, start, name, stop);
 		end
-		-- Provide the range of the MMIO space and the heap.
-		mmio = format("__mmio_region_start = 0x%x;\n%s__mmio_region_end = 0x%x;\n__export_mem_heap_end = 0x%x;\n",
-			mmio_start, mmio, mmio_end, board.heap["end"])
+	end)
 
-		local code_start = format("0x%x", board.instruction_memory.start);
-		-- Put the data either at the specified address if given, or directly after code
-		local data_start = board.data_memory and format("0x%x", board.data_memory.start) or '.';
-		local builddir = config.builddir and config.builddir() or config.buildir()
-		local rwdata_ldscript = path.join(builddir, target:name() .. "-firmware.rwdata.ldscript")
-		local rocode_ldscript = path.join(builddir, target:name() .. "-firmware.rocode.ldscript")
-		if not board.data_memory or (board.instruction_memory.start < board.data_memory.start) then
-			-- If we're not explicilty given a data address or it's lower than the code address
-			-- then code needs to go first in the linker script.
-			firmware_low_ldscript = rocode_ldscript
-			firmware_high_ldscript = rwdata_ldscript
-		else
-			-- Otherwise the data is at a lower address than code (e.g. Sonata with SRAM and hyperram)
-			-- so it needs to go first.
-			firmware_low_ldscript = rwdata_ldscript;
-			firmware_high_ldscript = rocode_ldscript;
+-- Rule for linking targets that are top-level firmware image like
+rule("cheriot.firmware.linkcmd")
+
+	after_load(function (target)
+		target:add("deps", "cheriot.board.ldscript.mmio")
+	end)
+
+	-- Perform the final link step for a firmware image.
+	on_linkcmd(function (target, batchcmds, opt)
+		-- Get a specified linker script, or set the default to the compartment
+		-- linker script.
+		local linkerscript_mmio = target:dep("cheriot.board.ldscript.mmio"):targetfile()
+		local linkerscript1 = target:get("cheriot.ldscript")
+		-- Link using the firmware's linker script.
+		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
+		batchcmds:mkdir(target:targetdir())
+		local objects = target:objectfiles()
+
+		local depfilter = target:extraconf("rules", "cheriot.firmware.linkcmd", "dependency_filter")
+		                  or function() return true end
+		visit_all_dependencies_of(target, function (dep)
+			if not dep:targetfile() then return end
+			if depfilter(dep) then
+				table.insert(objects, dep:targetfile())
+			end
+		end)
+
+		local ldargs = {
+			"-n",
+			"--script=" .. linkerscript_mmio,
+			"--script=" .. linkerscript1,
+			"--relax",
+			"-o", target:targetfile()
+		}
+		if target:extraconf("rules", "cheriot.firmware.linkcmd", "compartment_report") then
+			batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
+			table.insert(ldargs, "--compartment-report=" .. target:targetfile() .. ".json")
 		end
 
-		-- Set the start of memory that can be revoked.
-		-- By default, this is the start of code memory but it can be
-		-- explicitly overwritten.
-		local revokable_memory_start = code_start;
-		if board.revokable_memory_start then
-			revokable_memory_start = format("0x%x", board.revokable_memory_start);
-		end
-		add_defines_each_dependency("REVOKABLE_MEMORY_START=" .. revokable_memory_start);
+		batchcmds:vrunv(target:tool("ld"), table.join(ldargs, objects), opt)
+		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
+		batchcmds:vexecv(target:tool("objdump"), {"-glxsdrS", "--demangle", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
+		batchcmds:add_depfiles(linkerscript_mmio, linkerscript1)
+		batchcmds:add_depfiles(target:get("cheriot.ldscripts"))
+		batchcmds:add_depfiles(objects)
+	end)
 
+-- Specialize the above specifically for a RTOS firmware target
+rule ("cheriot.firmware.link")
+	add_deps("cheriot.firmware.linkcmd")
+	before_link(function(target)
+		-- add_deps(), as used in cheriot.firmware below, doesn't set rule
+		-- extraconfigs, and we don't want to make the firmware targets have to
+		-- add the rule by hand, so... do that here before the
+		-- "cheriot.firmware.linkcmd" on_linkcmd script fires.  Even though we
+		-- control most of the firmware target definition, it's rude to steal
+		-- all the script hooks for something we expect the user to touch, so
+		-- do this in a rule, too.
+		local cr = target:extraconf("rules", "cheriot.firmware.link", "compartment_report")
+		target:extraconf_set("rules", "cheriot.firmware.linkcmd", "compartment_report",
+			cr == nil and true or cr)
+		target:extraconf_set("rules", "cheriot.firmware.linkcmd", "dependency_filter",
+			target:extraconf("rules", "cheriot.firmware.link", "dependency_filter") or
+			function(dep)
+				return (dep:get("cheriot.type") == "library") or
+					(dep:get("cheriot.type") == "compartment") or
+					(dep:get("cheriot.type") == "privileged compartment") or
+					(dep:get("cheriot.type") == "privileged library")
+			end)
+	end)
+
+-- Rule for setting thread count for the per-firmware scheduler target
+rule("cheriot.firmware.scheduler.threads")
+	after_load(function (target)
+		local scheduler = target:deps()[target:name() .. ".scheduler"]
+		local threads = target:values("threads")
+
+		local thread_priorities_set = {}
+		for _, thread in ipairs(threads) do
+			if type(thread.priority) ~= "number" or thread.priority < 0 then
+				raise(("thread %d has malformed priority %q"):format(i, thread.priority))
+			end
+			thread_priorities_set[thread.priority] = true
+		end
+
+		-- Repack thread priorities into a contiguous span starting at 0.
+		local thread_priorities = {}
+		for p, _ in pairs(thread_priorities_set) do
+			table.insert(thread_priorities, p)
+		end
+		table.sort(thread_priorities)
+		local thread_priority_remap = {}
+		for ix, v in ipairs(thread_priorities) do
+			thread_priority_remap[v] = ix - 1
+		end
+		for i, thread in ipairs(threads) do
+			if thread.priority ~= thread_priority_remap[thread.priority] then
+				print(("Remapping priority of thread %d from %d to %d"):format(
+					i, thread.priority, thread_priority_remap[thread.priority]
+				))
+				thread.priority = thread_priority_remap[thread.priority]
+			end
+		end
+
+		local thread_max_priority = 0
+		for _, thread in ipairs(threads) do
+			thread_max_priority = math.max(thread_max_priority, thread.priority)
+		end
+
+		scheduler:add('defines', "CONFIG_THREADS_NUM=" .. #(threads))
+		scheduler:add('defines', "CONFIG_THREAD_MAX_PRIORITY=" .. thread_max_priority)
+	end)
+
+rule("cheriot.firmware.common_shared_objects")
+	after_load(function (target)
+		local threads = target:values("threads")
+		target:values_set("shared_objects", {
+			-- 32-bit counter for the hazard-pointer epoch.
+			allocator_epoch = 4,
+			-- Two hazard pointers per thread.
+			allocator_hazard_pointers = #(threads) * 8 * 2
+		}, { expand = false })
+	end)
+
+-- Set configuration variables for firmware images' ldscripts base on board and
+-- target (thread) information
+rule("cheriot.firmware.ldscript.conf")
+	before_config(function (target)
+		local function visit_all_dependencies(callback)
+			visit_all_dependencies_of(target, callback)
+		end
+
+		local board_target = target:deps()["cheriot.board"]
+		local board = board_target:get("cheriot.board_info")
+
+		local software_revoker = board.revoker == "software"
+
+		-- The heap, by default, starts immediately after globals and static shared objects
 		local heap_start = '.'
 		if board.heap.start then
 			heap_start = format("0x%x", board.heap.start)
 		end
-		
-		if board.interrupts then
-			-- The macro used to provide the interrupt enumeration in the public header
-			local interruptNames = "CHERIOT_INTERRUPT_NAMES="
-			-- Define the macro that's used to initialise the scheduler's interrupt configuration.
-			local interruptConfiguration = "CHERIOT_INTERRUPT_CONFIGURATION="
-			for _, interrupt in ipairs(board.interrupts) do
-				interruptNames = interruptNames .. interrupt.name .. "=" .. math.floor(interrupt.number) .. ", "
-				interruptConfiguration = interruptConfiguration .. "{"
-					.. math.floor(interrupt.number) .. ","
-					.. math.floor(interrupt.priority) .. ","
-					.. (interrupt.edge_triggered and "true" or "false")
-					.. "},"
-			end
-			add_defines_each_dependency(interruptNames)
-			scheduler:add('defines', interruptConfiguration)
-		end
-
-		local loader_stack_size = loader:get('loader_stack_size')
-		local loader_trusted_stack_size = loader:get('loader_trusted_stack_size')
-		loader:add('defines', "CHERIOT_LOADER_TRUSTED_STACK_SIZE=" .. loader_trusted_stack_size)
 
 		-- Get the threads config and prepare the predefined macros that describe them
 		local threads = target:values("threads")
@@ -845,67 +1252,30 @@ rule("cheriot.firmware")
 		local stack_size_limit = 65280
 
 		-- Initial pass through thread sequence to derive values within each
-		local thread_priorities_set = {}
+		local trusted_spill_size = board_target:get("cheriot.trusted_spill_size")
 		for i, thread in ipairs(threads) do
 			thread.mangled_entry_point = string.format("\"__export_%s__Z%d%sv\"", thread.compartment, string.len(thread.entry_point), thread.entry_point)
 			thread.thread_id = i
 			-- Trusted stack frame is 24 bytes.  If this size is too small, the
 			-- loader will fail.  If it is too big, we waste space.
-			thread.trusted_stack_size = loader_trusted_stack_size + (24 * thread.trusted_stack_frames)
+			thread.trusted_stack_size = trusted_spill_size + (24 * thread.trusted_stack_frames)
 
 			if thread.stack_size > stack_size_limit then
 				raise("thread " .. i .. " requested a " .. thread.stack_size ..
 				" stack.  Stacks over " .. stack_size_limit ..
 				" are not yet supported in the compartment switcher.")
 			end
-
-			if type(thread.priority) ~= "number" or thread.priority < 0 then
-				raise(("thread %d has malformed priority %q"):format(i, thread.priority))
-			end
-			thread_priorities_set[thread.priority] = true
 		end
 
-		-- Repack thread priorities into a contiguous span starting at 0.
-		local thread_priorities = {}
-		for p, _ in pairs(thread_priorities_set) do
-			table.insert(thread_priorities, p)
-		end
-		table.sort(thread_priorities)
-		local thread_priority_remap = {}
-		for ix, v in ipairs(thread_priorities) do
-			thread_priority_remap[v] = ix - 1
-		end
-		for i, thread in ipairs(threads) do
-			if thread.priority ~= thread_priority_remap[thread.priority] then
-				print(("Remapping priority of thread %d from %d to %d"):format(
-					i, thread.priority, thread_priority_remap[thread.priority]
-				))
-				thread.priority = thread_priority_remap[thread.priority]
-			end
-		end
-
-		-- Second pass through thread sequence, generating linker directives
+		-- Pass through thread sequence, generating linker directives
 		local thread_headers = ""
-		local thread_trusted_stacks =
-			"\n\t. = ALIGN(8);" ..
-			"\n\t.loader_trusted_stack : CAPALIGN" ..
-			"\n\t{" ..
-			"\n\t\tbootTStack = .;" ..
-			"\n\t\t. += " .. loader_trusted_stack_size .. ";" ..
-			"\n\t}\n"
-		local thread_stacks =
-			"\n\t. = ALIGN(16);" ..
-			"\n\t.loader_stack : CAPALIGN" ..
-			"\n\t{" ..
-			"\n\t\tbootStack = .;" ..
-			"\n\t\t. += " .. loader_stack_size .. ";" ..
-			"\n\t}\n"
+		local thread_trusted_stacks = ""
+		local thread_stacks = ""
 		for i, thread in ipairs(threads) do
 			thread_stacks = thread_stacks .. string.gsub(thread_stack_template, "${([_%w]*)}", thread)
 			thread_trusted_stacks = thread_trusted_stacks .. string.gsub(thread_trusted_stack_template, "${([_%w]*)}", thread)
 			thread_headers = thread_headers .. string.gsub(thread_template, "${([_%w]*)}", thread)
 		end
-		scheduler:add('defines', "CONFIG_THREADS_NUM=" .. #(threads))
 
 		-- Next set up the substitutions for the linker scripts.
 
@@ -993,18 +1363,11 @@ rule("cheriot.firmware")
 			software_revoker_globals="",
 			software_revoker_header="",
 			sealed_objects="",
-			mmio=mmio,
-			data_start=data_start,
-			code_start=code_start,
 			heap_start=heap_start,
-			firmware_low_ldscript=firmware_low_ldscript,
-			firmware_high_ldscript=firmware_high_ldscript,
 			thread_count=#(threads),
 			thread_headers=thread_headers,
 			thread_trusted_stacks=thread_trusted_stacks,
 			thread_stacks=thread_stacks,
-			loader_stack_size=loader:get('loader_stack_size'),
-			loader_trusted_stack_size=loader:get('loader_trusted_stack_size')
 		}
 		-- Helper function to add a dependency to the linker script
 		local add_dependency = function (name, dep, templates)
@@ -1080,12 +1443,7 @@ rule("cheriot.firmware")
 			end
 		end)
 
-		local shared_objects = {
-			-- 32-bit counter for the hazard-pointer epoch.
-			allocator_epoch = 4,
-			-- Two hazard pointers per thread.
-			allocator_hazard_pointers = #(threads) * 8 * 2
-			}
+		local shared_objects = { }
 		visit_all_dependencies(function (target)
 			local globals = target:values("shared_objects")
 			if globals then
@@ -1124,36 +1482,105 @@ rule("cheriot.firmware")
 		for key, value in pairs(ldscript_substitutions) do
 			target:set("configvar", key, value)
 		end
+
 	end)
 
-	-- Perform the final link step for a firmware image.
-	on_linkcmd(function (target, batchcmds, opt)
-		import("core.project.config")
-		-- Get a specified linker script, or set the default to the compartment
-		-- linker script.
-		local builddir = config.builddir and config.builddir() or config.buildir()
-		local linkerscript1 = path.join(builddir, target:name() .. "-firmware.ldscript")
-		local linkerscript2 = path.join(builddir, target:name() .. "-firmware.rocode.ldscript")
-		local linkerscript3 = path.join(builddir, target:name() .. "-firmware.rwdata.ldscript")
-		-- Link using the firmware's linker script.
-		batchcmds:show_progress(opt.progress, "linking firmware " .. target:targetfile())
-		batchcmds:mkdir(target:targetdir())
-		local objects = target:objectfiles()
-		visit_all_dependencies_of(target, function (dep)
-			if (dep:get("cheriot.type") == "library") or
-				(dep:get("cheriot.type") == "compartment") or
-				(dep:get("cheriot.type") == "privileged compartment") or
-				(dep:get("cheriot.type") == "privileged library") then
-				table.insert(objects, dep:targetfile())
-			end
-		end)
-		batchcmds:vrunv(target:tool("ld"), table.join({"-n", "--script=" .. linkerscript1, "--relax", "-o", target:targetfile(), "--compartment-report=" .. target:targetfile() .. ".json" }, objects), opt)
-		batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
-		batchcmds:show_progress(opt.progress, "Creating firmware dump " .. target:targetfile() .. ".dump")
-		batchcmds:vexecv(target:tool("objdump"), {"-glxsdrS", "--demangle", target:targetfile()}, table.join(opt, {stdout = target:targetfile() .. ".dump"}))
-		batchcmds:add_depfiles(linkerscript1, linkerscript2, linkerscript3)
-		batchcmds:add_depfiles(objects)
+rule("cheriot.firmware.ldscript.files")
+	-- Text and data segments are configfiles for each firmware target.  Set
+	-- those here and let the "cheriot.board.ldscript.conf" rule handle working
+	-- out the rest.  This must be done in on_load() because the bulk of that
+	-- rule's work is done in after_load().
+	on_load(function (target)
+		target:set("cheriot.ldfragment.rocode", {
+			{ srcpath = path.join(scriptdir, "firmware.rocode.ldscript.in")
+			, genname = target:name() .. "-firmware.rocode.ldscript"
+			}})
+
+		target:set("cheriot.ldfragment.rwdata", {
+			{ srcpath = path.join(scriptdir, "firmware.rwdata.ldscript.in")
+			, genname = target:name() .. "-firmware.rwdata.ldscript"
+			}})
 	end)
+
+	after_load(function (target)
+		-- Generate our top-level linker script as a configfile
+		do
+			local top_ldscript_genname = target:name() .. "-firmware.ldscript"
+			target:set("cheriot.ldscript", path.join(target:configdir(), top_ldscript_genname))
+			target:add("configfiles", path.join(scriptdir, "firmware.ldscript.in"),
+				{pattern = "@(.-)@", filename = top_ldscript_genname })
+		end
+	end)
+
+rule("cheriot.firmware.run")
+	on_run(function (target)
+		import("core.project.config")
+
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+
+		if (not board.run_command) and (not board.simulator) then
+			raise("board description does not define a run command")
+		end
+
+		local simulator = board.run_command or board.simulator
+		simulator = string.gsub(simulator, "${(%w*)}", { sdk=scriptdir, board=boarddir })
+		local firmware = target:targetfile()
+		local directory = path.directory(firmware)
+		firmware = path.filename(firmware)
+		local run = function(simulator)
+			local simargs = { firmware }
+			os.execv(simulator, simargs, { curdir = directory })
+		end
+		-- Try executing the simulator from the sdk directory, if it's there.
+		local tools_directory = config.get("sdk")
+		local simpath = path.join(tools_directory, simulator)
+		if os.isexec(simpath) then
+			run(simpath)
+			return
+		end
+		simpath = path.join(path.join(tools_directory, "bin"), simulator)
+		if os.isexec(simpath) then
+			run(simpath)
+			return
+		end
+		-- Otherwise, hope that it's in the path
+		run(simulator)
+	end)
+
+-- Rule for defining a firmware image.
+rule("cheriot.firmware")
+	-- Firmwares are reachability roots.
+	add_deps("cheriot.reachability_root")
+
+	-- Firmware targets want board-driven ldscript processing
+	add_deps("cheriot.board.ldscript.conf")
+
+	-- Firmware targets want board-driven all-dependent-target configuration
+	add_deps("cheriot.board.targets.conf")
+
+	add_deps("cheriot.firmware.link")
+
+	add_deps("cheriot.firmware.scheduler.threads")
+
+	add_deps("cheriot.firmware.ldscript.conf")
+	add_deps("cheriot.firmware.ldscript.files")
+
+	add_deps("cheriot.firmware.run")
+
+	-- Set up the thread defines and further information for the linker script.
+	-- This must be after load so that dependencies are resolved.
+	after_load(function (target)
+
+		-- Pick up the dependency on the board information, which has been
+		-- processed already by virtue of that target being *loaded*.
+		target:add("deps", "cheriot.board")
+
+		local board = target:deps()["cheriot.board"]:get("cheriot.board_info")
+		if board.revoker == "software" then
+			target:add('deps', "cheriot.software_revoker")
+		end
+	end)
+
 
 -- Rule for conditionally enabling debug for a component.
 rule("cheriot.component-debug")
@@ -1205,29 +1632,41 @@ rule("cheriot.define-rtos-git-description")
 		target:fileconfig_set(sourcefile, fileconfig)
 	end)
 
--- Build the loader.  The firmware rule will set the flags required for
--- this to create threads.
-target("cheriot.loader")
-	add_rules("cheriot.component-debug", "cheriot.baremetal-abi", "cheriot.subobject-bounds")
-	set_kind("object")
-	-- FIXME: We should be setting this based on a board config file.
-	add_files(path.join(coredir, "loader/boot.S"), path.join(coredir, "loader/boot.cc"),  {force = {cxflags = "-O1"}})
-	add_defines("CHERIOT_AVOID_CAPRELOCS")
+-- Common aspects of the CHERIoT loader target
+rule("cheriot.loader.base")
+	add_deps("cheriot.component-debug",
+	         "cheriot.baremetal-abi",
+	         "cheriot.subobject-bounds")
+
 	on_load(function (target)
+		target:set("kind", "object")
+		target:set("default", false)
+
+		target:add("deps", "cheriot.board")
+
+		target:add("defines",
+		           "CHERIOT_AVOID_CAPRELOCS",
+		           "CHERIOT_NO_AMBIENT_MALLOC")
+
 		target:set('cheriot.debug-name', "loader")
-		local config = {
-			-- Size in bytes of the trusted stack.
-			loader_trusted_stack_size = 192,
-			-- Size in bytes of the loader's stack.
-			loader_stack_size = 1024
-		}
-		target:add('defines', "CHERIOT_LOADER_STACK_SIZE=" .. config.loader_stack_size)
-		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
-		target:set('cheriot_loader_config', config)
-		for k, v in pairs(config) do
-			target:set(k, v)
-		end
 	end)
+
+	after_load(function (target)
+		local board_target = target:dep("cheriot.board")
+		local board = board_target:get("cheriot.board_info")
+		target:add("defines", board.rtos_defines and board.rtos_defines.loader)
+		target:add('defines',
+			"CHERIOT_LOADER_TRUSTED_SPILL_SIZE=" .. board_target:get("cheriot.trusted_spill_size"))
+	end)
+
+-- Build the loader.
+target("cheriot.loader")
+	add_rules("cheriot.loader.base")
+
+	-- FIXME: We should be setting this based on a board config file.
+	add_files(path.join(coredir, "loader/boot.S"),
+	          path.join(coredir, "loader/boot.cc"),
+	          {force = {cxflags = "-O1"}})
 
 -- Helper function to define firmware.  Used as `target`.
 function firmware(name)
@@ -1237,11 +1676,30 @@ function firmware(name)
 		add_rules("cheriot.privileged-compartment", "cheriot.component-debug", "cheriot.component-stack-checks", "cheriot.subobject-bounds")
 		add_deps("locks", "crt", "atomic1")
 		add_deps("compartment_helpers")
+		add_deps("cheriot.board.interrupts")
+		add_deps("cheriot.board")
 		on_load(function (target)
 			target:set("cheriot.compartment", "scheduler")
 			target:set('cheriot.debug-name', "scheduler")
 			target:add('defines', "SCHEDULER_ACCOUNTING=" .. tostring(get_config("scheduler-accounting")))
 			target:add('defines', "SCHEDULER_MULTIWAITER=" .. tostring(get_config("scheduler-multiwaiter")))
+		end)
+		after_load(function (target)
+			local board = target:dep("cheriot.board"):get("cheriot.board_info")
+			target:add("defines", board.rtos_defines and board.rtos_defines.scheduler)
+
+			if board.interrupts then
+				-- Define the macro that's used to initialise the scheduler's interrupt configuration.
+				local interruptConfiguration = "CHERIOT_INTERRUPT_CONFIGURATION="
+				for _, interrupt in ipairs(board.interrupts) do
+					interruptConfiguration = interruptConfiguration .. "{"
+						.. math.floor(interrupt.number) .. ","
+						.. math.floor(interrupt.priority) .. ","
+						.. (interrupt.edge_triggered and "true" or "false")
+						.. "},"
+				end
+				target:add('defines', interruptConfiguration)
+			end
 		end)
 		add_files(path.join(coredir, "scheduler/main.cc"))
 
@@ -1249,15 +1707,12 @@ function firmware(name)
 	-- the caller can add more rules to it.
 	target(name)
 		set_kind("binary")
+		add_deps("cheriot.board.file")
 		add_rules("cheriot.firmware")
+		add_rules("cheriot.firmware.common_shared_objects")
 		add_rules("cheriot.conditionally_link_allocator")
 		add_deps(name .. ".scheduler", "cheriot.loader", "cheriot.switcher")
 		add_deps("cheriot.token_library")
-		-- The firmware linker script will be populated based on the set of
-		-- compartments.
-		add_configfiles(path.join(scriptdir, "firmware.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.ldscript"})
-		add_configfiles(path.join(scriptdir, "firmware.rocode.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.rocode.ldscript"})
-		add_configfiles(path.join(scriptdir, "firmware.rwdata.ldscript.in"), {pattern = "@(.-)@", filename = name .. "-firmware.rwdata.ldscript"})
 end
 
 -- Helper to create a library.
@@ -1270,6 +1725,14 @@ end
 function compartment(name)
 	target(name)
 		add_rules("cheriot.compartment")
+
+		-- It's a good guess that application compartments depend on the
+		-- interrupt configuration.  Let's bake that assumption in, on the
+		-- grounds that the few users that don't want to pick up that build
+		-- dependency (which is, recall, just a generated include file and
+		-- contributes no bytes to the final image if not used) can use the
+		-- compartment rule instead.
+		add_deps("cheriot.board.interrupts")
 end
 
 -- Helper to synthesize cpu-specific Rust flags for the given board.

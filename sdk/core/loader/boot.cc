@@ -45,7 +45,7 @@ namespace
 	static_assert(round_up<8>(17) == 24);
 
 	__BEGIN_DECLS
-	static_assert(CheckSize<CHERIOT_LOADER_TRUSTED_STACK_SIZE,
+	static_assert(CheckSize<CHERIOT_LOADER_TRUSTED_SPILL_SIZE,
 	                        sizeof(TrustedStackGeneric<0>)>::Value,
 	              "Boot trusted stack sizes do not match.");
 	// It must also be aligned sufficiently for trusted stacks, so ensure that
@@ -1047,6 +1047,33 @@ namespace
 		{
 			Debug::log(
 			  "Capreloc address: {}, base: {}", reloc.addr, reloc.base);
+
+			if constexpr (DebugLoader)
+			{
+				auto hasSeenForbiddenCapRelocs = false;
+				for (auto &pC : image.privilegedCompartments)
+				{
+					if (contains(pC.code, reloc.addr) ||
+					    contains(pC.data, reloc.addr))
+					{
+						hasSeenForbiddenCapRelocs = true;
+						Debug::log(
+						  "Capreloc with address {} should be applied to "
+						  "a privileged compartment with code region: {} "
+						  "- {} and data region: {} - {}",
+						  reloc.addr,
+						  pC.code.start(),
+						  pC.code.start() + pC.code.size(),
+						  pC.data.start(),
+						  pC.data.start() + pC.data.size());
+					}
+				}
+
+				Debug::Invariant(!hasSeenForbiddenCapRelocs,
+				                 "Encountered forbidden relocations to "
+				                 "privileged compartment(s)");
+			}
+
 			// Find the compartment that this relocation applies to.
 			const auto &compartment = findCompartment(reloc.addr);
 

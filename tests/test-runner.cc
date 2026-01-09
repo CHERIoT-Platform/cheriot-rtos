@@ -3,6 +3,7 @@
 
 #include "tests.hh"
 #include <compartment.h>
+#include <platform-rdcycle.h>
 #include <priv/riscv.h>
 #include <simulator.h>
 #include <string>
@@ -15,23 +16,6 @@ namespace
 	/// Have we detected a crash in any of the compartments?
 	volatile bool crashDetected = false;
 
-	/**
-	 * Read the cycle counter.
-	 */
-	int rdcycle()
-	{
-		int cycles;
-#ifdef SAIL
-		// On Sail, report the number of instructions, the cycle count is
-		// meaningless.
-		__asm__ volatile("csrr %0, minstret" : "=r"(cycles));
-#elif defined(IBEX)
-		__asm__ volatile("csrr %0, mcycle" : "=r"(cycles));
-#else
-		__asm__ volatile("rdcycle %0" : "=r"(cycles));
-#endif
-		return cycles;
-	}
 	/**
 	 * Call `fn` and log a message informing the user how long it took.
 	 */

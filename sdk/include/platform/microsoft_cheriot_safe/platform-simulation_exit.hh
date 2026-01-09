@@ -4,15 +4,12 @@
 #pragma once
 
 #ifdef SIMULATION
+#	include <platform-uart.hh>
 #	include <stdint.h>
 
 static void platform_simulation_exit(uint32_t code)
 {
-#	ifdef IBEX_SAFE
-	// If we didn't exit with to-host, try writing a non-ASCII character to the
-	// UART.  This is how we exit the CHERIoT Ibex simulator for the SAFE
-	// platform.
+	// Microsoft's SAFE platform exits if UART 0 writes above ASCII
 	MMIO_CAPABILITY(Uart, uart)->blocking_write(0x80 + code);
-#	endif
 }
 #endif
