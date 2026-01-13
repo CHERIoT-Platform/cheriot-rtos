@@ -157,7 +157,11 @@ toolchain("cheriot-clang")
 	set_kind("standalone")
 	set_toolset("cc", "clang")
 	set_toolset("cxx", "clang++")
-	set_toolset("ld", "ld.lld")
+	-- "ld.lld" is not a dynamic linker xmake recognizes, but it recognizes "ld"
+	-- and has a mechanism (an ad-hoc stringy mechanism, alas) for
+	-- distinguishing the actual tool program from the name which xmake should
+	-- act as if it had: "${a}@${b}" means "use ${b} but perceive it as ${a}".
+	set_toolset("ld", "ld@ld.lld")
 	set_toolset("objdump", "llvm-objdump")
 	set_toolset("strip", "llvm-strip")
 	set_toolset("as", "clang")
