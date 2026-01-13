@@ -276,17 +276,8 @@ local function maybe_writefile(xmake_io, xmake_try, path, contents)
 	} }
 end
 
-
--- Common rules for any CHERI MCU component (library or compartment)
-rule("cheriot.component")
-
-	-- Set some default config values for all cheriot components.
-	on_load(function (target)
-		-- Treat this as a static library, though we will replace the default linking steps.
-		target:set("kind", "static")
-		-- We don't want a lib prefix or equivalent.
-		target:set("prefixname", "")
-	end)
+-- The counterpart of cheriot.reachability_root, below
+rule("cheriot.reachability_check")
 	before_build(function (target)
 		if not target:get("cheriot.reachable") then
 			raise("target " .. target:name() .. " is being built but does not " ..
@@ -294,6 +285,18 @@ rule("cheriot.component")
 			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
 			"prevent it from being built when not linked")
 		end
+	end)
+
+-- Common rules for any CHERI MCU component (library or compartment)
+rule("cheriot.component")
+	add_deps("cheriot.reachability_check")
+
+	-- Set some default config values for all cheriot components.
+	on_load(function (target)
+		-- Treat this as a static library, though we will replace the default linking steps.
+		target:set("kind", "static")
+		-- We don't want a lib prefix or equivalent.
+		target:set("prefixname", "")
 	end)
 
 	-- Custom link step, link this as a compartment, with the linker script
