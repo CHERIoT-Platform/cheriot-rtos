@@ -317,9 +317,20 @@ rule("cheriot.toolchain", function ()
 	end)
 end)
 
+-- The counterpart of cheriot.reachability_root, below
+rule("cheriot.reachability_check")
+	before_build(function (target)
+		if not target:get("cheriot.reachable") then
+			raise("target " .. target:name() .. " is being built but does not " ..
+			"appear to be connected to a firmware image.  Please either use " ..
+			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
+			"prevent it from being built when not linked")
+		end
+	end)
+
 -- Common rules for any CHERIoT component (library or compartment)
 rule("cheriot.component")
-	add_deps("cheriot.toolchain")
+	add_deps("cheriot.toolchain", "cheriot.reachability_check")
 
 	add_deps("cheriot.rust", "cheriot.rust.crate")
 
@@ -329,14 +340,6 @@ rule("cheriot.component")
 		target:set("kind", "static")
 		-- We don't want a lib prefix or equivalent.
 		target:set("prefixname", "")
-	end)
-	before_build(function (target)
-		if not target:get("cheriot.reachable") then
-			raise("target " .. target:name() .. " is being built but does not " ..
-			"appear to be connected to a firmware image.  Please either use " ..
-			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
-			"prevent it from being built when not linked")
-		end
 	end)
 
 	-- Custom link step, link this as a compartment, with the linker script
