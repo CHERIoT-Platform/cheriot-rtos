@@ -858,11 +858,17 @@ namespace loader
 		static constexpr size_t PermitLoadMutable = (1UL << 28);
 
 		/**
+		 * Bit in `sizeAndPermissions` indicating that this import has
+		 * load-global permission.
+		 */
+		static constexpr size_t PermitLoadGlobal = (1UL << 27);
+
+		/**
 		 * Mask for the used permissions.
 		 */
-		static constexpr size_t PermissionsMask = PermitLoad | PermitStore |
-		                                          PermitLoadStoreCapabilities |
-		                                          PermitLoadMutable;
+		static constexpr size_t PermissionsMask =
+		  PermitLoad | PermitStore | PermitLoadStoreCapabilities |
+		  PermitLoadMutable | PermitLoadGlobal;
 
 		/**
 		 * Mask for the space reserved for permissions.
@@ -941,7 +947,8 @@ namespace loader
 			  Permission::Load,
 			  Permission::Store,
 			  Permission::LoadStoreCapability,
-			  Permission::LoadMutable};
+			  Permission::LoadMutable,
+			  Permission::LoadGlobal};
 			CHERI::PermissionSet p{DefaultPermissions};
 			if ((sizeAndPermissions & PermitLoad) == 0)
 			{
@@ -958,6 +965,10 @@ namespace loader
 			if ((sizeAndPermissions & PermitLoadMutable) == 0)
 			{
 				p = p.without(Permission::LoadMutable);
+			}
+			if ((sizeAndPermissions & PermitLoadGlobal) == 0)
+			{
+				p = p.without(Permission::LoadGlobal);
 			}
 			return p;
 		}
