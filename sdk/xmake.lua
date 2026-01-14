@@ -1735,14 +1735,6 @@ function compartment(name)
 		add_deps("cheriot.board.interrupts")
 end
 
--- Helper to synthesize cpu-specific Rust flags for the given board.
-local rust_flags_for_board = function(board)
-	if board:match("sonata") or board:match("ibex") then
-		return { "+b" }
-	end
-
-	return nil
-end
 -- Rules for standalone Rust source files.
 -- Note that to make the implementation of this rule not too complex single source files are compiled to static libraries,
 -- which will also contain the the parts of Rust's standard library that CHERIoT supports.
@@ -1757,6 +1749,8 @@ rule("cheriot.rust", function()
 		import("core.tool.compiler")
 		import("core.project.depend")
 		import("utils.progress")
+		import("core.base.json")
+		import("core.project.config")
 
 		local dependfile = target:dependfile(sourcefile)
 
@@ -1769,10 +1763,15 @@ rule("cheriot.rust", function()
 
 		local compinst = compiler.load("rc", { target = target })
 		local compflags = compinst:compflags({ target = target })
-		local board = target:get("cheriot.board_file")
-		local cpu_flags = rust_flags_for_board(board)
-		if cpu_flags then
-			table.insert(compflags, "-Ctarget-feature=" .. table.concat(cpu_flags, ","))
+
+		-- Get the rcflags for this specific board
+		local boarddir, boardfile = board_file_for_name(get_config("board"), path.join(scriptdir, "boards"))
+		if not boarddir then
+			raise("unable to find board file " .. get_config("board") .. ".  Try specifying a full path")
+		end
+		local board = load_board_file(boarddir, boardfile, json, config)
+		if board and board.rcflags then
+			table.insert(compflags, board.rcflags)
 		end
 
 		local dependinfo = option.get("rebuild") and {} or (depend.load(dependfile) or {})
@@ -1797,7 +1796,8 @@ rule("cheriot.rust", function()
 		vprint("%s %s", compinst:program(), table.concat(flags, " "))
 		local outdata, errdata = os.iorunv(compinst:program(), flags)
 
-		assert(errdata == nil or errdata == "", "failed to compile  " .. sourcefile .. ":\n" .. errdata)
+		assert(errdata == nil or errdata == "" or errdata:match("Finished") or (not errdata:match("error")),
+			"failed to compile  " .. sourcefile .. ":\n" .. errdata)
 
 		dependinfo.values = depvalues
 		table.insert(dependinfo.files, sourcefile)
@@ -1826,10 +1826,11 @@ rule("cheriot.rust.crate", function()
 	-- Invoke `cargo` to build the crate with the given manifest path using the selected `rustc` compiler.
 	-- Then, add the resulting static library file as an object file for the target, which will be picked up during linking.
 	on_build_file(function(target, sourcefile, opt)
-
 		import("lib.detect.find_tool")
 		import("utils.progress")
 		import("core.base.json")
+		import("core.project.config")
+
 		local cargo = find_tool("cargo")
 		assert(
 			cargo,
@@ -1869,10 +1870,15 @@ rule("cheriot.rust.crate", function()
 		progress.show(opt.progress, "${color.build.object}compiling.$(mode) crate %s", crate_name)
 
 		local rustflags = rc:compflags()
-		local board = target:get("cheriot.board_file")
-		local cpu_flags = rust_flags_for_board(board)
-		if cpu_flags then
-			table.insert(rustflags, "-Ctarget-feature=" .. table.concat(cpu_flags, ","))
+
+		-- Get the rcflags for this specific board
+		local boarddir, boardfile = board_file_for_name(get_config("board"), path.join(scriptdir, "boards"))
+		if not boarddir then
+			raise("unable to find board file " .. get_config("board") .. ".  Try specifying a full path")
+		end
+		local board = load_board_file(boarddir, boardfile, json, config)
+		if board and board.rcflags then
+			table.insert(rustflags, board.rcflags)
 		end
 
 		local cargoflags = { "build", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path }
@@ -1897,10 +1903,10 @@ rule("cheriot.rust.crate", function()
 		vprint(cmd)
 
 		local outdata, errdata =
-			os.iorunv(cargo.program, cargoflags, { envs = { RUSTC = rc:program(), RUSTFLAGS = rustflags_str } })
+				os.iorunv(cargo.program, cargoflags, { envs = { RUSTC = rc:program(), RUSTFLAGS = rustflags_str } })
 
 		assert(
-			errdata == nil or errdata == "" or errdata:match("Finished"),
+			errdata == nil or errdata == "" or errdata:match("Finished") or (not errdata:match("error")),
 			"failed to compile  " .. sourcefile .. ":\n" .. errdata
 		)
 
