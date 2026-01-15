@@ -317,6 +317,7 @@ rule("cheriot.component")
 					"-o", target:targetfile()
 				},
 				target:get("ldflags") or {},
+				opt.verbose and { "--print-gc-sections" } or {},
 				target:objectfiles()),
 			opt)
 		-- This depends on all of the object files and the linker script.
