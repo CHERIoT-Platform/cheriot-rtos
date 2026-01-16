@@ -15,4 +15,7 @@ SECTIONS
 {
 	# The build system generates sections and assigns them within its PHDRs.
 	@ldscript_top_sections@
+
+	# Explicitly discard sections from the loader not claimed elsewhere.
+	/DISCARD/ : { *.loader.o(*) }
 }
