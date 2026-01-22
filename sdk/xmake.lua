@@ -155,12 +155,12 @@ local coredir = path.join(scriptdir, "core")
 -- Set up our llvm configuration.
 toolchain("cheriot-clang")
 	set_kind("standalone")
-	set_toolset("cc", "clang")
-	set_toolset("cxx", "clang++")
-	set_toolset("ld", "ld.lld")
-	set_toolset("objdump", "llvm-objdump")
-	set_toolset("strip", "llvm-strip")
-	set_toolset("as", "clang")
+	set_toolset("cc", "clang@clang-cheriot", "clang")
+	set_toolset("cxx", "clang++@clang++-cheriot", "clang++")
+	set_toolset("ld", "ld.lld@ld.lld-cheriot", "ld.lld")
+	set_toolset("objdump", "llvm-objdump", "llvm-objdump@llvm-objdump-cheriot")
+	set_toolset("strip", "llvm-strip", "llvm-strip@llvm-strip-cheriot")
+	set_toolset("as", "clang@clang-cheriot", "clang")
 
 	--Set up the flags that we need.
 	on_load(function (toolchain)
