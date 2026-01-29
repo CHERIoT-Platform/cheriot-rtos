@@ -443,8 +443,8 @@ volatile decltype(testString) *volatileString = &testString;
 
 void check_sealed_scoping()
 {
-	Capability<void> o{switcher_current_thread()};
-	TEST(o.is_valid() && (o.type() == CheriSealTypeSealedTrustedStacks),
+	Capability<void> o{MALLOC_CAPABILITY};
+	TEST(o.is_valid() && (o.type() == CheriSealTypeStaticToken),
 	     "Shared object cap not as expected: {}",
 	     o);
 
