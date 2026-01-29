@@ -656,25 +656,6 @@ __Z26compartment_switcher_entryz:
 	 *  tp, t1, t2, s0, s1: dead
 	 */
 	/*
-	 * There is an interesting narrow race to consider here.  We're preemptable
-	 * and in the switcher.  That means someone could call
-	 * __Z25switcher_interrupt_threadPv on us, and when we came back on core,
-	 * we'd jump ahead to switcher_after_compartment_call, via...
-	 *
-	 *   - .Lexception_scheduler_return_installed
-	 *   - .Lhandle_injected_error
-	 *   - .Lhandle_error
-	 *   - .Lhandle_error_switcher_pcc
-	 *   - .Lhandle_error_in_switcher
-	 *   - .Lcommon_force_unwind
-	 *
-	 * That is, rather than invoking the callee's compartment's error handler,
-	 * and letting it service the MCAUSE_THREAD_INTERRUPT, we'll return to the
-	 * caller with -ECOMPARTMENTFAIL.
-	 *
-	 * TODO: https://github.com/CHERIoT-Platform/cheriot-rtos/issues/372
-	 */
-	/*
 	 * Up to 10 registers are carrying state for the callee or are properly
 	 * zeroed.  Clear the remaining 5 now.
 	 */
@@ -726,17 +707,6 @@ switcher_after_compartment_call:
 	 * TODO for formal verification: the below should not fault before returning
 	 * back to the caller. If a fault occurs there must be a serious bug
 	 * elsewhere.
-	 */
-	/*
-	 * As just before the call, we are preemptive and in the switcher.  If we
-	 * are signaled via MCAUSE_THREAD_INTERRUPT at this point, we will come
-	 * back here (with a0 holding -ECOMPARTMENTFAIL and a1 holding 0).  This
-	 * block is _idempotent_ until the update of mtdc's
-	 * TrustedStack::frameoffset, so until then we will effectively just
-	 * clobber the return values.  After that, though, we'd forcibly unwind out
-	 * of the caller.
-	 *
-	 * TODO: https://github.com/CHERIoT-Platform/cheriot-rtos/issues/372
 	 */
 	/*
 	 * The return sentry given to the callee as part of that cjalr could be
@@ -1153,16 +1123,6 @@ exception_entry_asm:
 	 */
 
 	/*
-	 * If mcause is MCAUSE_THREAD_INTERRUPT, then we will jump into the error
-	 * handler: another thread has signalled that this thread should be
-	 * interrupted.  MCAUSE_THREAD_INTERRUPT is a reserved exception number that
-	 * we repurpose to indicate explicit interruption.
-	 */
-	li                 t1, MCAUSE_THREAD_INTERRUPT
-	// LIVE OUT: mtdc, sp
-	beq                t0, t1, .Lhandle_injected_error
-
-	/*
 	 * Environment call from M-mode is exception code 11.
 	 * We need to skip the ecall instruction to avoid an infinite loop.
 	 */
@@ -1246,7 +1206,6 @@ exception_entry_asm:
 .Lhandle_error:
 	/*
 	 * FROM: .Lexception_might_handle
-	 * FROM: .Lhandle_injected_error
 	 * IRQ REQUIRE: deferred (TrustedStack spill frame is precious)
 	 * LIVE IN: sp
 	 *
@@ -1738,24 +1697,6 @@ exception_entry_asm:
 	// LIVE OUT: mtdc, sp, t2
 	j                  .Lcommon_context_install
 
-.Lhandle_injected_error:
-	/*
-	 * FROM: .Lexception_scheduler_return_installed
-	 * IRQ REQUIRE: deferred (TrustedStack spill frame is precious)
-	 * LIVE IN: mtdc, sp
-	 *
-	 * Atlas:
-	 *  mtdc: TrustedStack pointer
-	 *  sp: TrustedStack pointer (a copy of mtdc)
-	 */
-#ifdef CONFIG_MSHWM
-	clw                ra, TrustedStack_offset_mshwm(csp)
-	csrw               CSR_MSHWM, ra
-	clw                ra, TrustedStack_offset_mshwmb(csp)
-	csrw               CSR_MSHWMB, ra
-#endif
-	j                  .Lhandle_error
-
 .Lcommon_defer_irqs_and_thread_exit:
 	/*
 	 * FROM: switcher_after_compartment_call
@@ -1989,121 +1930,6 @@ __Z22switcher_recover_stackv:
 	// LIVE OUT: mtdc, a0
 	cret
 
-	.section .text, "ax", @progbits
-	.p2align 2
-	.type __Z30trusted_stack_interrupt_threadPv,@function
-__Z25switcher_interrupt_threadPv:
-	/*
-	 * FROM: malice
-	 * IRQ ASSUME: deferred
-	 * LIVE IN: mtdc, callee-save, ra, a0
-	 *
-	 * Atlas:
-	 *   mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
-	 *   a0: sealed pointer to target thread TrustedStack
-	 *   ra: return pointer (guaranteed because this symbol is reachable only
-	 *       through an interrupt-disabling forward-arc sentry)
-	 */
-	/*
-	 * Because this function involves looking across two threads' states, it
-	 * needs to run with preemption prohibited, and that means IRQs deferred.
-	 */
-
-	// Load the unsealing key
-	LoadCapPCC         ca1, .Lsealing_key_trusted_stacks
-	/*
-	 * The target capability is in ca0.  Unseal, clobbering our authority;
-	 * check tag; and load the entry point offset.
-	 */
-	cunseal            ca1, ca0, ca1
-	// Atlas update: a1: unsealed pointer to target thread TrustedStack
-	/*
-	 * LOCAL SEAL: Nothing herein depends on a1 being GL(obal).
-	 */
-	cgettag            a0, ca1
-	// a0 (return register) now contains the tag.  We return false on failure
-	// so can just branch to the place where we zero non-return registers from
-	// here and it will contain faluse on failure.
-	beqz               a0, .Lswitcher_interrupt_thread_return
-
-	// A thread can't interrupt itself, return failure if it tries.
-	cspecialr          ca2, mtdc
-	li                 a0, 0
-	beq                a2, a1, .Lswitcher_interrupt_thread_return
-	// Atlas update: a2: unsealed pointer to current thread TrustedStack
-
-	/*
-	 * We allow the target thread to be interrupted if (and only if) the caller
-	 * is in the same compartment as the interrupted thread.  We will determine
-	 * this by checking if the base of the two export table entries from the
-	 * top of the trusted stack frames match.
-	 */
-
-// Helper macro that loads the export table from the register containing the
-// trusted stack.  The two arguments must be different registers.
-.macro LoadExportTable result, trustedStack
-	clhu               \result, TrustedStack_offset_frameoffset(\trustedStack)
-	addi               \result, \result, -TrustedStackFrame_size
-	cincoffset         c\result, \trustedStack, \result
-	clc                c\result, TrustedStackFrame_offset_calleeExportTable(c\result)
-	cgetbase           \result, c\result
-.endm
-
-	LoadExportTable    a3, ca1
-	cspecialr          ca0, mtdc
-	LoadExportTable    a2, ca0
-
-	// ca1 now contains the unsealed capability for the target thread, a3
-	// contains the base of the export table entry for that thread, a2 the base
-	// of the export table for our thread.
-	li                 a0, 42
-
-	// If the two export table entries differ, return.
-	bne                a2, a3, .Lswitcher_interrupt_thread_return
-	// Atlas update: a1, a2, a3: dead (to be zeroed)
-
-	/*
-	 * Mark the thread as interrupted.  Store a magic value in mcause.  This
-	 * value will not be overwritten by a trap before the scheduler sees the
-	 * target thread, since we are on core and it isn't.
-	 */
-	li                 a2, MCAUSE_THREAD_INTERRUPT
-	csw                a2, TrustedStack_offset_mcause(ca1)
-	// Return success
-	li                 a0, 1
-.Lswitcher_interrupt_thread_return:
-	zeroRegisters      a1, a2, a3
-	cret
-
-// Get a sealed pointer to the current thread's TrustedStack
-	.section .text, "ax", @progbits
-	.p2align 2
-	.type __Z23switcher_current_threadv,@function
-__Z23switcher_current_threadv:
-	/*
-	 * FROM: malice
-	 * IRQ ASSUME: deferred
-	 * LIVE IN: mtdc, callee-save, ra
-	 *
-	 * Atlas:
-	 *   mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
-	 *   ra: return pointer (guaranteed because this symbol is reachable only
-	 *       through an interrupt-disabling forward-arc sentry)
-	 */
-
-	LoadCapPCC         ca0, .Lsealing_key_trusted_stacks
-	// Atlas update: a0: sealing authority for trusted stacks
-	cspecialr          ca1, mtdc
-	// Atlas update: a1: copy of mtdc
-	cseal              ca0, ca1, ca0
-	li                 a1, 0
-	/*
-	 * Atlas update:
-	 *   a0: sealed copy of mtdc, this thread's TrustedStack
-	 *   a1: zero
-	 */
-	cret
-
 // Get a pointer to this thread's hazard pointers array
 	.section .text, "ax", @progbits
 	.p2align 2
@@ -2234,8 +2060,6 @@ __Z39switcher_handler_invocation_count_resetv:
 export __Z26compartment_switcher_entryz, __export_switcher
 export __Z23trusted_stack_has_spacei
 export __Z22switcher_recover_stackv
-export __Z25switcher_interrupt_threadPv
-export __Z23switcher_current_threadv
 export __Z28switcher_thread_hazard_slotsv
 export __Z13thread_id_getv
 export __Z25stack_lowest_used_addressv
