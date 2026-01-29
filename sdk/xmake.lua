@@ -1881,7 +1881,7 @@ rule("cheriot.rust.crate", function()
 			table.insert(rustflags, board.rcflags)
 		end
 
-		local cargoflags = { "build", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path }
+		local cargoflags = { "build", "--lib", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path }
 		local crate_build_mode
 
 		if is_mode("release") then
