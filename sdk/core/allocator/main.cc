@@ -274,6 +274,10 @@ namespace
 	                              uint32_t flags              = AllocateWaitAny)
 	{
 		check_gm();
+		Debug::Assert(
+		  capability->identifier != QuotaIdentifierAllocatorOwned,
+		  "Attempting to allocate a normal object with the allocator-owned "
+		  "identifier.  This should be impossible.");
 
 		do
 		{
@@ -411,6 +415,9 @@ namespace
 		  reinterpret_cast<PrivateAllocatorCapabilityState *>(capability);
 
 		// Assign an identifier if this is the first time that we've seen this.
+		// The value of 0 is used in allocator capabilities as a marker for
+		// uninitialised capabilities.  It is used internally in the heap for
+		// objects that are owned by the allocator.
 		if (state->identifier == 0)
 		{
 			static uint32_t nextIdentifier = 1;
@@ -578,13 +585,13 @@ namespace
 		                     uint16_t                         next)
 		{
 			auto space = gm->mspace_dispatch(
-			  sizeof(Claim), capability.quota, capability.identifier);
+			  sizeof(Claim), capability.quota, QuotaIdentifierAllocatorOwned);
 			if (!std::holds_alternative<Capability<void>>(space))
 			{
 				return nullptr;
 			}
-			return new (std::get<Capability<void>>(space))
-			  Claim(capability.identifier, next);
+			auto claim = std::get<Capability<void>>(space);
+			return new (claim) Claim(capability.identifier, next);
 		}
 
 		/**
