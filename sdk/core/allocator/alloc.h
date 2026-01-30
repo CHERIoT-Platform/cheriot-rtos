@@ -319,6 +319,22 @@ __cheri_no_subobject_bounds MChunkHeader
 	/// Head of a linked list of claims on this allocation
 	uint16_t claims;
 
+	/**
+	 * This must be a result not in the range of upper layer's encoding
+	 * technique for a valid Claim object.  There's a bit of layering violence
+	 * here because our (lightweight) hazard mechanism needs to be sensitive to
+	 * (upper layer) claims.
+	 *
+	 * The use of 0 is convenient as it is fast to test and, in the current
+	 * encoding scheme, would refer to the very first word of the heap
+	 * (at heapStart.address()), which, by construction, is a MChunkHeader.
+	 *
+	 * Concretely, see main.cc's Claim::encode_address() and mstate_init() as
+	 * well as our mspace_firstchunk_add().
+	 *
+	 */
+	static constexpr uint16_t NoClaims = 0;
+
 	__always_inline auto cell_prev()
 	{
 		return displacement_proxy::
@@ -1334,7 +1350,7 @@ class MState
 				Capability heap{heapStart};
 				heap.address() = ptr.address();
 				auto chunk     = MChunkHeader::from_body(heap);
-				if (chunk->claims > 0)
+				if (chunk->claims != MChunkHeader::NoClaims)
 				{
 					/*
 					 * The chunk was freed but ended up in
