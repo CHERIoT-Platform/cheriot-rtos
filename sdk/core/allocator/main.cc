@@ -515,7 +515,8 @@ namespace
 			/**
 			 * Placeholder value for end iterators.
 			 */
-			static inline const uint16_t EndPlaceholder = 0;
+			static inline const uint16_t EndPlaceholder =
+			  MChunkHeader::NoClaims;
 
 			/**
 			 * A pointer to the encoded next pointer.
@@ -669,6 +670,10 @@ namespace
 
 		/**
 		 * Encode the address of this object in a 16-bit value.
+		 *
+		 * This function must not output the value of `MChunkHeader::NoClaims`,
+		 * as that would break the allocator core's ability to test a chunk for
+		 * having claims.  See the comment over there for more details.
 		 */
 		uint16_t encode_address()
 		{
@@ -681,6 +686,8 @@ namespace
 			Debug::Assert(address <= std::numeric_limits<uint16_t>::max(),
 			              "Encoded claim address is too large: {}",
 			              address);
+			Debug::Assert(address != MChunkHeader::NoClaims,
+			              "Claim::encode_address would return NoClaims");
 			return address;
 		}
 	};
@@ -833,7 +840,7 @@ namespace
 			}
 			size_t chunkSize = chunk.size_get();
 			chunk.ownerID    = 0;
-			if (chunk.claims == 0)
+			if (chunk.claims == MChunkHeader::NoClaims)
 			{
 				int ret = gm->mspace_free(chunk, bodySize);
 				// If free fails, don't manipulate the quota.
@@ -853,7 +860,7 @@ namespace
 		// claim.
 		if (claim_drop(owner, chunk, reallyFree, freeAll))
 		{
-			if ((chunk.claims == 0) &&
+			if ((chunk.claims == MChunkHeader::NoClaims) &&
 			    (chunk.ownerID == QuotaIdentifierAllocatorOwned))
 			{
 				return gm->mspace_free(chunk, bodySize);
