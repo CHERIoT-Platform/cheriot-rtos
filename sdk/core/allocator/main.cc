@@ -684,7 +684,19 @@ namespace
 			Claim *claim = *i;
 			if (claim->owner() == owner)
 			{
-				return {*i.pointer(), claim};
+				/*
+				 * While in many cases it would be fine to bound the pointer to
+				 * the encoded location of the found claim, the head of this
+				 * list is within the MChunkHeader for this `chunk`.  That
+				 * location in memory is marked in the revocation bitmap, and so
+				 * any tightly-bounded pointer to any subobject of a live,
+				 * in-heap MChunkHeader cannot round-trip through memory
+				 * correctly.
+				 *
+				 * See discussion at
+				 * https://github.com/CHERIoT-Platform/llvm-project/issues/320
+				 */
+				return {__builtin_no_change_bounds(*i.pointer()), claim};
 			}
 		}
 		return {chunk.claims, nullptr};
