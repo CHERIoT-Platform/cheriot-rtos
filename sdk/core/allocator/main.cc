@@ -426,7 +426,7 @@ namespace
 		// The value of 0 is used in allocator capabilities as a marker for
 		// uninitialised capabilities.  It is used internally in the heap for
 		// objects that are owned by the allocator.
-		if (state->identifier == 0)
+		if (state->identifier == QuotaIdentifierAllocatorOwned)
 		{
 			static uint32_t nextIdentifier = 1;
 			if (nextIdentifier >= (1 << MChunkHeader::OwnerIDWidth))
@@ -846,7 +846,8 @@ namespace
 		// claim.
 		if (claim_drop(owner, chunk, reallyFree, freeAll))
 		{
-			if ((chunk.claims == 0) && (chunk.ownerID == 0))
+			if ((chunk.claims == 0) &&
+			    (chunk.ownerID == QuotaIdentifierAllocatorOwned))
 			{
 				return gm->mspace_free(chunk, bodySize);
 			}
