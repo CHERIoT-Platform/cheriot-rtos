@@ -855,15 +855,23 @@ namespace
 		ssize_t allocated = 0;
 		debug_log("Quota left before allocating: {}",
 		          heap_quota_remaining(SECOND_HEAP));
+		void *allocation = nullptr;
 		// Allocate and leak some things:
 		for (size_t i = 16; i < 256; i <<= 1)
 		{
 			allocated += i;
-			TEST(
-			  __builtin_cheri_tag_get(heap_allocate(&noWait, SECOND_HEAP, i)),
-			  "Allocating {} bytes failed",
-			  i);
+			allocation = heap_allocate(&noWait, SECOND_HEAP, i);
+			TEST(__builtin_cheri_tag_get(allocation),
+			     "Allocating {} bytes failed",
+			     i);
 		}
+		// Claim the last allocation twice.
+		TEST_EQUAL(heap_claim(SECOND_HEAP, allocation),
+		           128,
+		           "Claiming our own allocation (once)");
+		TEST_EQUAL(heap_claim(SECOND_HEAP, allocation),
+		           128,
+		           "Claiming our own allocation (twice)");
 		debug_log("Quota left after allocating {} bytes: {}",
 		          allocated,
 		          heap_quota_remaining(SECOND_HEAP));
