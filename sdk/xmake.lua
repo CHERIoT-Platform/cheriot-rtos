@@ -28,10 +28,31 @@ local function option_check_dep(raise, option, dep)
 	end
 end
 
-option("board")
+option("board", function ()
 	set_description("Board JSON description file")
 	set_showmenu(true)
 	set_category("board")
+	add_deps("board-mixins")
+
+	after_check(function (self)
+		if type(self:value()) ~= "string" then
+			raise("Bad value for required --board option")
+		end
+
+		local project_config = import("core.project.config", { anonymous = true })
+		local board_parsing = import("board-parsing",
+			{ anonymous = true
+			, rootdir = path.join(os.scriptdir(), "xmake")
+			})
+
+		local board_conf = board_parsing(
+			path.join(os.scriptdir(), "boards"),
+			self:value(),
+			self:dep("board-mixins"):value())
+
+		project_config.set("cheriot.board", board_conf)
+	end)
+end)
 
 option("board-mixins")
 	set_default("")
@@ -456,22 +477,14 @@ target("cheriot.software_revoker")
 		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 	end)
 
+-- XXX This can probably go away now that we're ing option()/`config`.
 target("cheriot.board")
 	set_kind("phony")
 	set_default(false)
+	add_options("cheriot.board")
 
 	on_load(function (self)
-		local project_config = import("core.project.config", { anonymous = true })
-		local board_parsing = import("board-parsing",
-			{ anonymous = true
-			, rootdir = path.join(os.scriptdir(), "xmake")
-			})
-		
-		local board_conf = board_parsing(
-			path.join(os.scriptdir(), "boards"),
-			get_config("board"),
-			get_config("board-mixins"))
-
+		local board_conf = get_config("cheriot.board") or {}
 		self:set("cheriot.board_dir", board_conf.dir)
 		self:set("cheriot.board_file", board_conf.file)
 		self:set("cheriot.board_info", { board_conf.info })
