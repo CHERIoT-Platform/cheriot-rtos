@@ -168,7 +168,7 @@ local scriptdir = os.scriptdir()
 local coredir = path.join(scriptdir, "core")
 
 -- Set up our llvm configuration.
-toolchain("cheriot-clang")
+toolchain("cheriot-clang", function ()
 	set_kind("standalone")
 	set_toolset("cc", "clang")
 	set_toolset("cxx", "clang++")
@@ -178,19 +178,23 @@ toolchain("cheriot-clang")
 	set_toolset("as", "clang")
 
 	--Set up the flags that we need.
-	on_load(function (toolchain)
-		local core_directory = scriptdir
-		local include_directory = path.join(core_directory, "include")
+	on_load(function (self)
+		local board = get_config("cheriot.board").info
+		local include_directory = path.join(scriptdir, "include")
+
+		local target = self:config("target")
+			or "riscv32cheriot-unknown-cheriotrtos"
+		local cpu = board["cpu"] or "cheriot"
+		local abi = self:config("abi") or "cheriot"
+
 		-- Flags used for C/C++ and assembly
-		local default_flags = {
-			"-target",
-			"riscv32cheriot-unknown-cheriotrtos",
-			"-mcpu=cheriot",
-			"-mabi=cheriot",
+		local default_clang_flags = {
+			"-target", target,
+			"-mcpu=" .. cpu,
+			"-mabi=" .. abi,
 			"-mxcheri-rvc",
 			"-mrelax",
 			"-fshort-wchar",
-			"-nostdinc",
 			"-g",
 			"-ffunction-sections",
 			"-fdata-sections",
@@ -202,33 +206,26 @@ toolchain("cheriot-clang")
 			"-fno-asynchronous-unwind-tables",
 			"-fno-c++-static-destructors",
 			"-fno-rtti",
+			"-nostdinc",
 			"-I" .. path.join(include_directory, "c++-config"),
 			"-I" .. path.join(include_directory, "libc++"),
 			"-I" .. include_directory,
 		}
 		-- C/C++ flags
-		toolchain:add("cxflags", default_flags)
+		self:add("cxflags", default_clang_flags)
 		-- Assembly flags
-		toolchain:add("asflags", default_flags)
+		self:add("asflags", default_clang_flags)
 	end)
-toolchain_end()
+end)
 
--- Override cxflags and cflags for the cheriot-clang toolchain to use the
--- baremetal ABI and target triple instead.
---
--- For xmake reasons, these get appended to the toolchain parameters, so we're
--- relying on the tools having a "last one wins" policy, with nothing in the
--- middle being interpreted relative to an earlier value.
+-- Pass configuration to the cheriot-clang toolchain to use the baremetal ABI
+-- and target triple instead of its defaults.
 rule("cheriot.baremetal-abi")
-	on_load(function (target)
-		for _, flags in ipairs({"cxflags", "asflags"}) do
-			target:add(flags,
-				{ "-target", "riscv32cheriot-unknown-unknown" },
-				{ expand = false, force = true })
-			target:add(flags,
-				{ "-mabi=cheriot-baremetal" },
-				{ expand = false, force = true })
-		end
+	on_load(function (self)
+		self:set("toolchains", "cheriot-clang",
+			{ target = "riscv32cheriot-unknown-unknown"
+			, abi = "cheriot-baremetal"
+			})
 	end)
 rule_end()
 
