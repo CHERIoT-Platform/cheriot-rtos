@@ -208,5 +208,5 @@
             "priority": 3
         }
     ],
-    "cxflags": "-mcpu=cheriot-ibex"
+    "cpu": "cheriot-ibex"
 }
