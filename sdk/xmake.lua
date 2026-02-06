@@ -218,11 +218,29 @@ toolchain("cheriot-clang", function ()
 	end)
 end)
 
+toolchain("cheriot-rust", function()
+	set_toolset("rc", "rustc")
+
+	on_load(function (self)
+		local board = get_config("cheriot.board").info
+		local include_directory = path.join(scriptdir, "include")
+
+		local target = self:config("target")
+			or "riscv32cheriot-unknown-cheriotrtos"
+		local cpu = board["cpu"] or "cheriot"
+
+		self:add("rcflags",
+			{ "--target=" .. target
+			, "-C", "target-cpu=" .. cpu
+			})
+	end)
+end)
+
 -- Pass configuration to the cheriot-clang toolchain to use the baremetal ABI
 -- and target triple instead of its defaults.
 rule("cheriot.baremetal-abi")
 	on_load(function (self)
-		self:set("toolchains", "cheriot-clang",
+		self:set("toolchains", "cheriot-clang", "cheriot-rust",
 			{ target = "riscv32cheriot-unknown-unknown"
 			, abi = "cheriot-baremetal"
 			})
@@ -280,7 +298,7 @@ end
 rule("cheriot.toolchain", function ()
 	on_load(function (target)
 		-- Use our toolchain and build for the CHERIoT architecture and platform
-		target:set("toolchains", "cheriot-clang")
+		target:set("toolchains", "cheriot-clang", "cheriot-rust")
 		target:set("arch", "cheriot")
 		target:set("plat", "cheriot")
 
