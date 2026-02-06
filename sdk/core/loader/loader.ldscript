@@ -1,0 +1,28 @@
+SECTIONS
+{
+
+.code_persistent : CAPALIGN
+{
+    KEEP(*/boot.S.o(.loader_start .loader_start.*));
+}
+
+.stacks : CAPALIGN
+{
+    KEEP(*/boot.S.o(.loader_trusted_stack .loader_stack));
+}
+
+.code_ephemeral : CAPALIGN
+{
+    HIDDEN(.code_ephemeral_start = .);
+    KEEP(*/boot.cc.o(.text .text.* .rodata .rodata.* .data.rel.ro));
+}
+HIDDEN(.code_ephemeral_size = SIZEOF(.code_ephemeral));
+
+.data_ephemeral : CAPALIGN
+{
+    HIDDEN(.data_ephemeral_start = .);
+    KEEP(*/boot.cc.o(.data .data.* .sdata .sdata.* .sbss .sbss.* .bss .bss.*));
+}
+HIDDEN(.data_ephemeral_size = SIZEOF(.data_ephemeral));
+
+}
