@@ -13,8 +13,6 @@ add_rules("mode.release", "mode.debug")
 -- finer-grained control.
 set_allowedmodes("release", "debug")
 
-set_allowedarchs("cheriot")
-
 -- More work arounds for xmake's buggy flag detection.
 if is_mode("release") then
     add_defines("NDEBUG", {force = true})
@@ -142,10 +140,6 @@ end
 
 testCheckOption("model-output")
 
--- Force -Oz irrespective of build config.  At -O0, we blow out our stack and
--- require much stronger alignment.
-set_optimize("smallest")
-
 --Capture the directory containing this script for later use.  We need this to
 --find the location of the linker scripts and so on.
 local scriptdir = os.scriptdir()
@@ -176,7 +170,6 @@ toolchain("cheriot-clang")
 			"-mrelax",
 			"-fshort-wchar",
 			"-nostdinc",
-			"-Oz",
 			"-g",
 			"-ffunction-sections",
 			"-fdata-sections",
@@ -194,8 +187,6 @@ toolchain("cheriot-clang")
 		}
 		-- C/C++ flags
 		toolchain:add("cxflags", default_flags)
-		toolchain:add("cxxflags", "-std=c++23")
-		toolchain:add("cflags", "-std=c23")
 		-- Assembly flags
 		toolchain:add("asflags", default_flags)
 	end)
@@ -235,11 +226,6 @@ rule("cheriot.subobject-bounds")
 	end)
 rule_end()
 
-set_defaultarchs("cheriot")
-set_defaultplat("cheriot")
-set_languages("c23", "cxx23")
-
-
 -- Helper to visit all dependencies of a specified target exactly once and call
 -- a callback.
 local function visit_all_dependencies_of(target, callback)
@@ -272,9 +258,26 @@ local function maybe_writefile(xmake_io, xmake_try, path, contents)
 	} }
 end
 
+-- Common rules for most CHERIoT builds
+rule("cheriot.toolchain", function ()
+	on_load(function (target)
+		-- Use our toolchain and build for the CHERIoT architecture and platform
+		target:set("toolchains", "cheriot-clang")
+		target:set("arch", "cheriot")
+		target:set("plat", "cheriot")
 
--- Common rules for any CHERI MCU component (library or compartment)
+		-- Default to -Oz irrespective of build config.  At -O0, we blow out our
+		-- stack and require much stronger alignment.
+		target:set("optimize", "smallest")
+
+		-- Default to modern versions of supported languages
+		target:set("languages", "c23", "cxx23")
+	end)
+end)
+
+-- Common rules for any CHERIoT component (library or compartment)
 rule("cheriot.component")
+	add_deps("cheriot.toolchain")
 
 	-- Set some default config values for all cheriot components.
 	on_load(function (target)
@@ -387,7 +390,7 @@ rule("cheriot.generated-source")
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
 target("cheriot.switcher")
-	add_rules("cheriot.baremetal-abi")
+	add_rules("cheriot.toolchain", "cheriot.baremetal-abi")
 	set_default(false)
 	set_kind("object")
 	add_files(path.join(coredir, "switcher/entry.S"))
@@ -1546,6 +1549,9 @@ rule("cheriot.firmware.run")
 
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
+	-- Firmwares build using our toolchain
+	add_deps("cheriot.toolchain")
+
 	-- Firmwares are reachability roots.
 	add_deps("cheriot.reachability_root")
 
@@ -1631,7 +1637,8 @@ rule("cheriot.define-rtos-git-description")
 
 -- Common aspects of the CHERIoT loader target
 rule("cheriot.loader.base")
-	add_deps("cheriot.component-debug",
+	add_deps("cheriot.toolchain",
+	         "cheriot.component-debug",
 	         "cheriot.baremetal-abi",
 	         "cheriot.subobject-bounds")
 
@@ -1646,6 +1653,9 @@ rule("cheriot.loader.base")
 		           "CHERIOT_NO_AMBIENT_MALLOC")
 
 		target:set('cheriot.debug-name', "loader")
+
+		target:set("optimize", "fast")
+		target:set("languages", "c23", "cxx23")
 	end)
 
 	after_load(function (target)
@@ -1662,8 +1672,7 @@ target("cheriot.loader")
 
 	-- FIXME: We should be setting this based on a board config file.
 	add_files(path.join(coredir, "loader/boot.S"),
-	          path.join(coredir, "loader/boot.cc"),
-	          {force = {cxflags = "-O1"}})
+	          path.join(coredir, "loader/boot.cc"))
 
 -- Helper function to define firmware.  Used as `target`.
 function firmware(name)
