@@ -1,0 +1,10 @@
+{
+  "base": "sail",
+  "patch": [
+    {
+      "op": "replace",
+      "path": "/cpu",
+      "value": "cheriot-ibex"
+    }
+  ]
+}
