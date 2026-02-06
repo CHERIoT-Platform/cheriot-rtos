@@ -387,6 +387,7 @@ rule("cheriot.generated-source")
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
 target("cheriot.switcher")
+	add_rules("cheriot.baremetal-abi")
 	set_default(false)
 	set_kind("object")
 	add_files(path.join(coredir, "switcher/entry.S"))
