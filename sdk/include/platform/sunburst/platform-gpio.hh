@@ -181,6 +181,14 @@ struct SonataGpioBoard : SonataGpioBase<0x0000'00FF, 0x0001'FFFF, 0x0000'0000>
 		{
 			return is_direction_pressed(JoystickDirection::Right);
 		}
+
+		/**
+		 * Implicit conversion to bool. True if any direction is pressed.
+		 */
+		operator bool()
+		{
+			return direction != static_cast<JoystickDirection>(0);
+		}
 	};
 
 	/**
