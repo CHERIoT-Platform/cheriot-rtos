@@ -1,6 +1,12 @@
 -- Copyright Microsoft and CHERIoT Contributors.
 -- SPDX-License-Identifier: MIT
 
+--Capture the directory containing this script for later use.  We need this to
+--find the location of the linker scripts and so on.
+local scriptdir = os.scriptdir()
+-- The directory where we will find the core components
+local coredir = path.join(scriptdir, "core")
+
 -- xmake has started refusing to pass flags that it doesn't recognise, so tell
 -- it to stop doing that for now.
 set_policy("check.auto_ignore_flags", false)
@@ -45,8 +51,21 @@ option("board", function ()
 			, rootdir = path.join(os.scriptdir(), "xmake")
 			})
 
+		-- Several paths in board JSON can contain ${variable} expansions:
+		-- * ${sdk} to refer to the SDK directory,
+		-- * ${sdkboards} to refer to the SDK's boards/ directory
+		-- * ${project} for the root source tree.
+		--
+		-- The board handling goo will also add ${board} for the --board file's
+		-- own directory, once that has been resolved.
+		local board_path_substitutes = {
+			sdk = scriptdir,
+			sdkboards = path.join(scriptdir, "boards"),
+			project = os.projectdir(),
+		}
+
 		local board_conf = board_parsing(
-			path.join(os.scriptdir(), "boards"),
+			board_path_substitutes,
 			self:value(),
 			self:dep("board-mixins"):value())
 
@@ -160,12 +179,6 @@ function testCheckOption(name)
 end
 
 testCheckOption("model-output")
-
---Capture the directory containing this script for later use.  We need this to
---find the location of the linker scripts and so on.
-local scriptdir = os.scriptdir()
--- The directory where we will find the core components
-local coredir = path.join(scriptdir, "core")
 
 -- Set up our llvm configuration.
 toolchain("cheriot-clang", function ()
@@ -643,9 +656,12 @@ rule("cheriot.board.ldscript.conf")
 	end)
 
 	after_load(function (target)
-		local board_target = target:deps()["cheriot.board"]
-		local board = board_target:get("cheriot.board_info")
-		local boarddir = board_target:get("cheriot.board_dir")
+		local board_config = get_config("cheriot.board")
+		local board = board_config.info
+
+		local function path_subst(p)
+			return p:gsub("${(%w*)}", board_config.path_substitutes)
+		end
 
 		local ldscript_fragments = {}
 		do
@@ -675,10 +691,9 @@ rule("cheriot.board.ldscript.conf")
 		-- use arrays or maps.
 		for _, fragment in pairs(board.ldscript_fragments or {}) do
 			if fragment.srcpath then
-				-- Allow ${sdk} to refer to the SDK directory, like includes
-				fragment.srcpath = string.gsub(fragment.srcpath, "${(%w*)}", { sdk=scriptdir })
+				fragment.srcpath = path_subst(fragment.srcpath)
 				if not path.is_absolute(fragment.srcpath) then
-					fragment.srcpath = path.join(boarddir, fragment.srcpath);
+					fragment.srcpath = path.join(board_config.dir, fragment.srcpath);
 				end
 			end
 			table.insert(ldscript_fragments, fragment)
@@ -772,9 +787,11 @@ rule("cheriot.board.targets.conf")
 			end)
 		end
 
-		local board_target = target:deps()["cheriot.board"]
-		local boarddir = board_target:get("cheriot.board_dir")
-		local board = board_target:get("cheriot.board_info")
+		local board_config = get_config("cheriot.board")
+		local board = board_config.info
+		local function path_subst(p)
+			return p:gsub("${(%w*)}", board_config.path_substitutes)
+		end
 
 		if board.revoker then
 			local temporal_defines = { "TEMPORAL_SAFETY" }
@@ -788,9 +805,9 @@ rule("cheriot.board.targets.conf")
 			for _, include_path in ipairs(board.driver_includes) do
 				-- Allow ${sdk} to refer to the SDK directory, so that external
 				-- board includes can include generic platform bits.
-				include_path = string.gsub(include_path, "${(%w*)}", { sdk=scriptdir })
+				include_path = path_subst(include_path)
 				if not path.is_absolute(include_path) then
-					include_path = path.join(boarddir, include_path);
+					include_path = path.join(board_config.dir, include_path);
 				end
 				visit_all_dependencies(function (target)
 					target:add('includedirs', include_path)
