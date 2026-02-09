@@ -1113,6 +1113,111 @@ rule("cheriot.firmware.linkcmd")
 		batchcmds:add_depfiles(target:get("cheriot.ldscripts"))
 		batchcmds:add_depfiles(objects)
 	end)
+    after_link(function (target)
+        -- This function goes through each dependancy looking for an audit instruction and runs any audits found.
+        -- Assumptions:
+        -- 1. cheriot.board_file is set
+        -- 2. Running post link means that the compartment report should be at target:targetfile() .. ".json"
+        -- 3. Each target to be checked has a "cheriot.audit" set.
+        -- 4. "cheriot.target" can take a string, a single table or a table of tables
+        -- 5. If you pass a string it will be the query to run against the rego file. Since you build this in the compartment's xmake.lua file, you can make this as complex as you'd like.
+        -- 6. If the format is a table or table of tables, the format for each table is:
+        --    [1] The query to run against the rego file. Since you build this in the compartment's xmake.lua file, you can make this as complex as you'd like.
+        --    [2] (OPTIONAL) The path to the rego file.
+        -- 7. The code code looks for the final result of "true" follwed by a new line. Anything else is raised as an exception.
+        -- 8. cheriot-audit is in the PATH. If this is going to be an issue we'll have to add code to go looking for it (SIGH!).
+        --
+        -- Example of setting one test with a direct query:
+        -- local audit = 'data.compartment.mmio_allow_list("uart2", {"uart_man"})'
+        -- target:set("cheriot.audit", audit)
+        --
+        -- Example of setting one test with a direct query (a different valid format):
+        -- local audit = {'data.compartment.mmio_allow_list("uart2", {"uart_man"})'}
+        -- target:set("cheriot.audit", audit)
+        --
+        -- Example of setting one test using a rego file query:
+        -- local audit = {'data.uart_man.valid("uart1")', path.join(target:scriptdir(), "uart_man.rego")}
+        -- target:set("cheriot.audit", audit)
+        -- 
+        -- Example excuting multiple tests (a mixture of direct queries and rego file queries):
+        -- local audit = {
+        --     {'data.uart_man.valid("uart1")', path.join(target:scriptdir(), "uart_man.rego")}, 
+        --     {'data.compartment.mmio_allow_list("uart2", {"uart_man"})'} 
+        -- }
+        -- target:set("cheriot.audit", audit)
+        -- 
+        -- Note: In these examples, we use target:scriptdir() to get the path to the folder where the compartment's xmake.lua file is stored. We would suggest keeping the files together in one folder as a best prectice
+
+        local function execute_audit(board_file, report_file, query, regofile)
+            -- Performs an audit. Assumes that cheriot-audit is in the PATH.
+            local t = {
+                "/cheriot-tools/bin/cheriot-audit --board",
+                board_file,
+                "--firmware-report",
+                report_file,
+                "-q",
+                "'"..query.."'"
+            }
+            if regofile then
+                table.insert(t, "-m")
+                table.insert(t, regofile)
+            end
+            local ex_string = table.concat(t, ' ')
+            
+            -- Execute the cheriot-audit
+            local outdata, errdata = os.iorun(ex_string)
+            if string.sub(outdata, -5, -1) == "true\n" then
+                if regofile then
+                    print("Audit passed. target: "..target:name()..", rego file: "..regofile..", query: "..query)
+                else
+                    print("Audit passed. target: "..target:name()..", query: "..query)
+                end
+            else
+                if regofile then
+                    raise("Audit failed! target: "..target:name()..", rego file: "..regofile..", query: "..query)
+                else
+                    raise("Audit failed! target: "..target:name()..", query: "..query)
+                end
+            end
+        end
+
+		-- local board_file = target:get("cheriot.board_file")
+        local board_file = path.join("$(buildir)", "board.json")
+		local compartment_report = path.join(target:scriptdir(), target:targetfile() .. ".json")
+
+        -- Work through the dependancy tree and call this only once for each dependancy
+        -- Note: When we PR this to cheriot:
+        --  1. We can use the existing visit_all_dependencies_of function
+        --  2. We can place this code in cheriot-rtos/sdk/xmake.lua
+        --  3. We should apply this rule in rule("cheriot.firmware")? 
+        local visited = {}
+        local function visit(targ)
+            if not visited[targ:name()] then
+                visited[targ:name()] = true
+                if (targ:get("cheriot.audit")) then
+                    local audit = targ:get("cheriot.audit")
+
+                    if type(audit) == "string" then
+                        execute_audit(board_file, compartment_report, audit)
+                    elseif type(audit) == "table" then
+                        if type(audit[1]) == "table" then
+                            for i,value in ipairs(audit) do
+                                execute_audit(board_file, compartment_report, value[1], value[2])
+                            end
+                        else
+                            execute_audit(board_file, compartment_report, audit[1], audit[2])
+                        end
+                    else
+                        raise("Audit failed! target: "..target:name()..", query is invalid!")
+                    end
+                end
+                for _, d in table.orderpairs(targ:deps()) do
+                    visit(d)
+                end
+            end
+        end
+        visit(target)
+    end)
 
 -- Specialize the above specifically for a RTOS firmware target
 rule ("cheriot.firmware.link")
