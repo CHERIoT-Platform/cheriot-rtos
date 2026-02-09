@@ -1,10 +1,7 @@
 local json = import("core.base.json", { anonymous = true })
 
 -- Helper to find a board file given either the name of a board file or a path.
-local function board_file_for_name(boardName, searchDir)
-	-- ${sdkboards} for absolute references
-	local boardfile = string.gsub(boardName, "${(%w*)}",
-		{ sdkboards=path.join(scriptdir, "boards") })
+local function board_file_for_name(boardfile, searchDir)
 	-- The directory containing the board file.
 	local boarddir = path.directory(boardfile);
 	-- If this isn't a path, look in searchDir
@@ -233,8 +230,10 @@ local function normalize_extent(jsonpath, extent)
 	end
 end
 
-function main(defaultPath, boardName, boardMixins)
-	local boarddir, boardfile = board_file_for_name(boardName, defaultPath)
+function main(boardPathSubstitutes, boardName, boardMixins)
+	local boarddir, boardfile = board_file_for_name(
+		boardName:gsub("${(%w)}", boardPathSubstitutes),
+		boardPathSubstitutes.sdkboards)
 	if not boarddir then
 		raise("unable to find board file " .. boardName .. ".  Try specifying a full path")
 	end
@@ -266,5 +265,12 @@ function main(defaultPath, boardName, boardMixins)
 	-- the system sees.
 	board.trusted_spill_size = board.stack_high_water_mark and 192 or 176
 
-	return { info = board, dir = boarddir, file = boardfile }
+	boardPathSubstitutes.board = boarddir
+
+	return {
+		info = board,
+		dir = boarddir,
+		file = boardfile,
+		path_substitutes = boardPathSubstitutes
+	}
 end
