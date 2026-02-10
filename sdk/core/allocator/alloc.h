@@ -58,6 +58,9 @@ using Binmap = uint32_t;
 static_assert(NSmallBins < utils::bytes2bits(sizeof(Binmap)));
 static_assert(NTreeBins < utils::bytes2bits(sizeof(Binmap)));
 
+/// Quota identifier 0 is reserved for allocator-owned objects.
+constexpr uint16_t QuotaIdentifierAllocatorOwned = 0;
+
 // Convert small size header into the actual size in bytes.
 static inline constexpr size_t head2size(SmallSize h)
 {
@@ -299,7 +302,10 @@ __cheri_no_subobject_bounds MChunkHeader
 	 */
 	SmallSize currSize;
 
-	/// The unique identifier of the allocator.
+	/**
+	 * The unique identifier of the allocator.  The ID 0 is reserved for
+	 * objects that are owned by the allocator, such as claims.
+	 */
 	uint16_t ownerID : OwnerIDWidth;
 	/**
 	 * Is this a sealed object?  If so, it should be exempted from free in
@@ -329,7 +335,8 @@ __cheri_no_subobject_bounds MChunkHeader
 
 	/**
 	 * Returns the owner for an in-use chunk. This should not be called with a
-	 * not-in-use chunk.
+	 * not-in-use chunk.  A value of 0 indicates that the object is owned by
+	 * the allocator and cannot be freed by any external caller.
 	 */
 	uint16_t owner()
 	{
@@ -340,7 +347,8 @@ __cheri_no_subobject_bounds MChunkHeader
 
 	/**
 	 * Sets the owner for an in-use chunk. This should not be called with a
-	 * not-in-use chunk.
+	 * not-in-use chunk.  A value of 0 indicates that the object is owned by
+	 * the allocator.
 	 */
 	void set_owner(uint16_t newOwner)
 	{

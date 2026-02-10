@@ -274,6 +274,10 @@ namespace
 	                              uint32_t flags              = AllocateWaitAny)
 	{
 		check_gm();
+		Debug::Assert(
+		  capability->identifier != QuotaIdentifierAllocatorOwned,
+		  "Attempting to allocate a normal object with the allocator-owned "
+		  "identifier.  This should be impossible.");
 
 		do
 		{
@@ -411,6 +415,9 @@ namespace
 		  reinterpret_cast<PrivateAllocatorCapabilityState *>(capability);
 
 		// Assign an identifier if this is the first time that we've seen this.
+		// The value of 0 is used in allocator capabilities as a marker for
+		// uninitialised capabilities.  It is used internally in the heap for
+		// objects that are owned by the allocator.
 		if (state->identifier == 0)
 		{
 			static uint32_t nextIdentifier = 1;
@@ -578,13 +585,13 @@ namespace
 		                     uint16_t                         next)
 		{
 			auto space = gm->mspace_dispatch(
-			  sizeof(Claim), capability.quota, capability.identifier);
+			  sizeof(Claim), capability.quota, QuotaIdentifierAllocatorOwned);
 			if (!std::holds_alternative<Capability<void>>(space))
 			{
 				return nullptr;
 			}
-			return new (std::get<Capability<void>>(space))
-			  Claim(capability.identifier, next);
+			auto claim = std::get<Capability<void>>(space);
+			return new (claim) Claim(capability.identifier, next);
 		}
 
 		/**
@@ -677,7 +684,19 @@ namespace
 			Claim *claim = *i;
 			if (claim->owner() == owner)
 			{
-				return {*i.pointer(), claim};
+				/*
+				 * While in many cases it would be fine to bound the pointer to
+				 * the encoded location of the found claim, the head of this
+				 * list is within the MChunkHeader for this `chunk`.  That
+				 * location in memory is marked in the revocation bitmap, and so
+				 * any tightly-bounded pointer to any subobject of a live,
+				 * in-heap MChunkHeader cannot round-trip through memory
+				 * correctly.
+				 *
+				 * See discussion at
+				 * https://github.com/CHERIoT-Platform/llvm-project/issues/320
+				 */
+				return {__builtin_no_change_bounds(*i.pointer()), claim};
 			}
 		}
 		return {chunk.claims, nullptr};
@@ -693,7 +712,7 @@ namespace
 		auto [next, claim] = claim_find(owner.identifier, chunk);
 		if (claim)
 		{
-			Debug::log("Adding second claim");
+			Debug::log("Adding reference to existing claim");
 			claim->reference_add();
 			return true;
 		}
@@ -711,7 +730,7 @@ namespace
 		claim = Claim::create(owner, next);
 		if (claim != nullptr)
 		{
-			Debug::log("Allocated new claim");
+			Debug::log("Allocated new claim for {}", chunk.body());
 			// If this is the owner, remove the owner and downgrade our
 			// ownership to a claim.  This simplifies the deallocation path.
 			if (isOwner)
@@ -740,7 +759,8 @@ namespace
 	 */
 	bool claim_drop(PrivateAllocatorCapabilityState &owner,
 	                MChunkHeader                    &chunk,
-	                bool                             reallyDrop)
+	                bool                             reallyDrop,
+	                bool                             freeAll = false)
 	{
 		Debug::log(
 		  "Trying to drop claim with {} ({})", owner.identifier, &owner);
@@ -755,8 +775,9 @@ namespace
 			return true;
 		}
 		// Drop the reference.  If this results in the last reference going
-		// away, destroy this claim structure.
-		if (claim->reference_remove())
+		// away, destroy this claim structure.  If we are in free-all mode,
+		// delete the claim unconditionally.
+		if (freeAll || claim->reference_remove())
 		{
 			next        = claim->encoded_next();
 			size_t size = chunk.size_get();
@@ -783,7 +804,8 @@ namespace
 	                               MChunkHeader                    &chunk,
 	                               size_t                           bodySize,
 	                               bool isPrecise  = true,
-	                               bool reallyFree = true)
+	                               bool reallyFree = true,
+	                               bool freeAll    = false)
 	{
 		// If this is a precise allocation, see if we can free it as the
 		// original owner.  You may drop claims with a capability that is a
@@ -814,7 +836,7 @@ namespace
 		}
 		// If this is an interior (but valid) pointer, see if we can drop a
 		// claim.
-		if (claim_drop(owner, chunk, reallyFree))
+		if (claim_drop(owner, chunk, reallyFree, freeAll))
 		{
 			if ((chunk.claims == 0) && (chunk.ownerID == 0))
 			{
@@ -1050,8 +1072,12 @@ __cheriot_minimum_stack(0x1a0) ssize_t
 		if (chunk->is_in_use() && !chunk->isSealedObject)
 		{
 			auto size = chunk->size_get();
-			if (heap_free_chunk(
-			      *capability, *chunk, gm->chunk_body_size(*chunk)) == 0)
+			if (heap_free_chunk(*capability,
+			                    *chunk,
+			                    gm->chunk_body_size(*chunk),
+			                    /*isPrecise*/ true,
+			                    /*reallyFree*/ true,
+			                    /*freeAll*/ true) == 0)
 			{
 				freed += size;
 			}
