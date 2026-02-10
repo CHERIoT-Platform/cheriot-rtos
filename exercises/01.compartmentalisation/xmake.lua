@@ -26,7 +26,6 @@ firmware("javascript")
     add_deps("js")
     add_deps("debug")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "js",

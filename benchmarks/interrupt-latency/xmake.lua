@@ -26,7 +26,6 @@ compartment("interrupt_bench")
 firmware("interrupt-benchmark")
     add_deps("interrupt_bench")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "interrupt_bench",

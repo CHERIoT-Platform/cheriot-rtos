@@ -18,7 +18,6 @@ firmware("memory_safety")
     add_deps("freestanding", "debug")
     add_deps("memory_safety_runner", "memory_safety_inner")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "memory_safety_runner",

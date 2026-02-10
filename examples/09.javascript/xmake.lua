@@ -17,7 +17,6 @@ firmware("javascript")
     add_deps("microvium", "debug")
     add_deps("hello")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "hello",

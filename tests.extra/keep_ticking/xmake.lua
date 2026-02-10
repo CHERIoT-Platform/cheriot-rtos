@@ -13,7 +13,6 @@ firmware("keep_ticking")
     add_deps("freestanding", "debug")
     add_deps("top")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "top",

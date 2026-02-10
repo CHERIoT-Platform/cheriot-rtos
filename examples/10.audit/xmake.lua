@@ -29,7 +29,6 @@ firmware("audit")
     add_deps("entry", "caesar")
     add_deps("producer", "consumer")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "entry",
