@@ -23,7 +23,6 @@ firmware("temporal_safety")
     add_deps("allocate")
     add_deps("claimant")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "allocate",

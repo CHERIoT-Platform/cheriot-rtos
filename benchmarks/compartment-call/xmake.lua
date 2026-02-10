@@ -44,7 +44,6 @@ firmware("compartment-call-benchmark")
     add_deps("crt", "freestanding", "atomic", "stdio", "string", "debug")
     add_deps("caller", "callee", "libcallee", "callee_seh", "callee_ueh")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "caller",

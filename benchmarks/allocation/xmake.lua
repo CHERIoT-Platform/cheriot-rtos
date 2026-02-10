@@ -22,7 +22,6 @@ compartment("allocbench")
 firmware("allocator-benchmark")
     add_deps("allocbench")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "allocbench",

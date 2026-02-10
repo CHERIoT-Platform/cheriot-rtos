@@ -295,7 +295,6 @@ firmware("test-suite")
     add_deps("debug", "freestanding")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "test_runner",
