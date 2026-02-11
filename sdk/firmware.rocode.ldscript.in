@@ -1,8 +1,8 @@
 _start = .;
 
-.loader_start :
+.loader_code_persistent : CAPALIGN
 {
-    *(.loader_start);
+    */*.loader.o(.code_persistent);
 }
 
 .compartment_export_tables : ALIGN(8)
