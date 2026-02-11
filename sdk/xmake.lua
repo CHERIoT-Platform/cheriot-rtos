@@ -1113,19 +1113,24 @@ rule("cheriot.firmware.linkcmd")
 		batchcmds:add_depfiles(target:get("cheriot.ldscripts"))
 		batchcmds:add_depfiles(objects)
 	end)
+
+-- Rule for linking targets that are top-level firmware image like
+rule("cheriot.auditcmd")
+	after_load(function (target)
+		target:add("deps", "cheriot.board.file")
+	end)
     after_link(function (target)
         -- This function goes through each dependancy looking for an audit instruction and runs any audits found.
         -- Assumptions:
-        -- 1. cheriot.board_file is set
-        -- 2. Running post link means that the compartment report should be at target:targetfile() .. ".json"
-        -- 3. Each target to be checked has a "cheriot.audit" set.
-        -- 4. "cheriot.target" can take a string, a single table or a table of tables
-        -- 5. If you pass a string it will be the query to run against the rego file. Since you build this in the compartment's xmake.lua file, you can make this as complex as you'd like.
-        -- 6. If the format is a table or table of tables, the format for each table is:
+        -- 1. Running post link means that the compartment report should be at target:targetfile() .. ".json"
+        -- 2. Each target to be checked has a "cheriot.audit" set.
+        -- 3. "cheriot.target" can take a string, a single table or a table of tables
+        -- 4. If you pass a string it will be the query to run against the rego file. Since you build this in the compartment's xmake.lua file, you can make this as complex as you'd like.
+        -- 5. If the format is a table or table of tables, the format for each table is:
         --    [1] The query to run against the rego file. Since you build this in the compartment's xmake.lua file, you can make this as complex as you'd like.
         --    [2] (OPTIONAL) The path to the rego file.
-        -- 7. The code code looks for the final result of "true" follwed by a new line. Anything else is raised as an exception.
-        -- 8. cheriot-audit is in the PATH. If this is going to be an issue we'll have to add code to go looking for it (SIGH!).
+        -- 6. The code code looks for the final result of "true" follwed by a new line. Anything else is raised as an exception.
+        -- 7. cheriot-audit is in the PATH. If this is going to be an issue we'll have to add code to go looking for it (SIGH!).
         --
         -- Example of setting one test with a direct query:
         -- local audit = 'data.compartment.mmio_allow_list("uart2", {"uart_man"})'
@@ -1150,6 +1155,7 @@ rule("cheriot.firmware.linkcmd")
 
         local function execute_audit(board_file, report_file, query, regofile)
             -- Performs an audit. Assumes that cheriot-audit is in the PATH.
+			-- Hmm, it isn't in the PATH. We should add some code to look for it.
             local t = {
                 "/cheriot-tools/bin/cheriot-audit --board",
                 board_file,
@@ -1181,46 +1187,33 @@ rule("cheriot.firmware.linkcmd")
             end
         end
 
-		-- local board_file = target:get("cheriot.board_file")
-        local board_file = path.join("$(buildir)", "board.json")
+		local board_file = target:dep("cheriot.board.file"):targetfile()
 		local compartment_report = path.join(target:scriptdir(), target:targetfile() .. ".json")
 
-        -- Work through the dependancy tree and call this only once for each dependancy
-        -- Note: When we PR this to cheriot:
-        --  1. We can use the existing visit_all_dependencies_of function
-        --  2. We can place this code in cheriot-rtos/sdk/xmake.lua
-        --  3. We should apply this rule in rule("cheriot.firmware")? 
-        local visited = {}
-        local function visit(targ)
-            if not visited[targ:name()] then
-                visited[targ:name()] = true
-                if (targ:get("cheriot.audit")) then
-                    local audit = targ:get("cheriot.audit")
-
-                    if type(audit) == "string" then
-                        execute_audit(board_file, compartment_report, audit)
-                    elseif type(audit) == "table" then
-                        if type(audit[1]) == "table" then
-                            for i,value in ipairs(audit) do
-                                execute_audit(board_file, compartment_report, value[1], value[2])
-                            end
-                        else
-                            execute_audit(board_file, compartment_report, audit[1], audit[2])
-                        end
-                    else
-                        raise("Audit failed! target: "..target:name()..", query is invalid!")
-                    end
-                end
-                for _, d in table.orderpairs(targ:deps()) do
-                    visit(d)
-                end
-            end
-        end
-        visit(target)
+        -- Works through the dependancy tree and calls this only once for each dependancy
+		visit_all_dependencies_of(target, function (target)
+			if (target:get("cheriot.audit")) then
+				local audit = target:get("cheriot.audit")
+				if type(audit) == "string" then
+					execute_audit(board_file, compartment_report, audit)
+				elseif type(audit) == "table" then
+					if type(audit[1]) == "table" then
+						for i,value in ipairs(audit) do
+							execute_audit(board_file, compartment_report, value[1], value[2])
+						end
+					else
+						execute_audit(board_file, compartment_report, audit[1], audit[2])
+					end
+				else
+					raise("Audit failed! target: "..target:name()..", query is invalid!")
+				end
+			end
+		end)
     end)
 
 -- Specialize the above specifically for a RTOS firmware target
 rule ("cheriot.firmware.link")
+	add_deps("cheriot.auditcmd")
 	add_deps("cheriot.firmware.linkcmd")
 	before_link(function(target)
 		-- add_deps(), as used in cheriot.firmware below, doesn't set rule
