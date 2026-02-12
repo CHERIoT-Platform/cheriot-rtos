@@ -899,13 +899,15 @@ rule("cheriot.auditcmd")
         -- Assumptions:
         -- 1. Running post link means that the compartment report should be at target:targetfile() .. ".json"
         -- 2. Each target to be checked has a "cheriot.audit" set.
-        -- 3. "cheriot.target" can take a string, a single table or a table of tables
-        -- 4. If you pass a string it will be the query to run against the rego file. Since you build this in the compartment's xmake.lua file, you can make this as complex as you'd like.
-        -- 5. If the format is a table or table of tables, the format for each table is:
-        --    [1] The query to run against the rego file. Since you build this in the compartment's xmake.lua file, you can make this as complex as you'd like.
-        --    [2] (OPTIONAL) The path to the rego file.
-        -- 6. The code code looks for the final result of "true" follwed by a new line. Anything else is raised as an exception.
-        -- 7. cheriot-audit is in the PATH. If this is going to be an issue we'll have to add code to go looking for it (SIGH!).
+        -- 3. "cheriot.audit" can take data in one of teh following formats:
+		--    a. target:set("cheriot.audit", "data.rtos.valid")  -- Runs a single query without importing any other modules (rego files)
+		--    b. target:set("cheriot.audit", {query="data.rtos.valid"})  -- Runs a single query without importing any other modules (rego files)
+		--    c. target:set("cheriot.audit", {query={"data.rtos.valid"}})  -- Runs a single query without importing any other modules (rego files)
+		--    d. target:set("cheriot.audit", {query={"data.rtos.valid", "data.rtos.valid2"}})  -- Runs multiple queries without importing any other modules (rego files)
+		--    e. target:set("cheriot.audit", {query={"data.rtos.valid", "data.caesar.valid"}}, module="caesar.rego")  -- Runs multiple queries, any of which can include data from the module "caesar.rego"
+		--    e. target:set("cheriot.audit", {query={"data.rtos.valid", "data.caesar.valid", "data.brutus.valid"}}, module={"caesar.rego", "brutus.rego")  -- Runs multiple queries, any of which can include data from the modules "caesar.rego" and/or "brutus.rego"
+        -- 4. The code code looks for the final result of "true" follwed by a new line. Anything else is raised as an exception.
+        -- 5. cheriot-audit is in the PATH or "/cheriot-tools/bin/" (we use lib.detect.find_tool to look for it).
         --
         -- Example of setting one test with a direct query:
         -- local audit = 'data.compartment.mmio_allow_list("uart2", {"uart_man"})'
@@ -928,11 +930,22 @@ rule("cheriot.auditcmd")
         -- 
         -- Note: In these examples, we use target:scriptdir() to get the path to the folder where the compartment's xmake.lua file is stored. We would suggest keeping the files together in one folder as a best prectice
 
-        local function execute_audit(board_file, report_file, query, regofile)
+		local function find_cheriot_audit()
+			import("lib.detect.find_tool")
+			local audit_tool = find_tool("cheriot-audit", {version = true, paths={"/cheriot-tools/bin/", "$(env PATH)"}, check = "--help"})
+			if(audit_tool and audit_tool.program) then
+				return audit_tool.program
+			else
+				return "cheriot-audit"	-- Hope it's burried somewhere in the PATH that we can't find.
+			end
+		end
+
+        local function execute_audit(cheriot_audit_program, board_file, report_file, query, regofile)
             -- Performs an audit. Assumes that cheriot-audit is in the PATH.
 			-- Hmm, it isn't in the PATH. We should add some code to look for it.
             local t = {
-                "/cheriot-tools/bin/cheriot-audit --board",
+				cheriot_audit_program, 
+                "--board",
                 board_file,
                 "--firmware-report",
                 report_file,
@@ -940,8 +953,15 @@ rule("cheriot.auditcmd")
                 "'"..query.."'"
             }
             if regofile then
-                table.insert(t, "-m")
-                table.insert(t, regofile)
+				if type(regofile) == "table" then
+					for _, file in ipairs(regofile) do
+						table.insert(t, "-m")
+						table.insert(t, file)
+					end
+				else
+					table.insert(t, "-m")
+					table.insert(t, regofile)
+				end
             end
             local ex_string = table.concat(t, ' ')
             
@@ -949,13 +969,13 @@ rule("cheriot.auditcmd")
             local outdata, errdata = os.iorun(ex_string)
             if string.sub(outdata, -5, -1) == "true\n" then
                 if regofile then
-                    print("Audit passed. target: "..target:name()..", rego file: "..regofile..", query: "..query)
+                    print("Audit passed. target: "..target:name()..", module files: "..regofile..", query: "..query)
                 else
                     print("Audit passed. target: "..target:name()..", query: "..query)
                 end
             else
                 if regofile then
-                    raise("Audit failed! target: "..target:name()..", rego file: "..regofile..", query: "..query)
+                    raise("Audit failed! target: "..target:name()..", module files: "..regofile..", query: "..query)
                 else
                     raise("Audit failed! target: "..target:name()..", query: "..query)
                 end
@@ -964,20 +984,21 @@ rule("cheriot.auditcmd")
 
 		local board_file = target:dep("cheriot.board.file"):targetfile()
 		local compartment_report = path.join(target:scriptdir(), target:targetfile() .. ".json")
+		local cheriot_audit_program = find_cheriot_audit();
 
         -- Works through the dependancy tree and calls this only once for each dependancy
 		visit_all_dependencies_of(target, function (target)
 			if (target:get("cheriot.audit")) then
 				local audit = target:get("cheriot.audit")
 				if type(audit) == "string" then
-					execute_audit(board_file, compartment_report, audit)
+					execute_audit(cheriot_audit_program, board_file, compartment_report, audit)
 				elseif type(audit) == "table" then
 					if type(audit[1]) == "table" then
 						for i,value in ipairs(audit) do
-							execute_audit(board_file, compartment_report, value[1], value[2])
+							execute_audit(cheriot_audit_program, board_file, compartment_report, value[1], value[2])
 						end
 					else
-						execute_audit(board_file, compartment_report, audit[1], audit[2])
+						execute_audit(cheriot_audit_program, board_file, compartment_report, audit[1], audit[2])
 					end
 				else
 					raise("Audit failed! target: "..target:name()..", query is invalid!")
