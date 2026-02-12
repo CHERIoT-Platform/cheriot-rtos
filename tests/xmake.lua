@@ -7,8 +7,6 @@ local scriptdir = os.scriptdir()
 sdkdir = "../sdk"
 includes(sdkdir)
 
-set_toolchains("cheriot-clang")
-
 option("board")
     set_default("sail")
 
@@ -28,6 +26,7 @@ target()
     add_rules("cheriot.test.ibuilddir")
 
 rule("cheriot.test.phony")
+    add_deps("cheriot.toolchain")
     on_load(function (target)
         target:set("kind", "phony")
         target:set("cheriot.type", "test-phony")
@@ -82,6 +81,7 @@ end
 -- Helper for creating the different variants of the FreeRTOS compile tests.
 function freertos_compile_test(name, defines)
 target("freertos-compile-" .. name)
+    add_rules("cheriot.toolchain")
     set_default(false)
     set_kind("object")
     add_files("ccompile-freertos-test.c")
@@ -295,7 +295,6 @@ firmware("test-suite")
     add_deps("debug", "freestanding")
     -- Set the thread entry point to the test runner.
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "test_runner",

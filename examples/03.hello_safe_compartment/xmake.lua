@@ -21,7 +21,6 @@ firmware("hello_safe_compartment")
     add_deps("freestanding", "debug")
     add_deps("hello", "uart")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "hello",

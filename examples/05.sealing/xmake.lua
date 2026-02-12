@@ -24,7 +24,6 @@ firmware("sealing")
     add_deps("freestanding", "debug")
     add_deps("caller", "identifier")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "caller",

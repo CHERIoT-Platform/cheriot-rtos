@@ -1,6 +1,12 @@
 -- Copyright Microsoft and CHERIoT Contributors.
 -- SPDX-License-Identifier: MIT
 
+--Capture the directory containing this script for later use.  We need this to
+--find the location of the linker scripts and so on.
+local scriptdir = os.scriptdir()
+-- The directory where we will find the core components
+local coredir = path.join(scriptdir, "core")
+
 -- xmake has started refusing to pass flags that it doesn't recognise, so tell
 -- it to stop doing that for now.
 set_policy("check.auto_ignore_flags", false)
@@ -12,8 +18,6 @@ add_rules("mode.release", "mode.debug")
 -- size in both modes, most things should use the --debug-{option}= flags for
 -- finer-grained control.
 set_allowedmodes("release", "debug")
-
-set_allowedarchs("cheriot")
 
 -- More work arounds for xmake's buggy flag detection.
 if is_mode("release") then
@@ -30,10 +34,44 @@ local function option_check_dep(raise, option, dep)
 	end
 end
 
-option("board")
+option("board", function ()
 	set_description("Board JSON description file")
 	set_showmenu(true)
 	set_category("board")
+	add_deps("board-mixins")
+
+	after_check(function (self)
+		if type(self:value()) ~= "string" then
+			raise("Bad value for required --board option")
+		end
+
+		local project_config = import("core.project.config", { anonymous = true })
+		local board_parsing = import("board-parsing",
+			{ anonymous = true
+			, rootdir = path.join(os.scriptdir(), "xmake")
+			})
+
+		-- Several paths in board JSON can contain ${variable} expansions:
+		-- * ${sdk} to refer to the SDK directory,
+		-- * ${sdkboards} to refer to the SDK's boards/ directory
+		-- * ${project} for the root source tree.
+		--
+		-- The board handling goo will also add ${board} for the --board file's
+		-- own directory, once that has been resolved.
+		local board_path_substitutes = {
+			sdk = scriptdir,
+			sdkboards = path.join(scriptdir, "boards"),
+			project = os.projectdir(),
+		}
+
+		local board_conf = board_parsing(
+			board_path_substitutes,
+			self:value(),
+			self:dep("board-mixins"):value())
+
+		project_config.set("cheriot.board", board_conf)
+	end)
+end)
 
 option("board-mixins")
 	set_default("")
@@ -142,18 +180,8 @@ end
 
 testCheckOption("model-output")
 
--- Force -Oz irrespective of build config.  At -O0, we blow out our stack and
--- require much stronger alignment.
-set_optimize("smallest")
-
---Capture the directory containing this script for later use.  We need this to
---find the location of the linker scripts and so on.
-local scriptdir = os.scriptdir()
--- The directory where we will find the core components
-local coredir = path.join(scriptdir, "core")
-
 -- Set up our llvm configuration.
-toolchain("cheriot-clang")
+toolchain("cheriot-clang", function ()
 	set_kind("standalone")
 	set_toolset("cc", "clang")
 	set_toolset("cxx", "clang++")
@@ -163,20 +191,23 @@ toolchain("cheriot-clang")
 	set_toolset("as", "clang")
 
 	--Set up the flags that we need.
-	on_load(function (toolchain)
-		local core_directory = scriptdir
-		local include_directory = path.join(core_directory, "include")
+	on_load(function (self)
+		local board = get_config("cheriot.board").info
+		local include_directory = path.join(scriptdir, "include")
+
+		local target = self:config("target")
+			or "riscv32cheriot-unknown-cheriotrtos"
+		local cpu = board["cpu"] or "cheriot"
+		local abi = self:config("abi") or "cheriot"
+
 		-- Flags used for C/C++ and assembly
-		local default_flags = {
-			"-target",
-			"riscv32cheriot-unknown-cheriotrtos",
-			"-mcpu=cheriot",
-			"-mabi=cheriot",
+		local default_clang_flags = {
+			"-target", target,
+			"-mcpu=" .. cpu,
+			"-mabi=" .. abi,
 			"-mxcheri-rvc",
 			"-mrelax",
 			"-fshort-wchar",
-			"-nostdinc",
-			"-Oz",
 			"-g",
 			"-ffunction-sections",
 			"-fdata-sections",
@@ -188,35 +219,26 @@ toolchain("cheriot-clang")
 			"-fno-asynchronous-unwind-tables",
 			"-fno-c++-static-destructors",
 			"-fno-rtti",
+			"-nostdinc",
 			"-I" .. path.join(include_directory, "c++-config"),
 			"-I" .. path.join(include_directory, "libc++"),
 			"-I" .. include_directory,
 		}
 		-- C/C++ flags
-		toolchain:add("cxflags", default_flags)
-		toolchain:add("cxxflags", "-std=c++23")
-		toolchain:add("cflags", "-std=c23")
+		self:add("cxflags", default_clang_flags)
 		-- Assembly flags
-		toolchain:add("asflags", default_flags)
+		self:add("asflags", default_clang_flags)
 	end)
-toolchain_end()
+end)
 
--- Override cxflags and cflags for the cheriot-clang toolchain to use the
--- baremetal ABI and target triple instead.
---
--- For xmake reasons, these get appended to the toolchain parameters, so we're
--- relying on the tools having a "last one wins" policy, with nothing in the
--- middle being interpreted relative to an earlier value.
+-- Pass configuration to the cheriot-clang toolchain to use the baremetal ABI
+-- and target triple instead of its defaults.
 rule("cheriot.baremetal-abi")
-	on_load(function (target)
-		for _, flags in ipairs({"cxflags", "asflags"}) do
-			target:add(flags,
-				{ "-target", "riscv32cheriot-unknown-unknown" },
-				{ expand = false, force = true })
-			target:add(flags,
-				{ "-mabi=cheriot-baremetal" },
-				{ expand = false, force = true })
-		end
+	on_load(function (self)
+		self:set("toolchains", "cheriot-clang",
+			{ target = "riscv32cheriot-unknown-unknown"
+			, abi = "cheriot-baremetal"
+			})
 	end)
 rule_end()
 
@@ -234,11 +256,6 @@ rule("cheriot.subobject-bounds")
 		end
 	end)
 rule_end()
-
-set_defaultarchs("cheriot")
-set_defaultplat("cheriot")
-set_languages("c23", "cxx23")
-
 
 -- Helper to visit all dependencies of a specified target exactly once and call
 -- a callback.
@@ -272,9 +289,26 @@ local function maybe_writefile(xmake_io, xmake_try, path, contents)
 	} }
 end
 
+-- Common rules for most CHERIoT builds
+rule("cheriot.toolchain", function ()
+	on_load(function (target)
+		-- Use our toolchain and build for the CHERIoT architecture and platform
+		target:set("toolchains", "cheriot-clang")
+		target:set("arch", "cheriot")
+		target:set("plat", "cheriot")
 
--- Common rules for any CHERI MCU component (library or compartment)
+		-- Default to -Oz irrespective of build config.  At -O0, we blow out our
+		-- stack and require much stronger alignment.
+		target:set("optimize", "smallest")
+
+		-- Default to modern versions of supported languages
+		target:set("languages", "c23", "cxx23")
+	end)
+end)
+
+-- Common rules for any CHERIoT component (library or compartment)
 rule("cheriot.component")
+	add_deps("cheriot.toolchain")
 
 	-- Set some default config values for all cheriot components.
 	on_load(function (target)
@@ -387,6 +421,7 @@ rule("cheriot.generated-source")
 -- linker script.  The switcher is independent of the firmware image
 -- configuration and so can be built as a single target.
 target("cheriot.switcher")
+	add_rules("cheriot.toolchain", "cheriot.baremetal-abi")
 	set_default(false)
 	set_kind("object")
 	add_files(path.join(coredir, "switcher/entry.S"))
@@ -452,283 +487,19 @@ target("cheriot.software_revoker")
 		target:add("defines", "CHERIOT_NO_AMBIENT_MALLOC")
 	end)
 
--- Helper to find a board file given either the name of a board file or a path.
-local function board_file_for_name(boardName, searchDir)
-	-- ${sdkboards} for absolute references
-	local boardfile = string.gsub(boardName, "${(%w*)}",
-		{ sdkboards=path.join(scriptdir, "boards") })
-	-- The directory containing the board file.
-	local boarddir = path.directory(boardfile);
-	-- If this isn't a path, look in searchDir
-	if not os.isfile(boardfile) then
-		boarddir = searchDir
-		local fullBoardPath = path.join(boarddir, boardfile .. '.json')
-		if not os.isfile(fullBoardPath) then
-			fullBoardPath = path.join(boarddir, boardfile .. '.patch')
-		end
-		if not os.isfile(fullBoardPath) then
-			return nil
-		end
-		boardfile = fullBoardPath
-	end
-	return boarddir, boardfile
-end
-
--- If a string value is a number, return it as number, otherwise return it
--- in its original form.
-local function asNumberIfNumber(value)
-	if tostring(tonumber(value)) == value then
-		return tonumber(value)
-	end
-	return value
-end
-
--- Heuristic to tell a Lua table is probably an array in Lua
--- This is O(n), but n is usually very small, and this happens once per
--- build so this doesn't really matter.
---
--- The generality and minimality of Lua tables results in some subtlety.  While
--- Lua has a notion of "borders" within the integer keys of a table t (values b
--- s.t. "(b == 0 or t[b] ~= nil) and t[b+1] == nil"), atop which it defines a
--- "sequence", a table with only a single border, we mean something stronger: a
--- sequence with only positive integer keys densely packed from 1.
-local function isarray(t)
-	local border = nil
-
-	-- Iteration order is undefined, even for numeric keys.  Each visited key
-	-- has non-nil value.
-	for k, _ in pairs(t) do
-		-- A non-positive-integral key means this isn't an array
-		-- (and since lua integers are finite, exclude anything for which
-		-- successor would be ill-defined)
-		if type(k) ~= "number" or
-		   k <= 0 or
-		   k >= math.maxinteger or
-		   math.tointeger(k) ~= k then
-			return false
-		end
-
-		if t[k+1] == nil then
-			-- More than one border means this isn't a sequence
-			if border ~= nil then return false end
-			border = k
-		end
-	end
-
-	-- An empty table (in which no border will be found) is an array.
-	-- Otherwise, t is an array if all of the above and t[1] is populated.
-	return (border == nil) or (t[1] ~= nil)
-end
-
-
-local function patch_board(base, patches, xmakeJson)
-	for _, p in ipairs(patches) do
-		if not p.op then
-			print("missing op in "..xmakeJson.encode(p))
-			return nil
-		end
-		if not p.path or (type(p.path) ~= "string") then
-			print("missing or invalid path in "..xmakeJson.encode(p))
-			return nil
-		end
-
-		-- Parse the JSON Pointer into an array of filed names, converting
-		-- numbers into Lua numbers if we see them.  This is not quite right,
-		-- because it doesn't handle field names with / in them, but we don't
-		-- currently use those for anything.  It also assumes that we really do
-		-- mean array indexes when we say numbers.  If we have an object with
-		-- "3" as the key and try to replace 3, it will currently not do the
-		-- right thing.  
-		local objectPath = {}
-		for entry in string.gmatch(p.path, "/([^/]+)") do
-			table.insert(objectPath, asNumberIfNumber(entry))
-		end
-
-		if #objectPath < 1 then
-			print("invalid path in "..xmakeJson.encode(p))
-			return nil
-		end
-
-		-- JSON arrays are indexed from 0, Lua's are from 1.  If someone says
-		-- array index 0, we need to map that to 1, and so on.
-
-		-- Last path object is the name of the key we're going to modify.
-		local nodeName = table.remove(objectPath)
-		-- Walk the path to find the object that we're going to modify.
-		local nodeToModify = base
-		for _, pathComponent in ipairs(objectPath) do
-			if isarray(nodeToModify) then
-				if type(pathComponent) ~= "number" then
-					print("invalid non-numeric index into array in "..xmakeJson.encode(p))
-					return nil
-				end
-				pathComponent = pathComponent + 1
-			end
-			nodeToModify = nodeToModify[pathComponent]
-		end
-
-		local isArrayOperation = false
-		if isarray(nodeToModify) then
-			if type(nodeName) == "number" then
-				nodeName = nodeName + 1
-				isArrayOperation = true
-			elseif p.op == "add" and nodeName == "-" then
-				-- The string "-" at the end of an "add"'s path means "append"
-				nodeName = #nodeToModify + 1
-				isArrayOperation = true
-			end
-		end
-
-		-- Handle the operation
-		if (p.op == "replace") or (p.op == "add") then
-			if not p.value then
-				print(tostring(p.op).. " requires a value, missing in ", xmakeJson.encode(p))
-				return nil
-			end
-			if isArrayOperation and p.op == "add" then
-				table.insert(nodeToModify, nodeName, p.value)
-			else
-				nodeToModify[nodeName] = p.value
-			end
-		elseif p.op == "remove" then
-			nodeToModify[nodeName] = nil
-		else
-			print(tostring(p.op) .. " is not a valid operation in ", xmakeJson.encode(p))
-			return nil
-		end
-	end
-end
-
--- Helper to load a board file.  This must be passed the json object provided
--- by import("core.base.json") because import does not work in helper
--- functions at the top level.
-local function load_board_file_inner(boardDir, boardFile, xmakeJson)
-	if path.extension(boardFile) == ".json" then
-		return xmakeJson.loadfile(boardFile)
-	end
-	if path.extension(boardFile) ~= ".patch" then
-		print("unknown extension for board file: " .. boardFile)
-		return nil
-	end
-	local patch = xmakeJson.loadfile(boardFile)
-	if not patch.base then
-		print("Board file " .. boardFile .. " does not specify a base")
-		return nil
-	end
-	local baseDir, baseFile = board_file_for_name(patch.base, boardDir)
-	if not baseDir then
-		print("unable to find board file " .. patch.name .. ".  Try specifying a full path")
-		return nil
-	end
-	local base = load_board_file_inner(baseDir, baseFile, xmakeJson)
-
-	patch_board(base, patch.patch, xmakeJson)
-
-	return base
-end
-
--- Load a board (patch) file (recursively) and then apply the configuration's
--- mixins as well.
-local function load_board_file(boardDir, boardFile, xmakeJson, xmakeConfig)
-	local base = load_board_file_inner(boardDir, boardFile, xmakeJson)
-
-	local mixinString = xmakeConfig.get("board-mixins")
-	if not mixinString or mixinString == "" then
-		return base
-	end
-
-	for mixinName in mixinString:gmatch("([^,]*),?") do
-		-- Initially, look next to the board file
-		local mixinDir, mixinFile = board_file_for_name(mixinName, boardDir)
-		if not mixinDir then
-			-- Fall back to looking in the SDK/ boards dir (which might be the same thing)
-			mixinDir, mixinFile = board_file_for_name(mixinName, path.join(scriptdir, "boards"))
-		end
-		if not mixinDir then
-			print("unable to find board mixin " .. mixinName .. ".  Try specifying a full path")
-			return nil
-		end
-
-		-- XXX this *ought* to return nil, error on error, but it just throws.
-		local mixinTree, err = xmakeJson.loadfile(mixinFile)
-		if not mixinTree then
-			error ("Could not process mixin %q: %s"):format(mixinName, err)
-		end
-
-		print(("Patching board with %q"):format(mixinFile))
-
-		patch_board(base, mixinTree, xmakeJson)
-	end
-
-	return base
-end
-
+-- XXX This can probably go away now that we're ing option()/`config`.
 target("cheriot.board")
 	set_kind("phony")
 	set_default(false)
+	add_options("cheriot.board")
 
-	on_load(function (target)
-		import("core.base.json")
-		import("core.project.config")
-
-		local boarddir, boardfile = board_file_for_name(get_config("board"), path.join(scriptdir, "boards"))
-		if not boarddir then
-			raise("unable to find board file " .. get_config("board") .. ".  Try specifying a full path")
-		end
-		local board = load_board_file(boarddir, boardfile, json, config)
-
-		-- Normalize memory extents within the board to have either both an end
-		-- and length or neither.
-		local function normalize_extent(jsonpath, extent)
-			local start = extent.start
-			local stop = extent["end"]
-			local length = extent.length
-			if not stop and not length then
-				raise(table.concat({
-					"Memory extent",
-					table.concat(jsonpath,"."),
-					"does not specify a length or an end"}, " "))
-			elseif not stop then
-				extent["end"] = start + length
-			elseif not length then
-				extent.length = stop - start
-			elseif start + length ~= stop then
-				raise(table.concat({
-					"Memory extent",
-					table.concat(jsonpath,"/"),
-					"specifies inconsistent length and end"}, " "))
-			end
-		end
-		local jsonpath = {"devices"}
-		for name, extent in table.orderpairs(board.devices) do
-			jsonpath[2] = name
-			normalize_extent(jsonpath, extent)
-		end
-		normalize_extent({"instruction_memory"}, board.instruction_memory)
-		if board.data_memory then
-			normalize_extent({"data_memory"}, board.data_memory)
-		end
-		local jsonpath = {"ldscript_fragments"}
-		for name, fragment in table.orderpairs(board.ldscript_fragments) do
-			-- XXX: ldscript fragments don't always know where they end?
-			if type(name) == "string" and (fragment["end"] or fragment.length) then
-				jsonpath[2] = name
-				normalize_extent(jsonpath, fragment)
-			end
-		end
-
-		target:set("cheriot.board_dir", boarddir)
-		target:set("cheriot.board_file", boardfile)
-		target:set("cheriot.board_info", { board })
-
-		-- The size of a register spill frame in a trusted stack is a function
-		-- of the board.  While *most* of the system gets this from
-		-- core/switcher/trusted-stack-assembly.h, we need it when sizing
-		-- thread trusted stacks over in the generated linker scripts.  The
-		-- loader component asserts that this value matches what the rest of
-		-- the system sees.
-		target:set("cheriot.trusted_spill_size",
-			board.stack_high_water_mark and 192 or 176)
+	on_load(function (self)
+		local board_conf = get_config("cheriot.board") or {}
+		self:set("cheriot.board_dir", board_conf.dir)
+		self:set("cheriot.board_file", board_conf.file)
+		self:set("cheriot.board_info", { board_conf.info })
+		self:set("cheriot.trusted_spill_size",
+			board_conf.info.trusted_spill_size)
 	end)
 
 target("cheriot.board.file")
@@ -885,9 +656,12 @@ rule("cheriot.board.ldscript.conf")
 	end)
 
 	after_load(function (target)
-		local board_target = target:deps()["cheriot.board"]
-		local board = board_target:get("cheriot.board_info")
-		local boarddir = board_target:get("cheriot.board_dir")
+		local board_config = get_config("cheriot.board")
+		local board = board_config.info
+
+		local function path_subst(p)
+			return p:gsub("${(%w*)}", board_config.path_substitutes)
+		end
 
 		local ldscript_fragments = {}
 		do
@@ -917,10 +691,9 @@ rule("cheriot.board.ldscript.conf")
 		-- use arrays or maps.
 		for _, fragment in pairs(board.ldscript_fragments or {}) do
 			if fragment.srcpath then
-				-- Allow ${sdk} to refer to the SDK directory, like includes
-				fragment.srcpath = string.gsub(fragment.srcpath, "${(%w*)}", { sdk=scriptdir })
+				fragment.srcpath = path_subst(fragment.srcpath)
 				if not path.is_absolute(fragment.srcpath) then
-					fragment.srcpath = path.join(boarddir, fragment.srcpath);
+					fragment.srcpath = path.join(board_config.dir, fragment.srcpath);
 				end
 			end
 			table.insert(ldscript_fragments, fragment)
@@ -1014,9 +787,11 @@ rule("cheriot.board.targets.conf")
 			end)
 		end
 
-		local board_target = target:deps()["cheriot.board"]
-		local boarddir = board_target:get("cheriot.board_dir")
-		local board = board_target:get("cheriot.board_info")
+		local board_config = get_config("cheriot.board")
+		local board = board_config.info
+		local function path_subst(p)
+			return p:gsub("${(%w*)}", board_config.path_substitutes)
+		end
 
 		if board.revoker then
 			local temporal_defines = { "TEMPORAL_SAFETY" }
@@ -1030,9 +805,9 @@ rule("cheriot.board.targets.conf")
 			for _, include_path in ipairs(board.driver_includes) do
 				-- Allow ${sdk} to refer to the SDK directory, so that external
 				-- board includes can include generic platform bits.
-				include_path = string.gsub(include_path, "${(%w*)}", { sdk=scriptdir })
+				include_path = path_subst(include_path)
 				if not path.is_absolute(include_path) then
-					include_path = path.join(boarddir, include_path);
+					include_path = path.join(board_config.dir, include_path);
 				end
 				visit_all_dependencies(function (target)
 					target:add('includedirs', include_path)
@@ -1643,6 +1418,9 @@ rule("cheriot.firmware.run")
 
 -- Rule for defining a firmware image.
 rule("cheriot.firmware")
+	-- Firmwares build using our toolchain
+	add_deps("cheriot.toolchain")
+
 	-- Firmwares are reachability roots.
 	add_deps("cheriot.reachability_root")
 
@@ -1728,7 +1506,8 @@ rule("cheriot.define-rtos-git-description")
 
 -- Common aspects of the CHERIoT loader target
 rule("cheriot.loader.base")
-	add_deps("cheriot.component-debug",
+	add_deps("cheriot.toolchain",
+	         "cheriot.component-debug",
 	         "cheriot.baremetal-abi",
 	         "cheriot.subobject-bounds")
 
@@ -1743,6 +1522,9 @@ rule("cheriot.loader.base")
 		           "CHERIOT_NO_AMBIENT_MALLOC")
 
 		target:set('cheriot.debug-name', "loader")
+
+		target:set("optimize", "fast")
+		target:set("languages", "c23", "cxx23")
 	end)
 
 	after_load(function (target)
@@ -1759,8 +1541,7 @@ target("cheriot.loader")
 
 	-- FIXME: We should be setting this based on a board config file.
 	add_files(path.join(coredir, "loader/boot.S"),
-	          path.join(coredir, "loader/boot.cc"),
-	          {force = {cxflags = "-O1"}})
+	          path.join(coredir, "loader/boot.cc"))
 
 -- Helper function to define firmware.  Used as `target`.
 function firmware(name)

@@ -16,7 +16,6 @@ firmware("top_compartment")
     add_deps("freestanding", "debug")
     add_deps("top", "helper")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "top",

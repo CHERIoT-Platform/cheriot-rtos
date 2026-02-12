@@ -18,7 +18,6 @@ compartment("hello")
 firmware("hello_world")
     add_deps("hello")
     on_load(function(target)
-        target:values_set("board", "$(board)")
         target:values_set("threads", {
             {
                 compartment = "hello",

@@ -86,5 +86,5 @@
     "stack_high_water_mark" : true,
     "run_command" : "${sdk}/../scripts/run-sonata.sh",
     "simulation": false,
-    "cxflags": "-mcpu=cheriot-ibex"
+    "cpu": "cheriot-ibex"
 }
