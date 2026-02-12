@@ -9,6 +9,36 @@ set_toolchains("cheriot-clang")
 option("board")
     set_default("sail")
 
+rule("caesar.checks")
+    before_build(function (target)
+        -- Examples of creating audits:
+        -- local audit = 1234 -- An error!
+        -- local audit = 'data.rtos.valid' -- A direct query
+        -- local audit = {'data.compartment.mmio_allow_list("uart2", {"uart_man"})'} -- A direct query
+        local audit = {'data.caesar.valid', path.join(target:scriptdir(), "caesar.rego")}  -- A query with a rego file
+        -- local audit = {  -- Multiple queires (mixed direct queries and rego file queries)
+        --     {'data.uart_man.valid("uart1")', path.join(target:scriptdir(), "uart_man.rego")}, 
+        --     {'data.compartment.mmio_allow_list("uart2", {"uart_man"})'} 
+        -- }
+        -- local audit = {  -- Multiple queires (mixed direct queries and rego file queries)
+        --     {'data.uart_man.valid("uart1")', path.join(target:scriptdir(), "uart_man.rego")}, 
+        --     {'data.uart_man.valid("uart2")', path.join(target:scriptdir(), "uart_man.rego")}
+        -- }
+        target:set("cheriot.audit", audit)
+
+        -- -- Example of a dynamic query based on the defines set in this compartment
+        -- local audit = {}
+        -- local defs = target:get("defines")
+        -- local search_string = "UART_MANAGE_UART_"
+        -- for _,d in ipairs(defs) do
+        --     local i, j = string.find(d, search_string)
+        --     if(i == 1) then
+        --         table.insert(audit, {'data.uart_man.valid("uart'..string.sub(d, j+1, -1)..'")', path.join(target:scriptdir(), "uart_man.rego")})
+        --     end
+        -- end
+        -- target:set("cheriot.audit", audit)
+    end)
+
 compartment("caesar")
     -- This compartment uses C++ thread-safe static initialisation and so
     -- depends on the C++ runtime.
@@ -19,6 +49,8 @@ compartment("entry")
 
 compartment("producer")
     add_files("producer.cc")
+    add_rules("caesar.checks", {private = true})
+
 compartment("consumer")
     add_files("consumer.cc")
 
