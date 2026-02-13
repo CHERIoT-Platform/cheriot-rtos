@@ -228,6 +228,13 @@ toolchain("cheriot-clang", function ()
 		self:add("cxflags", default_clang_flags)
 		-- Assembly flags
 		self:add("asflags", default_clang_flags)
+
+		-- Rust flags
+		local default_rc_flags = {
+			"--target=" .. target,
+			"-Ctarget-cpu=" .. cpu,
+		}
+		self:add("rcflags", default_rc_flags)
 	end)
 end)
 
@@ -1543,16 +1550,6 @@ rule("cheriot.rust", function()
 		local compinst = compiler.load("rc", { target = target })
 		local compflags = compinst:compflags({ target = target })
 
-		-- Get the rcflags for this specific board
-		local boarddir, boardfile = board_file_for_name(get_config("board"), path.join(scriptdir, "boards"))
-		if not boarddir then
-			raise("unable to find board file " .. get_config("board") .. ".  Try specifying a full path")
-		end
-		local board = load_board_file(boarddir, boardfile, json, config)
-		if board and board.rcflags then
-			table.insert(compflags, board.rcflags)
-		end
-
 		local dependinfo = option.get("rebuild") and {} or (depend.load(dependfile) or {})
 
 		local depvalues = { compinst:program(), compflags, sourcefile }
@@ -1649,17 +1646,6 @@ rule("cheriot.rust.crate", function()
 		progress.show(opt.progress, "${color.build.object}compiling.$(mode) crate %s", crate_name)
 
 		local rustflags = rc:compflags()
-
-		-- Get the rcflags for this specific board
-		local boarddir, boardfile = board_file_for_name(get_config("board"), path.join(scriptdir, "boards"))
-		if not boarddir then
-			raise("unable to find board file " .. get_config("board") .. ".  Try specifying a full path")
-		end
-		local board = load_board_file(boarddir, boardfile, json, config)
-		if board and board.rcflags then
-			table.insert(rustflags, board.rcflags)
-		end
-
 		local cargoflags = { "build", "--lib", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path }
 		local crate_build_mode
 
