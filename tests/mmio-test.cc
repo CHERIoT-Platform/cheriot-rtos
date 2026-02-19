@@ -16,63 +16,86 @@ void check_permissions(Capability<volatile void> mmio, PermissionSet p)
 
 int test_mmio()
 {
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, false, false, false, false, false),
+	                  {Permission::Global});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, false, false, true, false, false),
+	                  {Permission::Global});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, false, false, false, true, false),
+	                  {Permission::Global});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, false, false, true, true, false),
+	                  {Permission::Global});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, false, true, false, false, false),
+	                  {Permission::Global, Permission::Store});
 	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, false, false),
-	  {Permission::Global});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, true, false),
-	  {Permission::Global});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, false, true),
-	  {Permission::Global});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, false, true, true),
-	  {Permission::Global});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, false, false),
-	  {Permission::Global, Permission::Store});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, true, false),
+	  MMIO_CAPABILITY_WITH_PERMISSIONS(
+	    Uart, uart, false, true, true, false, false),
 	  {Permission::Global, Permission::Store, Permission::LoadStoreCapability});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, false, true, false, true, false),
+	                  {Permission::Global, Permission::Store});
 	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, false, true),
-	  {Permission::Global, Permission::Store});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, false, true, true, true),
+	  MMIO_CAPABILITY_WITH_PERMISSIONS(
+	    Uart, uart, false, true, true, true, false),
 	  {Permission::Global, Permission::Store, Permission::LoadStoreCapability});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, true, false, false, false, false),
+	                  {Permission::Global, Permission::Load});
 	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, false, false),
-	  {Permission::Global, Permission::Load});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, true, false),
+	  MMIO_CAPABILITY_WITH_PERMISSIONS(
+	    Uart, uart, true, false, true, false, false),
 	  {Permission::Global, Permission::Load, Permission::LoadStoreCapability});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, true, false, false, true, false),
+	                  {Permission::Global, Permission::Load});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, true, false, true, true, false),
+	                  {Permission::Global,
+	                   Permission::Load,
+	                   Permission::LoadStoreCapability,
+	                   Permission::LoadMutable});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, true, false, true, true, true),
+	                  {Permission::Global,
+	                   Permission::Load,
+	                   Permission::LoadStoreCapability,
+	                   Permission::LoadMutable,
+	                   Permission::LoadGlobal});
 	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, false, true),
-	  {Permission::Global, Permission::Load});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, false, true, true),
-	  {Permission::Global,
-	   Permission::Load,
-	   Permission::LoadStoreCapability,
-	   Permission::LoadMutable});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, false, false),
+	  MMIO_CAPABILITY_WITH_PERMISSIONS(
+	    Uart, uart, true, true, false, false, false),
 	  {Permission::Global, Permission::Load, Permission::Store});
 	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, true, false),
-	  {Permission::Global,
-	   Permission::Load,
-	   Permission::Store,
-	   Permission::LoadStoreCapability});
-	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, false, true),
+	  MMIO_CAPABILITY(Uart, uart) /* check default permissions */,
 	  {Permission::Global, Permission::Load, Permission::Store});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, true, true, true, false, false),
+	                  {Permission::Global,
+	                   Permission::Load,
+	                   Permission::Store,
+	                   Permission::LoadStoreCapability});
 	check_permissions(
-	  MMIO_CAPABILITY_WITH_PERMISSIONS(Uart, uart, true, true, true, true),
-	  {Permission::Global,
-	   Permission::Load,
-	   Permission::Store,
-	   Permission::LoadStoreCapability,
-	   Permission::LoadMutable});
+	  MMIO_CAPABILITY_WITH_PERMISSIONS(
+	    Uart, uart, true, true, false, true, false),
+	  {Permission::Global, Permission::Load, Permission::Store});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, true, true, true, true, false),
+	                  {Permission::Global,
+	                   Permission::Load,
+	                   Permission::Store,
+	                   Permission::LoadStoreCapability,
+	                   Permission::LoadMutable});
+	check_permissions(MMIO_CAPABILITY_WITH_PERMISSIONS(
+	                    Uart, uart, true, true, true, true, true),
+	                  {Permission::Global,
+	                   Permission::Load,
+	                   Permission::Store,
+	                   Permission::LoadStoreCapability,
+	                   Permission::LoadMutable,
+	                   Permission::LoadGlobal});
 	return 0;
 }
