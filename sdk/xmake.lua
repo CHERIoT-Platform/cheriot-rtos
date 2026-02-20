@@ -899,35 +899,15 @@ rule("cheriot.auditcmd")
         -- Assumptions:
         -- 1. Running post link means that the compartment report should be at target:targetfile() .. ".json"
         -- 2. Each target to be checked has a "cheriot.audit" set.
-        -- 3. "cheriot.audit" can take data in one of teh following formats:
-		--    a. target:set("cheriot.audit", "data.rtos.valid")  -- Runs a single query without importing any other modules (rego files)
-		--    b. target:set("cheriot.audit", {query="data.rtos.valid"})  -- Runs a single query without importing any other modules (rego files)
-		--    c. target:set("cheriot.audit", {query={"data.rtos.valid"}})  -- Runs a single query without importing any other modules (rego files)
-		--    d. target:set("cheriot.audit", {query={"data.rtos.valid", "data.rtos.valid2"}})  -- Runs multiple queries without importing any other modules (rego files)
-		--    e. target:set("cheriot.audit", {query={"data.rtos.valid", "data.caesar.valid"}}, module="caesar.rego")  -- Runs multiple queries, any of which can include data from the module "caesar.rego"
-		--    e. target:set("cheriot.audit", {query={"data.rtos.valid", "data.caesar.valid", "data.brutus.valid"}}, module={"caesar.rego", "brutus.rego")  -- Runs multiple queries, any of which can include data from the modules "caesar.rego" and/or "brutus.rego"
-        -- 4. The code code looks for the final result of "true" follwed by a new line. Anything else is raised as an exception.
-        -- 5. cheriot-audit is in the PATH or "/cheriot-tools/bin/" (we use lib.detect.find_tool to look for it).
-        --
-        -- Example of setting one test with a direct query:
-        -- local audit = 'data.compartment.mmio_allow_list("uart2", {"uart_man"})'
-        -- target:set("cheriot.audit", audit)
-        --
-        -- Example of setting one test with a direct query (a different valid format):
-        -- local audit = {'data.compartment.mmio_allow_list("uart2", {"uart_man"})'}
-        -- target:set("cheriot.audit", audit)
-        --
-        -- Example of setting one test using a rego file query:
-        -- local audit = {'data.uart_man.valid("uart1")', path.join(target:scriptdir(), "uart_man.rego")}
-        -- target:set("cheriot.audit", audit)
-        -- 
-        -- Example excuting multiple tests (a mixture of direct queries and rego file queries):
-        -- local audit = {
-        --     {'data.uart_man.valid("uart1")', path.join(target:scriptdir(), "uart_man.rego")}, 
-        --     {'data.compartment.mmio_allow_list("uart2", {"uart_man"})'} 
-        -- }
-        -- target:set("cheriot.audit", audit)
-        -- 
+        -- 3. "cheriot.audit" takes the following formats:
+		--    a. target:set("cheriot.audit", {{query="data.rtos.valid"}}})  -- Runs a single query without importing any other modules (rego files)
+		--    b. target:set("cheriot.audit", {{query={"data.rtos.valid"}}})  -- Runs a single query without importing any other modules (rego files)
+		--    c. target:set("cheriot.audit", {{query={"data.rtos.valid", "data.rtos.valid2"}}})  -- Runs multiple queries without importing any other modules (rego files)
+		--    d. target:set("cheriot.audit", {{query={"data.rtos.valid", "data.caesar.valid"}, module="caesar.rego"}})  -- Runs multiple queries, any of which can include data from the module "caesar.rego"
+		--    e. target:set("cheriot.audit", {{query={"data.rtos.valid", "data.caesar.valid", "data.brutus.valid"}, module={"caesar.rego", "brutus.rego"}}})  -- Runs multiple queries, any of which can include data from the modules "caesar.rego" and/or "brutus.rego"
+        -- 4. Note how we have double sets of {} above. xmake.lua seems to require this for tables with named indices.
+		-- 5. The code code looks for the final result of "true" follwed by a new line. Anything else is raised as an exception.
+        -- 6. cheriot-audit is in the PATH or "/cheriot-tools/bin/" (we use lib.detect.find_tool to look for it).
         -- Note: In these examples, we use target:scriptdir() to get the path to the folder where the compartment's xmake.lua file is stored. We would suggest keeping the files together in one folder as a best prectice
 
 		local function find_cheriot_audit()
@@ -941,8 +921,7 @@ rule("cheriot.auditcmd")
 		end
 
         local function execute_audit(cheriot_audit_program, board_file, report_file, query, regofile)
-            -- Performs an audit. Assumes that cheriot-audit is in the PATH.
-			-- Hmm, it isn't in the PATH. We should add some code to look for it.
+            -- Performs an audit. Uses find_cheriot_audit() to find cheriot-audit.
             local t = {
 				cheriot_audit_program, 
                 "--board",
@@ -988,18 +967,20 @@ rule("cheriot.auditcmd")
 
         -- Works through the dependancy tree and calls this only once for each dependancy
 		visit_all_dependencies_of(target, function (target)
-			if (target:get("cheriot.audit")) then
-				local audit = target:get("cheriot.audit")
-				if type(audit) == "string" then
-					execute_audit(cheriot_audit_program, board_file, compartment_report, audit)
-				elseif type(audit) == "table" then
-					if type(audit[1]) == "table" then
-						for i,value in ipairs(audit) do
-							execute_audit(cheriot_audit_program, board_file, compartment_report, value[1], value[2])
-						end
+			local audit = target:get("cheriot.audit")
+			if audit then
+				-- Look for "query" and "module" keys in the audit table. Either can be a string or a table of strings.
+				if audit.query then
+					if type(audit.query) == "string" then
+						execute_audit(cheriot_audit_program, board_file, compartment_report, audit.query, audit.module)
 					else
-						execute_audit(cheriot_audit_program, board_file, compartment_report, audit[1], audit[2])
-					end
+						for i,value in ipairs(audit.query) do
+							if type(value) ~= "string" then
+								raise("Audit failed! target: "..target:name()..", query is invalid!")
+							end
+							execute_audit(cheriot_audit_program, board_file, compartment_report, value, audit.module)
+						end
+					end				
 				else
 					raise("Audit failed! target: "..target:name()..", query is invalid!")
 				end

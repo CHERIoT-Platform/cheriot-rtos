@@ -12,31 +12,19 @@ option("board")
 rule("caesar.checks")
     before_build(function (target)
         -- Examples of creating audits:
-        -- local audit = 1234 -- An error!
-        -- local audit = 'data.rtos.valid' -- A direct query
-        -- local audit = {'data.compartment.mmio_allow_list("uart2", {"uart_man"})'} -- A direct query
-        local audit = {'data.caesar.valid', path.join(target:scriptdir(), "caesar.rego")}  -- A query with a rego file
-        -- local audit = {  -- Multiple queires (mixed direct queries and rego file queries)
-        --     {'data.uart_man.valid("uart1")', path.join(target:scriptdir(), "uart_man.rego")}, 
-        --     {'data.compartment.mmio_allow_list("uart2", {"uart_man"})'} 
+        -- "query" is the rego query
+        -- "module" is the path to an optional rego module
+        -- Either can be a string or a table of strings to specify multiple queries and/or modules.
+        local audit = {
+            query='data.caesar.valid',
+            module=path.join(target:scriptdir(), "caesar.rego")
+        }
+        -- An example of an audit query with multiple rego modules and multiple queries:
+        -- local audit = {
+        --     query={'data.caesar.valid', 'data.compartment.mmio_allow_list("uart2", {"uart_man"})'},
+        --     module={path.join(target:scriptdir(), "caesar.rego"), path.join(target:scriptdir(), "brutus.rego")}
         -- }
-        -- local audit = {  -- Multiple queires (mixed direct queries and rego file queries)
-        --     {'data.uart_man.valid("uart1")', path.join(target:scriptdir(), "uart_man.rego")}, 
-        --     {'data.uart_man.valid("uart2")', path.join(target:scriptdir(), "uart_man.rego")}
-        -- }
-        target:set("cheriot.audit", audit)
-
-        -- -- Example of a dynamic query based on the defines set in this compartment
-        -- local audit = {}
-        -- local defs = target:get("defines")
-        -- local search_string = "UART_MANAGE_UART_"
-        -- for _,d in ipairs(defs) do
-        --     local i, j = string.find(d, search_string)
-        --     if(i == 1) then
-        --         table.insert(audit, {'data.uart_man.valid("uart'..string.sub(d, j+1, -1)..'")', path.join(target:scriptdir(), "uart_man.rego")})
-        --     end
-        -- end
-        -- target:set("cheriot.audit", audit)
+        target:set("cheriot.audit", {audit})
     end)
 
 compartment("caesar")
@@ -49,7 +37,7 @@ compartment("entry")
 
 compartment("producer")
     add_files("producer.cc")
-    add_rules("caesar.checks", {private = true})
+    add_rules("caesar.checks", {private = false})
 
 compartment("consumer")
     add_files("consumer.cc")
