@@ -847,6 +847,7 @@ rule("cheriot.firmware.linkcmd")
 
 	after_load(function (target)
 		target:add("deps", "cheriot.board.ldscript.mmio")
+		target:set("cheriot.link_report", target:targetfile() .. ".json")
 	end)
 
 	-- Perform the final link step for a firmware image.
@@ -877,8 +878,9 @@ rule("cheriot.firmware.linkcmd")
 			"-o", target:targetfile()
 		}
 		if target:extraconf("rules", "cheriot.firmware.linkcmd", "compartment_report") then
-			batchcmds:show_progress(opt.progress, "Creating firmware report " .. target:targetfile() .. ".json")
-			table.insert(ldargs, "--compartment-report=" .. target:targetfile() .. ".json")
+			local targetFile = target:get("cheriot.link_report")
+			batchcmds:show_progress(opt.progress, "Creating firmware report " .. targetFile)
+			table.insert(ldargs, "--compartment-report=" .. targetFile)
 		end
 
 		batchcmds:vrunv(target:tool("ld"), table.join(ldargs, objects), opt)
@@ -962,7 +964,7 @@ rule("cheriot.auditcmd")
         end
 
 		local board_file = target:dep("cheriot.board.file"):targetfile()
-		local compartment_report = path.join(target:scriptdir(), target:targetfile() .. ".json")
+		local compartment_report = target:get("cheriot.link_report")
 		local cheriot_audit_program = find_cheriot_audit();
 
         -- Works through the dependancy tree and calls this only once for each dependancy
