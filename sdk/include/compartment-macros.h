@@ -71,21 +71,80 @@
  * holds.  MMIO capabilities are always global and without store local.  They
  * may optionally omit additional capabilities.
  */
-#define MMIO_CAPABILITY_WITH_PERMISSIONS(type,                                 \
-                                         name,                                 \
-                                         permitLoad,                           \
-                                         permitStore,                          \
-                                         permitLoadStoreCapabilities,          \
-                                         permitLoadMutable)                    \
-	MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(                                   \
-	  volatile type, /* NOLINT(bugprone-macro-parentheses) */                  \
+
+// NOLINTBEGIN
+#define PERMIT_FLAG(cond, flag) PERMIT_FLAG_##cond(flag)
+#define PERMIT_FLAG_true(flag) flag
+#define PERMIT_FLAG_1(flag) flag
+#define PERMIT_FLAG_false(flag) ""
+#define PERMIT_FLAG_0(flag) ""
+// NOLINTEND
+
+#define JOIN_FLAGS(pL, pS, pC, pM)                                             \
+	PERMIT_FLAG(pL, "R")                                                       \
+	PERMIT_FLAG(pS, "W") PERMIT_FLAG(pC, "c") PERMIT_FLAG(pM, "m")
+
+#define __TOKEN_PASTE_INNER(x, y) x##y
+#define TOKEN_PASTE(x, y) __TOKEN_PASTE_INNER(x, y)
+
+#if defined(__has_attribute) && __has_attribute(cheriot_mmio)
+#	define MMIO_CAPABILITY_WITH_PERMISSIONS_INNER(                            \
+	  type,                                                                    \
 	  name,                                                                    \
-	  "__import_mem_" #name "_" #permitLoad "_" #permitStore                   \
-	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
 	  permitLoad,                                                              \
 	  permitStore,                                                             \
 	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable)
+	  permitLoadMutable,                                                       \
+	  cValue)                                                                  \
+		({ /* NOLINT(bugprone-macro-parentheses) */                            \
+		   _Pragma("GCC diagnostic push")                                      \
+			 _Pragma("GCC diagnostic ignored \"-Wundefined-internal\"")        \
+			   __attribute__((cheriot_mmio(                                    \
+			     #name,                                                        \
+			     JOIN_FLAGS(permitLoad,                                        \
+			                permitStore,                                       \
+			                permitLoadStoreCapabilities,                       \
+			                permitLoadMutable)))) volatile extern char cValue; \
+		   (type *)&cValue;                                                    \
+		   _Pragma("GCC diagnostic pop")                                       \
+		})
+
+#endif
+
+#if defined(__has_attribute) && __has_attribute(cheriot_mmio)
+#	define MMIO_CAPABILITY_WITH_PERMISSIONS(type,                             \
+	                                         name,                             \
+	                                         permitLoad,                       \
+	                                         permitStore,                      \
+	                                         permitLoadStoreCapabilities,      \
+	                                         permitLoadMutable)                \
+		MMIO_CAPABILITY_WITH_PERMISSIONS_INNER(                                \
+		  type,                                                                \
+		  name,                                                                \
+		  permitLoad,                                                          \
+		  permitStore,                                                         \
+		  permitLoadStoreCapabilities,                                         \
+		  permitLoadMutable,                                                   \
+		  TOKEN_PASTE(__cheriot_mmio__, TOKEN_PASTE(name, __COUNTER__)))
+
+#else
+#	define MMIO_CAPABILITY_WITH_PERMISSIONS(type,                             \
+	                                         name,                             \
+	                                         permitLoad,                       \
+	                                         permitStore,                      \
+	                                         permitLoadStoreCapabilities,      \
+	                                         permitLoadMutable)                \
+		MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(                               \
+		  volatile type, /* NOLINT(bugprone-macro-parentheses) */              \
+		  name,                                                                \
+		  "__import_mem_" #name "_" #permitLoad "_" #permitStore               \
+		  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,             \
+		  permitLoad,                                                          \
+		  permitStore,                                                         \
+		  permitLoadStoreCapabilities,                                         \
+		  permitLoadMutable)
+
+#endif
 
 /**
  * Provide a capability of the type `volatile type *` referring to the MMIO
@@ -108,22 +167,66 @@
  * holds.  Pre-shared objects are always global and without store local.  They
  * may optionally omit additional permissions.
  */
-#define SHARED_OBJECT_WITH_PERMISSIONS(type,                                   \
-                                       name,                                   \
-                                       permitLoad,                             \
-                                       permitStore,                            \
-                                       permitLoadStoreCapabilities,            \
-                                       permitLoadMutable)                      \
-	IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(                                 \
-	  type, /* NOLINT(bugprone-macro-parentheses) */                           \
-	  name,                                                                    \
-	  __cheriot_shared_object_,                                                \
-	  "__import_cheriot_shared_object_" #name "_" #permitLoad "_" #permitStore \
-	  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,                 \
-	  permitLoad,                                                              \
-	  permitStore,                                                             \
-	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable)
+
+#if defined(__has_attribute) && __has_attribute(cheriot_shared_object)
+#	define SHARED_OBJECT_WITH_PERMISSIONS_INNER(type,                         \
+	                                             name,                         \
+	                                             permitLoad,                   \
+	                                             permitStore,                  \
+	                                             permitLoadStoreCapabilities,  \
+	                                             permitLoadMutable,            \
+	                                             cValue)                       \
+		({ /* NOLINT(bugprone-macro-parentheses) */                            \
+		   _Pragma("GCC diagnostic push")                                      \
+			 _Pragma("GCC diagnostic ignored \"-Wundefined-internal\"")        \
+			   __attribute__((cheriot_shared_object(                           \
+			     #name,                                                        \
+			     JOIN_FLAGS(permitLoad,                                        \
+			                permitStore,                                       \
+			                permitLoadStoreCapabilities,                       \
+			                permitLoadMutable)))) volatile extern char cValue; \
+		   (type *)&cValue;                                                    \
+		   _Pragma("GCC diagnostic pop")                                       \
+		})
+
+#endif
+
+#if defined(__has_attribute) && __has_attribute(cheriot_shared_object)
+#	define SHARED_OBJECT_WITH_PERMISSIONS(type,                               \
+	                                       name,                               \
+	                                       permitLoad,                         \
+	                                       permitStore,                        \
+	                                       permitLoadStoreCapabilities,        \
+	                                       permitLoadMutable)                  \
+		SHARED_OBJECT_WITH_PERMISSIONS_INNER(                                  \
+		  type,                                                                \
+		  name,                                                                \
+		  permitLoad,                                                          \
+		  permitStore,                                                         \
+		  permitLoadStoreCapabilities,                                         \
+		  permitLoadMutable,                                                   \
+		  TOKEN_PASTE(__cheriot_so__, TOKEN_PASTE(name, __COUNTER__)))
+
+#else
+
+#	define SHARED_OBJECT_WITH_PERMISSIONS(type,                               \
+	                                       name,                               \
+	                                       permitLoad,                         \
+	                                       permitStore,                        \
+	                                       permitLoadStoreCapabilities,        \
+	                                       permitLoadMutable)                  \
+		IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(                             \
+		  type, /* NOLINT(bugprone-macro-parentheses) */                       \
+		  name,                                                                \
+		  __cheriot_shared_object_,                                            \
+		  "__import_cheriot_shared_object_" #name "_" #permitLoad              \
+		  "_" #permitStore "_" #permitLoadStoreCapabilities                    \
+		  "_" #permitLoadMutable,                                              \
+		  permitLoad,                                                          \
+		  permitStore,                                                         \
+		  permitLoadStoreCapabilities,                                         \
+		  permitLoadMutable)
+#endif
 
 /**
  * Provide a capability of the type `type *` referring to the pre-shared object
@@ -194,10 +297,14 @@
  * Macro that evaluates to a static sealing type that is local to this
  * compartment.
  */
-#define STATIC_SEALING_TYPE(name)                                              \
-	CHERIOT_EMIT_STATIC_SEALING_TYPE("sealing_type." COMPARTMENT_NAME_STRING   \
-	                                 "." #name)
-
+#if defined(__has_builtin) && __has_builtin(__builtin_cheriot_sealing_type)
+#	define STATIC_SEALING_TYPE(name)                                          \
+		static_cast<SKey>(__builtin_cheriot_sealing_type(#name)) /* NOLINT */
+#else
+#	define STATIC_SEALING_TYPE(name)                                          \
+		CHERIOT_EMIT_STATIC_SEALING_TYPE(                                      \
+		  "sealing_type." COMPARTMENT_NAME_STRING "." #name)
+#endif
 /**
  * Forward-declare a static sealed object.  This declares an object of type
  * `type` that can be referenced with the `STATIC_SEALED_VALUE` macro using
@@ -213,24 +320,33 @@
  * the value in `STATIC_SEALED_VALUE` will be `CHERI_SEALED(valueType*)`.  This
  * is useful for variable length arrays at the end of the structure.
  */
-#define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                             \
-  type, valueType, compartment, keyName, name)                                 \
-	/* Implementation detail: This declaration in the reserved namespace       \
-	 * exists only so that __typeof__ can be used later to determine the       \
-	 * original type.  This will be removed once the compiler understands      \
-	 * static sealed objects natively. */                                      \
-	extern valueType __sealed_type_placeholder_##name;                         \
-	_Alignas(_Alignof(type) < 8 ? 8 : _Alignof(type)) extern __if_cxx(         \
-	  "C") struct __##name##_type                                              \
-	{                                                                          \
-		uint32_t key;                                                          \
-		uint32_t padding;                                                      \
-		type     body;                                                         \
-	}(name);                                                                   \
-	/* Make sure the type that we're casting this to is not bigger than the    \
-	 * value that we've emitted. */                                            \
-	_Static_assert(sizeof(__sealed_type_placeholder_##name) <=                 \
-	               sizeof((name).body))
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed)
+#	define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                         \
+	  type, valueType, compartment, keyName, name)                             \
+		extern valueType __sealed_type_placeholder_##name;                     \
+		typedef type     __##name##_type                                       \
+		  __attribute__((cheriot_sealed(#compartment, #keyName)));             \
+		extern __##name##_type name;
+#else
+#	define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                         \
+	  type, valueType, compartment, keyName, name)                             \
+		/* Implementation detail: This declaration in the reserved namespace   \
+		 * exists only so that __typeof__ can be used later to determine the   \
+		 * original type.  This will be removed once the compiler understands  \
+		 * static sealed objects natively. */                                  \
+		extern valueType __sealed_type_placeholder_##name;                     \
+		_Alignas(_Alignof(type) < 8 ? 8 : _Alignof(type)) extern __if_cxx(     \
+		  "C") struct __##name##_type                                          \
+		{                                                                      \
+			uint32_t key;                                                      \
+			uint32_t padding;                                                  \
+			type     body;                                                     \
+		}(name);                                                               \
+		/* Make sure the type that we're casting this to is not bigger than    \
+		 * the value that we've emitted. */                                    \
+		_Static_assert(sizeof(__sealed_type_placeholder_##name) <=             \
+		               sizeof((name).body))
+#endif
 
 /**
  * Forward-declare a static sealed object.  This declares an object of type
@@ -256,18 +372,26 @@
  * The object created with this macro can be accessed only by code that has
  * access to the sealing key.
  */
-#define DEFINE_STATIC_SEALED_VALUE(                                            \
-  type, compartment, keyName, name, initialiser, ...)                          \
-	extern __if_cxx("C") int __sealing_key_##compartment##_##keyName __asm(    \
-	  "__export.sealing_type." #compartment "." #keyName);                     \
-	__attribute__((section(".sealed_objects"), used)) __if_cxx(                \
-	  inline) _Alignas(_Alignof(type) < 8                                      \
-	                     ? 8                                                   \
-	                     : _Alignof(type)) struct __##name##_type              \
-	  name = /* NOLINT(bugprone-macro-parentheses) */                          \
-	  {(uint32_t)&__sealing_key_##compartment##_##keyName,                     \
-	   0,                                                                      \
-	   {initialiser, ##__VA_ARGS__}}
+
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed)
+#	define DEFINE_STATIC_SEALED_VALUE(                                        \
+	  type, compartment, keyName, name, initialiser, ...)                      \
+		__##name##_type name = {initialiser, ##__VA_ARGS__}
+#else
+#	define DEFINE_STATIC_SEALED_VALUE(                                        \
+	  type, compartment, keyName, name, initialiser, ...)                      \
+		extern __if_cxx("C") int                                               \
+		  __sealing_key_##compartment##_##keyName __asm(                       \
+		    "__export.sealing_type." #compartment "." #keyName);               \
+		__attribute__((section(".sealed_objects"), used)) __if_cxx(            \
+		  inline) _Alignas(_Alignof(type) < 8                                  \
+		                     ? 8                                               \
+		                     : _Alignof(type)) struct __##name##_type          \
+		  name = /* NOLINT(bugprone-macro-parentheses) */                      \
+		  {(uint32_t)&__sealing_key_##compartment##_##keyName,                 \
+		   0,                                                                  \
+		   {initialiser, ##__VA_ARGS__}}
+#endif
 
 /**
  * Helper macro that declares and defines a sealed value.
@@ -306,28 +430,34 @@
  * Returns a sealed capability to the named object created with
  * `DECLARE_STATIC_SEALED_VALUE`.
  */
-#define STATIC_SEALED_VALUE(name)                                              \
-	({                                                                         \
-		CHERI_SEALED(__typeof__(__sealed_type_placeholder_##name) *)           \
-		ret; /* NOLINT(bugprone-macro-parentheses) */                          \
-		__asm(".ifndef __import.sealed_object." #name "\n"                     \
-		      "  .type     __import.sealed_object." #name ",@object\n"         \
-		      "  .section  .compartment_imports." #name                        \
-		      ",\"awG\",@progbits," #name "\n"                                 \
-		      "  .weak    __import.sealed_object." #name "\n"                  \
-		      "  .p2align  3\n"                                                \
-		      "__import.sealed_object." #name ":\n"                            \
-		      "  .word " #name "\n"                                            \
-		      "  .word %c1\n"                                                  \
-		      "  .size __import.sealed_object." #name ", 8\n"                  \
-		      " .previous\n"                                                   \
-		      ".endif\n"                                                       \
-		      "1:"                                                             \
-		      "  auipcc  %0,"                                                  \
-		      "      %%cheriot_compartment_hi(__import.sealed_object." #name   \
-		      ")\n"                                                            \
-		      "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"             \
-		      : "=C"(ret)                                                      \
-		      : "i"(sizeof(__typeof__(name))));                                \
-		ret;                                                                   \
-	})
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed)
+#	define STATIC_SEALED_VALUE(name, ...)                                     \
+		(CHERI_SEALED(__typeof__(__sealed_type_placeholder_##name) *))(&name)
+#else
+#	define STATIC_SEALED_VALUE(name)                                          \
+		({                                                                     \
+			CHERI_SEALED(__typeof__(__sealed_type_placeholder_##name) *)       \
+			ret; /* NOLINT(bugprone-macro-parentheses) */                      \
+			__asm(".ifndef __import.sealed_object." #name "\n"                 \
+			      "  .type     __import.sealed_object." #name ",@object\n"     \
+			      "  .section  .compartment_imports." #name                    \
+			      ",\"awG\",@progbits," #name "\n"                             \
+			      "  .weak    __import.sealed_object." #name "\n"              \
+			      "  .p2align  3\n"                                            \
+			      "__import.sealed_object." #name ":\n"                        \
+			      "  .word " #name "\n"                                        \
+			      "  .word %c1\n"                                              \
+			      "  .size __import.sealed_object." #name ", 8\n"              \
+			      " .previous\n"                                               \
+			      ".endif\n"                                                   \
+			      "1:"                                                         \
+			      "  auipcc  %0,"                                              \
+			      "      "                                                     \
+			      "%%cheriot_compartment_hi(__import.sealed_object." #name     \
+			      ")\n"                                                        \
+			      "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"         \
+			      : "=C"(ret)                                                  \
+			      : "i"(sizeof(__typeof__(name))));                            \
+			ret;                                                               \
+		})
+#endif
