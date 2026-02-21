@@ -34,6 +34,7 @@
 		      "1:"                                                             \
 		      "  auipcc  %0,"                                                  \
 		      "      %%cheriot_compartment_hi(" mangledName ")\n"              \
+		      "  cincoffset x0, x0, x0\n"                                      \
 		      "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"             \
 		      : "=C"(ret)                                                      \
 		      : "i"(((permitLoad) ? (1 << 31) : 0) +                           \
@@ -179,6 +180,7 @@
 		  ".endif\n"                                                           \
 		  "1:\n"                                                               \
 		  "  auipcc  %0, %%cheriot_compartment_hi(__import." name ")\n"        \
+		  "  cincoffset x0, x0, x0\n"                                          \
 		  "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"                 \
 		  : "=C"(ret));                                                        \
 		ret;                                                                   \
@@ -326,6 +328,7 @@
 		      "  auipcc  %0,"                                                  \
 		      "      %%cheriot_compartment_hi(__import.sealed_object." #name   \
 		      ")\n"                                                            \
+		      "  cincoffset c0, c0, x0\n"                                      \
 		      "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"             \
 		      : "=C"(ret)                                                      \
 		      : "i"(sizeof(__typeof__(name))));                                \

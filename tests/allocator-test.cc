@@ -95,6 +95,7 @@ namespace
 		__asm__ volatile(
 		  "1:\n"
 		  "auipcc ct2, %%cheriot_compartment_hi(.compartment_switcher)\n"
+		  "cincoffset x0, x0, x0\n" // Mandatory 4-byte nop
 		  "clc ct2, %%cheriot_compartment_lo_i(1b)(ct2)\n"
 		  "cmove ca0, %[heapCap]\n"
 		  "cmove ca1, %[p]\n"

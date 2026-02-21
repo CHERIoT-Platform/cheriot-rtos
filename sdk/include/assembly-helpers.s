@@ -75,6 +75,7 @@
 .macro LoadCapPCC register symbol
 1:
 	auipcc		\register, %cheriot_compartment_hi(\symbol)
+	cincoffset x0, x0, x0 // Mandatory 4-byte nop
 	clc			\register, %cheriot_compartment_lo_i(1b)(\register)
 .endm
 
@@ -85,5 +86,6 @@
 .macro LoadCapCGP register symbol
 1:
 	auicgp		\register, %cheriot_compartment_hi(\symbol)
+	cincoffset x0, x0, x0 // Mandatory 4-byte nop
 	clc			\register, %cheriot_compartment_lo_i(1b)(\register)
 .endm
