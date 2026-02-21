@@ -87,7 +87,7 @@ namespace
 	{
 		Thread::walk_thread_list(futexWaitingList, [&](Thread *thread) {
 			if ((thread->futexPriorityInheriting) &&
-			    (thread->futexWaitAddress = key))
+			    (thread->futexWaitAddress == key))
 			{
 				thread->futexPriorityBoostedThread = threadID;
 			}
