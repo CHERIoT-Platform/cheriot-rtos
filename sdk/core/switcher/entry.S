@@ -618,6 +618,7 @@ __Z26compartment_switcher_entryz:
 .Lswitch_load_zero_arguments_start:
 	// FROM: above
 	auipcc             cs0, %cheriot_compartment_hi(.Lswitch_zero_arguments_start)
+	cincoffset         x0, x0, x0 // Mandatory 4-byte nop
 	cincoffset         cs0, cs0, %cheriot_compartment_lo_i(.Lswitch_load_zero_arguments_start)
 	// Atlas update: s0: .Lzero_arguments_start
 	andi               t2, tp, 0x7 // loader/types.h's ExportEntry::flags
@@ -1754,6 +1755,7 @@ exception_entry_asm:
 	 *  t1: A copy of mepcc, the faulting program counter
 	 */
 	auipcc             ctp, %cheriot_compartment_hi(.Lswitch_entry_first_spill)
+	cincoffset         x0, x0, x0 // Mandatory 4-byte nop
 	cincoffset         ctp, ctp, %cheriot_compartment_lo_i(.Lhandle_error_in_switcher)
 	bne                t1, tp, .Lcommon_force_unwind
 	li                 a0, -ENOTENOUGHSTACK
@@ -1777,6 +1779,7 @@ exception_entry_asm:
 	 *  a0, a1: return values to the caller
 	 */
 	auipcc             ct2, %cheriot_compartment_hi(.Lswitch_just_return)
+	cincoffset         x0, x0, x0 // Mandatory 4-byte nop
 	cincoffset         ct2, ct2, %cheriot_compartment_lo_i(.Lhandle_return_context_install)
 	csc                ca0, TrustedStack_offset_ca0(csp)
 	csc                ca1, TrustedStack_offset_ca1(csp)

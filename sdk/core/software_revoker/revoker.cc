@@ -24,6 +24,7 @@ __asm__("	.section .text, \"ax\", @progbits\n"
         "	sll        a0, a0, 3\n"
         "1:\n"
         "	auipcc     ca1, %cheriot_compartment_hi(globals)\n"
+        "	cincoffset x0, x0, x0\n" // Mandatory 4-byte nop
         "	cincoffset ca1, ca1, %cheriot_compartment_lo_i(1b)\n"
         "	cincoffset ca1, ca1, a0\n"
         "	clc        ca0, 0(ca1)\n"
