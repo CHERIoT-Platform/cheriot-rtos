@@ -367,7 +367,9 @@ class KunyanEthernet
 	void mdio_wait_for_ready()
 	{
 		auto &mdioControl = mmio_register<RegisterOffset::MDIOControl>();
-		while (mdioControl & 1) {}
+		while (mdioControl & 1)
+		{
+		}
 	}
 
 	/**
@@ -424,8 +426,8 @@ class KunyanEthernet
 		auto    &mdioWrite    = mmio_register<RegisterOffset::MDIODataWrite>();
 		uint32_t writeCommand = (0 << 10) | (phyAddress << 5) |
 		                        static_cast<uint32_t>(registerAddress);
-		mdioAddress = writeCommand;
-		mdioWrite   = data;
+		mdioAddress           = writeCommand;
+		mdioWrite             = data;
 		mdio_start_transaction();
 	}
 
@@ -500,8 +502,8 @@ class KunyanEthernet
 		auto &macAddressHigh = mmio_register<RegisterOffset::MACAddressHigh>();
 		auto &macAddressLow  = mmio_register<RegisterOffset::MACAddressLow>();
 		macAddressHigh       = (address[2] << 24) | (address[3] << 16) |
-		                 (address[4] << 8) | address[5];
-		macAddressLow = (address[1] << 8) | address[0];
+		                       (address[4] << 8) | address[5];
+		macAddressLow        = (address[1] << 8) | address[0];
 	}
 
 	uint32_t receive_interrupt_value()
@@ -747,7 +749,9 @@ class KunyanEthernet
 		auto &transmitControl =
 		  mmio_register<RegisterOffset::TransmitControlPing>();
 		// Spin waiting for the transmit buffer to be free.
-		while (transmitControl & 1) {}
+		while (transmitControl & 1)
+		{
+		}
 		// Write the frame to the transmit buffer.
 		auto transmitBuffer = transmit_buffer_pointer();
 		// We must check the frame pointer and its length. Although it
@@ -779,7 +783,9 @@ class KunyanEthernet
 		// Start the transmit.
 		transmitControl = 1;
 		Debug::log("Sent frame, waiting for completion");
-		while (transmitControl & 1) {}
+		while (transmitControl & 1)
+		{
+		}
 		// Return if the frame was sent successfully.
 		Debug::log("Transmit control register: {}", transmitControl);
 		if ((transmitControl & 2) != 0)

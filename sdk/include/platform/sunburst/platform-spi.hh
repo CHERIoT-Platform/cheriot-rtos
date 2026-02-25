@@ -252,7 +252,9 @@ namespace SonataSpi
 		void wait_idle() volatile
 		{
 			// Wait whilst IDLE field in STATUS is low
-			while ((status & StatusIdle) == 0) {}
+			while ((status & StatusIdle) == 0)
+			{
+			}
 		}
 
 		/**
@@ -312,7 +314,9 @@ namespace SonataSpi
 				for (uint32_t i = 0; i < len; ++i)
 				{
 					// Wait for at least one byte to be available in the RX FIFO
-					while ((status & StatusRxFifoLevel) == 0) {}
+					while ((status & StatusRxFifoLevel) == 0)
+					{
+					}
 					data[i] = static_cast<uint8_t>(receiveFifo);
 				}
 			}
