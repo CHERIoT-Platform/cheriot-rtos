@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "timer.h"
 #include "thread.h"
 #include <errno.h>
 #include <multiwaiter.h>
