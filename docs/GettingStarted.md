@@ -466,9 +466,28 @@ On macOS, the device name includes the serial number of the device and so will b
 On Windows, it will be a COM port, but unfortunately Windows is not always consistent about the order in which the ports appear.
 
 If you install a serial terminal (for example, `minicom` on *NIX or PuTTY on Windows), you can point it at the relevant serial port.
+The serial configuration is similar to Arty A7 (8 data bits, hardware & software flow control disabled, 1 stop bit, and no parity) except for **baud rate**, which should be `921600`, not `115200`.
 
-The serial setup is the same as for the Arty A7 [above](#installing-and-running-the-firmware), aside from the different device name.
-
-Once a serial terminal is connected, running `xmake run` should show the output from the test suite.
+Once a serial terminal is connected, you should be able to see the output in your serial terminal window as soon as you run `xmake run` in your build window.
 
 If you are unsure which of Sonata's serial ports is the correct one, you can connect your serial console to all four and see which produces output from the test suite.
+
+Here are some examples with different serial tools (replace serial number of the device with correct one):
+
+`Tio` ([download and install instructions](https://github.com/tio/tio?tab=readme-ov-file#4-installation))
+
+```
+$ tio -b 921600 /dev/ttyUSB2
+```
+
+`Minicom`
+
+```
+$ minicom -c on -D /dev/ttyUSB2 -b 921600
+```
+
+`Screen`
+
+```
+$ screen /dev/ttyUSB2 921600
+```
