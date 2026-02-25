@@ -59,15 +59,15 @@ namespace
 	 */
 	template<typename T>
 	constexpr std::array<T, NumberOfPowersOfTen> PositiveBinaryPowersOfTen = {
-	  T(1e1),
-	  T(1e2),
-	  T(1e4),
-	  T(1e8),
-	  T(1e16),
-	  T(1e32),
-	  T(1e64),
-	  T(1e128),
-	  T(1e256)};
+	  static_cast<T>(1e1),
+	  static_cast<T>(1e2),
+	  static_cast<T>(1e4),
+	  static_cast<T>(1e8),
+	  static_cast<T>(1e16),
+	  static_cast<T>(1e32),
+	  static_cast<T>(1e64),
+	  static_cast<T>(1e128),
+	  static_cast<T>(1e256)};
 
 	/**
 	 * Table of negative powers of ten.  These are expensive to compute
@@ -75,15 +75,15 @@ namespace
 	 */
 	template<typename T>
 	constexpr std::array<T, NumberOfPowersOfTen> NegativeBinaryPowersOfTen = {
-	  T(1e-1),
-	  T(1e-2),
-	  T(1e-4),
-	  T(1e-8),
-	  T(1e-16),
-	  T(1e-32),
-	  T(1e-64),
-	  T(1e-128),
-	  T(1e-256)};
+	  static_cast<T>(1e-1),
+	  static_cast<T>(1e-2),
+	  static_cast<T>(1e-4),
+	  static_cast<T>(1e-8),
+	  static_cast<T>(1e-16),
+	  static_cast<T>(1e-32),
+	  static_cast<T>(1e-64),
+	  static_cast<T>(1e-128),
+	  static_cast<T>(1e-256)};
 
 	/// Largest value that is printed without an exponent
 	template<typename T>

@@ -624,7 +624,7 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 		// Round down to the previous multiple for unrolling
 		const uint32_t  UnrollSize = (size & ~UnrollMask);
 		const uint32_t *sourceEnd  = reinterpret_cast<uint32_t *>(
-          reinterpret_cast<uintptr_t>(source) + UnrollSize);
+		  reinterpret_cast<uintptr_t>(source) + UnrollSize);
 
 		// This is manulally unrolled for two reasons:
 		// 1. We can't do partial writes to the USB packet buffer,

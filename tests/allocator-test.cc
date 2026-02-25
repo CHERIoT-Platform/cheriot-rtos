@@ -772,13 +772,13 @@ namespace
 		TEST(alloc.is_valid(), "Allocation failed");
 		int  claimCount = 0;
 		auto claim      = [&]() {
-            ssize_t claimSize = heap_claim(SECOND_HEAP, alloc);
-            claimCount++;
-            TEST((allocSize <= claimSize),
-                 "{}-byte allocation claimed as {} bytes (claim number {})",
-                 allocSize,
-                 claimSize,
-                 claimCount);
+			ssize_t claimSize = heap_claim(SECOND_HEAP, alloc);
+			claimCount++;
+			TEST((allocSize <= claimSize),
+			     "{}-byte allocation claimed as {} bytes (claim number {})",
+			     allocSize,
+			     claimSize,
+			     claimCount);
 		};
 		claim();
 		int ret = heap_free(SECOND_HEAP, alloc);
@@ -1256,7 +1256,7 @@ namespace
 		 */
 		auto dynamicSealingKey = token_key_new();
 		sealedPointer          = token_sealed_unsealed_alloc(
-          &noWait, SECOND_HEAP, dynamicSealingKey, 0x18, nullptr);
+		  &noWait, SECOND_HEAP, dynamicSealingKey, 0x18, nullptr);
 		TEST(sealedPointer.is_valid(), "Invalid outparam case failed alloc");
 		TEST_EQUAL(
 		  token_obj_destroy(SECOND_HEAP, sealingCapability, sealedPointer),

@@ -63,7 +63,9 @@ struct SonataRgbLedController : private utils::NoCopyNoMove
 	 */
 	void wait_for_idle() volatile
 	{
-		while ((status & StatusIdle) == 0) {}
+		while ((status & StatusIdle) == 0)
+		{
+		}
 	}
 
 	/**

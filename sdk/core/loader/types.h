@@ -179,9 +179,14 @@ namespace loader
 		 * Permissions for this (software-defined) root.  By default, these are
 		 * identical to the architectural root from which this is derived.
 		 */
+		// NOLINTBEGIN(google-readability-casting)
+		// The lint is disabled because clang-tidy reports a nonsensical
+		// warning about C vs C++-style casts on this line.
 		template<Type Ty>
 		constexpr static CHERI::PermissionSet Permissions =
 		  ArchitecturalPermissions<ArchitecturalRoot<Ty>>;
+		// NOLINTEND(google-readability-casting)
+
 		/**
 		 * The permissions held by the global (software-defined) root.  In
 		 * software, we ensure that nothing has both global and store-local
@@ -190,7 +195,7 @@ namespace loader
 		 */
 		template<>
 		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
-		                                Permissions<Type::RWGlobal> =
+		  Permissions<Type::RWGlobal> =
 		    ArchitecturalPermissions<ISAType::RW>.without(
 		      CHERI::Permission::StoreLocal);
 		/**
@@ -202,7 +207,7 @@ namespace loader
 		 */
 		template<>
 		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
-		                                Permissions<Type::RWStoreL> =
+		  Permissions<Type::RWStoreL> =
 		    ArchitecturalPermissions<ISAType::RW>.without(
 		      CHERI::Permission::Global);
 
