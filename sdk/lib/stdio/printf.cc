@@ -428,7 +428,7 @@ namespace
 					sharpflag = (width == 0);
 					sign      = 0;
 					num       = static_cast<size_t>(
-                      reinterpret_cast<uintptr_t>(va_arg(ap, void *)));
+					  reinterpret_cast<uintptr_t>(va_arg(ap, void *)));
 					goto number; // NOLINT
 				case 'q':
 					qflag = 1;

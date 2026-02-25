@@ -408,7 +408,9 @@ struct OpenTitanI2c : private utils::NoCopyNoMove
 
 	void blocking_write_byte(const uint32_t Fmt) volatile
 	{
-		while (0 != (StatusFormatFull & status)) {}
+		while (0 != (StatusFormatFull & status))
+		{
+		}
 		formatData = Fmt;
 	}
 
@@ -452,7 +454,9 @@ struct OpenTitanI2c : private utils::NoCopyNoMove
 		for (uint32_t idx = 0; idx < NumBytes; idx += ReceiveFifoDepth)
 		{
 			blocking_write_byte(FormatDataStart | (Addr7 << 1) | 1u);
-			while (!format_is_empty()) {}
+			while (!format_is_empty())
+			{
+			}
 			if (interrupt_is_asserted(Interrupt::ControllerHalt))
 			{
 				reset_controller_events();
@@ -465,7 +469,9 @@ struct OpenTitanI2c : private utils::NoCopyNoMove
 
 			blocking_write_byte((lastChunk ? FormatDataStop : 0) |
 			                    FormatDataReadBytes | chunkSize);
-			while (!format_is_empty()) {}
+			while (!format_is_empty())
+			{
+			}
 
 			for (uint32_t chunkIdx = 0; chunkIdx < chunkSize; ++chunkIdx)
 			{

@@ -190,7 +190,7 @@ namespace loader
 		 */
 		template<>
 		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
-		                                Permissions<Type::RWGlobal> =
+		  Permissions<Type::RWGlobal> =
 		    ArchitecturalPermissions<ISAType::RW>.without(
 		      CHERI::Permission::StoreLocal);
 		/**
@@ -202,7 +202,7 @@ namespace loader
 		 */
 		template<>
 		CONSTEXPR_STATIC_SPECIALIZATION CHERI::PermissionSet
-		                                Permissions<Type::RWStoreL> =
+		  Permissions<Type::RWStoreL> =
 		    ArchitecturalPermissions<ISAType::RW>.without(
 		      CHERI::Permission::Global);
 

@@ -570,8 +570,8 @@ namespace
 
 		// Build an export table entry for the given compartment.
 		auto buildExportEntry = [&](const auto &compartment) {
-			auto exportEntry = build(compartment.exportTable, entry.address)
-			                     .template cast<ExportEntry>();
+			auto exportEntry     = build(compartment.exportTable, entry.address)
+			                         .template cast<ExportEntry>();
 			auto interruptStatus = exportEntry->interrupt_status();
 			Debug::Invariant((interruptStatus == InterruptStatus::Enabled) ||
 			                   (interruptStatus == InterruptStatus::Disabled),
@@ -674,18 +674,18 @@ namespace
 				{
 					auto typeAddress = *sealingType;
 					auto findExport  = [&](auto &compartment) {
-                        if (contains<ExportEntry>(compartment.exportTable,
-                                                  typeAddress))
-                        {
-                            auto exportEntry = build<ExportEntry>(
-                              compartment.exportTable, typeAddress);
-                            Debug::Invariant(
-                              exportEntry->is_sealing_type(),
-                              "Sealed object points to invalid sealing type");
-                            *sealingType = exportEntry->functionStart;
-                            return true;
-                        }
-                        return false;
+						if (contains<ExportEntry>(compartment.exportTable,
+						                          typeAddress))
+						{
+							auto exportEntry = build<ExportEntry>(
+							  compartment.exportTable, typeAddress);
+							Debug::Invariant(
+							  exportEntry->is_sealing_type(),
+							  "Sealed object points to invalid sealing type");
+							*sealingType = exportEntry->functionStart;
+							return true;
+						}
+						return false;
 					};
 					bool found = findExport(image.allocator());
 					found |= findExport(image.scheduler());

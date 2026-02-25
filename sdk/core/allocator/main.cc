@@ -928,7 +928,9 @@ __cheriot_minimum_stack(0xe0) int heap_quarantine_flush(Timeout *timeout)
 		// Try removing items from quarantine until we've popped all that
 		// we can.  There may still be quarantine things from the previous
 		// epoch.
-		while (gm->quarantine_dequeue()) {}
+		while (gm->quarantine_dequeue())
+		{
+		}
 		// If we've emptied the quarantine, stop and report success.
 		if (gm->heapQuarantineSize == 0)
 		{
@@ -940,7 +942,9 @@ __cheriot_minimum_stack(0xe0) int heap_quarantine_flush(Timeout *timeout)
 			return -ETIMEDOUT;
 		}
 		// Remove everything that was freed with the previous revocation.
-		while (gm->quarantine_dequeue()) {}
+		while (gm->quarantine_dequeue())
+		{
+		}
 		Debug::log("{} bytes left in quarantine", gm->heapQuarantineSize);
 		return 0;
 	}

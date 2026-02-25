@@ -237,9 +237,9 @@ class Sealed
  */
 template<typename T>
 __always_inline std::pair<T *, Sealed<T>>
-                token_allocate(Timeout            *timeout,
-                               AllocatorCapability heapCapability,
-                               TokenKey            key)
+token_allocate(Timeout            *timeout,
+               AllocatorCapability heapCapability,
+               TokenKey            key)
 {
 	/*
 	 * Explicitly initialize unsealed, since callers like to check it, and not

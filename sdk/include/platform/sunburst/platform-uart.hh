@@ -290,7 +290,9 @@ struct OpenTitanUart : private utils::NoCopyNoMove
 	 */
 	void blocking_write(uint8_t byte) volatile
 	{
-		while (!can_write()) {}
+		while (!can_write())
+		{
+		}
 		writeData = byte;
 	}
 
@@ -299,7 +301,9 @@ struct OpenTitanUart : private utils::NoCopyNoMove
 	 */
 	uint8_t blocking_read() volatile
 	{
-		while (!can_read()) {}
+		while (!can_read())
+		{
+		}
 		return readData;
 	}
 };

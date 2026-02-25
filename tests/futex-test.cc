@@ -113,37 +113,39 @@ int test_futex()
 
 	static cheriot::atomic<int> state;
 	auto                        priorityBug = []() {
-        if (thread_id_get() == 2)
-        {
-            debug_log("Medium-priority task starting");
-            // We are the high priority thread, wait for the futex to be
-            // acquired and then spin and never yield.
-            while (state != 1)
-            {
-                Timeout t{3};
-                TEST_SUCCESS(thread_sleep(&t));
-            }
-            debug_log("Consuming all CPU on medium-priority thread");
-            state = 2;
-            while (state != 4) {}
-            debug_log("Finishing medium-priority task");
-        }
-        else
-        {
-            debug_log("Low-priority task starting");
-            futex = thread_id_get();
-            state = 1;
-            debug_log("Low-priority thread acquired futex, yielding");
-            // Now the high priority thread should run.
-            while (state != 3)
-            {
-                yield();
-            }
-            debug_log("Low-priority thread finished, unlocking");
-            state = 4;
-            futex = 0;
-            TEST_SUCCESS(futex_wake(&futex, 1));
-        }
+		if (thread_id_get() == 2)
+		{
+			debug_log("Medium-priority task starting");
+			// We are the high priority thread, wait for the futex to be
+			// acquired and then spin and never yield.
+			while (state != 1)
+			{
+				Timeout t{3};
+				TEST_SUCCESS(thread_sleep(&t));
+			}
+			debug_log("Consuming all CPU on medium-priority thread");
+			state = 2;
+			while (state != 4)
+			{
+			}
+			debug_log("Finishing medium-priority task");
+		}
+		else
+		{
+			debug_log("Low-priority task starting");
+			futex = thread_id_get();
+			state = 1;
+			debug_log("Low-priority thread acquired futex, yielding");
+			// Now the high priority thread should run.
+			while (state != 3)
+			{
+				yield();
+			}
+			debug_log("Low-priority thread finished, unlocking");
+			state = 4;
+			futex = 0;
+			TEST_SUCCESS(futex_wake(&futex, 1));
+		}
 	};
 	async(priorityBug);
 	async(priorityBug);
