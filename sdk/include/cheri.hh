@@ -753,7 +753,7 @@ namespace CHERI
 			 * permissions.
 			 */
 			template<std::same_as<Permission>... Permissions>
-			constexpr PermissionSet without(Permissions... ps) const
+			[[nodiscard]] constexpr PermissionSet without(Permissions... ps) const
 			{
 				return static_cast<PermissionSet>(*this).without(ps...);
 			}
@@ -773,7 +773,7 @@ namespace CHERI
 			 * permissions.
 			 */
 			template<std::same_as<Permission>... Permissions>
-			constexpr bool contains(Permissions... permissions) const
+			[[nodiscard]] constexpr bool contains(Permissions... permissions) const
 			{
 				return static_cast<PermissionSet>(*this).contains(
 				  permissions...);
@@ -1158,7 +1158,7 @@ namespace CHERI
 		 * Cast this capability to some other type.
 		 */
 		template<typename U>
-		Capability<U, IsSealed> cast() const
+		[[nodiscard]] Capability<U, IsSealed> cast() const
 		{
 			return {
 			  static_cast<std::conditional_t<IsSealed, CHERI_SEALED(U *), U *>>(
@@ -1171,7 +1171,7 @@ namespace CHERI
 		 * all other cases.
 		 */
 		template<typename U>
-		bool is_subset_of(Capability<U, IsSealed> other) const
+		[[nodiscard]] bool is_subset_of(Capability<U, IsSealed> other) const
 		{
 			return __builtin_cheri_subset_test(other.ptr, ptr);
 		}
