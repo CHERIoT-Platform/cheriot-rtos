@@ -155,16 +155,15 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 	return milliseconds;
 #else
 	static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
-	static const uint32_t CyclesPerTick        = CPU_TIMER_HZ / TICK_RATE_HZ;
 	__if_cxx(
 	  static_assert(CyclesPerMillisecond > 0, "CPU_TIMER_HZ is too low"););
 	uint32_t cycles  = milliseconds * CyclesPerMillisecond;
 	uint64_t start   = rdcycle64();
 	uint64_t end     = start + cycles;
 	uint64_t current = start;
-	while ((end > current) && (end - current > MS_PER_TICK))
+	while ((end > current) && (end - current > TIMERCYCLES_PER_TICK))
 	{
-		Timeout t = {0, ((uint32_t)(end - current)) / CyclesPerTick};
+		Timeout t = {0, ((uint32_t)(end - current)) / TIMERCYCLES_PER_TICK};
 		(void)thread_sleep(&t, ThreadSleepNoEarlyWake);
 		current = rdcycle64();
 	}
