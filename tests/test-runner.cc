@@ -97,6 +97,7 @@ int __cheri_compartment("test_runner") run_tests()
 			__asm__ volatile(
 			  "1:\n"
 			  "auipcc %0, %%cheriot_compartment_hi(.compartment_switcher)\n"
+			  "cincoffset x0, x0, x0\n" // Mandatory 4-byte nop
 			  "clc %0, %%cheriot_compartment_lo_i(1b)(%0)\n"
 			  : "=C"(switcherCrossCallRaw));
 			Capability switcherCrossCall{switcherCrossCallRaw};

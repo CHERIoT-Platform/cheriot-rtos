@@ -29,6 +29,7 @@ compartment_error_handler_stackless:
 // stack we will run some different cleanup code next time. */
 .Llookup_reset:
 	auipcc          ct2, %cheriot_compartment_hi(__library_import_libcalls__Z39switcher_handler_invocation_count_resetv)
+	cincoffset      x0, x0, x0 // Mandatory 4-byte nop
 	clc             ct2, %cheriot_compartment_lo_i(.Llookup_reset)(ct2)
 	cjalr           ct2
 // longjmp to the error handler.

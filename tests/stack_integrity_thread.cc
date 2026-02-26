@@ -23,6 +23,7 @@ using namespace CHERI;
 		__asm__ volatile(                                                      \
 		  "1:\n"                                                               \
 		  "auipcc ct2, %%cheriot_compartment_hi(.compartment_switcher)\n"      \
+		  "cincoffset x0, x0, x0\n"                                            \
 		  "clc ct2, %%cheriot_compartment_lo_i(1b)(ct2)\n"                     \
 		  "" instructions "\n"                                                 \
 		  "cjalr ct2\n"                                                        \
@@ -129,6 +130,7 @@ int exhaust_thread_stack_spill(__cheri_callback int (*fn)())
 	  // Make the call
 	  "1:\n"
 	  "auipcc ct2, %%cheriot_compartment_hi(.compartment_switcher)\n"
+	  "cincoffset x0, x0, x0\n" // Mandatory 4-byte nop
 	  "clc ct2, %%cheriot_compartment_lo_i(1b)(ct2)\n"
 	  "cjalr ct2\n"
 
