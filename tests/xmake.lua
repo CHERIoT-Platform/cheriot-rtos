@@ -208,6 +208,10 @@ test("multiwaiter", { name = "Multiwatier" })
 test("allocator", { name = "Allocator" })
     add_deps("cxxrt")
 
+-- Test Rust compilation and allocation.
+test("rust", { name = "Rust", not_most = true })
+  add_files("rust-test.rs")
+
 includes(path.join(sdkdir, "lib"))
 
 rule("cheriot.tests")
