@@ -47,7 +47,7 @@ jobs:
     - name: Build tests
       run: |
         cd tests
-        xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
+        xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ --test-rust=y ${{ matrix.build-flags }}
         xmake
     - name: Run tests
       run: |

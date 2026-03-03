@@ -1538,13 +1538,19 @@ rule("cheriot.rust", function()
 		import("core.base.json")
 		import("core.project.config")
 
+		-- If the directory to store objects for this target doesn't exist, `rustc` will fail.
+		-- We thus check if the directory exists and, if it doesn't, create it.
+		local objdir = target:objectdir()
+
+		if not os.exists(objdir) then
+				os.mkdir(objdir)
+		end
+
 		local dependfile = target:dependfile(sourcefile)
 
-		-- path/to/rust.rs -> libpath_to_rust
+		-- path/to/rust.rs -> libpath_to_rust.rs.a
 		local libname = "lib" .. string.gsub(sourcefile:sub(1, #sourcefile - 3), "//", "_")
-		local targetfile = target:objectfile(libname)
-		-- <buildir>/libpath_to_rust.o -> <buildir>/libpath_to_rust.a
-		local targetfile = targetfile:sub(1, #targetfile - 1) .. "a"
+		local targetfile = target:objectfile(libname) .. ".a"
 		table.insert(target:objectfiles(), targetfile)
 
 		local compinst = compiler.load("rc", { target = target })
