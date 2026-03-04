@@ -151,7 +151,7 @@ static inline bool is_small(size_t s)
 	return small_index(s) < NSmallBins;
 }
 // Convert smallbin index to the size it contains.
-static inline size_t small_index2size(BIndex i)
+static inline constexpr size_t small_index2size(BIndex i)
 {
 	return (static_cast<size_t>(i) + 1) << SmallBinShift;
 }
@@ -260,7 +260,7 @@ namespace displacement_proxy
  * encapsulated using the displacement_proxy::Proxy above and the
  * cell_{next,prev} methods herein.
  *
- * Chunks are in one of four states:
+ * Chunks are in one of five states:
  *
  *   - Allocated / "In Use" by the application
  *
@@ -272,20 +272,35 @@ namespace displacement_proxy
  *       - body() is a MChunk (and not a TChunk)
  *       - Collected in a quarantine ring using body()'s MChunk::ring linkages
  *
+ *   - Free for allocation and tiny
+ *
+ *       - body() is a MChunk (and not a TChunk)
+ *       - Collected in a smallbin ring using body()'s MChunk::ring
+ *       - PrevFooter absent; successor header directly encodes tiny size
+ *
  *   - Free for allocation and small
  *
  *       - body() is a MChunk (and not a TChunk)
  *       - Collected in a smallbin ring using body()'s MChunk::ring
+ *       - PrevFooter present, will be used by successor chunk's cell_prev()
  *
  *   - Free for allocation and large
  *
  *       - body() is a TChunk
  *       - Collected in a treebin ring, using either/both the TChunk linkages
  *         or/and the MChunk::ring links present in body().
+ *       - PrevFooter present, will be used by successor chunk's cell_prev()
  */
 struct __packed __aligned(MallocAlignment)
 __cheri_no_subobject_bounds MChunkHeader
 {
+	/*
+	 * The size of a free chunk that cannot hold a footer.
+	 *
+	 * sizeof(MChunkHeader) + sizeof(MChunk); asserted below.
+	 */
+	static constexpr size_t TinySize = 16;
+
 	/**
 	 * Each chunk has a 16-bit metadata field that is used to store a small
 	 * bitfield and the owner ID in the remaining bits.  This is the space not
@@ -294,19 +309,12 @@ __cheri_no_subobject_bounds MChunkHeader
 	 */
 	static constexpr size_t OwnerIDWidth = 13;
 	/**
-	 * Compressed size of the predecessor chunk.  See cell_prev().
-	 */
-	SmallSize prevSize;
-	/**
 	 * Compressed size of this chunk.  See cell_next().
 	 */
 	SmallSize currSize;
 
-	/**
-	 * The unique identifier of the allocator.  The ID 0 is reserved for
-	 * objects that are owned by the allocator, such as claims.
-	 */
-	uint16_t ownerID : OwnerIDWidth;
+	uint32_t unused : 12;
+
 	/**
 	 * Is this a sealed object?  If so, it should be exempted from free in
 	 * `heap_free_all` because deallocation requires consensus between the
@@ -314,16 +322,128 @@ __cheri_no_subobject_bounds MChunkHeader
 	 * capability.
 	 */
 	bool isSealedObject : 1;
-	bool isPrevInUse : 1;
 	bool isCurrInUse : 1;
+
+	enum class PrevState : unsigned int
+	{
+		/// The prior chunk is allocated; we cannot find cell_prev().
+		Allocated = 0b00,
+		/// The prior chunk is free and is exactly TinySize bytes in size.
+		FreeTiny = 0b10,
+		/// The prior chunk is free and has a footer containing its size.
+		Free = 0b11,
+	} prevState : 2;
+
+	/**
+	 * The unique identifier of the allocator.  The ID 0 is reserved for
+	 * objects that are owned by the allocator, such as claims.
+	 */
+	uint16_t ownerID : OwnerIDWidth;
+
 	/// Head of a linked list of claims on this allocation
 	uint16_t claims;
 
+	/**
+	 * This must be a result not in the range of upper layer's encoding
+	 * technique for a valid Claim object.  There's a bit of layering violence
+	 * here because our (lightweight) hazard mechanism needs to be sensitive to
+	 * (upper layer) claims.
+	 *
+	 * The use of 0 is convenient as it is fast to test and, in the current
+	 * encoding scheme, would refer to the very first word of the heap
+	 * (at heapStart.address()), which, by construction, is a MChunkHeader.
+	 *
+	 * Concretely, see main.cc's Claim::encode_address() and mstate_init() as
+	 * well as our mspace_firstchunk_add().
+	 *
+	 */
+	static constexpr uint16_t NoClaims = 0;
+
+	struct PrevFooter
+	{
+		SmallSize prevSize;
+	};
+
+	/**
+	 * A pointer proxy to encode the address of this chunk's predecessor.
+	 *
+	 * MChunkHeader predecessor pointers are... odd.  They exist only when the
+	 * prior chunk is free, and they're encoded partially in this chunk's header
+	 * and partially in some spare bits at the end of the prior object, outside
+	 * the MChunk or TChunk in that space.
+	 */
+	class PredecessorProxy
+	{
+		MChunkHeader *hdr;
+
+		public:
+		using Type = MChunkHeader;
+
+		__always_inline PredecessorProxy(MChunkHeader *h) : hdr(h) {}
+
+		__always_inline operator MChunkHeader *() const
+		{
+			switch (hdr->prevState)
+			{
+				case PrevState::Free:
+				{
+					auto *prevFoot = ds::pointer::offset<const PrevFooter>(
+					  hdr, -sizeof(PrevFooter));
+					return ds::pointer::offset<MChunkHeader>(
+					  hdr, -head2size(prevFoot->prevSize));
+				}
+
+				case PrevState::FreeTiny:
+					return ds::pointer::offset<MChunkHeader>(hdr, -TinySize);
+
+				default:
+					Debug::Invariant(false,
+					                 "Attempted to walk backwards into an "
+					                 "allocated chunk: {} {}",
+					                 hdr,
+					                 static_cast<int>(hdr->prevState));
+					__builtin_unreachable();
+			}
+		}
+
+		__always_inline MChunkHeader *operator->()
+		{
+			return *this;
+		}
+
+		__always_inline PredecessorProxy &operator=(MChunkHeader *p)
+		{
+			if (p->isCurrInUse)
+			{
+				// Predecessor chunk is allocated; no predecessor link kept
+				hdr->prevState = PrevState::Allocated;
+			}
+			else
+			{
+				auto diff = ds::pointer::diff(p, hdr);
+				if (diff == TinySize)
+				{
+					hdr->prevState = PrevState::FreeTiny;
+				}
+				else
+				{
+					Debug::Assert(diff >= TinySize, "Impossibly small chunk?");
+
+					auto prevFoot      = new (ds::pointer::offset<PrevFooter>(
+					  hdr, -sizeof(PrevFooter))) PrevFooter();
+					prevFoot->prevSize = size2head(diff);
+					hdr->prevState     = PrevState::Free;
+				}
+			}
+			return *this;
+		}
+	};
+	static_assert(ds::pointer::proxy::Proxies<PredecessorProxy, MChunkHeader>);
+
+	/// Return a pointer to the prior header (presuming we can)
 	__always_inline auto cell_prev()
 	{
-		return displacement_proxy::
-		  Proxy<MChunkHeader, SmallSize, false, head2size, size2head>(this,
-		                                                              prevSize);
+		return PredecessorProxy(this);
 	}
 
 	__always_inline auto cell_next()
@@ -377,13 +497,7 @@ __cheri_no_subobject_bounds MChunkHeader
 
 	bool is_prev_in_use()
 	{
-		return isPrevInUse;
-	}
-
-	// size of the previous chunk
-	size_t prevsize_get()
-	{
-		return head2size(prevSize);
+		return this->prevState == PrevState::Allocated;
 	}
 
 	// size of this chunk
@@ -394,15 +508,22 @@ __cheri_no_subobject_bounds MChunkHeader
 
 	void mark_in_use()
 	{
-		isCurrInUse              = true;
-		cell_next()->isPrevInUse = true;
+		isCurrInUse = true;
+
+		/*
+		 * Break the link from our successor back to us, implicitly reclaiming
+		 * the footer
+		 */
+		cell_next()->prevState = PrevState::Allocated;
 	}
 
 	void mark_free()
 	{
-		isCurrInUse              = false;
-		isSealedObject           = false;
-		cell_next()->isPrevInUse = false;
+		isCurrInUse    = false;
+		isSealedObject = false;
+
+		// Now that we're marked as free, have our successor point back at us
+		cell_next()->cell_prev() = this;
 	}
 
 	/**
@@ -443,12 +564,11 @@ __cheri_no_subobject_bounds MChunkHeader
 
 		auto newnext = new (newloc) MChunkHeader();
 		newnext->clear();
+		newnext->isCurrInUse = isCurrInUse;
 		// Invariant that headers must point to shadow bits that are set.
 		revoker.shadow_paint_single(CHERI::Capability{newloc}.address(), true);
 
 		ds::linked_list::emplace_after(this, newnext);
-		newnext->isCurrInUse = newnext->isPrevInUse = isCurrInUse;
-
 		return newnext;
 	}
 
@@ -469,19 +589,19 @@ __cheri_no_subobject_bounds MChunkHeader
 
 		auto first = new (base) MChunkHeader();
 		first->clear();
-		first->currSize    = size2head(size);
-		first->isPrevInUse = true;
+		first->prevState   = PrevState::Allocated;
 		first->isCurrInUse = false;
 		revoker.shadow_paint_single(CHERI::Capability{first}.address(), true);
 
 		auto footer =
 		  new (ds::pointer::offset<void>(base, size)) MChunkHeader();
 		footer->clear();
-		footer->prevSize    = size;
 		footer->currSize    = size2head(sizeof(MChunkHeader));
-		footer->isPrevInUse = false;
 		footer->isCurrInUse = true;
 		revoker.shadow_paint_single(CHERI::Capability{footer}.address(), true);
+
+		first->cell_next()  = footer; // Sets first->currSize
+		footer->cell_prev() = first;  // Setes footer->prevState
 
 		return first;
 	}
@@ -681,6 +801,9 @@ class MChunkAssertions
 // the minimum size of a chunk (including the header)
 constexpr size_t MinChunkSize =
   (sizeof(MChunkHeader) + sizeof(MChunk) + MallocAlignMask) & ~MallocAlignMask;
+
+static_assert(MChunkHeader::TinySize == MinChunkSize);
+
 // the minimum size of a chunk (excluding the header)
 constexpr size_t MinRequest = MinChunkSize - sizeof(MChunkHeader);
 
@@ -856,6 +979,10 @@ class TChunkAssertions
 {
 	static_assert(std::is_standard_layout_v<TChunk>);
 	static_assert(offsetof(TChunk, mchunk) == 0);
+
+	static_assert(sizeof(TChunk) + sizeof(MChunkHeader::PrevFooter) <=
+	                small_index2size(NSmallBins - 1),
+	              "Tree-indexed chunks might not have room for footers");
 };
 
 class MState
@@ -1334,7 +1461,7 @@ class MState
 				Capability heap{heapStart};
 				heap.address() = ptr.address();
 				auto chunk     = MChunkHeader::from_body(heap);
-				if (chunk->claims > 0)
+				if (chunk->claims != MChunkHeader::NoClaims)
 				{
 					/*
 					 * The chunk was freed but ended up in
@@ -1636,11 +1763,11 @@ class MState
 			              "Chunk {} is insufficiently aligned",
 			              pHeader);
 			Debug::Assert(
-			  nextHeader->prevsize_get() == sz,
-			  "Chunk {} has size {}, next node expects its size to be {}",
+			  pHeader == nextHeader->cell_prev(),
+			  "Chunk {} successor {} does not point back to us, but to {}",
 			  pHeader,
-			  sz,
-			  nextHeader->prevsize_get());
+			  nextHeader,
+			  static_cast<MChunkHeader *>(nextHeader->cell_prev()));
 			Debug::Assert(pHeader->is_prev_in_use(),
 			              "Free chunk {} should follow an in-use chunk",
 			              pHeader);
@@ -2865,13 +2992,18 @@ class MState
 		while (toAddr(header) != heapStart.top())
 		{
 			RenderDebug::log(
-			  "  header {}: size={} inuse={} pinuse={} owner={} claims={}",
+			  "  header {}: size={} inuse={} pstate={} owner={} claims={}",
 			  toAddr(header),
 			  header->size_get(),
 			  header->isCurrInUse,
-			  header->isPrevInUse,
+			  static_cast<int>(header->prevState),
 			  header->ownerID,
 			  header->claims);
+
+			if (header->prevState != MChunkHeader::PrevState::Allocated)
+			{
+				RenderDebug::log("   pred={}", toAddr(header->cell_prev()));
+			}
 
 			if (!header->is_in_use())
 			{
