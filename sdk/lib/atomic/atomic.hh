@@ -62,6 +62,21 @@
 	}
 
 /**
+ * Macro that defines a library function to implement an atomic
+ * fetch-and-nand for the specified size, using the specified type.
+ */
+#define DEFINE_ATOMIC_FETCH_NAND(size, type)                                   \
+	DECLARE_ATOMIC_LIBCALL(                                                    \
+	  __atomic_fetch_nand_##size, type, type *, type, int);                    \
+	type __atomic_fetch_nand_##size(type *ptr, type value, int)                \
+	{                                                                          \
+		static_assert(sizeof(type) == size, "Invalid type for size");          \
+		type tmp = *ptr;                                                       \
+		*ptr     = ~(tmp & value);                                             \
+		return tmp;                                                            \
+	}
+
+/**
  * Helper macro that defines all of the cases of atomic operations.
  */
 #define DEFINE_ATOMIC_FETCH_OPS(size, type)                                    \
@@ -69,7 +84,8 @@
 	DEFINE_ATOMIC_FETCH_OP(size, type, sub, -)                                 \
 	DEFINE_ATOMIC_FETCH_OP(size, type, and, &)                                 \
 	DEFINE_ATOMIC_FETCH_OP(size, type, or, |)                                  \
-	DEFINE_ATOMIC_FETCH_OP(size, type, xor, ^)
+	DEFINE_ATOMIC_FETCH_OP(size, type, xor, ^)                                 \
+	DEFINE_ATOMIC_FETCH_NAND(size, type)
 
 /**
  * Macro that defines a library function to implement an atomic exchange for the
