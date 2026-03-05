@@ -185,7 +185,11 @@ toolchain("cheriot-clang", function ()
 	set_kind("standalone")
 	set_toolset("cc", "clang")
 	set_toolset("cxx", "clang++")
-	set_toolset("ld", "ld.lld")
+	-- "ld.lld" is not a dynamic linker xmake recognizes, but it recognizes "ld"
+	-- and has a mechanism (an ad-hoc stringy mechanism, alas) for
+	-- distinguishing the actual tool program from the name which xmake should
+	-- act as if it had: "${a}@${b}" means "use ${b} but perceive it as ${a}".
+	set_toolset("ld", "ld@ld.lld")
 	set_toolset("objdump", "llvm-objdump")
 	set_toolset("strip", "llvm-strip")
 	set_toolset("as", "clang")
@@ -313,9 +317,20 @@ rule("cheriot.toolchain", function ()
 	end)
 end)
 
+-- The counterpart of cheriot.reachability_root, below
+rule("cheriot.reachability_check")
+	before_build(function (target)
+		if not target:get("cheriot.reachable") then
+			raise("target " .. target:name() .. " is being built but does not " ..
+			"appear to be connected to a firmware image.  Please either use " ..
+			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
+			"prevent it from being built when not linked")
+		end
+	end)
+
 -- Common rules for any CHERIoT component (library or compartment)
 rule("cheriot.component")
-	add_deps("cheriot.toolchain")
+	add_deps("cheriot.toolchain", "cheriot.reachability_check")
 
 	add_deps("cheriot.rust", "cheriot.rust.crate")
 
@@ -325,14 +340,6 @@ rule("cheriot.component")
 		target:set("kind", "static")
 		-- We don't want a lib prefix or equivalent.
 		target:set("prefixname", "")
-	end)
-	before_build(function (target)
-		if not target:get("cheriot.reachable") then
-			raise("target " .. target:name() .. " is being built but does not " ..
-			"appear to be connected to a firmware image.  Please either use " ..
-			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
-			"prevent it from being built when not linked")
-		end
 	end)
 
 	-- Custom link step, link this as a compartment, with the linker script
@@ -344,7 +351,18 @@ rule("cheriot.component")
 		-- Link using the compartment's linker script.
 		batchcmds:show_progress(opt.progress, "linking " .. target:get("cheriot.type") .. ' ' .. target:filename())
 		batchcmds:mkdir(target:targetdir())
-		batchcmds:vrunv(target:tool("ld"), table.join({"--script=" .. linkerscript, "--compartment", "--gc-sections", "--relax", "-o", target:targetfile()}, target:objectfiles()), opt)
+		batchcmds:vrunv(target:tool("ld"),
+			table.join({
+					"--script=" .. linkerscript,
+					"--compartment",
+					"--gc-sections",
+					"--relax",
+					"-o", target:targetfile()
+				},
+				target:get("ldflags") or {},
+				opt.verbose and { "--print-gc-sections" } or {},
+				target:objectfiles()),
+			opt)
 		-- This depends on all of the object files and the linker script.
 		batchcmds:add_depfiles(linkerscript)
 		batchcmds:add_depfiles(target:objectfiles())
@@ -1418,13 +1436,21 @@ rule("cheriot.define-rtos-git-description")
 -- Common aspects of the CHERIoT loader target
 rule("cheriot.loader.base")
 	add_deps("cheriot.toolchain",
+	         "cheriot.reachability_check",
 	         "cheriot.component-debug",
 	         "cheriot.baremetal-abi",
 	         "cheriot.subobject-bounds")
 
 	on_load(function (target)
-		target:set("kind", "object")
 		target:set("default", false)
+
+		target:set("cheriot.type", "privileged library")
+		target:set('cheriot.debug-name', "loader")
+
+		-- "binary"-kinded xmake targets get both compilation and linking phases
+		-- (and use the dynamic linker).
+		target:set("kind", "binary")
+		target:set("extension", ".loader.o")
 
 		target:add("deps", "cheriot.board")
 
@@ -1432,10 +1458,16 @@ rule("cheriot.loader.base")
 		           "CHERIOT_AVOID_CAPRELOCS",
 		           "CHERIOT_NO_AMBIENT_MALLOC")
 
-		target:set('cheriot.debug-name', "loader")
-
 		target:set("optimize", "fast")
 		target:set("languages", "c23", "cxx23")
+
+		-- When linking, generate a relocatable object and use the indicated
+		-- custom linker script (via xmake's built-in rule for such things,
+		-- fished out through its file-extension based lookup mechanism).
+		target:add("ldflags", "--relocatable", { force = true })
+		target:add("files",
+		           path.join(coredir, "loader/loader.ldscript"),
+		           { sourcekind = ".lds" })
 	end)
 
 	after_load(function (target)
@@ -1453,6 +1485,12 @@ target("cheriot.loader")
 	-- FIXME: We should be setting this based on a board config file.
 	add_files(path.join(coredir, "loader/boot.S"),
 	          path.join(coredir, "loader/boot.cc"))
+
+	-- For the baseline loader, remove any extraneous sections.  Other,
+	-- device- and/or situation-specific loaders may want to carry other
+	-- sections up to the final firmware image, so this isn't present up in the
+	-- "cheriot.loader.base" rule.
+	add_ldflags("--gc-sections")
 
 -- Helper function to define firmware.  Used as `target`.
 function firmware(name)
