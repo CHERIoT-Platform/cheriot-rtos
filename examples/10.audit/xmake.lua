@@ -10,7 +10,7 @@ option("board")
     set_default("sail")
 
 rule("caesar.checks")
-    before_build(function (target)
+    after_load(function (target)
         -- Examples of creating audits:
         -- "query" is the rego query
         -- "module" is the path to an optional rego module

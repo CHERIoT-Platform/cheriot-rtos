@@ -901,12 +901,10 @@ rule("cheriot.firmware.linkcmd")
 		batchcmds:add_depfiles(objects)
 	end)
 
--- Rule for linking targets that are top-level firmware image like
-rule("cheriot.auditcmd")
-	after_load(function (target)
-		target:add("deps", "cheriot.board.file")
-	end)
-    after_link(function (target)
+-- A task to execute the auditing
+task("audit")
+	set_category("main")
+    on_run(function ()
         -- This function goes through each dependancy looking for an audit instruction and runs any audits found.
         -- Assumptions:
         -- 1. Running post link means that the compartment report should be at target:targetfile() .. ".json"
@@ -932,7 +930,7 @@ rule("cheriot.auditcmd")
 			end
 		end
 
-        local function execute_audit(cheriot_audit_program, board_file, report_file, query, regofile)
+        local function execute_audit(target, cheriot_audit_program, board_file, report_file, query, regofile)
             -- Performs an audit. Uses find_cheriot_audit() to find cheriot-audit.
             local t = {
 				cheriot_audit_program, 
@@ -973,32 +971,100 @@ rule("cheriot.auditcmd")
             end
         end
 
-		local board_file = target:dep("cheriot.board.file"):targetfile()
-		local compartment_report = target:get("cheriot.link_report")
-		local cheriot_audit_program = find_cheriot_audit();
-
-        -- Works through the dependancy tree and calls this only once for each dependancy
-		visit_all_dependencies_of(target, function (target)
-			local audit = target:get("cheriot.audit")
-			if audit then
-				-- Look for "query" and "module" keys in the audit table. Either can be a string or a table of strings.
-				if audit.query then
-					if type(audit.query) == "string" then
-						execute_audit(cheriot_audit_program, board_file, compartment_report, audit.query, audit.module)
-					else
-						for i,value in ipairs(audit.query) do
-							if type(value) ~= "string" then
-								raise("Audit failed! target: "..target:name()..", query is invalid!")
-							end
-							execute_audit(cheriot_audit_program, board_file, compartment_report, value, audit.module)
+		local function each_firmware(target, cheriot_audit_program)
+			local compartment_report = target:get("cheriot.link_report")
+			local cheriot_audit = target:get("cheriot.audit")
+			local board_file_1 = target:dep("cheriot.board.file")
+			if board_file_1 and compartment_report then
+				local board_file = board_file_1:targetfile()
+				-- printf("%s: (type: %s, kind: %s)\r\n", _, target:type(), target:kind())
+				-- printf("  compartment_report: %s\r\n", compartment_report)
+				-- printf("  board_file: %s\r\n", board_file)
+				-- printf("  cheriot_audit_program: %s\r\n", cheriot_audit_program)
+				-- Works through the dependancy tree and calls this only once for each dependancy
+				visit_all_dependencies_of(target, function (target)
+					local audit = target:get("cheriot.audit")
+					if audit then
+						-- Look for "query" and "module" keys in the audit table. Either can be a string or a table of strings.
+						if audit.query then
+							if type(audit.query) == "string" then
+								execute_audit(target, cheriot_audit_program, board_file, compartment_report, audit.query, audit.module)
+							else
+								for i,value in ipairs(audit.query) do
+									if type(value) ~= "string" then
+										raise("Audit failed! target: "..target:name()..", query is invalid!")
+									end
+									execute_audit(target, cheriot_audit_program, board_file, compartment_report, value, audit.module)
+								end
+							end				
+						else
+							raise("Audit failed! target: "..target:name()..", query is invalid!")
 						end
-					end				
-				else
-					raise("Audit failed! target: "..target:name()..", query is invalid!")
-				end
+					end
+				end)
+			end			
+		end
+
+		-- Split a string with give separator
+		local function custom_split(inputstr, seperator)
+			if inputstr == nil then
+				return {}
 			end
-		end)
+			if seperator == nil then	-- If seperator is nil use a space
+				seperator = '%s'
+			end
+			local t={}
+			for str in string.gmatch(inputstr, '([^'..seperator..']+)') do
+				table.insert(t, str)
+			end
+
+			return t
+		end
+
+		import("core.base.option")
+        -- Get the options
+        local query = option.get("query") or {}
+        local modules = custom_split(option.get("modules"), '|')
+        
+		print("modules:",modules)
+		print("query:", query)
+		-- printf("Query:\r\n")
+		-- for _,q in ipairs(contents) do
+		-- 	printf("  %i. %s\r\n", _, q)
+		-- end
+
+		-- Load the config or project.targets() will fail later.
+		import("core.project.config")
+		config.load()
+
+		local cheriot_audit_program = find_cheriot_audit();	-- Find the location of cheriot-audit utility
+
+		import("core.project.project")
+		local targets = project.targets()
+
+		local cheriot_audit_program = find_cheriot_audit();
+		for _, target in pairs(targets) do
+			each_firmware(target, cheriot_audit_program)
+		end
     end)
+    
+    set_menu {
+        usage = "xmake audit [options]",
+		shortname = 'a',
+        description = "Run cheriot-audit on the files. Will use any audit query declared in xmake.lua files or you can pass in from command line.",
+        options = {
+            {'m', "modules", "kv", nil, "Module file(s), separate with pipe (|) symbol. These will override any modules already set in the xmake.lua files.",
+										"e.g. ",
+										"    - xmake --modules=rego_files/caesar.rego [query]",
+										"    - xmake --modules='rego_files/caesar.rego' [query 1] [query 2]",
+										"    - xmake --modules='rego_files/caesar.rego|decrypt.rego' [query 1] [query 2]"},
+            {nil, "query", "vs", nil, 	"Query or queries to run in cheriot-audit. These will override any queries already set in the xmake.lua files.",
+										"e.g. ",
+										"    - xmake",
+										"    - xmake [query]",
+										"    - xmake [query1] [query2]"}
+        }
+    }
 
 -- Specialize the above specifically for a RTOS firmware target
 rule ("cheriot.firmware.link")
