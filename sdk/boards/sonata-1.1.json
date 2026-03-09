@@ -6,27 +6,27 @@
         },
         "gpio_board" : {
             "start" : 0x80000000,
-            "end"   : 0x80000010
+            "end"   : 0x8000001C
         },
         "gpio_rpi" : {
             "start" : 0x80000040,
-            "end"   : 0x80000050
+            "end"   : 0x8000005C
         },
         "gpio_arduino" : {
             "start" : 0x80000080,
-            "end"   : 0x80000090
+            "end"   : 0x8000009C
         },
         "gpio_pmod0" : {
             "start" : 0x800000C0,
-            "end"   : 0x800000D0
+            "end"   : 0x800000DC
         },
         "gpio_pmod1": {
             "start" : 0x80000100,
-            "end"   : 0x80000110
+            "end"   : 0x8000011C
         },
         "gpio_pmodc": {
             "start" : 0x80000140,
-            "end"   : 0x80000150
+            "end"   : 0x8000015C
         },
         "pwm": {
             "start" : 0x80001000,
