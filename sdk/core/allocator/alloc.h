@@ -45,10 +45,16 @@ constexpr size_t TreeBinShift = MallocAlignShift + NSmallBinsShift;
 // the max size (including header) that still falls in small bins
 constexpr size_t MaxSmallSize = 1U << TreeBinShift;
 
-// the compressed size. The actual size is SmallSize * MallocAlignment.
-using SmallSize               = uint16_t;
-constexpr size_t MaxChunkSize = (1U << utils::bytes2bits(sizeof(SmallSize)))
-                                << MallocAlignShift;
+/**
+ * The type of compressed sizes used in MChunkHeader-s (q.v.).
+ * See size2head and head2size for codecs.
+ */
+using CompressedSizeType            = uint16_t;
+constexpr size_t CompressedSizeBits = 16;
+static_assert(utils::bytes2bits(sizeof(CompressedSizeType)) >=
+              CompressedSizeBits);
+constexpr size_t MaxChunkSize = (1U << CompressedSizeBits) << MallocAlignShift;
+
 // the index to one of the bins
 using BIndex = uint32_t;
 // the bit map of all the bins. 1 for in-use and 0 for empty.
@@ -60,12 +66,12 @@ static_assert(NTreeBins < utils::bytes2bits(sizeof(Binmap)));
 constexpr uint16_t QuotaIdentifierAllocatorOwned = 0;
 
 // Convert small size header into the actual size in bytes.
-static inline constexpr size_t head2size(SmallSize h)
+static inline constexpr size_t head2size(CompressedSizeType h)
 {
 	return static_cast<size_t>(h) << MallocAlignShift;
 }
 // Convert byte size into small size header.
-static inline constexpr SmallSize size2head(size_t s)
+static inline constexpr CompressedSizeType size2head(size_t s)
 {
 	return s >> MallocAlignShift;
 }
@@ -212,12 +218,13 @@ __cheri_no_subobject_bounds MChunkHeader
 	 * stolen for other fields.
 	 */
 	static constexpr size_t OwnerIDWidth = 13;
+
 	/**
 	 * Compressed size of this chunk.  See cell_next().
 	 */
-	SmallSize currSize;
+	CompressedSizeType currSize : CompressedSizeBits;
 
-	uint32_t unused : 12;
+	uint32_t unused1 : (32 - 4 - CompressedSizeBits);
 
 	/**
 	 * Is this a sealed object?  If so, it should be exempted from free in
@@ -237,6 +244,8 @@ __cheri_no_subobject_bounds MChunkHeader
 		/// The prior chunk is free and has a footer containing its size.
 		Free = 0b11,
 	} prevState : 2;
+
+	uint16_t unused2 : (16 - OwnerIDWidth);
 
 	/**
 	 * The unique identifier of the allocator.  The ID 0 is reserved for
@@ -265,7 +274,11 @@ __cheri_no_subobject_bounds MChunkHeader
 
 	struct PrevFooter
 	{
-		SmallSize prevSize;
+		/*
+		 * No point, as yet, of making this a bitfield, but logically it's
+		 * `CompressedSizeBits` wide.
+		 */
+		CompressedSizeType prevSize;
 	};
 
 	/**
@@ -584,10 +597,7 @@ __cheri_no_subobject_bounds MChunkHeader
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
-static_assert(
-  offsetof(MChunkHeader, claims) == 2 * sizeof(SmallSize) + sizeof(uint16_t),
-  "Metadata is no longer 16 bits.  Update the OwnerIDWidth constant to correct "
-  "the space used for the owner ID to match the remaining space.");
+static_assert(offsetof(MChunkHeader, claims) == 6);
 
 // the maximum requested size that is still categorised as a small bin
 constexpr size_t MaxSmallRequest = MaxSmallSize - sizeof(MChunkHeader);
