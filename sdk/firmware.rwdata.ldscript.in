@@ -74,7 +74,7 @@ ASSERT(__export_mem_heap >= ., "Heap would overlap static data")
 # This is sdk/core/allocator/alloc.h's MaxChunkSize, since right now the heap
 # requires that we be able to represent the whole thing in a single chunk.
 # If the heap allocator isn't included in the build, that's also fine.
-__export_mem_heap_maximum_size = 512*1024;
+__export_mem_heap_maximum_size = 2*1024*1024;
 ASSERT((SIZEOF(allocator_code) == 0)
   || (__export_mem_heap_end - __export_mem_heap
     <= __export_mem_heap_maximum_size),

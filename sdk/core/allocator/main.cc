@@ -134,7 +134,8 @@ namespace
 			 * linker script sounds like a headache.  Settle for it being a
 			 * runtime assertion in debug builds.
 			 */
-			Debug::Assert(LA_ABS(__export_mem_heap_maximum_size) == MaxChunkSize,
+			Debug::Assert(LA_ABS(__export_mem_heap_maximum_size) ==
+			                MaxChunkSize,
 			              "Linker script mis-computed the maximum heap size");
 
 			Capability heap = const_cast<void *>(
