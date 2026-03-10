@@ -49,8 +49,6 @@ constexpr size_t MaxSmallSize = 1U << TreeBinShift;
 using SmallSize               = uint16_t;
 constexpr size_t MaxChunkSize = (1U << utils::bytes2bits(sizeof(SmallSize)))
                                 << MallocAlignShift;
-// the compressed pointer. Used to point to prev and next in free lists.
-using SmallPtr = size_t;
 // the index to one of the bins
 using BIndex = uint32_t;
 // the bit map of all the bins. 1 for in-use and 0 for empty.
@@ -723,14 +721,13 @@ class __packed __aligned(MallocAlignment) MChunk
 		                                  offsetof(MChunk, ring));
 	}
 
-	// the internal small pointer representation of this chunk
-	SmallPtr ptr()
+	ptraddr_t addr()
 	{
 		return CHERI::Capability{this}.address();
 	}
 
 	/**
-	 * The friend needs to access bk, fd and ptr() to rederive chunks.
+	 * The friend needs to access bk, fd and addr() to rederive chunks.
 	 * XXX: How do we grant access to only these?
 	 */
 	friend class MState;
@@ -1055,7 +1052,7 @@ class MState
 	/// Rederive a capability to a `T` from the heap range.  This does not
 	/// apply bounds to the result.
 	template<typename T>
-	T *rederive(SmallPtr ptr)
+	T *rederive(ptraddr_t ptr)
 	{
 		CHERI::Capability<T> cap{heapStart.cast<T>()};
 		cap.address() = ptr;
@@ -2057,7 +2054,7 @@ class MState
 		              small_index2size(i));
 
 		if (RTCHECK(&p->ring == bin->last() ||
-		            (ok_address(f->ptr()) && f->bk_equals(p))))
+		            (ok_address(f->addr()) && f->bk_equals(p))))
 		{
 			if (br == fr)
 			{
@@ -2066,7 +2063,7 @@ class MState
 				bin->reset();
 			}
 			else if (RTCHECK(&p->ring == smallbin_at(i)->first() ||
-			                 (ok_address(b->ptr()) && b->fd_equals(p))))
+			                 (ok_address(b->addr()) && b->fd_equals(p))))
 			{
 				ds::linked_list::unsafe_remove(&p->ring);
 			}
@@ -2096,7 +2093,7 @@ class MState
 		MChunk *p = MChunk::from_ring(b->unsafe_take_first());
 
 		Debug::Assert(
-		  ok_address(p->ptr()), "Removed chunk {} has bad address", p);
+		  ok_address(p->addr()), "Removed chunk {} has bad address", p);
 
 		if (b->is_empty())
 		{
@@ -2161,8 +2158,8 @@ class MState
 				{
 					TChunk *back =
 					  TChunk::from_ring(t->mchunk.ring.cell_prev());
-					if (RTCHECK(ok_address(t->mchunk.ptr()) &&
-					            ok_address(back->mchunk.ptr())))
+					if (RTCHECK(ok_address(t->mchunk.addr()) &&
+					            ok_address(back->mchunk.addr())))
 					{
 						t->ring_emplace(i, xHeader);
 						break;
@@ -2200,7 +2197,7 @@ class MState
 		{
 			TChunk *f = TChunk::from_ring(x->mchunk.ring.cell_next());
 			r         = TChunk::from_ring(x->mchunk.ring.cell_prev());
-			if (RTCHECK(ok_address(f->mchunk.ptr()) &&
+			if (RTCHECK(ok_address(f->mchunk.addr()) &&
 			            f->mchunk.bk_equals(&x->mchunk) &&
 			            r->mchunk.fd_equals(&x->mchunk)))
 			{
@@ -2244,7 +2241,7 @@ class MState
 					treemap_clear(x->index);
 				}
 			}
-			else if (RTCHECK(ok_address(xp->mchunk.ptr())))
+			else if (RTCHECK(ok_address(xp->mchunk.addr())))
 			{
 				if (xp->child[0] == x)
 				{
@@ -2261,13 +2258,13 @@ class MState
 			}
 			if (r != nullptr)
 			{
-				if (RTCHECK(ok_address(r->mchunk.ptr())))
+				if (RTCHECK(ok_address(r->mchunk.addr())))
 				{
 					TChunk *c0, *c1;
 					r->parent = xp;
 					if ((c0 = x->child[0]) != nullptr)
 					{
-						if (RTCHECK(ok_address(c0->mchunk.ptr())))
+						if (RTCHECK(ok_address(c0->mchunk.addr())))
 						{
 							r->child[0] = c0;
 							c0->parent  = r;
@@ -2279,7 +2276,7 @@ class MState
 					}
 					if ((c1 = x->child[1]) != nullptr)
 					{
-						if (RTCHECK(ok_address(c1->mchunk.ptr())))
+						if (RTCHECK(ok_address(c1->mchunk.addr())))
 						{
 							r->child[1] = c1;
 							c1->parent  = r;
@@ -2367,7 +2364,7 @@ class MState
 		 */
 		v = TChunk::from_ring(v->mchunk.ring.cell_next());
 
-		if (RTCHECK(ok_address(v->mchunk.ptr())))
+		if (RTCHECK(ok_address(v->mchunk.addr())))
 		{
 			auto vHeader = MChunkHeader::from_body(v);
 
