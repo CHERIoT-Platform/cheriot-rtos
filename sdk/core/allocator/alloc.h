@@ -205,26 +205,22 @@ static inline constexpr size_t small_index2size(BIndex i)
 struct __packed __aligned(MallocAlignment)
 __cheri_no_subobject_bounds MChunkHeader
 {
-	/*
+	/**
 	 * The size of a free chunk that cannot hold a footer.
 	 *
 	 * sizeof(MChunkHeader) + sizeof(MChunk); asserted below.
 	 */
 	static constexpr size_t TinySize = 16;
 
-	/**
-	 * Each chunk has a 16-bit metadata field that is used to store a small
-	 * bitfield and the owner ID in the remaining bits.  This is the space not
-	 * consumed by the metadata.  It must be reduced if additional bits are
-	 * stolen for other fields.
-	 */
+	/// The number of bits dedicated to storing owning quota identifiers.
 	static constexpr size_t OwnerIDWidth = 13;
 
 	/**
-	 * Compressed size of this chunk.  See cell_next().
+	 * The first 32-bit word of a MChunkHeader holds the current chunk size and
+	 * a few status bits.  This field occupies the space not presently consumed
+	 * therein.  We are cheating a bit and taking advantage of some knowledge of
+	 * how clang will lower our bitfield definition to architecture.
 	 */
-	CompressedSizeType currSize : CompressedSizeBits;
-
 	uint32_t unused1 : (32 - 4 - CompressedSizeBits);
 
 	/**
@@ -251,6 +247,16 @@ __cheri_no_subobject_bounds MChunkHeader
 		Free = 0b11,
 	} prevState : 2;
 
+	/**
+	 * Compressed size of this chunk.  See cell_next().
+	 */
+	CompressedSizeType currSize : CompressedSizeBits;
+
+	/**
+	 * The second 32-bit word of a MChunkHeader holds the current owner (if any)
+	 * and, if the chunk is in use, the head of a linked list of claims on it.
+	 * This field is the unused space in that word.
+	 */
 	uint16_t unused2 : (16 - OwnerIDWidth);
 
 	/**
