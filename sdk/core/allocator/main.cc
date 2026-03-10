@@ -129,6 +129,14 @@ namespace
 	{
 		if (gm == nullptr)
 		{
+			/*
+			 * We'd love this to be static, but getting a constant to C++ and a
+			 * linker script sounds like a headache.  Settle for it being a
+			 * runtime assertion in debug builds.
+			 */
+			Debug::Assert(LA_ABS(__export_mem_heap_maximum_size) == MaxChunkSize,
+			              "Linker script mis-computed the maximum heap size");
+
 			Capability heap = const_cast<void *>(
 			  MMIO_CAPABILITY_WITH_PERMISSIONS(void,
 			                                   heap,
