@@ -219,11 +219,6 @@ __cheri_no_subobject_bounds MChunkHeader
 	 */
 	static constexpr size_t OwnerIDWidth = 13;
 
-	/**
-	 * Compressed size of this chunk.  See cell_next().
-	 */
-	CompressedSizeType currSize : CompressedSizeBits;
-
 	uint32_t unused1 : (32 - 4 - CompressedSizeBits);
 
 	/**
@@ -244,6 +239,11 @@ __cheri_no_subobject_bounds MChunkHeader
 		/// The prior chunk is free and has a footer containing its size.
 		Free = 0b11,
 	} prevState : 2;
+
+	/**
+	 * Compressed size of this chunk.  See cell_next().
+	 */
+	CompressedSizeType currSize : CompressedSizeBits;
 
 	uint16_t unused2 : (16 - OwnerIDWidth);
 
