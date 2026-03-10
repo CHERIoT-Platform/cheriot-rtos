@@ -46,9 +46,9 @@ constexpr size_t TreeBinShift = MallocAlignShift + NSmallBinsShift;
 constexpr size_t MaxSmallSize = 1U << TreeBinShift;
 
 // the compressed size. The actual size is SmallSize * MallocAlignment.
-using SmallSize               = uint16_t;
-constexpr size_t MaxChunkSize = (1U << utils::bytes2bits(sizeof(SmallSize)))
-                                << MallocAlignShift;
+using SmallSize = uint16_t;
+constexpr size_t MaxChunkSize =
+  ((1U << utils::bytes2bits(sizeof(SmallSize))) - 1) << MallocAlignShift;
 // the compressed pointer. Used to point to prev and next in free lists.
 using SmallPtr = size_t;
 // the index to one of the bins
