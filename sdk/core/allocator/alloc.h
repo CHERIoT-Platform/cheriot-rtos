@@ -156,100 +156,6 @@ static inline constexpr size_t small_index2size(BIndex i)
 	return (static_cast<size_t>(i) + 1) << SmallBinShift;
 }
 
-namespace displacement_proxy
-{
-
-	template<auto F, typename D>
-	concept Decoder = requires(D d) {
-		{ F(d) } -> std::same_as<size_t>;
-	};
-
-	template<auto F, typename D>
-	concept Encoder = requires(size_t s) {
-		{ F(s) } -> std::same_as<D>;
-	};
-
-	/**
-	 * Equipped with a context for bounds and a base address, a reference to a
-	 * (coded) displacement relative to that base can be a proxy for a pointer.
-	 */
-	template<typename T, typename D, bool Positive, auto Decode, auto Encode>
-	    requires Decoder<Decode, D> && Encoder<Encode, D>
-	class Proxy
-	{
-		CHERI::Capability<void> ctx;
-		D                      &d;
-
-		__always_inline void set(T *p)
-		{
-			size_t diff =
-			  Positive ? ds::pointer::diff(ctx, p) : ds::pointer::diff(p, ctx);
-			d = Encode(diff);
-		}
-
-		public:
-		using Type = T;
-
-		__always_inline Proxy(void *c, D &r) : ctx(c), d(r) {}
-
-		__always_inline operator T *() const
-		{
-			size_t disp = Decode(d);
-
-			auto p = CHERI::Capability{ctx};
-			auto a = p.address();
-
-			if constexpr (Positive)
-			{
-				a += disp;
-			}
-			else
-			{
-				a -= disp;
-			}
-
-			return reinterpret_cast<T *>(a.ptr());
-		}
-
-		__always_inline T *operator->()
-		{
-			return *this;
-		}
-
-		__always_inline operator ptraddr_t()
-		{
-			return CHERI::Capability{static_cast<T *>(*this)}.address();
-		}
-
-		__always_inline Proxy &operator=(T *p)
-		{
-			set(p);
-			return *this;
-		}
-
-		__always_inline Proxy &operator=(Proxy const &p)
-		{
-			set(p);
-			return *this;
-		}
-
-		__always_inline bool operator==(Proxy const &p) const
-		{
-			return static_cast<T *>(*this) == static_cast<T *>(p);
-		}
-
-		__always_inline auto operator<=>(Proxy const &p) const
-		{
-			return static_cast<T *>(*this) <=> static_cast<T *>(p);
-		}
-	};
-
-	static_assert(ds::pointer::proxy::Proxies<
-	              Proxy<void, SmallSize, false, head2size, size2head>,
-	              void>);
-
-} // namespace displacement_proxy
-
 /**
  * Every chunk, in use or not, includes a minimal header.  That is, this is a
  * classic malloc, not something like a slab or sizeclass allocator or a
@@ -446,11 +352,76 @@ __cheri_no_subobject_bounds MChunkHeader
 		return PredecessorProxy(*this);
 	}
 
+	/**
+	 * A pointer proxy to encode the address of this chunk's predecessor.
+	 *
+	 * MChunkHeader predecessor pointers are... odd.  They exist only when the
+	 * prior chunk is free, and they're encoded partially in this chunk's header
+	 * and partially in some spare bits at the end of the prior object, outside
+	 * the MChunk or TChunk in that space.
+	 */
+	class SuccessorProxy
+	{
+		MChunkHeader &hdr;
+
+		__always_inline void set(MChunkHeader *p)
+		{
+			size_t diff  = ds::pointer::diff(&hdr, p);
+			hdr.currSize = size2head(diff);
+		}
+
+		public:
+		using Type = MChunkHeader;
+
+		__always_inline SuccessorProxy(MChunkHeader &h) : hdr(h) {}
+
+		__always_inline operator MChunkHeader *() const
+		{
+			return ds::pointer::offset<MChunkHeader>(&hdr,
+			                                         head2size(hdr.currSize));
+		}
+
+		__always_inline MChunkHeader *operator->()
+		{
+			return *this;
+		}
+
+		__always_inline operator ptraddr_t()
+		{
+			return CHERI::Capability{static_cast<MChunkHeader *>(*this)}
+			  .address();
+		}
+
+		__always_inline SuccessorProxy &operator=(MChunkHeader *p)
+		{
+			set(p);
+			return *this;
+		}
+
+		__always_inline SuccessorProxy &operator=(SuccessorProxy const &p)
+		{
+			set(p);
+			return *this;
+		}
+
+		__always_inline bool operator==(SuccessorProxy const &p) const
+		{
+			return static_cast<MChunkHeader *>(*this) ==
+			       static_cast<MChunkHeader *>(p);
+		}
+
+		__always_inline std::strong_ordering
+		                operator<=>(SuccessorProxy const &p) const
+		{
+			return static_cast<MChunkHeader *>(*this) <=>
+			       static_cast<MChunkHeader *>(p);
+		}
+	};
+	static_assert(ds::pointer::proxy::Proxies<SuccessorProxy, MChunkHeader>);
+
 	__always_inline auto cell_next()
 	{
-		return displacement_proxy::
-		  Proxy<MChunkHeader, SmallSize, true, head2size, size2head>(this,
-		                                                             currSize);
+		return SuccessorProxy(*this);
 	}
 
 	/**
