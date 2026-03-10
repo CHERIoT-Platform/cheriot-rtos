@@ -50,8 +50,8 @@ constexpr size_t MaxSmallSize = 1U << TreeBinShift;
  * MChunkHeader-s (q.v.) and in MChunkHeader::PrevFooter-s.
  * See size2head and head2size for codecs.
  */
-using CompressedSizeType            = uint16_t;
-constexpr size_t CompressedSizeBits = 16;
+using CompressedSizeType            = uint32_t;
+constexpr size_t CompressedSizeBits = 18;
 static_assert(utils::bytes2bits(sizeof(CompressedSizeType)) >=
               CompressedSizeBits);
 constexpr size_t MaxChunkSize = (1U << CompressedSizeBits) << MallocAlignShift;
