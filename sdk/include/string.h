@@ -21,6 +21,12 @@ CHERIOT_DECLARE_STANDARD_LIBCALL(memcpy,
                                  void       *dest,
                                  const void *src,
                                  size_t      n)
+CHERIOT_DECLARE_STANDARD_LIBCALL(memccpy,
+                                 void *,
+                                 void       *dest,
+                                 const void *src,
+                                 int         c,
+                                 size_t      n)
 CHERIOT_DECLARE_STANDARD_LIBCALL(memset, void *, void *, int, size_t)
 CHERIOT_DECLARE_STANDARD_LIBCALL(memmove,
                                  void *,

@@ -9,5 +9,6 @@ library("string")
 		"strchr.c",
 		"strlcpy.c",
 		"memchr.c",
-		"memrchr.c"
+		"memrchr.c",
+		"memccpy.c"
 	)
