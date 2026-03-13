@@ -3,6 +3,7 @@
 
 #include "alloc.h"
 #include "cheri.hh"
+#include "heap_offset.h"
 #include "revoker.h"
 #include "token.h"
 #include <allocator.h>
@@ -427,7 +428,12 @@ namespace
 		if (state->identifier == 0)
 		{
 			static uint32_t nextIdentifier = 1;
-			if (nextIdentifier >= (1 << MChunkHeader::OwnerIDWidth))
+			// Cleave the ID space in half, with upper range reserved for
+			// dynamically allocated subquotas.
+			// FIXME: If we can determine the number of static quotas in the
+			// loader and provide this to the allocator, we can reclaim most of
+			// this ID space.
+			if (nextIdentifier >= (1 << (MChunkHeader::OwnerIDWidth - 1)))
 			{
 				return nullptr;
 			}
@@ -443,6 +449,12 @@ namespace
 	class Claim
 	{
 		/**
+		 * Ensure the heap offsets behave as expected.
+		 */
+		static_assert(sizeof(HeapOffset<Claim>) == sizeof(uint16_t));
+		static_assert(alignof(HeapOffset<Claim>) == alignof(uint16_t));
+
+		/**
 		 * The identifier of the owning allocation capability.
 		 */
 		uint16_t allocatorIdentifier = 0;
@@ -450,7 +462,7 @@ namespace
 		 * Next 'pointer' encoded as a shifted offset from the start of the
 		 * heap.
 		 */
-		uint16_t encodedNext = 0;
+		HeapOffset<Claim> encodedNext = {};
 		/**
 		 * Saturating reference count.  We use one to indicate a single
 		 * reference count rather than zero to slightly simplify the logic at
@@ -467,7 +479,7 @@ namespace
 		 * Private constructor, creates a new claim with a single reference
 		 * count.
 		 */
-		Claim(uint16_t identifier, uint16_t nextClaim)
+		Claim(uint16_t identifier, HeapOffset<Claim> nextClaim)
 		  : allocatorIdentifier(identifier), encodedNext(nextClaim)
 		{
 		}
@@ -492,7 +504,7 @@ namespace
 		/**
 		 * Returns the value of the compressed next pointer.
 		 */
-		[[nodiscard]] uint16_t encoded_next() const
+		[[nodiscard]] HeapOffset<Claim> encoded_next() const
 		{
 			return encodedNext;
 		}
@@ -506,13 +518,12 @@ namespace
 			/**
 			 * Placeholder value for end iterators.
 			 */
-			static inline const uint16_t EndPlaceholder = 0;
+			HeapOffset<Claim> endPlaceholder = {};
 
 			/**
 			 * A pointer to the encoded next pointer.
 			 */
-			uint16_t *encodedNextPointer =
-			  const_cast<uint16_t *>(&EndPlaceholder);
+			HeapOffset<Claim> *encodedNextPointer = &endPlaceholder;
 
 			public:
 			/**
@@ -524,7 +535,7 @@ namespace
 			__always_inline Iterator(const Iterator &other) = default;
 
 			/// Constructor from an explicit next pointer.
-			__always_inline Iterator(uint16_t *nextPointer)
+			__always_inline Iterator(HeapOffset<Claim> *nextPointer)
 			  : encodedNextPointer(nextPointer)
 			{
 			}
@@ -534,7 +545,7 @@ namespace
 			 */
 			__always_inline Claim *operator*()
 			{
-				return Claim::from_encoded_offset(*encodedNextPointer);
+				return encodedNextPointer->get();
 			}
 
 			/**
@@ -542,13 +553,14 @@ namespace
 			 */
 			__always_inline Claim *operator->()
 			{
-				return Claim::from_encoded_offset(*encodedNextPointer);
+				return encodedNextPointer->get();
 			}
 
 			/// Iteration termination condition.
 			__always_inline bool operator!=(const Iterator Other)
 			{
-				return *encodedNextPointer != *Other.encodedNextPointer;
+				return encodedNextPointer->value !=
+				       Other.encodedNextPointer->value;
 			}
 
 			/**
@@ -567,14 +579,14 @@ namespace
 			 */
 			Iterator &operator=(Claim *claim)
 			{
-				*encodedNextPointer = claim->encode_address();
+				*encodedNextPointer = HeapOffset<Claim>::from(claim);
 				return *this;
 			}
 
 			/**
 			 * Returns the next pointer that this iterator refers to.
 			 */
-			uint16_t *pointer()
+			HeapOffset<Claim> *pointer()
 			{
 				return encodedNextPointer;
 			}
@@ -588,7 +600,7 @@ namespace
 		 * failure.
 		 */
 		static Claim *create(PrivateAllocatorCapabilityState &capability,
-		                     uint16_t                         next)
+		                     HeapOffset<Claim>                next)
 		{
 			auto space = gm->mspace_dispatch(
 			  sizeof(Claim), capability.quota, QuotaIdentifierAllocatorOwned);
@@ -642,48 +654,16 @@ namespace
 			}
 			return referenceCount == 0;
 		}
-
-		/**
-		 * Decode an encoded offset and return a pointer to the claim.
-		 */
-		static Claim *from_encoded_offset(uint16_t offset)
-		{
-			if (offset == 0)
-			{
-				return nullptr;
-			}
-			Capability<Claim> ret{gm->heapStart.cast<Claim>()};
-			ret.address() += offset << MallocAlignShift;
-			ret.bounds() = sizeof(Claim);
-			return ret;
-		}
-
-		/**
-		 * Encode the address of this object in a 16-bit value.
-		 */
-		uint16_t encode_address()
-		{
-			ptraddr_t address = Capability{this}.address();
-			address -= gm->heapStart.address();
-			Debug::Assert((address & MallocAlignMask) == 0,
-			              "Claim at address {} is insufficiently aligned",
-			              address);
-			address >>= MallocAlignShift;
-			Debug::Assert(address <= std::numeric_limits<uint16_t>::max(),
-			              "Encoded claim address is too large: {}",
-			              address);
-			return address;
-		}
 	};
 	static_assert(sizeof(Claim) <= (1 << MallocAlignShift),
 	              "Claims should fit in the smallest possible allocation");
 
 	/**
-	 * Find a claim if one exists.  Returns a reference to the next pointer
+	 * Find a claim if one exists.  Returns a pointer to the next HeapOffset
 	 * that refers to this claim.
 	 */
-	std::pair<uint16_t &, Claim *> claim_find(uint16_t      owner,
-	                                          MChunkHeader &chunk)
+	std::pair<HeapOffset<Claim> *, Claim *> claim_find(uint16_t      owner,
+	                                                   MChunkHeader &chunk)
 	{
 		for (Claim::Iterator i{&chunk.claims}, end; i != end; ++i)
 		{
@@ -702,10 +682,10 @@ namespace
 				 * See discussion at
 				 * https://github.com/CHERIoT-Platform/llvm-project/issues/320
 				 */
-				return {__builtin_no_change_bounds(*i.pointer()), claim};
+				return {__builtin_no_change_bounds(i.pointer()), claim};
 			}
 		}
-		return {chunk.claims, nullptr};
+		return {&chunk.claims, nullptr};
 	}
 
 	/**
@@ -733,7 +713,7 @@ namespace
 			}
 			owner.quota -= size;
 		}
-		claim = Claim::create(owner, next);
+		claim = Claim::create(owner, *next);
 		if (claim != nullptr)
 		{
 			Debug::log("Allocated new claim for {}", chunk.body());
@@ -744,7 +724,7 @@ namespace
 				chunk.ownerID = 0;
 				claim->reference_add();
 			}
-			next = claim->encode_address();
+			*next = HeapOffset<Claim>::from(claim);
 			return true;
 		}
 		// If we failed to allocate the claim object, undo adding this to our
@@ -785,7 +765,7 @@ namespace
 		// delete the claim unconditionally.
 		if (freeAll || claim->reference_remove())
 		{
-			next        = claim->encoded_next();
+			*next       = claim->encoded_next();
 			size_t size = chunk.size_get();
 			owner.quota += size;
 			Claim::destroy(owner, claim);
@@ -824,7 +804,7 @@ namespace
 			}
 			size_t chunkSize = chunk.size_get();
 			chunk.ownerID    = 0;
-			if (chunk.claims == 0)
+			if (chunk.claims.is_null())
 			{
 				int ret = gm->mspace_free(chunk, bodySize);
 				// If free fails, don't manipulate the quota.
@@ -844,7 +824,7 @@ namespace
 		// claim.
 		if (claim_drop(owner, chunk, reallyFree, freeAll))
 		{
-			if ((chunk.claims == 0) && (chunk.ownerID == 0))
+			if ((chunk.claims.is_null()) && (chunk.ownerID == 0))
 			{
 				return gm->mspace_free(chunk, bodySize);
 			}
@@ -895,6 +875,38 @@ namespace
 	}
 
 } // namespace
+
+template<typename T>
+T *HeapOffset<T>::get() const
+{
+	if (value == 0)
+	{
+		return nullptr;
+	}
+	Capability<T> ret{gm->heapStart.cast<T>()};
+	ret.address() += value << MallocAlignShift;
+	ret.bounds() = sizeof(T);
+	return ret;
+}
+
+template<typename T>
+HeapOffset<T> HeapOffset<T>::from(T *ptr)
+{
+	if (ptr == nullptr)
+	{
+		return HeapOffset{0};
+	}
+	ptraddr_t address = Capability{ptr}.address();
+	address -= gm->heapStart.address();
+	Debug::Assert((address & MallocAlignMask) == 0,
+	              "HeapOffset target at address {} is insufficiently aligned",
+	              address);
+	address >>= MallocAlignShift;
+	Debug::Assert(address <= std::numeric_limits<uint16_t>::max(),
+	              "Encoded heap address is too large: {}",
+	              address);
+	return HeapOffset{static_cast<uint16_t>(address)};
+}
 
 __cheriot_minimum_stack(0xa0) ssize_t
   heap_quota_remaining(AllocatorCapability heapCapability)
