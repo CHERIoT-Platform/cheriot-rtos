@@ -134,6 +134,28 @@ namespace
 	}
 
 	/**
+	 * Test memccpy.
+	 */
+	void check_memccpy()
+	{
+		debug_log("Test memccpy.");
+
+		constexpr size_t N = 7;
+
+		const uint8_t S[N]  = {'C', 'H', 'E', 'R', 'I', 'O', 'T'};
+		uint8_t       d[N]  = {'A', 'B', 'C', 'D', 'E', 'F', 'G'};
+		uint8_t       rem[] = {'F', 'G'};
+
+		TEST(memccpy(d, S, 'E', N) == &d[3],
+		     "memccpy must return the next character in dest after 'E'");
+		TEST(d[3] == 'D', "memccpy must not overwrite dest buffer past 'E'");
+		TEST(memccpy(d, S, 'I', N) == &d[5],
+		     "memccpy must return the next character in dest after 'E'");
+		TEST(memcmp(S, d, 5) == 0, "first 5 character were copied");
+		TEST(memcmp(rem, (d + 5), 2) == 0, "last two characters untouched");
+	}
+
+	/**
 	 * Test strto{,u}l
 	 */
 	void check_strtol()
@@ -518,6 +540,7 @@ int test_misc()
 
 	check_timeouts();
 	check_memchr();
+	check_memccpy();
 	check_memrchr();
 	check_strtol();
 	check_pointer_utilities();
