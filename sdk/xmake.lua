@@ -234,12 +234,31 @@ toolchain("cheriot-clang", function ()
 		-- Assembly flags
 		self:add("asflags", default_clang_flags)
 
-		-- Rust flags
-		local default_rc_flags = {
-			"--target=riscv32cheriot-unknown-cheriotrtos",
+		-- Rust flags for various use-cases.
+
+		-- For now Rust uses a different target name.
+		local rust_target = "riscv32cheriot-unknown-cheriotrtos"
+
+		-- Will be used later in the cargo rule to figure out where object files are saved.
+		self:add("cheriot.rust.target", rust_target)
+
+		-- Cargo flags.
+		local default_cargo_flags = {
+			"--target=" .. rust_target,
+		}
+		self:add("cargoflags", { default_cargo_flags })
+
+		-- Rust flags used when `rustc` is invoked by `cargo`.
+		local default_rc_cargo_flags = {
 			"-Ctarget-cpu=" .. cpu,
 		}
-		self:add("rcflags", default_rc_flags)
+		self:add("rccargoflags", { default_rc_cargo_flags })
+
+		-- Rust flags used when `rustc` is directly invoked.
+		local default_rc_flags = table.join(default_rc_cargo_flags, {
+			"--target=" .. rust_target,
+		})
+		self:add("rcflags", { default_rc_flags })
 	end)
 end)
 
@@ -1589,6 +1608,7 @@ rule("cheriot.rust", function()
 		dependinfo.files = {}
 		local flags = table.join("-Copt-level=z", "--crate-type=staticlib", compflags, "-o", targetfile, sourcefile)
 
+
 		vprint("%s %s", compinst:program(), table.concat(flags, " "))
 		local outdata, errdata = os.iorunv(compinst:program(), flags)
 
@@ -1631,11 +1651,11 @@ rule("cheriot.rust.crate", function()
 		local cargo = target:tool("cargo")
 
 		-- If it wasn't found in the sdk, search using `find_tool`.
-		if not cargo then 
-		  cargo = find_tool("cargo")
-		  if cargo then 
-			cargo = cargo.program
-		  end
+		if not cargo then
+			cargo = find_tool("cargo")
+			if cargo then
+				cargo = cargo.program
+			end
 		end
 
 		assert(
@@ -1675,8 +1695,48 @@ rule("cheriot.rust.crate", function()
 
 		progress.show(opt.progress, "${color.build.object}compiling.$(mode) crate %s", crate_name)
 
-		local rustflags = rc:compflags()
-		local cargoflags = { "build", "--lib", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path }
+		-- We need to find the current toolchain to see if there are cargo/rc+cargo flags.
+		local toolchain_name = target:get("toolchains")
+		local toolchain = nil
+		for _, t in pairs(target:toolchains()) do
+			if t:name() == toolchain_name then
+				toolchain = t
+				break
+			end
+		end
+		assert(toolchain, "No toolchain found!")
+
+		local rustflags = toolchain:get("rccargoflags") or {}
+
+		-- Add flags from the user, if any.
+		local userflags = target:values("cheriot.rust.crate.rcflags")
+		if userflags then
+			if type(userflags) == "table" then
+				table.join(rustflags, userflags)
+			end
+
+			if type(userflags) == "string" then
+				table.insert(rustflags, userflags)
+			end
+		end
+
+		local cargoflags = table.join(
+			{ "build", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path },
+			toolchain:get("cargoflags")
+		)
+
+		-- Add flags from the user, if any.
+		local userflags = target:values("cheriot.rust.crate.cargoflags")
+		if userflags then
+			if type(userflags) == "table" then
+				table.join(cargoflags, userflags)
+			end
+
+			if type(userflags) == "string" then
+				table.insert(cargoflags, userflags)
+			end
+		end
+
 		local crate_build_mode
 
 		if is_mode("release") then
