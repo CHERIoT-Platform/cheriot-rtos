@@ -981,6 +981,8 @@ task("audit")
 				-- printf("  compartment_report: %s\r\n", compartment_report)
 				-- printf("  board_file: %s\r\n", board_file)
 				-- printf("  cheriot_audit_program: %s\r\n", cheriot_audit_program)
+				-- Every target shoudl get the data.rtos.valid() query run against it, as a basic smoke test. This will check that the compartment report is well formed and that the board file is correct.
+				execute_audit(target, cheriot_audit_program, board_file, compartment_report, "data.rtos.valid", nil)
 				-- Works through the dependancy tree and calls this only once for each dependancy
 				visit_all_dependencies_of(target, function (target)
 					local audit = target:get("cheriot.audit")
@@ -1023,15 +1025,15 @@ task("audit")
 
 		import("core.base.option")
         -- Get the options
-        local query = option.get("query") or {}
+        local query = option.get("query")
         local module = custom_split(option.get("module"), '|')
         
 		print("module:",module)
-		print("query:", query)
-		-- printf("Query:\r\n")
-		-- for _,q in ipairs(contents) do
-		-- 	printf("  %i. %s\r\n", _, q)
-		-- end
+		if query then
+			print("query:", query)
+		else
+			print("query: NONE")
+		end
 
 		-- Load the config or project.targets() will fail later.
 		import("core.project.config")
