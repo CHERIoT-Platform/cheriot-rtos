@@ -89,7 +89,7 @@ namespace thread_pool
 		{
 			auto key = sealing_key_for_type<T>();
 			auto fn  = token_unseal(
-              key, Sealed<T>(static_cast<CHERI_SEALED(T *)>(rawFn)));
+			  key, Sealed<T>(static_cast<CHERI_SEALED(T *)>(rawFn)));
 			if (fn == nullptr)
 			{
 				return;

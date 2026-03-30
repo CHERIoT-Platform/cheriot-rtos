@@ -189,6 +189,7 @@ toolchain("cheriot-clang", function ()
 	set_toolset("objdump", "llvm-objdump")
 	set_toolset("strip", "llvm-strip")
 	set_toolset("as", "clang")
+	set_toolset("cargo", "cargo")
 
 	--Set up the flags that we need.
 	on_load(function (self)
@@ -1640,13 +1641,19 @@ rule("cheriot.rust", function()
 		import("core.base.json")
 		import("core.project.config")
 
+		-- If the directory to store objects for this target doesn't exist, `rustc` will fail.
+		-- We thus check if the directory exists and, if it doesn't, create it.
+		local objdir = target:objectdir()
+
+		if not os.exists(objdir) then
+				os.mkdir(objdir)
+		end
+
 		local dependfile = target:dependfile(sourcefile)
 
-		-- path/to/rust.rs -> libpath_to_rust
+		-- path/to/rust.rs -> libpath_to_rust.rs.a
 		local libname = "lib" .. string.gsub(sourcefile:sub(1, #sourcefile - 3), "//", "_")
-		local targetfile = target:objectfile(libname)
-		-- <buildir>/libpath_to_rust.o -> <buildir>/libpath_to_rust.a
-		local targetfile = targetfile:sub(1, #targetfile - 1) .. "a"
+		local targetfile = target:objectfile(libname) .. ".a"
 		table.insert(target:objectfiles(), targetfile)
 
 		local compinst = compiler.load("rc", { target = target })
@@ -1704,7 +1711,17 @@ rule("cheriot.rust.crate", function()
 		import("core.base.json")
 		import("core.project.config")
 
-		local cargo = find_tool("cargo")
+		-- Search cargo in the sdk path.
+		local cargo = target:tool("cargo")
+
+		-- If it wasn't found in the sdk, search using `find_tool`.
+		if not cargo then 
+		  cargo = find_tool("cargo")
+		  if cargo then 
+			cargo = cargo.program
+		  end
+		end
+
 		assert(
 			cargo,
 			"No `cargo` binary was found. Please install `cargo`: https://doc.rust-lang.org/cargo/getting-started/installation.html"
@@ -1717,8 +1734,8 @@ rule("cheriot.rust.crate", function()
 		local manifest_path = path.absolute(sourcefile)
 
 		local flags = { "metadata", "--no-deps", "--format-version=1", "--manifest-path=" .. manifest_path }
-		local cmd = cargo.program .. table.concat(flags, " ")
-		local crate_metadata, errdata = os.iorunv(cargo.program, flags)
+		local cmd = cargo .. table.concat(flags, " ")
+		local crate_metadata, errdata = os.iorunv(cargo, flags)
 
 		assert(not errdata or errdata == "", "failed to run `" .. cmd .. " :\n" .. errdata)
 
@@ -1758,14 +1775,14 @@ rule("cheriot.rust.crate", function()
 			'RUSTC="%s" RUSTFLAGS="%s" %s %s',
 			rc:program(),
 			rustflags_str,
-			cargo.program,
+			cargo,
 			table.concat(cargoflags, " ")
 		)
 
 		vprint(cmd)
 
 		local outdata, errdata =
-				os.iorunv(cargo.program, cargoflags, { envs = { RUSTC = rc:program(), RUSTFLAGS = rustflags_str } })
+				os.iorunv(cargo, cargoflags, { envs = { RUSTC = rc:program(), RUSTFLAGS = rustflags_str } })
 
 		assert(
 			errdata == nil or errdata == "" or errdata:match("Finished") or (not errdata:match("error")),

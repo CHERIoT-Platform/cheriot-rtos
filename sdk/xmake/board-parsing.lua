@@ -69,12 +69,10 @@ end
 local function patch_board(base, patches)
 	for _, p in ipairs(patches) do
 		if not p.op then
-			print("missing op in " .. json.encode(p))
-			return nil
+			raise("missing op in " .. json.encode(p))
 		end
 		if not p.path or (type(p.path) ~= "string") then
-			print("missing or invalid path in " .. json.encode(p))
-			return nil
+			raise("missing or invalid path in " .. json.encode(p))
 		end
 
 		-- Parse the JSON Pointer into an array of filed names, converting
@@ -90,8 +88,7 @@ local function patch_board(base, patches)
 		end
 
 		if #objectPath < 1 then
-			print("invalid path in " .. json.encode(p))
-			return nil
+			raise("invalid path in " .. json.encode(p))
 		end
 
 		-- JSON arrays are indexed from 0, Lua's are from 1.  If someone says
@@ -104,8 +101,7 @@ local function patch_board(base, patches)
 		for _, pathComponent in ipairs(objectPath) do
 			if isarray(nodeToModify) then
 				if type(pathComponent) ~= "number" then
-					print("invalid non-numeric index into array in " .. json.encode(p))
-					return nil
+					raise("invalid non-numeric index into array in " .. json.encode(p))
 				end
 				pathComponent = pathComponent + 1
 			end
@@ -127,8 +123,7 @@ local function patch_board(base, patches)
 		-- Handle the operation
 		if (p.op == "replace") or (p.op == "add") then
 			if not p.value then
-				print(tostring(p.op).. " requires a value, missing in ", json.encode(p))
-				return nil
+				raise(tostring(p.op).. " requires a value, missing in ", json.encode(p))
 			end
 			if isArrayOperation and p.op == "add" then
 				table.insert(nodeToModify, nodeName, p.value)
@@ -138,8 +133,7 @@ local function patch_board(base, patches)
 		elseif p.op == "remove" then
 			nodeToModify[nodeName] = nil
 		else
-			print(tostring(p.op) .. " is not a valid operation in ", json.encode(p))
-			return nil
+			raise(tostring(p.op) .. " is not a valid operation in ", json.encode(p))
 		end
 	end
 end
@@ -152,18 +146,15 @@ local function load_board_file_inner(boardDir, boardFile)
 		return json.loadfile(boardFile)
 	end
 	if path.extension(boardFile) ~= ".patch" then
-		print("unknown extension for board file: " .. boardFile)
-		return nil
+		raise("unknown extension for board file: " .. boardFile)
 	end
 	local patch = json.loadfile(boardFile)
 	if not patch.base then
-		print("Board file " .. boardFile .. " does not specify a base")
-		return nil
+		raise("Board file " .. boardFile .. " does not specify a base")
 	end
 	local baseDir, baseFile = board_file_for_name(patch.base, boardDir)
 	if not baseDir then
-		print("unable to find board file " .. patch.name .. ".  Try specifying a full path")
-		return nil
+		raise("unable to find base board file " .. patch.base .. " with search dir " .. boardDir .. ".  Try specifying a full path")
 	end
 	local base = load_board_file_inner(baseDir, baseFile)
 
@@ -189,14 +180,13 @@ local function load_board_file(boardDir, boardFile, mixinString)
 			mixinDir, mixinFile = board_file_for_name(mixinName, path.join(scriptdir, "boards"))
 		end
 		if not mixinDir then
-			print("unable to find board mixin " .. mixinName .. ".  Try specifying a full path")
-			return nil
+			raise("unable to find board mixin " .. mixinName .. ".  Try specifying a full path")
 		end
 
 		-- XXX this *ought* to return nil, error on error, but it just throws.
 		local mixinTree, err = json.loadfile(mixinFile)
 		if not mixinTree then
-			error ("Could not process mixin %q: %s"):format(mixinName, err)
+			raise("Could not process mixin %q: %s"):format(mixinName, err)
 		end
 
 		print(("Patching board with %q"):format(mixinFile))

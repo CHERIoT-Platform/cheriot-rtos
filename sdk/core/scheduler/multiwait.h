@@ -3,6 +3,7 @@
 
 #pragma once
 #include "thread.h"
+#include "timer.h"
 #include <errno.h>
 #include <multiwaiter.h>
 #include <riscvreg.h>

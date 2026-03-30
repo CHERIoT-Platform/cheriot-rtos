@@ -81,10 +81,10 @@ namespace
 		 */
 		static void update()
 		{
-			auto *thread             = Thread::current_get();
-			bool  waitingListIsEmpty = ((Thread::waitingList == nullptr) ||
-                                       (Thread::waitingList->expiryTime == -1));
-			bool  threadHasNoPeers =
+			auto *thread            = Thread::current_get();
+			bool waitingListIsEmpty = ((Thread::waitingList == nullptr) ||
+			                           (Thread::waitingList->expiryTime == -1));
+			bool threadHasNoPeers =
 			  (thread == nullptr) || (!thread->has_priority_peers());
 			if (waitingListIsEmpty && threadHasNoPeers)
 			{

@@ -31,13 +31,50 @@ template<
    * The mask of bits for the `output_enable` register, again this is usually
    * the same as OutputMask.
    */
-  uint32_t OutputEnableMask = OutputMask>
+  uint32_t OutputEnableMask = OutputMask,
+  /**
+   * The mask of bits for the `pcint_mask` register, this is the same as the
+   * InputMask.
+   */
+  uint32_t PcIntMask = InputMask>
 struct SonataGpioBase : private utils::NoCopyNoMove
 {
 	uint32_t output;
 	uint32_t input;
 	uint32_t debouncedInput;
 	uint32_t outputEnable;
+	uint32_t control;
+	uint32_t status;
+	uint32_t pcintMask;
+
+	/// Control Register Fields
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Pin-change interrupt status. Write 1 to clear.
+		PcIntStatus = 1U << 31,
+	};
+
+	// Pin-change interrupt modes
+	enum [[clang::flag_enum]] PcIntMode : uint32_t
+	{
+		AnyEdge     = 0,
+		RisingEdge  = 1,
+		FallingEdge = 2,
+		LowLevel    = 3,
+	};
+
+	static constexpr uint32_t PcIntModeBits = 2;
+	/// Status Register Fields
+	enum [[clang::flag_enum]] : uint32_t
+	{
+		/// Pin-change interrupt mode.
+		/// See PcIntMode enums.
+		PcIntModeSelect = PcIntModeBits << 0,
+		/// Select between the raw (0) and debounced input (1).
+		PcIntInputSelect = 1U << 3,
+		/// Enable the pin-change interrupt instance-wide.
+		PcIntEnable = 1U << 31,
+	};
 
 	/**
 	 * Returns a mask with a single bit set corresponding to the given GPIO
@@ -86,6 +123,76 @@ struct SonataGpioBase : private utils::NoCopyNoMove
 	}
 
 	/**
+	 * Enable GPIO pin-change interrupts for this instance.
+	 */
+	void enable_interrupts(bool enable) volatile
+	{
+		if (enable)
+		{
+			control = control | PcIntEnable;
+		}
+		else
+		{
+			control = control & ~PcIntEnable;
+		}
+	}
+
+	/**
+	 * Clear the GPIO pin-change interrupt mask.
+	 */
+	void clear_interrupt_mask() volatile
+	{
+		pcintMask = 0;
+	}
+
+	/**
+	 * Only GPIO pins explicitly enabled can trigger an interrupt.  Enabling a
+	 * GPIO pin for interrupts will set the corresponding bit in the pin-change
+	 * interrupt mask.
+	 */
+	void set_interrupt(uint32_t index, bool enable) volatile
+	{
+		const uint32_t Bit = gpio_bit(index, PcIntMask);
+		if (enable)
+		{
+			pcintMask = pcintMask | Bit;
+		}
+		else
+		{
+			pcintMask = pcintMask & ~Bit;
+		}
+	}
+
+	/**
+	 * Whether to use the raw or debounced input for the GPIO pin-change
+	 * interrupt.
+	 */
+	void debounce_interrupt(bool debounce) volatile
+	{
+		if (debounce)
+		{
+			control = control | PcIntInputSelect;
+		}
+		else
+		{
+			control = control & ~PcIntInputSelect;
+		}
+	}
+
+	/**
+	 * Select the pin-change interrupt mode.
+	 */
+	void change_interrupt_mode(enum PcIntMode mode) volatile
+	{
+		control = (control & ~PcIntModeSelect) | (mode & PcIntModeBits);
+	}
+
+	void clear_interrupt_status() volatile
+	{
+		status = status | PcIntStatus;
+	}
+
+	/**
 	 * Read the input value for a given GPIO pin index. For this to be
 	 * meaningful, the corresponding pin must be configured to be an input
 	 * first (set output enable to `false` for the given index). If given an
@@ -107,6 +214,11 @@ struct SonataGpioBase : private utils::NoCopyNoMove
 	bool read_debounced_input(uint32_t index) volatile
 	{
 		return (debouncedInput & gpio_bit(index, InputMask)) > 0;
+	}
+
+	bool read_interrupt_status() volatile
+	{
+		return (status & PcIntStatus) > 0;
 	}
 };
 

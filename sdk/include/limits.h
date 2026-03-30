@@ -24,14 +24,17 @@
 
 #define USHRT_MAX (SHRT_MAX * 2U + 1U)
 
+#define __UWIDTH_MAX_IMPL(x) __UINT##x##_MAX__
+#define __UWIDTH_MAX(x) __UWIDTH_MAX_IMPL(x)
+
 #define INT_MAX __INT_MAX__
 #define INT_MIN (-INT_MAX - 1)
-#define UINT_MAX (INT_MAX * 2U + 1U)
+#define UINT_MAX __UWIDTH_MAX(__INT_WIDTH__)
 
 #define LONG_MAX __LONG_MAX__
 #define LONG_MIN (-LONG_MAX - 1)
-#define ULONG_MAX (LONG_MAX * 2U + 1U)
+#define ULONG_MAX __UWIDTH_MAX(__LONG_WIDTH__)
 
 #define LLONG_MAX __LONG_LONG_MAX__
 #define LLONG_MIN (-LLONG_MAX - 1)
-#define ULLONG_MAX (LLONG_MAX * 2U + 1U)
+#define ULLONG_MAX __UWIDTH_MAX(__LLONG_WIDTH__)

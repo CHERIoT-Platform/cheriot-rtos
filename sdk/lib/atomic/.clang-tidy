@@ -2,6 +2,7 @@ Checks:          'clang-diagnostic-*,-clang-diagnostic-error,google-readability-
 FormatStyle: file
 UseColor: true
 WarningsAsErrors: false
+ExcludeHeaderFilterRegex: 'libc\+\+|third_party|std.*\.h|errno\.h|strings\.h|string\.h|-assembly\.h|cdefs\.h|/riscv\.h|inttypes\.h|/cheri-builtins\.h|c\+\+-config|ctype\.h|switcher\.h|assert\.h|setjmp\.h|unwind\.h|/build/|microvium|FreeRTOS-Compat|sunburst/v0\.2|float\.h|magic_enum'
 CheckOptions:
     - key: readability-identifier-naming.StructCase
       value: CamelCase

@@ -98,7 +98,9 @@ class Uart16550
 	 */
 	uint8_t blocking_read() volatile
 	{
-		while (!can_read()) {}
+		while (!can_read())
+		{
+		}
 		return data;
 	}
 
@@ -107,7 +109,9 @@ class Uart16550
 	 */
 	void blocking_write(uint8_t byte) volatile
 	{
-		while (!can_write()) {}
+		while (!can_write())
+		{
+		}
 		data = byte;
 	}
 

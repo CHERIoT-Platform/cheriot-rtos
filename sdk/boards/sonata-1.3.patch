@@ -1,0 +1,15 @@
+{
+  "base": "sonata-1.1",
+  "patch": [
+    {
+      "op": "add",
+      "path": "/interrupts/-",
+      "value":
+        {
+          "name": "GpioInterrupt",
+          "number": 4,
+          "priority": 3
+        }
+    }
+  ]
+}
