@@ -1024,9 +1024,9 @@ task("audit")
 		import("core.base.option")
         -- Get the options
         local query = option.get("query") or {}
-        local modules = custom_split(option.get("modules"), '|')
+        local module = custom_split(option.get("module"), '|')
         
-		print("modules:",modules)
+		print("module:",module)
 		print("query:", query)
 		-- printf("Query:\r\n")
 		-- for _,q in ipairs(contents) do
@@ -1053,7 +1053,7 @@ task("audit")
 		shortname = 'a',
         description = "Run cheriot-audit on the files. Will use any audit query declared in xmake.lua files or you can pass in from command line.",
         options = {
-            {'m', "modules", "kv", nil, "Module file(s), separate with pipe (|) symbol. These will override any modules already set in the xmake.lua files.",
+            {'m', "module", "kv", nil, "Module file(s), separate with pipe (|) symbol. These will override any modules already set in the xmake.lua files.",
 										"e.g. ",
 										"    - xmake --modules=rego_files/caesar.rego [query]",
 										"    - xmake --modules='rego_files/caesar.rego' [query 1] [query 2]",

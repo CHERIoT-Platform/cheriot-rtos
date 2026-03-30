@@ -31,16 +31,20 @@ compartment("caesar")
     -- This compartment uses C++ thread-safe static initialisation and so
     -- depends on the C++ runtime.
     add_files("caesar_cypher.cc")
+target_end()
 
 compartment("entry")
     add_files("entry.cc")
+target_end()
 
 compartment("producer")
     add_files("producer.cc")
     add_rules("caesar.checks", {private = false})
+target_end()
 
 compartment("consumer")
     add_files("consumer.cc")
+target_end()
 
 -- Firmware image for the example.
 firmware("audit")
@@ -59,3 +63,4 @@ firmware("audit")
             }
         }, {expand = false})
     end)
+target_end()
