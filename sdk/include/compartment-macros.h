@@ -17,7 +17,8 @@
                                                   permitLoad,                  \
                                                   permitStore,                 \
                                                   permitLoadStoreCapabilities, \
-                                                  permitLoadMutable)           \
+                                                  permitLoadMutable,           \
+                                                  permitLoadGlobal)            \
 	({                                                                         \
 		type *ret; /* NOLINT(bugprone-macro-parentheses) */                    \
 		__asm(".ifndef " mangledName "\n"                                      \
@@ -39,7 +40,8 @@
 		      : "i"(((permitLoad) ? (1 << 31) : 0) +                           \
 		            ((permitStore) ? (1 << 30) : 0) +                          \
 		            ((permitLoadStoreCapabilities) ? (1 << 29) : 0) +          \
-		            ((permitLoadMutable) ? (1 << 28) : 0)));                   \
+		            ((permitLoadMutable) ? (1 << 28) : 0) +                    \
+		            ((permitLoadGlobal) ? (1 << 27) : 0)));                    \
 		ret;                                                                   \
 	})
 
@@ -49,8 +51,11 @@
  * can be used only in code (it cannot be used to initialise a global).
  *
  * The last arguments specify the set of permissions that this capability
- * holds.  MMIO capabilities are always global and without store local.  They
- * may optionally omit additional capabilities.
+ *
+ * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), Load
+ * Mutable (LM), and Load Global (LG).
+ *
+ * MMIO capabilities are always global (GL) and without store local (SL).
  */
 
 // NOLINTBEGIN
@@ -63,11 +68,12 @@
 	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG_##cond(flag)
 // NOLINTEND
 
-#define CHERIOT_COMPARTMENT_MACROS_JOIN_FLAGS(pL, pS, pC, pM)                  \
+#define CHERIOT_COMPARTMENT_MACROS_JOIN_FLAGS(pL, pS, pC, pM, pG)              \
 	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pL, "R")                            \
 	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pS, "W")                            \
 	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pC, "c")                            \
-	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pM, "m")
+	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pM, "m")                            \
+	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pG, "g")
 
 #define CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE_INNER(x, y) x##y
 #define CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(x, y)                           \
@@ -81,6 +87,7 @@
 	  permitStore,                                                             \
 	  permitLoadStoreCapabilities,                                             \
 	  permitLoadMutable,                                                       \
+	  permitLoadGlobal,                                                        \
 	  cValue)                                                                  \
 		({                                                                     \
 			/* NOLINTBEGIN(bugprone-macro-parentheses) */                      \
@@ -97,7 +104,8 @@
 			        permitLoad,                                                \
 			        permitStore,                                               \
 			        permitLoadStoreCapabilities,                               \
-			        permitLoadMutable)))) volatile extern char cValue;         \
+			        permitLoadMutable,                                         \
+			        permitLoadGlobal)))) volatile extern char cValue;          \
 			(type *)&cValue;                                                   \
 			_Pragma("GCC diagnostic pop")                                      \
 			/* NOLINTEND(bugprone-macro-parentheses) */                        \
@@ -108,7 +116,8 @@
 	                                         permitLoad,                       \
 	                                         permitStore,                      \
 	                                         permitLoadStoreCapabilities,      \
-	                                         permitLoadMutable)                \
+	                                         permitLoadMutable,                \
+	                                         permitLoadGlobal)                 \
 		MMIO_CAPABILITY_WITH_PERMISSIONS_INNER(                                \
 		  type,                                                                \
 		  name,                                                                \
@@ -116,6 +125,7 @@
 		  permitStore,                                                         \
 		  permitLoadStoreCapabilities,                                         \
 		  permitLoadMutable,                                                   \
+		  permitLoadGlobal,                                                    \
 		  CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(                              \
 		    __cheriot_mmio__,                                                  \
 		    CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(name, __COUNTER__)))
@@ -132,7 +142,8 @@
 	  permitLoad,                                                              \
 	  permitStore,                                                             \
 	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable)                                                       \
+	  permitLoadMutable,                                                       \
+	  permitLoadGlobal)                                                        \
 		IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                        \
 		                                          name,                        \
 		                                          __export_mem_,               \
@@ -140,23 +151,27 @@
 		                                          permitLoad,                  \
 		                                          permitStore,                 \
 		                                          permitLoadStoreCapabilities, \
-		                                          permitLoadMutable)
+		                                          permitLoadMutable,           \
+		                                          permitLoadGlobal)
 
 #	define MMIO_CAPABILITY_WITH_PERMISSIONS(type,                             \
 	                                         name,                             \
 	                                         permitLoad,                       \
 	                                         permitStore,                      \
 	                                         permitLoadStoreCapabilities,      \
-	                                         permitLoadMutable)                \
+	                                         permitLoadMutable,                \
+	                                         permitLoadGlobal)                 \
 		MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(                               \
 		  volatile type, /* NOLINT(bugprone-macro-parentheses) */              \
 		  name,                                                                \
 		  "__import_mem_" #name "_" #permitLoad "_" #permitStore               \
-		  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable,             \
+		  "_" #permitLoadStoreCapabilities "_" #permitLoadMutable              \
+		  "_" #permitLoadGlobal,                                               \
 		  permitLoad,                                                          \
 		  permitStore,                                                         \
 		  permitLoadStoreCapabilities,                                         \
-		  permitLoadMutable)
+		  permitLoadMutable,                                                   \
+		  permitLoadGlobal)
 
 #endif
 
@@ -170,7 +185,8 @@
  * MMIO_CAPABILITY_WITH_PERMISSIONS.
  */
 #define MMIO_CAPABILITY(type, name)                                            \
-	MMIO_CAPABILITY_WITH_PERMISSIONS(type, name, true, true, false, false)
+	MMIO_CAPABILITY_WITH_PERMISSIONS(                                          \
+	  type, name, true, true, false, false, false)
 
 /**
  * Provide a capability of the type `type *` referring to the pre-shared object
@@ -178,8 +194,11 @@
  * used to initialise a global).
  *
  * The last arguments specify the set of permissions that this capability
- * holds.  Pre-shared objects are always global and without store local.  They
- * may optionally omit additional permissions.
+ * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), Load
+ * Mutable (LM), and Load Global (LG).
+ *
+ * Capabilities to pre-shared objects are always global (GL) and without store
+ * local (SL).
  */
 
 #if defined(__has_attribute) && __has_attribute(cheriot_shared_object)
@@ -189,6 +208,7 @@
 	                                             permitStore,                  \
 	                                             permitLoadStoreCapabilities,  \
 	                                             permitLoadMutable,            \
+	                                             permitLoadGlobal,             \
 	                                             cValue)                       \
 		({                                                                     \
 			/* NOLINTBEGIN(bugprone-macro-parentheses) */                      \
@@ -206,7 +226,8 @@
 			        permitLoad,                                                \
 			        permitStore,                                               \
 			        permitLoadStoreCapabilities,                               \
-			        permitLoadMutable)))) volatile extern char cValue;         \
+			        permitLoadMutable,                                         \
+			        permitLoadGlobal)))) volatile extern char cValue;          \
 			(type *)&cValue;                                                   \
 			_Pragma("GCC diagnostic pop")                                      \
 			/* NOLINTEND(bugprone-macro-parentheses) */                        \
@@ -217,7 +238,8 @@
 	                                       permitLoad,                         \
 	                                       permitStore,                        \
 	                                       permitLoadStoreCapabilities,        \
-	                                       permitLoadMutable)                  \
+	                                       permitLoadMutable,                  \
+	                                       permitLoadGlobal)                   \
 		SHARED_OBJECT_WITH_PERMISSIONS_INNER(                                  \
 		  type,                                                                \
 		  name,                                                                \
@@ -225,6 +247,7 @@
 		  permitStore,                                                         \
 		  permitLoadStoreCapabilities,                                         \
 		  permitLoadMutable,                                                   \
+		  permitLoadGlobal,                                                    \
 		  CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(                              \
 		    __cheriot_so__,                                                    \
 		    CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(name, __COUNTER__)))
@@ -236,18 +259,20 @@
 	                                       permitLoad,                         \
 	                                       permitStore,                        \
 	                                       permitLoadStoreCapabilities,        \
-	                                       permitLoadMutable)                  \
+	                                       permitLoadMutable,                  \
+	                                       permitLoadGlobal)                   \
 		IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(                             \
 		  type, /* NOLINT(bugprone-macro-parentheses) */                       \
 		  name,                                                                \
 		  __cheriot_shared_object_,                                            \
 		  "__import_cheriot_shared_object_" #name "_" #permitLoad              \
 		  "_" #permitStore "_" #permitLoadStoreCapabilities                    \
-		  "_" #permitLoadMutable,                                              \
+		  "_" #permitLoadMutable "_" #permitLoadGlobal,                        \
 		  permitLoad,                                                          \
 		  permitStore,                                                         \
 		  permitLoadStoreCapabilities,                                         \
-		  permitLoadMutable)
+		  permitLoadMutable,                                                   \
+		  permitLoadGlobal)
 #endif
 
 /**
@@ -260,7 +285,21 @@
  * set of permissions use `SHARED_OBJECT_WITH_PERMISSIONS`.
  */
 #define SHARED_OBJECT(type, name)                                              \
-	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true)
+	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true, true)
+
+/**
+ * Provide a capability of the type `type *` referring to the pre-shared object
+ * with `name` as its name.  This macro can be used only in code (it cannot be
+ * used to initialise a global).
+ *
+ * Pre-shared object capabilities produced by this macro have the indicated load
+ * and store permission, but no load/store-capability permissions (and,
+ * therefore, no load-mutable or load-global permissions).
+ */
+#define SHARED_OBJECT_WITH_DATA_PERMISSIONS(                                   \
+  type, name, permitLoad, permitStore)                                         \
+	SHARED_OBJECT_WITH_PERMISSIONS(                                            \
+	  type, name, permitLoad, permitStore, false, false, false)
 
 /**
  * Macro to test whether a device with a specific name exists in the board
