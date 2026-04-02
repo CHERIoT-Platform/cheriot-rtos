@@ -524,3 +524,18 @@
 			ret;                                                               \
 		})
 #endif
+
+/**
+ * Declare a CHERIoT initialiser function.  This macro can be used in place of
+ * a prototype for a function called `function`.  Initialiser functions are
+ * called in ascending priority order.
+ */
+#define CHERIOT_INITIALISER(function, priority)                                \
+	__asm("  .section .cheriot_initialiser." #priority ",\"aR\",@progbits\n"   \
+	      "  .p2align  3\n"                                                    \
+	      "  .word __export_" COMPARTMENT_NAME_STRING "_" #function "\n"       \
+	      "  .word 0\n"                                                        \
+	      "  .previous\n");                                                    \
+	__if_cxx(extern "C") __cheriot_callback                                    \
+	  [[cheriot::interrupt_state(disabled)]] void                              \
+	  function()

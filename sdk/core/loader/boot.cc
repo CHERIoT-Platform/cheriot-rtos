@@ -472,6 +472,47 @@ namespace
 	Capability<void> trustedStackKey;
 
 	/**
+	 * Find an export table target.  This looks for the address within
+	 * all of the export tables in the image.  The `size` parameter is used if
+	 * this is an MMIO import, the `lib` parameter is used to derive
+	 * capabilities for the library compartment.
+	 */
+	void *find_export_entry_point(const ImgHdr &image, ImportEntry &entry)
+	{
+		/// Build an export table entry for the given compartment.
+		auto buildExportEntry = [&](const auto &compartment) {
+			auto exportEntry     = build(compartment.exportTable, entry.address)
+			                         .template cast<ExportEntry>();
+			auto interruptStatus = exportEntry->interrupt_status();
+			Debug::Invariant(
+			  (interruptStatus == InterruptStatus::Disabled),
+			  "Initialisation functions must have interrupts disabled");
+			Debug::Invariant(exportEntry->argument_register_count() == 0,
+			                 "Exported initialiser must have 0 arguments");
+			exportEntry.without_permissions(Permission::Store);
+			return exportEntry.seal(exportSealingKey);
+		};
+
+		for (auto &compartment : image.privilegedCompartments)
+		{
+			if (contains<ExportEntry>(compartment.exportTable, entry.address))
+			{
+				return buildExportEntry(compartment);
+			}
+		}
+
+		for (auto &compartment : image.compartments())
+		{
+			if (contains<ExportEntry>(compartment.exportTable, entry.address))
+			{
+				return buildExportEntry(compartment);
+			}
+		}
+		Debug::Invariant(false, "Invalid initialiser: {}", entry.address);
+		return nullptr;
+	}
+
+	/**
 	 * Find an export table target.  This looks for the `target` address within
 	 * all of the export tables in the image.  The `size` parameter is used if
 	 * this is an MMIO import, the `lib` parameter is used to derive
@@ -865,6 +906,12 @@ namespace
 		// Space per thread for hazard pointers.
 		static constexpr size_t HazardPointerSpace =
 		  HazardPointersPerThread * sizeof(void *);
+		Debug::Invariant(
+		  hazardPointers.length() == image.thread_count() * HazardPointerSpace,
+		  "Hazard pointer space is {}, should be {} for {} threads",
+		  hazardPointers.length(),
+		  image.thread_count() * HazardPointerSpace,
+		  image.thread_count());
 
 		/*
 		 * Construct a return sentry with which to populate initial thread
@@ -1408,10 +1455,24 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 		populate_imports(imgHdr, compartment, switcherPCC);
 	}
 
+	Debug::log("Initialisers: {}--{}",
+	           imgHdr.initialisers.start(),
+	           imgHdr.initialisers.end());
+	auto importEntryRange = build_range<ImportEntry>(imgHdr.initialisers);
+	ret.initialiserList   = importEntryRange.begin();
+	for (auto &importEntries : importEntryRange)
+	{
+		Debug::log("Initialiser import: {}", &importEntries);
+		Debug::log("Initialiser import: {}", importEntries.address);
+		*reinterpret_cast<void **>(&importEntries) =
+		  find_export_entry_point(imgHdr, importEntries);
+	}
+
 	Debug::log("Creating boot threads\n");
+	Debug::log("Thread infos: {}", ret.threads);
 	boot_threads_create(imgHdr, ret.threads);
 	// Provide the switcher with the capabilities for entering the scheduler.
-	void *schedCGP = build_cgp(imgHdr.scheduler());
+	void *schedulerCGP = build_cgp(imgHdr.scheduler());
 	auto  exceptionEntryOffset =
 	  build<ExportEntry>(
 	    imgHdr.scheduler().exportTable,
@@ -1431,7 +1492,7 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	*build<void *>(imgHdr.switcher.code, imgHdr.switcher.scheduler_pcc()) =
 	  schedExceptionEntry;
 	*build<void *>(imgHdr.switcher.code, imgHdr.switcher.scheduler_cgp()) =
-	  schedCGP;
+	  schedulerCGP;
 	// The scheduler will inherit our stack once we're done with it
 	Capability<void> csp = ({
 		register void *cspRegister asm("csp");
@@ -1446,7 +1507,7 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	Debug::log(
 	  "Scheduler exception entry configured:\nPCC: {}\nCGP: {}\nCSP: {}",
 	  schedExceptionEntry,
-	  schedCGP,
+	  schedulerCGP,
 	  csp);
 
 #ifdef SOFTWARE_REVOKER
@@ -1495,8 +1556,6 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	asm volatile("cspecialw mtcc, %0" ::"C"(exceptionEntry.get()));
 	Debug::log("Set exception entry point to {}", exceptionEntry);
 
-	// Construct and enter the scheduler compartment.
-	auto schedPCC = build_pcc(imgHdr.scheduler());
 	// Set the scheduler entry point to the scheduler_entry export.
 	// TODO: We should probably have a separate scheduler linker script that
 	// exposes this.  If the scheduler is no longer creating threads, we can
@@ -1505,10 +1564,14 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	auto exportEntry = build<ExportEntry>(
 	  imgHdr.scheduler().exportTable,
 	  LA_ABS(__export_scheduler__Z15scheduler_entryPK16ThreadLoaderInfo));
-	schedPCC.address() += exportEntry->functionStart;
+	exportEntry.without_permissions(Permission::Store);
+	Debug::Invariant(
+	  exportEntry->argument_register_count() == 1,
+	  "Export entry for loader must take one argument, takes: {}",
+	  exportEntry->argument_register_count());
+	ret.schedulerExportEntry = exportEntry.seal(exportSealingKey);
 
-	Debug::log("Will return to scheduler entry point: {}", schedPCC);
+	ret.switcherPCC = switcherPCC;
 
-	ret.schedPCC = schedPCC;
-	ret.schedCGP = schedCGP;
+	Debug::log("Will return to scheduler entry point: {}", exportEntry);
 }
