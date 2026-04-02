@@ -459,7 +459,26 @@ namespace
 
 	const char *testString = "Hello world";
 
+	bool initialiserRun1;
+	bool initialiserRun2;
+
 } // namespace
+
+//__cheriot_callback extern "C" void initialiser1()
+CHERIOT_INITIALISER(initialiser1, 123)
+{
+	debug_log("Running initialiser1");
+	// Make sure that this has run
+	initialiserRun1 = true;
+}
+
+//__cheriot_callback extern "C" void initialiser2()
+CHERIOT_INITIALISER(initialiser2, 456)
+{
+	debug_log("Running initialiser2");
+	// Make sure that this has run after initialiser1
+	initialiserRun2 = initialiserRun1;
+}
 
 volatile decltype(testString) *volatileString = &testString;
 
@@ -519,6 +538,9 @@ int test_misc()
 		TEST(!switcherReturnSentry.permissions().contains(Permission::Global),
 		     "Switcher return sentry should be local");
 	}
+
+	TEST(initialiserRun1, "initialiser1 ran");
+	TEST(initialiserRun2, "initialiser1 ran before initialiser2");
 
 	CHERI::Capability largeRW{largeBuffer};
 	CHERI::Capability largeRO{LargeConstBuffer};

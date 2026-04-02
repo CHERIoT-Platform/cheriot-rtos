@@ -8,4 +8,7 @@
 	la_abs     a0, __export_mem_shadow
 	csetaddr   ca0, ca4, a0
 	la_abs     a1, __export_mem_shadow_end
-	cjal       .Lfill_block
+.Lzero_shadow:
+	csc        c0, 0(ca0)
+	cincoffset ca0, ca0, 8
+	bltu       a0, a1, .Lzero_shadow

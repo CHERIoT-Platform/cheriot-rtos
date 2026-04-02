@@ -63,6 +63,14 @@ __shared_objects_start = .;
 @shared_objects@
 __shared_objects_end = .;
 
+# In theory, these could be placed in the region that's reused for stack.
+.cheriot_compartment_initialisers : ALIGN(8)
+{
+	.initialiser_start = .;
+	*.compartment(SORT_BY_INIT_PRIORITY(.cheriot_initialiser.*));
+	.initialiser_end = .;
+}
+
 . = ALIGN(64);
 
 # Everything after this point can be discarded after the loader has
@@ -173,12 +181,15 @@ __cap_relocs_end = .;
     # Magic number, used to detect mismatches between linker script and
     # loader versions.
     # New versions of this can be generated with:
-    # head /dev/random | shasum | cut -c 0-8
-    LONG(0x46391da0);
+    # head /dev/random | shasum | cut -c 1-8
+    LONG(0xb0531162);
     # Number of library headers.
     SHORT(@library_count@);
     # Number of compartment headers.
     SHORT(@compartment_count@);
+	# Address of the start and end of the global initialiser table
+	LONG(.initialiser_start);
+	SHORT(.initialiser_end - .initialiser_start);
     @compartment_headers@
 }
 
@@ -225,3 +236,4 @@ __compart_headers_size = __compart_headers_end - __compart_headers;
 
     @library_exports@
 }
+
