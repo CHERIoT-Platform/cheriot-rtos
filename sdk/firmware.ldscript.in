@@ -15,4 +15,7 @@ SECTIONS
 {
 	# The build system generates sections and assigns them within its PHDRs.
 	@ldscript_top_sections@
+
+	# Explicitly discard allocating sections from the loader not claimed elsewhere.
+	/DISCARD/ : { INPUT_SECTION_FLAGS (SHF_ALLOC) *.loader.o(*) }
 }
