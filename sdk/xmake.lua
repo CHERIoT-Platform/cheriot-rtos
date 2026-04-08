@@ -930,7 +930,20 @@ task("audit")
 			end
 		end
 
-        local function execute_audit(target, cheriot_audit_program, board_file, report_file, query, regofile)
+        local function execute_audit(cheriot_audit_program, audit_data)
+			local report_file = audit_data.target:get("cheriot.link_report")
+			local board_file_1 = audit_data.target:dep("cheriot.board.file")
+			if(board_file_1 == nil) then
+				raise("Audit failed! target: "..audit_data.target:name()..", board file not found!")
+			end
+			local board_file = board_file_1 and board_file_1:targetfile() or nil
+			if(board_file == nil) then
+				raise("Audit failed! target: "..audit_data.target:name()..", board file not found!")
+			end
+			if(report_file == nil) then
+				raise("Audit failed! target: "..audit_data.target:name()..", report file not found!")
+			end
+
             -- Performs an audit. Uses find_cheriot_audit() to find cheriot-audit.
             local t = {
 				cheriot_audit_program, 
@@ -939,17 +952,17 @@ task("audit")
                 "--firmware-report",
                 report_file,
                 "-q",
-                "'"..query.."'"
+                "'"..audit_data.query.."'"
             }
-            if regofile then
-				if type(regofile) == "table" then
-					for _, file in ipairs(regofile) do
+            if audit_data.module then
+				if type(audit_data.module) == "table" then
+					for _, file in ipairs(audit_data.module) do
 						table.insert(t, "-m")
 						table.insert(t, file)
 					end
 				else
 					table.insert(t, "-m")
-					table.insert(t, regofile)
+					table.insert(t, audit_data.module)
 				end
             end
             local ex_string = table.concat(t, ' ')
@@ -957,55 +970,65 @@ task("audit")
             -- Execute the cheriot-audit
             local outdata, errdata = os.iorun(ex_string)
             if string.sub(outdata, -5, -1) == "true\n" then
-                if regofile then
-                    print("Audit passed. target: "..target:name()..", module files: "..regofile..", query: "..query)
+                if audit_data.module then
+                    print("Audit passed. target: "..audit_data.target:name()..", module files: "..audit_data.module..", query: "..audit_data.query)
                 else
-                    print("Audit passed. target: "..target:name()..", query: "..query)
+                    print("Audit passed. target: "..audit_data.target:name()..", query: "..audit_data.query)
                 end
             else
-                if regofile then
-                    raise("Audit failed! target: "..target:name()..", module files: "..regofile..", query: "..query)
+                if audit_data.module then
+                    raise("Audit failed! target: "..audit_data.target:name()..", module files: "..audit_data.module..", query: "..audit_data.query)
                 else
-                    raise("Audit failed! target: "..target:name()..", query: "..query)
+                    raise("Audit failed! target: "..audit_data.target:name()..", query: "..audit_data.query)
                 end
             end
         end
 
 		local function each_firmware(target, cheriot_audit_program)
+			-- New plan:
+			-- 1. Build a list of all the audits to run and the modules they require by visiting the dependancy tree. This will be a list of tuples of the form (target, query, module) where module is optional.
+			-- 2. Go through the list and run each audit, using the same board file and compartment report for each one.
 			local compartment_report = target:get("cheriot.link_report")
 			local cheriot_audit = target:get("cheriot.audit")
-			local board_file_1 = target:dep("cheriot.board.file")
-			if board_file_1 and compartment_report then
-				local board_file = board_file_1:targetfile()
-				-- printf("%s: (type: %s, kind: %s)\r\n", _, target:type(), target:kind())
-				-- printf("  compartment_report: %s\r\n", compartment_report)
-				-- printf("  board_file: %s\r\n", board_file)
-				-- printf("  cheriot_audit_program: %s\r\n", cheriot_audit_program)
-				-- Every target shoudl get the data.rtos.valid() query run against it, as a basic smoke test. This will check that the compartment report is well formed and that the board file is correct.
-				execute_audit(target, cheriot_audit_program, board_file, compartment_report, "data.rtos.valid", nil)
+			local board_file = target:dep("cheriot.board.file")
+			local audit_list = {}
+			if board_file and compartment_report then
+				local board_file_name = board_file:targetfile()
+				-- Every target should get the data.rtos.valid() query run against it, as a basic smoke test. This will check that the compartment report is well formed and that the board file is correct.
+				table.insert(audit_list, {target=target, query="data.rtos.valid", module=nil})
 				-- Works through the dependancy tree and calls this only once for each dependancy
-				visit_all_dependencies_of(target, function (target)
-					local audit = target:get("cheriot.audit")
+				visit_all_dependencies_of(target, function (target_inner)
+					local audit = target_inner:get("cheriot.audit")
 					if audit then
 						-- Look for "query" and "module" keys in the audit table. Either can be a string or a table of strings.
 						if audit.query then
-							if type(audit.query) == "string" then
-								execute_audit(target, cheriot_audit_program, board_file, compartment_report, audit.query, audit.module)
-							else
-								for i,value in ipairs(audit.query) do
-									if type(value) ~= "string" then
-										raise("Audit failed! target: "..target:name()..", query is invalid!")
-									end
-									execute_audit(target, cheriot_audit_program, board_file, compartment_report, value, audit.module)
+							for i,value in ipairs(audit.query) do
+								if type(value) ~= "string" then
+									raise("Audit failed! target: "..target:name()..", query is invalid!")
 								end
-							end				
+								-- printf("2. Adding audit for target: %s, query: %s, module: %s\r\n", target:name(), value, audit.module)
+								table.insert(audit_list, {target=target, query=value, module=audit.module})
+							end
 						else
 							raise("Audit failed! target: "..target:name()..", query is invalid!")
 						end
 					end
 				end)
-			end			
+			end	
+
+			return audit_list
 		end
+
+		function tableConcat(t1,t2)
+			-- loop over t2 items
+			for i=1,#t2 do
+				-- append entries to t1   
+				t1[#t1+1] = t2[i]
+			end
+			-- return merged table
+			return t1
+		end
+
 
 		-- Split a string with give separator
 		local function custom_split(inputstr, seperator)
@@ -1045,9 +1068,20 @@ task("audit")
 		local targets = project.targets()
 
 		local cheriot_audit_program = find_cheriot_audit();
+		local audit_list ={};
 		for _, target in pairs(targets) do
-			each_firmware(target, cheriot_audit_program)
+			audit_list = tableConcat(audit_list, each_firmware(target, cheriot_audit_program))
 		end
+
+		if(#audit_list > 0) then
+			printf("Audit list:\r\n")
+		end
+		for i,value in ipairs(audit_list) do
+			printf("%i. \"%s\": q=\"%s\", m = \"%s\"\r\n", i, value.target:name(), value.query, value.module)
+			-- execute_audit(cheriot_audit_program, value.target, value.query, value.module)
+			execute_audit(cheriot_audit_program, value)
+		end	
+
     end)
     
     set_menu {
