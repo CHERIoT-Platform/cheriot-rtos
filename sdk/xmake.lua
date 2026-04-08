@@ -930,7 +930,7 @@ task("audit")
 			end
 		end
 
-        local function execute_audit(cheriot_audit_program, audit_data)
+        local function execute_audit(cheriot_audit_program, audit_data, external_modules)
 			local report_file = audit_data.target:get("cheriot.link_report")
 			local board_file_1 = audit_data.target:dep("cheriot.board.file")
 			if(board_file_1 == nil) then
@@ -963,6 +963,17 @@ task("audit")
 				else
 					table.insert(t, "-m")
 					table.insert(t, audit_data.module)
+				end
+            end
+            if external_modules then
+				if type(external_modules) == "table" then
+					for _, file in ipairs(external_modules) do
+						table.insert(t, "-m")
+						table.insert(t, file)
+					end
+				else
+					table.insert(t, "-m")
+					table.insert(t, external_modules)
 				end
             end
             local ex_string = table.concat(t, ' ')
@@ -1049,9 +1060,9 @@ task("audit")
 		import("core.base.option")
         -- Get the options
         local query = option.get("query")
-        local module = custom_split(option.get("module"), '|')
+        local external_modules = custom_split(option.get("module"), '|')
         
-		print("module:",module)
+		print("module(s):", external_modules)
 		if query then
 			print("query:", query)
 		else
@@ -1078,8 +1089,7 @@ task("audit")
 		end
 		for i,value in ipairs(audit_list) do
 			printf("%i. \"%s\": q=\"%s\", m = \"%s\"\r\n", i, value.target:name(), value.query, value.module)
-			-- execute_audit(cheriot_audit_program, value.target, value.query, value.module)
-			execute_audit(cheriot_audit_program, value)
+			execute_audit(cheriot_audit_program, value, external_modules)
 		end	
 
     end)
