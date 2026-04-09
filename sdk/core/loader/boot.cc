@@ -349,7 +349,7 @@ namespace
 	{
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc99-designator"
-		constexpr SealingType Sentries[] = {
+		static constexpr const SealingType Sentries[] = {
 		  [static_cast<int>(InterruptStatus::Enabled)]   = SentryEnabling,
 		  [static_cast<int>(InterruptStatus::Disabled)]  = SentryDisabling,
 		  [static_cast<int>(InterruptStatus::Inherited)] = SentryInheriting};
@@ -1512,21 +1512,3 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	ret.schedPCC = schedPCC;
 	ret.schedCGP = schedCGP;
 }
-
-/**
- * a dumb implementation, assuming no overlap and no capabilities
- */
-// NOLINTBEGIN(clang-analyzer-cheri.CapabilityCopy)
-void *memcpy(void *dst, const void *src, size_t n)
-{
-	char       *dst0 = static_cast<char *>(dst);
-	const char *src0 = static_cast<const char *>(src);
-
-	for (size_t i = 0; i < n; ++i)
-	{
-		dst0[i] = src0[i];
-	}
-
-	return dst0;
-}
-// NOLINTEND(clang-analyzer-cheri.CapabilityCopy)
