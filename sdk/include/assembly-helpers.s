@@ -84,6 +84,6 @@
  */
 .macro LoadCapCGP register symbol
 1:
-	auicgp		\register, %cheriot_compartment_hi(\symbol)
+	auicgp.relaxable		\register, %cheriot_compartment_cgp_hi(\symbol)
 	clc			\register, %cheriot_compartment_lo_i(1b)(\register)
 .endm
