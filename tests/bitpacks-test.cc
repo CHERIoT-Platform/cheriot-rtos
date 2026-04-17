@@ -319,6 +319,30 @@ static void test_static_asserts()
 	static_assert(BITPACK_MASKED_REL_QVAL(C1, ==, Flag0::No, Scalar{7}));
 }
 
+/*
+ * Demonstrate a derived bitpack and how we can, in particular, describe a
+ * bitpack that differs only in the constness of a field therein.
+ */
+struct DerivedFC : BitpackDerived<Foo::Control>
+{
+	BITPACK_DERIVED_PREFIX;
+	BITPACK_DERIVED_FIELD_CONST_FOR_TYPE(Flag1, true);
+};
+
+#define FIELD_INFO_BY_QTYPE(bt, t)                                             \
+	[]() { return decltype(BITPACK_BY_QTYPE((bt){}, t))::Field::Info; }()
+
+/*
+ * The derived bitpack continues to have types inherited from its parent and,
+ * if we do not do anyting, these have the same associated field info.
+ */
+static_assert(FIELD_INFO_BY_QTYPE(Foo::Control, Drive) ==
+              FIELD_INFO_BY_QTYPE(DerivedFC, Drive));
+
+// But we can also redefine the fields associated with types...
+static_assert(!FIELD_INFO_BY_QTYPE(Foo::Control, Flag1).isConst);
+static_assert(FIELD_INFO_BY_QTYPE(DerivedFC, Flag1).isConst);
+
 namespace MaybeBetterErgonomicsTypes
 {
 	/*

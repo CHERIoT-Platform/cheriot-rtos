@@ -662,6 +662,24 @@ class BITPACK_DECL_ANNOTATION Bitpack
 };
 
 /**
+ * It is occasionally useful to derive one bitpack from another.  Using
+ * BitpackDerived<B> as the sole (non-empty) superclass of an aggregate type
+ * reduces the syntactic clutter of deriving from the bitpack B.
+ *
+ * See `BITPACK_DERIVED_PREFIX` and `BITPACK_DERIVED_FIELD_INFO_FOR_TYPE`.
+ */
+template<typename B>
+    requires std::derived_from<B, Bitpack<typename B::Storage>>
+struct BitpackDerived : B
+{
+	using B::B;
+	using B::operator=;
+
+	protected:
+	using ParentBitpack = B;
+};
+
+/**
  * \defgroup macros Convenience macros
  * @{
  */
@@ -804,6 +822,46 @@ class BITPACK_DECL_ANNOTATION Bitpack
  * function of a template parameter).
  */
 #define BITPACK_BY_TQTYPE(b, t) (b).template view<typename decltype(b)::t>()
+
+/// @}
+
+/**
+ * \defgroup macros_defn Derived bitpack definition macros
+ * @{
+ */
+
+/**
+ * Capture the incantations often at the top of a `BitpackDerived` structure.
+ * especially one with type-directed field views.
+ */
+#define BITPACK_DERIVED_PREFIX                                                 \
+	using BitpackDerived<ParentBitpack>::BitpackDerived;                       \
+	using BitpackDerived<ParentBitpack>::operator=;                            \
+	/* Inherit field info for most types from parent bitpack */                \
+	template<typename FieldType>                                               \
+	static constexpr FieldInfo field_info_for_type()                           \
+	{                                                                          \
+		return ParentBitpack::field_info_for_type<FieldType>();                \
+	}
+
+/// Modify the field information for a type in a derived bitpack.
+#define BITPACK_DERIVED_FIELD_INFO_FOR_TYPE(type, lambda)                      \
+	template<>                                                                 \
+	constexpr FieldInfo field_info_for_type<type>()                            \
+	{                                                                          \
+		static_assert(                                                         \
+		  std::is_invocable_r_v<void, decltype(lambda), FieldInfo &>);         \
+		auto fi = ParentBitpack::field_info_for_type<type>();                  \
+		lambda(fi);                                                            \
+		return fi;                                                             \
+	}
+
+/**
+ * Modify the constness field information for a type in a derived bitpack.
+ * This is a thin wrapper around BITPACK_DERIVED_FIELD_INFO_FOR_TYPE.
+ */
+#define BITPACK_DERIVED_FIELD_CONST_FOR_TYPE(type, c)                          \
+	BITPACK_DERIVED_FIELD_INFO_FOR_TYPE(type, [](auto &fi) { fi.isConst = c; })
 
 /// @}
 
