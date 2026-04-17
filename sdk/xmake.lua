@@ -197,7 +197,7 @@ toolchain("cheriot-clang", function ()
 		local include_directory = path.join(scriptdir, "include")
 
 		local target = self:config("target")
-			or "riscv32cheriot-unknown-cheriotrtos"
+			or "riscv32-unknown-cheriotrtos"
 		local cpu = board["cpu"] or "cheriot"
 		local abi = self:config("abi") or "cheriot"
 
@@ -232,7 +232,7 @@ toolchain("cheriot-clang", function ()
 
 		-- Rust flags
 		local default_rc_flags = {
-			"--target=" .. target,
+			"--target=riscv32cheriot-unknown-cheriotrtos",
 			"-Ctarget-cpu=" .. cpu,
 		}
 		self:add("rcflags", default_rc_flags)
@@ -244,7 +244,7 @@ end)
 rule("cheriot.baremetal-abi")
 	on_load(function (self)
 		self:set("toolchains", "cheriot-clang",
-			{ target = "riscv32cheriot-unknown-unknown"
+			{ target = "riscv32-unknown-unknown"
 			, abi = "cheriot-baremetal"
 			})
 	end)
