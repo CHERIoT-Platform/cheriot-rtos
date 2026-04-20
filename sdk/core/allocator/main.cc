@@ -35,25 +35,194 @@ using namespace CHERI;
 Revocation::Revoker revoker;
 namespace
 {
-	/**
-	 * Internal view of an allocator capability.
-	 *
-	 * TODO: For now, these are statically allocated. Eventually we will have
-	 * some that are dynamically allocated. These should be ref counted so that
-	 * we can avoid repeated validity checks.
-	 */
+	/// Internal view of an allocator capability.
 	struct PrivateAllocatorCapabilityState
 	{
 		/// The remaining quota for this capability.
 		size_t quota;
 		/// A unique identifier for this pool.
 		uint16_t identifier;
+		/// Pointers forming DLL for dynamically allocated sub quotas.
+		HeapOffset<PrivateAllocatorCapabilityState> next;
+		HeapOffset<PrivateAllocatorCapabilityState> prev;
 	};
 
 	static_assert(sizeof(PrivateAllocatorCapabilityState) <=
 	              sizeof(AllocatorCapabilityState));
 	static_assert(alignof(PrivateAllocatorCapabilityState) <=
 	              alignof(AllocatorCapabilityState));
+
+	/**
+	 * Represents the assignable ID space for heap resident quotas.
+	 */
+	class SubQuotaIdSpace
+	{
+		static constexpr uint16_t IdMax =
+		  (1 << (MChunkHeader::OwnerIDWidth)) - 1;
+		// FIXME: If we can determine the number of static quotas in the
+		// loader and provide this to the allocator, we can reclaim most of
+		// this ID space.
+		static constexpr uint16_t IdMin =
+		  (1 << (MChunkHeader::OwnerIDWidth - 1));
+		// Full span of the sub-quota ID range as a uint32_t to avoid
+		// truncation when projecting IDs when wrapping around.
+		static constexpr uint32_t IdRange = IdMax - IdMin + 1;
+
+		HeapOffset<PrivateAllocatorCapabilityState> head = {};
+
+		/**
+		 * Helper function that inserts the given quota object after `anchor`
+		 * and assigns it `id`.
+		 */
+		__always_inline void node_insert_after(
+		  PrivateAllocatorCapabilityState            *anchor,
+		  PrivateAllocatorCapabilityState            *node,
+		  HeapOffset<PrivateAllocatorCapabilityState> nodeOffset,
+		  uint16_t                                    id)
+		{
+			Debug::Assert(id >= IdMin && id <= IdMax,
+			              "Provided ID {} is outside sub-quota range [{}, {}]",
+			              id,
+			              IdMin,
+			              IdMax);
+			node->identifier = id;
+			node->next       = anchor->next;
+			node->prev =
+			  HeapOffset<PrivateAllocatorCapabilityState>::from(anchor);
+			anchor->next->prev = nodeOffset;
+			anchor->next       = nodeOffset;
+		}
+
+		/**
+		 * Helper function for picking the offset into a given range of free
+		 * IDs. Here we take the midpoint.
+		 */
+		[[nodiscard]] __always_inline static uint16_t offset_pick(uint32_t gap)
+		{
+			return static_cast<uint16_t>(gap / 2);
+		}
+
+		public:
+		[[nodiscard]] __always_inline static constexpr bool
+		is_sub_quota_id(uint16_t value)
+		{
+			return value >= IdMin;
+		}
+
+		[[nodiscard]] __always_inline bool is_empty() const
+		{
+			return head.is_null();
+		}
+
+		/**
+		 * Insert `node` into the sorted ring. Node is assigned an ID chosen by
+		 * policy described by `offset_pick`. Returns true on success, false if
+		 * the ID space is exhausted.
+		 */
+		[[nodiscard]] __noinline bool
+		id_allocate(PrivateAllocatorCapabilityState *node)
+		{
+			Debug::Assert(node != nullptr, "id_allocate called with null node");
+			Debug::Assert(node->next.is_null() && node->prev.is_null(),
+			              "Node {} already appears to be in ring",
+			              node->identifier);
+
+			auto nodeOffset =
+			  HeapOffset<PrivateAllocatorCapabilityState>::from(node);
+
+			// Ring is empty, so use full ID range for picking offset
+			if (head.is_null())
+			{
+				auto offset = offset_pick(IdRange);
+				Debug::Assert(
+				  offset < IdRange,
+				  "offset_pick returned offset {} outside IdRange {}",
+				  offset,
+				  IdRange);
+				uint16_t id      = static_cast<uint16_t>(IdMin + offset);
+				node->identifier = id;
+				node->next       = nodeOffset;
+				node->prev       = nodeOffset;
+				head             = nodeOffset;
+				return true;
+			}
+
+			auto *start   = head.get();
+			auto *current = start;
+
+			do
+			{
+				auto *next = current->next.get();
+				Debug::Assert(current == next ||
+				                current->identifier != next->identifier,
+				              "Duplicate identifiers in sub-quota ring: {}",
+				              current->identifier);
+
+				// project next's ID above current to handle wraparound nicely
+				uint32_t nextIdProjected = next->identifier;
+				if (nextIdProjected <= current->identifier)
+				{
+					nextIdProjected += IdRange;
+				}
+
+				uint32_t gap = nextIdProjected - current->identifier - 1;
+
+				if (gap > 0)
+				{
+					uint16_t offset = offset_pick(gap);
+					Debug::Assert(offset < gap,
+					              "offset_pick returned offset outside "
+					              "gap [{}, {})",
+					              current->identifier + 1,
+					              next->identifier);
+					uint32_t wideId = current->identifier + 1 + offset;
+					uint16_t id =
+					  (wideId > IdMax)
+					    ? static_cast<uint16_t>(IdMin + (wideId - IdMax - 1))
+					    : static_cast<uint16_t>(wideId);
+
+					// insert the node into the list and advance the head
+					// pointer to the inserted node, such that we reduce
+					// clustering.
+					node_insert_after(current, node, nodeOffset, id);
+					head = nodeOffset;
+					return true;
+				}
+
+				// no free ID range
+				current = next;
+			} while (current != start);
+
+			return false;
+		}
+
+		/**
+		 * Remove `node` from the sorted ring and clear its link pointers.
+		 */
+		void __noinline id_release(PrivateAllocatorCapabilityState *node)
+		{
+			Debug::Assert(node != nullptr, "id_release called with null node");
+			Debug::Assert(!head.is_null(), "release called on empty ring");
+			Debug::Assert(!node->next.is_null() && !node->prev.is_null(),
+			              "Node with ID {} appears not to be in the ring.",
+			              node->identifier);
+
+			if (head.get() == node)
+			{
+				head = (node->next.get() == node)
+				         ? HeapOffset<PrivateAllocatorCapabilityState>{}
+				         : node->next;
+			}
+
+			node->prev->next = node->next;
+			node->next->prev = node->prev;
+			node->next       = {};
+			node->prev       = {};
+		}
+	};
+
+	/// The sub quota ID space
+	SubQuotaIdSpace subQuotaIds;
 
 	// the global memory space
 	MState *gm;
@@ -391,6 +560,10 @@ namespace
 					// Failed to acquire lock within allowed timeout.
 					return -ETIMEDOUT;
 				}
+				if (!Capability{capability}.is_valid())
+				{
+					return -EPERM;
+				}
 				continue;
 			}
 		} while (may_block(timeout));
@@ -428,13 +601,13 @@ namespace
 		if (state->identifier == 0)
 		{
 			static uint32_t nextIdentifier = 1;
-			// Cleave the ID space in half, with upper range reserved for
-			// dynamically allocated subquotas.
-			// FIXME: If we can determine the number of static quotas in the
-			// loader and provide this to the allocator, we can reclaim most of
-			// this ID space.
-			if (nextIdentifier >= (1 << (MChunkHeader::OwnerIDWidth - 1)))
+
+			if (SubQuotaIdSpace::is_sub_quota_id(nextIdentifier))
 			{
+				// If this ID is a sub quota ID, then we've run out of IDs for
+				// our static quotas.
+				Debug::log<DebugLevel::Warning>(
+				  "Exhausted static quota ID space.");
 				return nullptr;
 			}
 			state->identifier = nextIdentifier++;
@@ -502,6 +675,27 @@ namespace
 		}
 
 		/**
+		 * Transfers ownership of this claim. Cannot be transferred to allocator
+		 * ownership.
+		 */
+		void ownership_transfer(uint16_t newOwner)
+		{
+			Debug::Assert(
+			  newOwner != QuotaIdentifierAllocatorOwned,
+			  "newOwner of claim cannot be QuotaIdentifierAllocatorOwned, "
+			  "since the allocator cannot make claims.");
+			allocatorIdentifier = newOwner;
+		}
+
+		/**
+		 * Returns the number of references for this claim.
+		 */
+		[[nodiscard]] uint32_t reference_count() const
+		{
+			return referenceCount;
+		}
+
+		/**
 		 * Returns the value of the compressed next pointer.
 		 */
 		[[nodiscard]] HeapOffset<Claim> encoded_next() const
@@ -518,12 +712,13 @@ namespace
 			/**
 			 * Placeholder value for end iterators.
 			 */
-			HeapOffset<Claim> endPlaceholder = {};
+			static inline const HeapOffset<Claim> EndPlaceholder = {};
 
 			/**
 			 * A pointer to the encoded next pointer.
 			 */
-			HeapOffset<Claim> *encodedNextPointer = &endPlaceholder;
+			HeapOffset<Claim> *encodedNextPointer =
+			  const_cast<HeapOffset<Claim> *>(&EndPlaceholder);
 
 			public:
 			/**
@@ -557,10 +752,9 @@ namespace
 			}
 
 			/// Iteration termination condition.
-			__always_inline bool operator!=(const Iterator Other)
+			__always_inline bool operator!=(const Iterator &other)
 			{
-				return encodedNextPointer->value !=
-				       Other.encodedNextPointer->value;
+				return *encodedNextPointer != *other.encodedNextPointer;
 			}
 
 			/**
@@ -830,6 +1024,7 @@ namespace
 			}
 			return 0;
 		}
+
 		return -EPERM;
 	}
 
@@ -846,6 +1041,7 @@ namespace
 			                                heapCapability);
 			return -EPERM;
 		}
+
 		// Validate the pointer. We do not permit freeing sealed pointers.
 		Capability<void> mem{rawPointer};
 		if (!mem.is_valid() || mem.is_sealed())
@@ -1167,62 +1363,22 @@ namespace
 	using TokenHandle = CHERI::Capability<TokenObjectType, false>;
 
 	/**
-	 * Helper that allocates a sealed object and returns the sealed and
-	 * unsealed capabilities to the object.  Requires that the sealing key have
-	 * all of the permissions in `permissions`.
+	 * Must be called with the lock held. This function is intended to be called
+	 * from within the allocator, with an unsealed AllocatorCapabilityState
+	 * reference.
 	 */
-	std::pair<SealedTokenHandle, TokenHandle<false>>
-	  __noinline allocate_sealed_unsealed(Timeout            *timeout,
-	                                      AllocatorCapability heapCapability,
-	                                      SealingKey          key,
-	                                      size_t              requestedSize,
-	                                      PermissionSet       permissions)
+	__noinline std::pair<SealedTokenHandle, TokenHandle<false>>
+	           allocate_sealed_unsealed_internal(
+	             LockGuard<decltype(lock)>      &&g,
+	             Timeout                         *timeout,
+	             PrivateAllocatorCapabilityState *capability,
+	             SealingKey                       key,
+	             size_t                           sealedSize)
 	{
-		if (!check_timeout_pointer(timeout))
-		{
-			return {nullptr, nullptr};
-		}
-
-		if (!permissions.can_derive_from(key.permissions()))
-		{
-			Debug::log<DebugLevel::Warning>(
-			  "Operation requires {}, cannot derive from {}", permissions, key);
-			return {nullptr, nullptr};
-		}
-
-		// Round up the size to the next representable size.  This ensures
-		// that, once we've added the header space, we have an allocation where
-		// both the object (from the end) and the header (with padding at the
-		// start) are representable.
-		size_t unsealedSize = CHERI::representable_length(requestedSize);
-		// Very large sizes may be rounded 'up' to zero.  Don't allow this.
-		if (unsealedSize == 0)
-		{
-			Debug::log<DebugLevel::Warning>(
-			  "Requested size {} is not representable", requestedSize);
-			return {nullptr, nullptr};
-		}
-
-		// It shouldn't be possible to overflow the add due to the way the
-		// rounding works, but this is not guaranteed in future capability
-		// encodings, so we'll do a tiny bit of extra work here to avoid
-		// accidentally introducing a security vulnerability in a future
-		// encoding.
-		size_t sealedSize;
-		if (__builtin_add_overflow(
-		      sizeof(TokenObjectHeader), unsealedSize, &sealedSize))
-		{
-			Debug::log<DebugLevel::Warning>(
-			  "Requested size {} is too large to include header",
-			  requestedSize);
-			return {nullptr, nullptr};
-		}
-
-		LockGuard g{lock};
-		auto     *capability =
-		  malloc_capability_unseal(heapCapability, AllocatorPermitAllocate);
 		if (capability == nullptr)
 		{
+			Debug::log<DebugLevel::Warning>(
+			  "sealed_unsealed Failed to unseal capability.");
 			return {nullptr, nullptr};
 		}
 
@@ -1281,6 +1437,84 @@ namespace
 			      nullptr, nullptr};
 		    });
 	}
+
+	/**
+	 * Helper for determining the size of the sealed object allocation needed
+	 * for the requested size.
+	 */
+	__always_inline std::optional<size_t>
+	                sealed_allocation_size(size_t requestedSize)
+	{
+		// Round up the size to the next representable size.  This ensures
+		// that, once we've added the header space, we have an allocation where
+		// both the object (from the end) and the header (with padding at the
+		// start) are representable.
+		size_t unsealedSize = CHERI::representable_length(requestedSize);
+		// Very large sizes may be rounded 'up' to zero.  Don't allow this.
+		if (unsealedSize == 0)
+		{
+			Debug::log<DebugLevel::Warning>(
+			  "Requested size {} is not representable", requestedSize);
+			return std::nullopt;
+		}
+
+		// It shouldn't be possible to overflow the add due to the way the
+		// rounding works, but this is not guaranteed in future capability
+		// encodings, so we'll do a tiny bit of extra work here to avoid
+		// accidentally introducing a security vulnerability in a future
+		// encoding.
+		size_t sealedSize;
+		if (__builtin_add_overflow(
+		      sizeof(TokenObjectHeader), unsealedSize, &sealedSize))
+		{
+			Debug::log<DebugLevel::Warning>(
+			  "Requested size {} is too large to include header",
+			  requestedSize);
+			return std::nullopt;
+		}
+
+		return sealedSize;
+	}
+
+	/**
+	 * Helper that allocates a sealed object and returns the sealed and
+	 * unsealed capabilities to the object.  Requires that the sealing key have
+	 * all of the permissions in `permissions`.
+	 */
+	std::pair<SealedTokenHandle, TokenHandle<false>>
+	  __noinline allocate_sealed_unsealed(Timeout            *timeout,
+	                                      AllocatorCapability heapCapability,
+	                                      SealingKey          key,
+	                                      size_t              requestedSize,
+	                                      PermissionSet       permissions)
+	{
+		if (!check_timeout_pointer(timeout))
+		{
+			return {nullptr, nullptr};
+		}
+
+		if (!permissions.can_derive_from(key.permissions()))
+		{
+			Debug::log<DebugLevel::Warning>(
+			  "Operation requires {}, cannot derive from {}", permissions, key);
+			return {nullptr, nullptr};
+		}
+
+		auto sealedSize = sealed_allocation_size(requestedSize);
+		if (!sealedSize.has_value())
+		{
+			return {nullptr, nullptr};
+		}
+
+		{
+			LockGuard g{lock};
+			auto     *capability =
+			  malloc_capability_unseal(heapCapability, AllocatorPermitAllocate);
+			return allocate_sealed_unsealed_internal(
+			  std::move(g), timeout, capability, key, sealedSize.value());
+		}
+	}
+
 } // namespace
 
 TokenKey token_key_new()
@@ -1316,6 +1550,7 @@ __cheriot_minimum_stack(0x290) CHERI_SEALED(void *)
 	STACK_CHECK(0x290);
 	if (!check_timeout_pointer(timeout))
 	{
+		Debug::log<DebugLevel::Warning>("Timeout invalid.");
 		return nullptr;
 	}
 	auto [sealed, obj] = allocate_sealed_unsealed(
@@ -1442,6 +1677,225 @@ __cheriot_minimum_stack(TokenObjDestroyStackUsage) int token_obj_can_destroy(
 	unsealed.address() = unsealed.base();
 
 	return heap_can_free(heapCapability, unsealed);
+}
+
+__cheriot_minimum_stack(0x270) AllocatorCapability
+  split_quota(Timeout *timeout, AllocatorCapability parent, size_t size)
+{
+	STACK_CHECK(0x270);
+	if (!check_timeout_pointer(timeout))
+	{
+		return reinterpret_cast<AllocatorCapability>(-EINVAL);
+	}
+
+	LockGuard g{lock};
+
+	auto *parentCap = malloc_capability_unseal(parent, AllocatorPermitAllocate);
+	if (parentCap == nullptr)
+	{
+		return reinterpret_cast<AllocatorCapability>(-EPERM);
+	}
+
+	auto sealedSize =
+	  sealed_allocation_size(sizeof(PrivateAllocatorCapabilityState));
+
+	if (!sealedSize.has_value() ||
+	    parentCap->quota < (size + sealedSize.value()))
+	{
+		return reinterpret_cast<AllocatorCapability>(-ENOMEM);
+	}
+
+	auto key = STATIC_SEALING_TYPE(MallocKey);
+
+	auto [sealedWrapped, unsealedWrapped] = allocate_sealed_unsealed_internal(
+	  std::move(g), timeout, parentCap, key, sealedSize.value());
+
+	if (!sealedWrapped.is_valid())
+	{
+		return reinterpret_cast<AllocatorCapability>(-EINVAL);
+	}
+
+	// Slightly ugly solution. SealedTokenHandle doesn't expose .get() so we pun
+	// through pointer for correct return value.
+	auto sealed = *reinterpret_cast<AllocatorCapability *>(&sealedWrapped);
+	// Casting to Private lets us write to our prev/next pointers.
+	auto *unsealed = reinterpret_cast<PrivateAllocatorCapabilityState *>(
+	  unsealedWrapped.get());
+
+	// Allocate the quota to the child
+	parentCap->quota -= size;
+	unsealed->quota = size;
+
+	if (subQuotaIds.id_allocate(unsealed))
+	{
+		return sealed;
+	}
+
+	// the unsealed capability returned from allocate_sealed_unsealed_internal
+	// is interior to the actual allocation made. It cannot be used to free
+	// because of this, so we unseal our sealed capability to get the full
+	// bounds.
+	TokenHandle<true> unsealedFull =
+	  unseal_internal(STATIC_SEALING_TYPE(MallocKey), sealedWrapped);
+	unsealedFull.address() = unsealedFull.base();
+	Debug::log<DebugLevel::Warning>(
+	  "Failed to allocate ID in split_quota, freeing {}", unsealedFull);
+
+	int ret = heap_free_internal(parent, unsealedFull, true);
+
+	if (ret < 0)
+	{
+		Debug::log<DebugLevel::Warning>(
+		  "Failed to free allocated child after ID allocation failure. "
+		  "Free manually with recombine_quota.");
+		return reinterpret_cast<AllocatorCapability>(-EINVAL);
+	}
+
+	parentCap->quota += size;
+	return reinterpret_cast<AllocatorCapability>(-ENOMEM);
+}
+
+__cheriot_minimum_stack(0x1a0) int recombine_quota(AllocatorCapability child,
+                                                   AllocatorCapability parent)
+{
+	STACK_CHECK(0x1a0);
+	LockGuard g{lock};
+
+	auto parentState =
+	  malloc_capability_unseal(parent, AllocatorPermitAllocate);
+
+	auto *childState = malloc_capability_unseal(child, AllocatorPermitAllocate);
+
+	if (childState == nullptr || parentState == nullptr)
+	{
+		return -EPERM;
+	}
+
+	uint16_t childID  = childState->identifier;
+	uint16_t parentID = parentState->identifier;
+	if (!SubQuotaIdSpace::is_sub_quota_id(childID))
+	{
+		return -EINVAL;
+	}
+
+	// Sealed pointer was an internal address, we want to free from base.
+	TokenHandle<true> unsealedChild =
+	  unseal_internal(STATIC_SEALING_TYPE(MallocKey),
+	                  reinterpret_cast<CHERI_SEALED(TokenObjectType *)>(child));
+	unsealedChild.address() = unsealedChild.base();
+
+	// Check that parent is authorized to free child, but don't really free
+	int ret = heap_free_internal(parent, unsealedChild, false);
+	if (ret != 0)
+	{
+		return ret;
+	}
+
+	// Walk the heap and transfer ownership of chunks from child to parent.
+	{
+		auto      chunk   = gm->heapStart.cast<MChunkHeader>();
+		ptraddr_t heapEnd = chunk.top();
+
+		do
+		{
+			if (chunk->is_in_use())
+			{
+				if (chunk->ownerID == childID)
+				{
+					// Child is the owner of this chunk. An owner never appears
+					// in a claims list for an allocation it owns, so we check
+					// only for a parent claim.
+					auto [parentNext, parentClaim] =
+					  claim_find(parentID, *chunk);
+					if (parentClaim != nullptr)
+					{
+						// Parent has a claim on allocation. Convert child's
+						// ownership into an additional reference on parent's
+						// existing claim.
+						chunk->set_owner(0);
+						childState->quota += chunk->size_get();
+						parentClaim->reference_add();
+					}
+					else
+					{
+						// There is no parent claim on the allocation and so we
+						// can simply reassign ownership.
+						chunk->set_owner(parentID);
+					}
+				}
+				else
+				{
+					// Child does not own this chunk, check for a child claim
+					auto [childNext, childClaim] = claim_find(childID, *chunk);
+					if (childClaim != nullptr)
+					{
+						auto [parentNext, parentClaim] =
+						  claim_find(parentID, *chunk);
+						if (parentClaim != nullptr)
+						{
+							// Both parent and child have claims on this
+							// allocation. Absorb the child's claim into the
+							// parents and destroy the child's claim object. We
+							// loop here since claim counts are expected to be
+							// small, and we want to respect the saturation
+							// logic.
+							for (uint32_t i = 0;
+							     i < childClaim->reference_count();
+							     ++i)
+							{
+								parentClaim->reference_add();
+							}
+							*childNext = childClaim->encoded_next();
+							childState->quota += chunk->size_get();
+							Claim::destroy(*childState, childClaim);
+						}
+						else if (chunk->ownerID == parentID)
+						{
+							// Parent is the owner of this allocation. We need
+							// to convert that ownership to a claim and add a
+							// reference. The parent has already paid for this
+							// allocation, as has the child, so we refund the
+							// size to the child to avoid double counting.
+							chunk->set_owner(0);
+							childClaim->ownership_transfer(parentID);
+							childClaim->reference_add();
+							childState->quota += chunk->size_get();
+						}
+						else
+						{
+							// Only child has a claim on this allocation, so we
+							// can transfer ownership of the claim to the
+							// parent.
+							childClaim->ownership_transfer(parentID);
+						}
+					}
+					// Else: child has no relation to this chunk. Nothing to do.
+				}
+			}
+			chunk = static_cast<MChunkHeader *>(chunk->cell_next());
+		} while (chunk.address() < heapEnd);
+	}
+
+	// Record the current quota of the childState after the fold operation
+	// has potentially destroyed claims
+	size_t quota      = childState->quota;
+	childState->quota = 0;
+
+	// Release the child ID
+	subQuotaIds.id_release(childState);
+
+	// Now really free the child
+	ret = heap_free_internal(parent, unsealedChild, true);
+
+	if (ret != 0)
+	{
+		Debug::log<DebugLevel::Warning>("Failed to destroy sub quota {}",
+		                                child);
+		return ret;
+	}
+
+	parentState->quota += quota;
+	return 0;
 }
 
 size_t heap_available()
