@@ -139,6 +139,35 @@ static inline uint64_t thread_microsecond_spin(uint32_t microseconds)
 }
 
 /**
+ * Wait until the cycle counter (as returned by rdcycle64()) reaches the given
+ * value.
+ *
+ * This will yield for periods that are longer than a scheduler tick and then
+ * spin for the remainder of the time.
+ *
+ * Returns the number of milliseconds that the thread actually waited.
+ */
+static inline uint64_t thread_wait_until(uint64_t end)
+{
+	static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
+	uint64_t              start                = rdcycle64();
+	uint64_t              current              = start;
+	// sleep for periods > 1 tick
+	while ((end > current) && (end - current > TIMERCYCLES_PER_TICK))
+	{
+		Timeout t = {0, ((uint32_t)(end - current)) / TIMERCYCLES_PER_TICK};
+		(void)thread_sleep(&t, ThreadSleepNoEarlyWake);
+		current = rdcycle64();
+	}
+	// Spin for the remaining time.
+	while (current < end)
+	{
+		current = rdcycle64();
+	}
+	return (current - start) / CyclesPerMillisecond;
+}
+
+/**
  * Wait for the specified number of milliseconds.  This will yield for periods
  * that are longer than a scheduler tick and then spin for the remainder of the
  * time.
@@ -155,26 +184,12 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 	return milliseconds;
 #else
 	static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
-	static const uint32_t CyclesPerTick        = CPU_TIMER_HZ / TICK_RATE_HZ;
+	uint64_t              start                = rdcycle64();
+	uint32_t              cycles = milliseconds * CyclesPerMillisecond;
+	uint64_t              end    = start + cycles;
 	__if_cxx(
 	  static_assert(CyclesPerMillisecond > 0, "CPU_TIMER_HZ is too low"););
-	uint32_t cycles  = milliseconds * CyclesPerMillisecond;
-	uint64_t start   = rdcycle64();
-	uint64_t end     = start + cycles;
-	uint64_t current = start;
-	while ((end > current) && (end - current > MS_PER_TICK))
-	{
-		Timeout t = {0, ((uint32_t)(end - current)) / CyclesPerTick};
-		(void)thread_sleep(&t, ThreadSleepNoEarlyWake);
-		current = rdcycle64();
-	}
-	// Spin for the remaining time.
-	while (current < end)
-	{
-		current = rdcycle64();
-	}
-	current = rdcycle64();
-	return (current - start) / CyclesPerMillisecond;
+	return thread_wait_until(end);
 #endif
 }
 
