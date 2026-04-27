@@ -975,7 +975,11 @@ task("audit")
             -- Execute the cheriot-audit
             local outdata, errdata = os.iorun(ex_string)
 			if query then 
-				print("Audit output:")
+					if #audit_data.module > 0 then
+						print("Audit run: target: "..audit_data.target:name()..", module files: "..table.concat(audit_data.module, ', ')..", query: "..audit_data.query)
+					else
+						print("Audit run: target: "..audit_data.target:name()..", query: "..audit_data.query)
+					end
 				printf("%s",outdata)
 			else
 				if string.sub(outdata, -5, -1) == "true\n" then
