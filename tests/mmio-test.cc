@@ -16,6 +16,11 @@ void check_permissions(Capability<volatile void> mmio, PermissionSet p)
 
 int test_mmio()
 {
+	// check that the returned pointer has the expected type. This serves a
+	// regression for https://github.com/CHERIoT-Platform/cheriot-rtos/pull/692
+	auto testType = MMIO_CAPABILITY(Uart, uart);
+	static_assert(std::is_same_v<decltype(testType), volatile Uart *>);
+
 #if !__has_attribute(cheriot_mmio)
 	// XXX No permissions; the compiler misinterprets this as all permissions!
 	// To mitigate this, we add a static assertion in the code this macro
