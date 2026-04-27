@@ -100,9 +100,13 @@ namespace
 		Capability m{tbase.cast<MState>()};
 
 		size_t hazardQuarantineSize =
-		  Capability{
-		    SHARED_OBJECT_WITH_PERMISSIONS(
-		      void *, allocator_hazard_pointers, true, false, true, false)}
+		  Capability{SHARED_OBJECT_WITH_PERMISSIONS(void *,
+		                                            allocator_hazard_pointers,
+		                                            true,
+		                                            false,
+		                                            true,
+		                                            false,
+		                                            false)}
 		    .length();
 
 		m.bounds()            = sizeof(*m);
@@ -129,13 +133,15 @@ namespace
 	{
 		if (gm == nullptr)
 		{
+			// Access without LoadGlobal to help ensure we don't break isolation
 			Capability heap = const_cast<void *>(
 			  MMIO_CAPABILITY_WITH_PERMISSIONS(void,
 			                                   heap,
 			                                   /*load*/ true,
 			                                   /*store*/ true,
 			                                   /*capabilities*/ true,
-			                                   /*loadMutable*/ true));
+			                                   /*loadMutable*/ true,
+			                                   /*loadGlobal*/ false));
 
 			revoker.init();
 			gm = mstate_init(heap, heap.bounds());

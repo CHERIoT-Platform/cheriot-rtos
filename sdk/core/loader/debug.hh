@@ -147,7 +147,7 @@ namespace
 				s = 0 - s;
 			}
 			std::array<char, 10> buf;
-			const char           Digits[] = "0123456789";
+			static const char    Digits[] = "0123456789";
 			for (int i = static_cast<int>(buf.size() - 1); i >= 0; i--)
 			{
 				buf.at(static_cast<size_t>(i)) = Digits[s % 10];
@@ -175,7 +175,7 @@ namespace
 		__attribute__((noinline)) void append_hex_word(uint32_t s)
 		{
 			std::array<char, 8> buf;
-			const char          Hexdigits[] = "0123456789abcdef";
+			static const char   Hexdigits[] = "0123456789abcdef";
 			// Length of string including null terminator
 			static_assert(sizeof(Hexdigits) == 0x11);
 			for (long i = static_cast<long>(buf.size() - 1); i >= 0; i--)
