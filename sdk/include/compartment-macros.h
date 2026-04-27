@@ -119,7 +119,7 @@
 	                                         permitLoadMutable,                \
 	                                         permitLoadGlobal)                 \
 		MMIO_CAPABILITY_WITH_PERMISSIONS_INNER(                                \
-		  type,                                                                \
+		  volatile type,                                                       \
 		  name,                                                                \
 		  permitLoad,                                                          \
 		  permitStore,                                                         \
