@@ -71,6 +71,55 @@ allocator_permissions_and(AllocatorCapability heapCapability, int permissions)
 }
 
 /**
+ * Split off a sub quota object from the provided parent. The requested size
+ * will be subtracted from the parent's quota, along with the size of the
+ * sub-quota itself. The child is an object allocated using the parent quota,
+ * and so counts against the quota of the parent until a corresponding call to
+ * `recombine_quota`.
+ *
+ * The allocator capability returned from this function on success may be used
+ * in place of a static allocation capability in any heap API, but care should
+ * be taken: the quota is a heap allocated object, and so may be freed.
+ *
+ * This will return an AllocatorCapability that refers to the newly created sub
+ * quota on success.
+ *
+ * Returns `-EPERM` if `parent` is not a valid allocator capability or does not
+ * have `AllocatorPermitAllocate` permission, `-ENOMEM` if `parent` has
+ * insufficient quota to accommodate the requested `size` plus the overhead of
+ * the sub-quota object itself, or `-EINVAL` if either  `timeout` is not a valid
+ * timeout pointer or the internal allocation fails for any reason (including
+ * timeout).
+ *
+ * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
+ * stack is insufficiently large to run the function. See `heap_allocate`.
+ */
+AllocatorCapability __cheri_compartment("allocator")
+  split_quota(Timeout *timeout, AllocatorCapability parent, size_t size);
+
+/**
+ * Recombine the provided child quota with its parent. This operation frees
+ * the underlying object, and returns all loaned quota to the parent.
+ *
+ * Allocations currently owned by the child quota will have their ownership
+ * transferred to the parent. Likewise, claims will be transferred. If either
+ * parent or child have a claim on an object, and the other does too, then
+ * the result will be a claim with two references attributed to the parent.
+ *
+ * Returns zero on success.
+ *
+ * Returns `-EPERM` if either `child` or `parent` is not a valid allocator
+ * capability or `child` is not derived from `parent`, or `-EINVAL` if
+ * `child` is not a dynamically allocated sub-quota (for example, if a
+ * static allocator capability is passed).
+ *
+ * Similarly to `heap_allocate`, `-ENOTENOUGHSTACK` may be returned if the
+ * stack is insufficiently large to run the function. See `heap_allocate`.
+ */
+int __cheri_compartment("allocator")
+  recombine_quota(AllocatorCapability child, AllocatorCapability parent);
+
+/**
  * Add a claim to an allocation.  The object will be counted against the quota
  * provided by the first argument until a corresponding call to `heap_free`.
  * Note that this can be used with interior pointers.

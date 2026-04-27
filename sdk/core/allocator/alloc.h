@@ -5,6 +5,7 @@
 
 #include "alloc_config.h"
 #include "compartment-macros.h"
+#include "heap_offset.h"
 #include "revoker.h"
 #include <algorithm>
 #include <cdefs.h>
@@ -251,6 +252,15 @@ namespace displacement_proxy
 } // namespace displacement_proxy
 
 /**
+ * Forward declare claims in an anonymous namespace for use with HeapOffsets in
+ * MChunkHeader.
+ */
+namespace
+{
+	class Claim;
+} // namespace
+
+/**
  * Every chunk, in use or not, includes a minimal header.  That is, this is a
  * classic malloc, not something like a slab or sizeclass allocator or a
  * "BIBOP"-inspired design.
@@ -317,7 +327,7 @@ __cheri_no_subobject_bounds MChunkHeader
 	bool isPrevInUse : 1;
 	bool isCurrInUse : 1;
 	/// Head of a linked list of claims on this allocation
-	uint16_t claims;
+	HeapOffset<Claim> claims;
 
 	__always_inline auto cell_prev()
 	{
@@ -1340,7 +1350,7 @@ class MState
 				Capability heap{heapStart};
 				heap.address() = ptr.address();
 				auto chunk     = MChunkHeader::from_body(heap);
-				if (chunk->claims > 0)
+				if (!chunk->claims.is_null())
 				{
 					/*
 					 * The chunk was freed but ended up in
