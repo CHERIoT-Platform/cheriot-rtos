@@ -91,8 +91,7 @@
 	  cValue)                                                                  \
 		({                                                                     \
 			/* NOLINTBEGIN(bugprone-macro-parentheses) */                      \
-			_Static_assert(permitLoad || permitStore ||                        \
-			                 permitLoadStoreCapabilities || permitLoadMutable, \
+			_Static_assert(permitLoad || permitStore,                          \
 			               "Importing an MMIO capability with no permissions " \
 			               "is not allowed.");                                 \
 			_Pragma("GCC diagnostic push")                                     \
@@ -213,8 +212,7 @@
 		({                                                                     \
 			/* NOLINTBEGIN(bugprone-macro-parentheses) */                      \
 			_Static_assert(                                                    \
-			  permitLoad || permitStore || permitLoadStoreCapabilities ||      \
-			    permitLoadMutable,                                             \
+			  permitLoad || permitStore,                                       \
 			  "Importing a shared object capability with no permissions "      \
 			  "is not allowed.");                                              \
 			_Pragma("GCC diagnostic push")                                     \
