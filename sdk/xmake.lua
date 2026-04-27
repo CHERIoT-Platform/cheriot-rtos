@@ -1026,13 +1026,13 @@ task("audit")
 											if type(module) ~= "string" then
 												raise("Audit failed! target: "..target:name()..", module is invalid!")
 											end
-											table.insert(module_list, module)
+											table.insert(module_list, path.join(target:scriptdir(), module))
 										end
 									else
 										if type(audit.module) ~= "string" then
 											raise("Audit failed! target: "..target:name()..", module is invalid!")
 										end
-										table.insert(module_list, audit.module)
+										table.insert(module_list, path.join(target:scriptdir(), audit.module))
 									end
 								end
 								if external_modules then
@@ -1081,7 +1081,7 @@ task("audit")
 								if type(value) ~= "string" then
 									raise("Audit failed! target: "..target:name()..", module is invalid!")
 								end
-								table.insert(mod_list, value)
+								table.insert(mod_list, path.join(target:scriptdir(), value))
 							end
 						end
 						if external_modules then

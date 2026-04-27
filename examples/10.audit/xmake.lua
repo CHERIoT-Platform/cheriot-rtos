@@ -17,12 +17,12 @@ rule("caesar.checks")
         -- Either can be a string or a table of strings to specify multiple queries and/or modules.
         local audit = {
             query='data.caesar.valid',
-            module=path.join(target:scriptdir(), "caesar.rego")
+            module="caesar.rego"
         }
         -- An example of an audit query with multiple rego modules and multiple queries:
         -- local audit = {
         --     query={'data.caesar.valid', 'data.compartment.mmio_allow_list("uart2", {"uart_man"})'},
-        --     module={path.join(target:scriptdir(), "caesar.rego"), path.join(target:scriptdir(), "brutus.rego")}
+        --     module={"caesar.rego", "brutus.rego"}
         -- }
         target:set("cheriot.audit", {audit})
     end)
