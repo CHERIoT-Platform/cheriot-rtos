@@ -472,6 +472,57 @@ namespace
 	Capability<void> trustedStackKey;
 
 	/**
+	 * Populate an ExportTable for a given compartment (anything that has a
+	 * .exportTable member and can be passed to build_pcc and build_cgp, but, in
+	 * practice, either a PrivilegedCompartmentHeader or a CompartmentHeader).
+	 * This is responsible for filling in the pcc and cgp members and for
+	 * adjusting the displacements for exception handlers.
+	 */
+	void populate_export_table(auto &compartment)
+	{
+		// Helper to construct a writeable pointer to an export table.
+		auto getExportTableHeader = [](const auto &range) {
+			auto header = build<ExportTable>(range);
+			Debug::Invariant(((header.address()) & 0x7) == 0,
+			                 "Export table {} is not capability aligned\n",
+			                 header);
+			return header;
+		};
+
+		auto expTablePtr = getExportTableHeader(compartment.exportTable);
+		expTablePtr->pcc = build_pcc(compartment);
+		expTablePtr->cgp = build_cgp(compartment);
+
+		auto handlerDisplacement =
+		  compartment.import_table().end() - compartment.code.start();
+
+		auto displaceHandler = [handlerDisplacement](auto &v) {
+			using V = std::remove_reference_t<decltype(v)>;
+
+			if (v == static_cast<V>(-1))
+			{
+				return;
+			}
+
+			ptrdiff_t displaced = v;
+			displaced += handlerDisplacement;
+
+			Debug::Invariant(displaced <= std::numeric_limits<V>::max(),
+			                 "Compartment error handler out of reach: {} {}",
+			                 handlerDisplacement,
+			                 v);
+
+			v = displaced;
+		};
+
+		displaceHandler(expTablePtr->errorHandler);
+		displaceHandler(expTablePtr->errorHandlerStackless);
+
+		Debug::log("Error handler for compartment is {}",
+		           expTablePtr->errorHandler);
+	}
+
+	/**
 	 * Find an export table target.  This looks for the address within
 	 * all of the export tables in the image.  The `size` parameter is used if
 	 * this is an MMIO import, the `lib` parameter is used to derive
@@ -1396,15 +1447,6 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	// Set up export tables
 	Debug::log("Populating export tables' PCC/CGP");
 
-	// Helper to construct a writeable pointer to an export table.
-	auto getExportTableHeader = [](const auto &range) {
-		auto header = build<ExportTable>(range);
-		Debug::Invariant(((header.address()) & 0x7) == 0,
-		                 "Export table {} is not capability aligned\n",
-		                 header);
-		return header;
-	};
-
 	for (auto &compartment : imgHdr.privilegedCompartments)
 	{
 		if (compartment.exportTable.size() == 0)
@@ -1413,20 +1455,12 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 			continue;
 		}
 
-		auto expTablePtr = getExportTableHeader(compartment.exportTable);
-		Debug::log("Error handler for compartment is {}",
-		           expTablePtr->errorHandler);
-		expTablePtr->pcc = build_pcc(compartment);
-		expTablePtr->cgp = build_cgp(compartment);
+		populate_export_table(compartment);
 	}
 
 	for (auto &compartment : imgHdr.libraries_and_compartments())
 	{
-		auto expTablePtr = getExportTableHeader(compartment.exportTable);
-		Debug::log("Error handler for compartment is {}",
-		           expTablePtr->errorHandler);
-		expTablePtr->pcc = build_pcc(compartment);
-		expTablePtr->cgp = build_cgp(compartment);
+		populate_export_table(compartment);
 	}
 
 	Debug::log("First pass to find sealing key imports");
