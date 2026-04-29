@@ -492,6 +492,34 @@ namespace
 		auto expTablePtr = getExportTableHeader(compartment.exportTable);
 		expTablePtr->pcc = build_pcc(compartment);
 		expTablePtr->cgp = build_cgp(compartment);
+
+		auto handlerDisplacement =
+		  compartment.import_table().end() - compartment.code.start();
+
+		auto displaceHandler = [handlerDisplacement](auto &v) {
+			using V = std::remove_reference_t<decltype(v)>;
+
+			if (v == static_cast<V>(-1))
+			{
+				return;
+			}
+
+			ptrdiff_t displaced = v;
+			displaced += handlerDisplacement;
+
+			Debug::Invariant(displaced <= std::numeric_limits<V>::max(),
+			                 "Compartment error handler out of reach: {} {}",
+			                 handlerDisplacement,
+			                 v);
+
+			v = displaced;
+		};
+
+		displaceHandler(expTablePtr->errorHandler);
+		displaceHandler(expTablePtr->errorHandlerStackless);
+
+		Debug::log("Error handler for compartment is {}",
+		           expTablePtr->errorHandler);
 	}
 
 	/**
