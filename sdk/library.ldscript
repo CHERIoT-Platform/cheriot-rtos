@@ -35,12 +35,6 @@ SECTIONS
 		*(.rodata .rodata.*);
 		*(.data.rel.ro .data.rel.ro.*);
 	}
-	# BSS remains in a separate section so that we can find it later.
-	.bss :
-	{
-		*(.sbss .sbss.*);
-		*(.bss .bss.*);
-	}
 	# Statically allocated sealed objects
 	.sealed_objects :
 	{
@@ -53,5 +47,7 @@ SECTIONS
 		# Libraries may not have data sections.
 		*(.data .data.*);
 		*(.sdata .sdata.*);
+		*(.sbss .sbss.*);
+		*(.bss .bss.*);
 	}
 }
