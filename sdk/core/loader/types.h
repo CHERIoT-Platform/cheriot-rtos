@@ -1035,6 +1035,15 @@ namespace loader
 		 * The offset of the compartment's error handler from the start of
 		 * `pcc`.  A value of 0xffff indicates that this compartment does not
 		 * provide an error handler.
+		 *
+		 * The value provided by the linker is a displacement from the address
+		 * one past the end of the import table, and we will rewrite it to be
+		 * the displacement from the start of PCC.  That is, the various
+		 * "middle" linker scripts (sdk/compartment.ldscript and friends) do not
+		 * need to know the final layout, nor does the switcher, but we, the
+		 * loader, and the linker -- or, more accurately, the top-level ldscript
+		 * generated from sdk/firmware.*.ldscript.in -- must agree that code
+		 * begins immediately after the import table.
 		 */
 		uint16_t errorHandler;
 
@@ -1042,6 +1051,8 @@ namespace loader
 		 * The offset of the compartment's stackless error handler from the
 		 * start of `pcc`.  A value of 0xffff indicates that this compartment
 		 * does not provide a stackless error handler.
+		 *
+		 * See the comment on `errorHandler` for the nuances of this value, too.
 		 */
 		uint16_t errorHandlerStackless;
 	};
