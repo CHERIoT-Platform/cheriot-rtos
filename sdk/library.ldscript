@@ -6,11 +6,20 @@ SECTIONS
 	. = 0;
 	.compartment_export_table : ALIGN(8)
 	{
-		# Space for the compartment's PCC and GDC.
+		# This section is a sdk/core/loader/types.h:/ExportTable
+
+		# Scratch space for the PCC and unused GDC.  Libraries are not switched
+		# to, but rather importers are granted sentries to the entrypoints.
+		# Libraries lack data sections, so the 2nd cap here is unused.  Further,
+		# their export tables do not persist after load, but it's simpler to
+		# have libraries present to the loader as compartments, even if it does
+		# mean a dead store to this ExportTable.
 		. = . + 16;
-		# Space for the error handler.
-		. = . + 4;
-		# Array of compartment exports
+		# Libraries don't have error handlers, because they aren't switched to.
+		SHORT(0xffff);
+		SHORT(0xffff);
+
+		# Array of compartment exports; see sdk/core/loader/types.h:/ExportEntry
 		*(.compartment_exports);
 	}
 	# Lay out the compartment imports section.  This will end up on PCC.
