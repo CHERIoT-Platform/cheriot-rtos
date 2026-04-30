@@ -136,7 +136,7 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 			__always_inline T
 			load(memory_order order = memory_order_seq_cst) const noexcept
 			{
-				return __atomic_load_n(&value, int(order));
+				return static_cast<T>(__atomic_load_n(&value, int(order)));
 			}
 
 			__always_inline T load(
