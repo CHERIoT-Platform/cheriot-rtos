@@ -189,5 +189,13 @@ int test_futex()
 	     "PI futex with a zero thread ID returned {}, should be {}",
 	     ret,
 	     -EINVAL);
+
+	t = 0;
+	futex = 0;
+	ret = futex_timed_wait(&t, &futex, 0);
+	TEST_EQUAL(ret, -ETIMEDOUT, "Futex with zero timeout and no wake event should timeout");
+	t = 1;
+	ret = futex_timed_wait(&t, &futex, 0);
+	TEST_EQUAL(ret, -ETIMEDOUT, "Futex with one-tick timeout and no wake event should timeout");
 	return 0;
 }

@@ -68,6 +68,66 @@ struct CountingSemaphoreState
 	uint32_t maxCount;
 };
 
+/**
+ * State for a barrier.
+ *
+ * A barrier is a primitive that allows a set of threads to rendezvous.  Each
+ * thread arrives at the barrier and blocks.  All threads can proceed once
+ * every thread is there.  Barriers must be initialised with the number of
+ * threads that can reach them.
+ */
+struct BarrierState
+{
+	/**
+	 * The number of threads that have to rendezvous with this barrier to allow
+	 * waiters to wake.
+	 */
+	_Atomic(uint32_t) remaining;
+};
+
+/**
+ * Condition variable state.
+ */
+struct ConditionVariableState
+{
+	/**
+	 * Sequence counter used to wait and notify waiters.
+	 */
+	_Atomic(uint32_t) sequenceCounter;
+};
+
+/**
+ * State-machine states for run-once functions.
+ */
+enum OnceStateMachineStates : uint32_t
+{
+	/**
+	 * The function has not run yet.
+	 */
+	OnceStateNotRun = 0,
+	/**
+	 * The function has not yet run, but is running.
+	 */
+	OnceStateRunning = 1,
+	/**
+	 * The function has run to completion.
+	 */
+	OnceStateRun = 2
+};
+
+/**
+ * Synchronisation state for run-once functions.
+ *
+ * This must be initialised to 0 (`OnceStateNotRun`) in C code.  This happens
+ * automatically for globals and almost all correct uses of this type are in
+ * globals.
+ */
+struct OnceState
+{
+	_Atomic(enum OnceStateMachineStates)
+	  state __if_cxx(= OnceStateMachineStates::OnceStateNotRun);
+};
+
 __BEGIN_DECLS
 
 /**
@@ -219,5 +279,86 @@ int __cheri_libcall semaphore_get(Timeout                       *timeout,
  * the semaphore count above the maximum.
  */
 int __cheri_libcall semaphore_put(struct CountingSemaphoreState *semaphore);
+
+/**
+ * Wait on a barrier.  Returns 0 or 1 on success, or `-ETIMEDOUT` on failure.
+ *
+ *  - 0 indicates that this was the last thread to reach the barrier.
+ *  - 1 indicates that this was a thread that blocked on the barrier and has now
+ *    woken.
+ *  - `-ETIMEDOUT` indicates that not all threads reached the barrier prior to
+ * the timeout.
+ *
+ * Note that barriers that are reached via
+ */
+int __cheriot_libcall barrier_timed_wait(Timeout             *timeout,
+                                         struct BarrierState *barrier);
+
+/**
+ * Helper that calls `barrier_timed_wait` with an unlimited timeout.
+ */
+static int barrier_wait(struct BarrierState *barrier)
+{
+	Timeout t = {0, UnlimitedTimeout};
+	return barrier_timed_wait(&t, barrier);
+}
+
+/**
+ * Signal the condition variable and wake up to the number of waiters specified
+ * by the second argument.
+ *
+ * Returns 0 on success.  Currently has no failure conditions.
+ */
+int __cheriot_libcall
+condition_variable_notify(struct ConditionVariableState *conditionVariable,
+                          uint32_t                       waiters);
+
+/**
+ * Wait on a condition variable.  This operation releases a mutex and
+ * atomically waits for the condition variable to be signalled.
+ *
+ * The mutex is provided via the `mutex` parameter and the operations to lock
+ * and unlock it are passed via the `mutexLock` and `mutexUnlock` parameters.
+ * These must return 0 on success.  Any non-zero result will be propagated to
+ * the caller.  The `mutexUnlock` function does not take a timeout and so
+ * should not return `-ETIMEDOUT`.
+ *
+ * Returns 0 on success, and either `-ETIMEDOUT` or an error forwarded from one
+ * of the callbacks on failure.
+ *
+ * Note that, unlike the POSIX equivalent, this does *not* reacquire the
+ * condition variable if this operation times out.  This can be wrapped to
+ * produce POSIX-compatible behaviour by calling the mutex-wait function with
+ * an unlimited timeout if necessary, however the POSIX behaviour cannot be
+ * wrapped to provide a variant that does not expire past deadlines.
+ *
+ * This implementation mirrors the algorithm used in Bionic (Android) and has
+ * the bug that, if another thread calls `condition_variable_notify` *exactly*
+ * 2^32 times in between this implementation releasing the lock and sleeping,
+ * and then no thread subsequently signals the condition variable, then the
+ * thread calling `condition_variable_wait` will sleep forever.
+ */
+int __cheriot_libcall
+condition_variable_wait(Timeout                       *t,
+                        struct ConditionVariableState *conditionVariable,
+                        void                          *mutex,
+                        int (*mutexLock)(Timeout *, void *),
+                        int (*mutexUnlock)(void *));
+
+int __cheriot_libcall run_once_slow_path(struct OnceState *state,
+                                         void (*callback)(void));
+
+__always_inline
+static inline int run_once(struct OnceState *state, void (*callback)(void))
+{
+	// Fast path, if intitialisation has run then we can elide the call with a single load and compare.
+	if (atomic_load_explicit(
+	      &state->state, __if_cxx(std::) memory_order_relaxed) == OnceStateRun)
+	{
+		return 0;
+	}
+	// If this either hasn't run or is running, hit the slow path.
+	return run_once_slow_path(state, callback);
+}
 
 __END_DECLS

@@ -394,6 +394,85 @@ namespace
 		     counter.load());
 	}
 
+	/**
+	 * Test the barrier functionality.
+	 */
+	void test_barrier()
+	{
+		static BarrierState barrier{3};
+		Timeout             t{1};
+		int                 ret = barrier_timed_wait(&t, &barrier);
+		TEST_EQUAL(ret,
+		           -ETIMEDOUT,
+		           "Barrier wait with no rendzvousing thread should time out");
+		async([&]() {
+			int r = barrier_wait(&barrier);
+			TEST_EQUAL(
+			  r,
+			  1,
+			  "Thread that slept on the barrier should see return value 1");
+		});
+		// Yield for long enough for the other thread to reach the barrier.
+		sleep(2);
+		int r = barrier_wait(&barrier);
+		TEST_EQUAL(
+		  r, 0, "Thread that triggered the barrier should see return value 0");
+	}
+
+	template<typename T>
+	void
+	test_condition_variable_with_mutex(ConditionVariable &conditionVariable,
+	                                   T                 &mutex)
+	{
+		debug_log("{}", __PRETTY_FUNCTION__);
+		mutex.lock();
+		Timeout t{0};
+		int ret = conditionVariable.wait(&t, mutex);
+		TEST_EQUAL(ret, -ETIMEDOUT, "Condition variable should have timed out (not signaled)");
+		// We should have not reacquired the lock due to timeout, so acquire it again.
+		mutex.lock();
+		async([&]() mutable {
+			sleep(8);
+			mutex.lock();
+			conditionVariable.signal();
+			mutex.unlock();
+		});
+		t = 200;
+		ret = conditionVariable.wait(&t, mutex);
+		TEST_EQUAL(ret, 0, "Condition variable should have been reaquired");
+		// We should have reacquired the lock due to timeout, so drop it.
+		mutex.unlock();
+	}
+
+	/**
+	 * Test condition variables.
+	 */
+	void test_condition_variable()
+	{
+		static ConditionVariable         conditionVariable;
+		static FlagLock                  flagLock;
+		static FlagLockPriorityInherited flagLockInheriting;
+		static TicketLock                ticketLock;
+		test_condition_variable_with_mutex(conditionVariable, flagLock);
+		test_condition_variable_with_mutex(conditionVariable,
+		                                   flagLockInheriting);
+		test_condition_variable_with_mutex(conditionVariable, ticketLock);
+	}
+
+	/**
+	 * Test run once.
+	 */
+	void test_run_once()
+	{
+		static int x = 0;
+		static OnceState once;
+		run_once(&once, []() { x++; });
+		run_once(&once, []() { x++; });
+		run_once(&once, []() { x++; });
+		run_once(&once, []() { x++; });
+		TEST_EQUAL(x, 1, "Run once should have run exactly once!");
+	}
+
 } // namespace
 
 int test_locks()
@@ -412,5 +491,8 @@ int test_locks()
 	test_ticket_lock_ordering();
 	test_ticket_lock_overflow();
 	test_recursive_mutex();
+	test_barrier();
+	test_condition_variable();
+	test_run_once();
 	return 0;
 }

@@ -1,5 +1,5 @@
 #include <atomic>
-#include <debug.hh>
+#include "lock_debug.hh"
 #include <errno.h>
 #include <limits>
 #include <locks.h>
@@ -7,14 +7,6 @@
 
 namespace
 {
-	constexpr bool DebugLocks =
-#ifdef DEBUG_LOCKS
-	  DEBUG_LOCKS
-#else
-	  false
-#endif
-	  ;
-	using Debug = ConditionalDebug<DebugLocks, "Locking">;
 	/**
 	 * Internal implementation of a simple flag lock. See comments in
 	 * locks.hh and locks.h for more details.
