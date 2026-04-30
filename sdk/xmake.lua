@@ -1772,7 +1772,12 @@ rule("cheriot.rust.crate", function()
 		)
 
 		-- Add the resulting static library to the objectfiles() of the target and remove any Cargo.toml.o that might appear there.
-		local library_path = path.join(build_dir, crate_build_mode, "lib" .. crate_name .. ".a")
+		local library_path = path.join(
+			build_dir,
+			toolchain:get("cheriot.rust.target"),
+			crate_build_mode,
+			"lib" .. string.gsub(crate_name, "-", "_") .. ".a"
+		)
 		table.insert(target:objectfiles(), library_path)
 		for i, v in ipairs(target:objectfiles()) do
 			if v:match("Cargo.toml.o") then
