@@ -381,4 +381,75 @@ class LockGuard
 	}
 };
 
+/**
+ * Condition variable C++ wrapper.
+ */
+class ConditionVariable
+{
+	/**
+	 * The state for the underlying condition variable.
+	 */
+	ConditionVariableState state;
+
+	public:
+	/**
+	 * Wake one waiter.
+	 */
+	int signal()
+	{
+		return condition_variable_notify(&state, 1);
+	}
+
+	/**
+	 * Wake all waiters.
+	 */
+	int broadcast()
+	{
+		return condition_variable_notify(&state,
+		                                 std::numeric_limits<uint32_t>::max());
+	}
+
+	/**
+	 * Atomically release `mutex`, wait until the condition variable is
+	 * signalled, and reacquire the mutex.  This will return 0 if the sequence
+	 * completes correctly, or `-ETIMEDOUT` if waiting or reacquiring the lock
+	 * failed due to a timeout.
+	 */
+	template<TryLockable Mutex>
+	int wait(Timeout *t, Mutex &mutex)
+	{
+		auto lock = [](Timeout *t, void *m) {
+			return static_cast<Mutex *>(m)->try_lock(t) ? 0 : -ETIMEDOUT;
+		};
+		auto unlock = [](void *m) {
+			static_cast<Mutex *>(m)->unlock();
+			return 0;
+		};
+		return condition_variable_wait(t, &state, &mutex, lock, unlock);
+	}
+
+	/**
+	 * Atomically release `mutex`, wait until the condition variable is
+	 * signalled, and reacquire the mutex.  This variant uses locks with no
+	 * timeout and so may block for longer than the specified timeout while
+	 * reacquiring the lock.  It will not attempt to reacquire the lock if the
+	 * timeout happens while waiting, so can still fail in the same ways as the
+	 * normal overload.
+	 */
+	template<Lockable Mutex>
+	int wait(Timeout *t, Mutex &mutex)
+	    requires(!TryLockable<Mutex>)
+	{
+		auto lock = [](Timeout *t, void *m) {
+			static_cast<Mutex *>(m)->lock();
+			return 0;
+		};
+		auto unlock = [](void *m) {
+			static_cast<Mutex *>(m)->unlock();
+			return 0;
+		};
+		return condition_variable_wait(t, &state, &mutex, lock, unlock);
+	}
+};
+
 __clang_ignored_warning_pop();
