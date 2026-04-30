@@ -251,12 +251,18 @@ toolchain("cheriot-clang", function ()
 		-- Rust flags used when `rustc` is invoked by `cargo`.
 		local default_rc_cargo_flags = {
 			"-Ctarget-cpu=" .. cpu,
+			-- We also set the opt-level here, because we set the default optimisation level to "smallest", which means `s` for Rust.
+			-- For now, however, we're mostly using `z`.
+			"-C opt-level=z"
 		}
 		self:add("rccargoflags", { default_rc_cargo_flags })
 
 		-- Rust flags used when `rustc` is directly invoked.
 		local default_rc_flags = table.join(default_rc_cargo_flags, {
 			"--target=" .. rust_target,
+			-- We also set the opt-level here, because we set the default optimisation level to "smallest", which means `s` for Rust.
+			-- For now, however, we're mostly using `z`.
+			"-C opt-level=z"
 		})
 		self:add("rcflags", { default_rc_flags })
 	end)
@@ -1606,8 +1612,8 @@ rule("cheriot.rust", function()
 		io.flush()
 
 		dependinfo.files = {}
-		local flags = table.join("-Copt-level=z", "--crate-type=staticlib", compflags, "-o", targetfile, sourcefile)
 
+		local flags = table.join(compflags, "--crate-type=staticlib", "-o", targetfile, sourcefile)
 
 		vprint("%s %s", compinst:program(), table.concat(flags, " "))
 		local outdata, errdata = os.iorunv(compinst:program(), flags)
