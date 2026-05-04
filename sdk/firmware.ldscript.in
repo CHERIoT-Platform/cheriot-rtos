@@ -15,4 +15,8 @@ SECTIONS
 {
 	# The build system generates sections and assigns them within its PHDRs.
 	@ldscript_top_sections@
+
+	/DISCARD/ : {
+    	*(.note.cheriot.compartment-name)
+	}
 }
