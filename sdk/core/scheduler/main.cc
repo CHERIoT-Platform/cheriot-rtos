@@ -3,11 +3,18 @@
 
 #define CHERIOT_NO_AMBIENT_MALLOC
 #define CHERIOT_NO_NEW_DELETE
+#include "common.h"
+
+#include "interrupt_configuration.hh"
+#if __has_include(<platform-scheduler_interrupt_controller.hh>)
+#	include <platform-scheduler_interrupt_controller.hh>
+#else
+#	include "interrupt_controller.hh"
+#endif
+
 #include "../switcher/tstack.h"
 #include "multiwait.h"
-#include "plic.h"
 #include "thread.h"
-#include "timer.h"
 #include <cdefs.h>
 #include <cheri.hh>
 #include <compartment.h>
@@ -21,6 +28,10 @@
 #include <stdlib.h>
 #include <thread.h>
 #include <token.h>
+
+// Timer might come to depend on PLIC on some platforms, though so far it has
+// always used the CLINT.
+#include "timer.h"
 
 using namespace CHERI;
 
@@ -36,6 +47,26 @@ int scheduler_simulation_exit(uint32_t code)
 	return -EPROTO;
 }
 #endif
+
+template<typename T>
+concept IsInterruptController =
+  std::is_integral_v<typename T::SourceID> && requires(T v, T::SourceID s) {
+	  { T::master_init() } -> std::same_as<void>;
+
+	  { T::master() } -> std::same_as<T &>;
+
+	  {
+		  v.futex_word_for_source(s)
+	  } -> std::same_as<utils::OptionalReference<uint32_t>>;
+
+	  {
+		  v.do_external_interrupt()
+	  } -> std::same_as<utils::OptionalReference<uint32_t>>;
+
+	  { v.interrupt_complete(s) } -> std::same_as<void>;
+  };
+
+static_assert(IsInterruptController<InterruptController>);
 
 /**
  * The value of the cycle counter at the last scheduling event.
@@ -187,8 +218,9 @@ namespace
 				count -= multiwaitersWoken;
 				woke += multiwaitersWoken;
 			}
-			Debug::log("futex_wake on {} woke {} waiters", key, woke);
 		}
+
+		Debug::log("futex_wake on {} woke {} waiters", key, woke);
 
 		return {shouldRecalculatePriorityBoost, woke};
 	}
@@ -376,14 +408,18 @@ namespace
 			schedNeeded = false;
 			InterruptController::master().do_external_interrupt().and_then(
 			  [&](uint32_t &word) {
-				  // Increment the futex word so that anyone preempted on
-				  // the way into the scheduler sleeping on its old value
-				  // will still see this update.
-				  word++;
+#ifdef PLATFORM_INTERRUPT_CONTROLLER_EXTERNAL_HOOK
+				  if (InterruptController::external_hook(
+				        word, schedNeeded, tick))
+				  {
+					  return;
+				  }
+#endif
 				  // Wake anyone sleeping on this futex.  Interrupt futexes
 				  // are not priority inheriting.
 				  int woke;
-				  Debug::log("Waking waiters on interrupt futex {}", &word);
+				  Debug::log("Waking waiters on interrupt futex {}",
+				             Capability{&word}.address());
 				  std::tie(std::ignore, woke) =
 				    futex_wake(Capability{&word}.address());
 				  schedNeeded |= (woke > 0);
@@ -474,13 +510,13 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(
 		Debug::log("futex_timed_wait: skip wait {} != {}", *address, expected);
 		return 0;
 	}
-	Thread *currentThread = Thread::current_get();
+	Thread   *currentThread = Thread::current_get();
+	ptraddr_t key           = Capability{address}.address();
 	Debug::log("Thread {} waiting on futex {} for {} ticks",
 	           currentThread->id_get(),
-	           address,
+	           key,
 	           timeout->remaining);
-	bool      isPriorityInheriting         = flags & FutexPriorityInheritance;
-	ptraddr_t key                          = Capability{address}.address();
+	bool isPriorityInheriting              = flags & FutexPriorityInheritance;
 	currentThread->futexWaitAddress        = key;
 	currentThread->futexPriorityInheriting = isPriorityInheriting;
 	Thread  *owningThread                  = nullptr;
@@ -537,7 +573,7 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(
 	}
 	Debug::log("Thread {} ({}) woke after waiting on futex {}",
 	           currentThread->id_get(),
-	           currentThread,
+	           Capability{currentThread}.address(),
 	           address);
 	return 0;
 }

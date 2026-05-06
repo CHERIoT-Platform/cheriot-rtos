@@ -6,6 +6,19 @@
 #include "../switcher/trusted-stack-assembly.h"
 #include <cheri-builtins.h>
 
+
+/**
+ * Machine-mode stack high water mark CSR
+ */
+#define CSR_MSHWM  0xbc1
+
+/**
+ * Machine mode stack high water mark stack base CSR
+ */
+#define CSR_MSHWMB 0xbc2
+
+
+
 .include "assembly-helpers.s"
 
     .section .loader_start, "ax", @progbits
@@ -72,8 +85,7 @@
 	 *
 	 *  - a5/x15: holds the RW cap root without GL(obal) permission.
 	 *
-	 * In particular, ra/x1, a0/x10, and a1/x11 are free and may be clobbered,
-	 * as platform code is quite likely to want to use .Lfill_block, below.
+	 * In particular, ra/x1, a0/x10, and a1/x11 are free and may be clobbered.
 	 */
 #if __has_include(<platform-early_boot.inc>)
 #	include <platform-early_boot.inc>
@@ -131,40 +143,61 @@
 
 	// ca4 still has the RW memory root; nothing to change
 
+	// Reserve 16 bytes at the top of the stack to later hold the hazard pointer slot
+	cincoffset		csp, csp, -16
+
 	/*
 	 * The first argument (ca0) is a SchedEntryInfo out parameter.  Make space
-	 * for it at the base of the stack, where we can easily find it again after
-	 * the call returns.
+	 * for it at the top of the current stack frame, where we can easily find
+	 * it again after the call returns.
 	 */
+	// First make space for the thread infos
 	la_abs			s1, __thread_count
 	csetaddr		cs1, ca4, s1
 	clhu			s1, 0(cs1)
 	li			t0, -BOOT_THREADINFO_SZ
 	mul			s1, s1, t0
-	addi			s1, s1, -SchedulerEntryInfo_offset_threads
 	cincoffset		csp, csp, s1
-	neg			s1, s1
-	csetbounds		ca0, csp, s1
+	// ca1 now contains the bounded capability to the threads array
+	neg				s1, s1
+	csetboundsexact	ct0, csp, s1
+	// Make space for the scheduler info
+	cincoffset		csp, csp, -SchedulerEntryInfo_size
+	csc				ct0, SchedulerEntryInfo_offset_threads(csp)
+	csetbounds		ca0, csp, SchedulerEntryInfo_size
 
 	// Call to loader_entry_point.
 	cjalr			cra
 
 	/*
-	 * Load the two return values (pcc and cgp for the scheduler entry point).
+	 * Prepare a trusted stack for the idle thread.  This structure is almost
+	 * entirely present to simplify the scheduler.  Unlike other trusted stacks
+	 * in the system, it does not make reference to a compartment export table.
 	 *
-	 * Drop these elements from the on-stack SchedulerEntryInfo, leaving only
-	 * its array of ThreadInfo-s (pointed to by sp).
+	 * This clobbers mtdc's initial value of the RW root.
 	 */
-	clc				cs0, 0(csp)
-	clc				cgp, 8(csp)
-	cincoffset		csp, csp, SchedulerEntryInfo_offset_threads
-
-	// Zero the stack (except for the aforementioned threadInfo-s).
-	cgetbase		a0, csp
-	csetaddr		ca0, csp, a0
-	cmove			ca1, csp
-	cjal			.Lfill_block
-	// Nothing in the loader stores to the stack after this point
+	la_abs			a3, bootTStack
+	li				a1, BOOT_TSTACK_SIZE
+	cspecialr		ca0, mscratchc // mscratch still has the RW (G+SL) root
+	csetaddr		ca3, ca0, a3
+	csetboundsexact	ca3, ca3, a1
+	li				a1, TSTACKOFFSET_FIRSTFRAME + TrustedStackFrame_size
+	csh				a1, TrustedStack_offset_frameoffset(ca3)
+	cspecialw		mtdc, ca3
+	// Initialise the stack high-water mark registers
+	cgetbase		a1, csp
+	csrw			CSR_MSHWMB, a1
+	csrw			CSR_MSHWM, sp
+	/*
+	 * Set up dummy hazard-pointer space in this trusted stack frame.
+	 * The switcher wants to zero this on call and return, so make sure that it
+	 * exists, to avoid a branch in the switcher.
+	 */
+	cgettop			a2, csp
+	addi			a2, a2, -16
+	csetaddr		ca2, csp, a2
+	csetbounds		ca2, ca2, 16
+	csc				ca2, TrustedStack_offset_hazardPointers(ca3)
 
 	/*
 	 * Clear most capability roots.
@@ -183,63 +216,78 @@
 	la_abs			a1, __export_mem_heap
 	csetaddr		ca0, ca0, a1
 	la_abs			a1, __export_mem_heap_end
-	cjal			.Lfill_block
+.Lzero_heap:
+	csc				c0, 0(ca0)
+	cincoffset		ca0, ca0, 8
+	bltu			a0, a1, .Lzero_heap
+
+
+	// Get the array of initialisers and the switcher PCC
+	clc				cs0, SchedulerEntryInfo_offset_switcherPCC(csp)
+	clc				cs1, SchedulerEntryInfo_offset_initialiserList(csp)
+	// Loop prelude
+.Lnext_initialiser:
+	// Get the end of the initialiser list
+	cgettop			t1, cs1
+	// Loop exit 
+	bge				s1, t1, .Ldone_initialisers
+
+	// Loop body
+	// Load the sealed capability for the entry point
+	clc				ct1, 0(cs1)
+	// Call the switcher
+	cjalr			cs0
+	// Increment the array pointer
+	cincoffset		cs1, cs1, 8
+
+	// Loop
+	j				.Lnext_initialiser
+.Ldone_initialisers:
 
 	/*
-	 * Prepare a trusted stack for the idle thread.  This structure is almost
-	 * entirely present to simplify the scheduler.  Unlike other trusted stacks
-	 * in the system, it does not make reference to a compartment export table.
-	 *
-	 * This clobbers mtdc's initial value of the RW root.
+	 * Load the scheduler entry point (as a cross-compartment function pointer,
+	 * for use with the compartment switcher) and its argument.
 	 */
-	la_abs			a3, bootTStack
-	li				a1, BOOT_TSTACK_SIZE
-	csetaddr		ca3, ca0, a3 // ca0 still has the RW (G+SL) root
-	csetboundsexact	ca3, ca3, a1
-	li				a1, TSTACKOFFSET_FIRSTFRAME
-	csh				a1, TrustedStack_offset_frameoffset(ca3)
-	cspecialw		mtdc, ca3
-
-	// Move the scheduler's (bounded) PCC into the register we'll jump to later.
-	cmove			cra, cs0
+	clc				ct1, SchedulerEntryInfo_offset_schedulerExportEntry(csp)
+	clc				ca0, SchedulerEntryInfo_offset_threads(csp)
 
 	/*
-	 * Pass, as the first argument, the array of ThreadInfo-s from what was the
-	 * on-stack SchedulerEntryInfo.
-	 *
-	 * This clobbers a0's copy of the RW root; all roots are now gone.
+	 * Move the stack pointer up over the return from the C++ loader.  This
+	 * will be zeroed by the switcher.  The stack now contains only the thread
+	 * handles.  This stack will be used for the scheduler after this call, so
+	 * accidentally leaking that doesn't matter.
 	 */
-	addi			s1, s1, -SchedulerEntryInfo_offset_threads
-	csetbounds		ca0, csp, s1
+	cincoffset		csp, csp, SchedulerEntryInfo_size
 
-	/*
-	 * The machine is now about to approximate the behavor of the idle thread
-	 * (mtdc, sp) making a compartment call into the scheduler compartment (ra
-	 * and gp) and in particular its initialization hook, scheduler_entry.
-	 * This is not a proper cross-call, especially in that neither the call nor
-	 * return will go via the switcher's cross-call path (or use the trusted
-	 * stack), because we are not a fully-fledged RTOS thread.
-	 *
-	 * Clear all other registers before invoking.  This ensures that the
-	 * scheduler does not, for example, get access to capability roots.
-	 */
-	zeroAllRegistersExcept	ra, sp, gp, a0
-	cjalr			cra
+	// Clear s1, so its old contents are't spilled on the stack
+	zeroOne         s1
+
+	// Call the scheduler initialisation function.
+	cjalr			cs0
 
 	/*
 	 * Done scheduler setup.  Now prepare to be the idle thread.
 	 *
 	 * Drop our reference to the stack, as it is now exclusively property of the
 	 * scheduler, having been installed over in switcher/entry.S's
-	 * switcher_scheduler_entry_csp.
+	 * switcher_scheduler_entry_csp.  Zero some additional registers for defence in depth:
+	 * 
+	 *  - s0 contains the switcher pcc.
+	 *  - a0 and a1 may contain return values from the switcher or scheduler
+	 *    (should not be capabilities).
+	 *  - All temporary registers or other argument registers are zeroed by the switcher.
 	 */
-	zeroOne			sp
+	zeroRegisters  sp, s0, a0, a1
 
 	// Enable external and timer interrupts.
 	li				t1, (MIE_MEIE | MIE_MTIE)
 	csrs			mie, t1
 	// Globally enable interrupts.
 	csrsi			mstatus, MSTATUS_MIE
+
+	// Note: In theory, we should drop ASR permission from pcc here, but we
+	// don't really need to because there's no data processed by the wfi loop
+	// that would allow an attacker to do anything useful.
 
 	/*
 	 * Yield to the scheduler to start real tasks, if a well-timed interrupt
@@ -253,11 +301,6 @@
 	wfi
 	j				.Lidle_loop
 
-.Lfill_block:
-	csc				c0, 0(ca0)
-	cincoffset		ca0, ca0, 8
-	bltu			a0, a1, .Lfill_block
-	cret
 .size start, . - start
 
 	.section .loader_trusted_stack, "a", @progbits

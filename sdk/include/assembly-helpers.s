@@ -84,6 +84,10 @@
  */
 .macro LoadCapCGP register symbol
 1:
-	auicgp		\register, %cheriot_compartment_hi(\symbol)
+#if __CHERIOT__ >= 20260429 || __CHERIOT_BAREMETAL__ >= 20260429
+	auipcc.data		\register, %cheriot_compartment_data_hi(\symbol)
+#else
+	auicgp		\register, %cheriot_compartment_data_hi(\symbol)
+#endif
 	clc			\register, %cheriot_compartment_lo_i(1b)(\register)
 .endm

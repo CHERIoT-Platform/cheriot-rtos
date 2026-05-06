@@ -46,6 +46,12 @@ namespace
 	StackUsageCheck<StackMode, expected, __PRETTY_FUNCTION__> stackCheck
 
 	/**
+	 * The type of a thread's priority, as managed by the scheduler (as opposed
+	 * to, say, the interrupt controller's opinion of priority values).
+	 */
+	using ThreadPriority = uint8_t;
+
+	/**
 	 * Base class for sealed objects that are exported from the scheduler.
 	 *
 	 * Subclasses must implement a static `sealing_type` method that returns

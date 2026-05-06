@@ -14,19 +14,16 @@
 #include <utils.hh>
 
 /*
- * Platform specific low-level implementations of the interrupt controller. Not
- * to be used directly. These should be inherited by the interrupt controller
- * wrapper class.
+ * This include is redundant with the one in ./main.cc but it placates
+ * clang-tidy and doesn't result in extra work due to the "#pragma once" within.
  */
+#include "interrupt_configuration.hh"
+
 namespace
 {
-	using Priority = uint32_t;
-	using SourceID = uint32_t;
-
 	template<typename T, size_t MaxIntrID, typename SourceID, typename Priority>
 	concept IsPlic = requires(T v, SourceID id, Priority p) {
 		{ v.interrupt_enable(id) };
-		{ v.interrupt_disable(id) };
 		{ v.interrupt_disable(id) };
 		{ v.priority_set(id, p) };
 		{ v.interrupt_claim() } -> std::same_as<std::optional<SourceID>>;
@@ -38,65 +35,19 @@ namespace
 	 * it does just like other builds to let things compile. We need tons of
 	 * #ifdefs or a big rewrite to make the entire external interrupt path
 	 * optional.
-	 *
-	 * FIXME: Here should only be platform-agnostic code but we still hardcode
-	 * an Ethernet handler. We should be generic and auto-generate event
-	 * channels and intr_complete() functions here.
 	 */
 
 	/**
-	 * The PLIC class that wraps platform-specific implementations and
-	 * provides higher-level abstractions.
+	 * Wraps the underlying platform-specific implementations and provides our
+	 * futex-based, higher-level abstractions.
 	 */
-	class InterruptController final
+	class InterruptController final : private InterruptConfiguration
 	{
-		/**
-		 * Structure representing the configuration for an interrupt.
-		 */
-		struct Interrupt
-		{
-			/**
-			 * The interrupt number.
-			 */
-			uint32_t number;
-			/**
-			 * The priority for this interrupt.
-			 */
-			uint32_t priority;
-			/**
-			 * True if this interrupt is edge triggered, false otherwise.  Edge
-			 * triggered interrupts are automatically acknowledged, level
-			 * triggered interrupts must be explicitly acknowledged.
-			 */
-			bool isEdgeTriggered;
-		};
+		public:
+		using Priority = uint32_t;
+		using SourceID = uint32_t;
 
-		/**
-		 * The array of interrupts that are configured.
-		 */
-		static constexpr Interrupt ConfiguredInterrupts[] = {
-#ifdef CHERIOT_INTERRUPT_CONFIGURATION
-		  CHERIOT_INTERRUPT_CONFIGURATION
-#endif
-		};
-
-		/**
-		 * The number of interrupts that are configured.
-		 *
-		 * We only allocate state for configured interrupts.
-		 */
-		static constexpr size_t NumberOfInterrupts =
-		  std::extent_v<decltype(ConfiguredInterrupts)>;
-
-		static constexpr uint32_t LargestInterruptNumber = []() {
-			uint32_t max = 0;
-			for (auto i : ConfiguredInterrupts)
-			{
-				max = std::max(max, i.number);
-			}
-			return max;
-		}();
-
+		private:
 		using PlicType = Plic<LargestInterruptNumber, SourceID, Priority>;
 
 		static_assert(
@@ -133,31 +84,21 @@ namespace
 		 * If the template parameter is true then this completes the interrupt
 		 * if it is edge triggered.
 		 */
-		template<bool CompleteInterruptIfEdgeTriggered = false>
 		utils::OptionalReference<uint32_t>
 		futex_word_for_source(SourceID source)
 		{
-			for (size_t i = 0; i < NumberOfInterrupts; i++)
-			{
-				if (ConfiguredInterrupts[i].number ==
-				    static_cast<uint32_t>(source))
-				{
-					if constexpr (CompleteInterruptIfEdgeTriggered)
-					{
-						if (ConfiguredInterrupts[i].isEdgeTriggered)
-						{
-							master().interrupt_complete(source);
-						}
-					}
+			auto i = index_of_source(static_cast<uint32_t>(source));
 
-					// The returned pointer (reference) will have bounds of the
-					// entire futexWords array.  That's likely fine within the
-					// scheduler and saves us a setbounds on the IRQ handling
-					// path, but it does mean that interrupt_futex_get needs to
-					// do the bounding.
-					return {futexWords[i]};
-				}
+			if (i.has_value())
+			{
+				// The returned pointer (reference) will have bounds of the
+				// entire futexWords array.  That's likely fine within the
+				// scheduler and saves us a setbounds on the IRQ handling path,
+				// but it does mean that interrupt_futex_get needs to do the
+				// bounding.
+				return {futexWords[*i]};
 			}
+
 			return nullptr;
 		}
 
@@ -203,8 +144,24 @@ namespace
 				return nullptr;
 			}
 
-			return futex_word_for_source<
-			  /*Complete edge triggered interrupt*/ true>(*src);
+			auto i = index_of_source(static_cast<uint32_t>(*src));
+
+			if (!i)
+			{
+				return nullptr;
+			}
+
+			if (ConfiguredInterrupts[*i].isEdgeTriggered)
+			{
+				master().interrupt_complete(*src);
+			}
+
+			// Increment the futex word so that anyone preempted on
+			// the way into the scheduler sleeping on its old value
+			// will still see this update.
+			futexWords[*i]++;
+
+			return {futexWords[*i]};
 		}
 
 		void interrupt_complete(SourceID id)

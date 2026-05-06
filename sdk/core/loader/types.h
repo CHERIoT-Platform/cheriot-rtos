@@ -343,6 +343,14 @@ namespace loader
 			{
 				return static_cast<size_t>(smallSize) << Shift;
 			}
+
+			/**
+			 * Returns the end address.
+			 */
+			[[nodiscard]] ptraddr_t end() const
+			{
+				return startAddress + size();
+			}
 		};
 
 		static_assert(IsAddressRange<ShiftedAddressRange<0>>,
@@ -615,7 +623,7 @@ namespace loader
 			// This is a random 32-bit number and should be changed whenever
 			// the compartment header layout changes to provide some sanity
 			// checking.
-			return magic == 0x46391da0;
+			return magic == 0xb0531162;
 		}
 
 		/**
@@ -629,6 +637,11 @@ namespace loader
 		 * the `compartments` array that are stateful compartments.
 		 */
 		uint16_t compartmentCount;
+
+		/**
+		 * The firmware initialiser list.
+		 */
+		ShiftedAddressRange<0> initialisers;
 
 		/**
 		 * The raw compartment header that's generated in the final link step.
@@ -801,6 +814,14 @@ namespace loader
 			{
 				return {threadConfigs, &threadConfigs[threadCount]};
 			}
+
+			/**
+			 * Returns the number of threads in this image.
+			 */
+			[[nodiscard]] auto count() const
+			{
+				return threadCount;
+			}
 		};
 
 		/// Convenience type for a range of compartment headers.
@@ -829,6 +850,13 @@ namespace loader
 			return reinterpret_cast<const ThreadInfo *>(
 			         &compartmentHeaders[libraryCount + compartmentCount])
 			  ->threads();
+		}
+
+		[[nodiscard]] auto thread_count() const
+		{
+			return reinterpret_cast<const ThreadInfo *>(
+			         &compartmentHeaders[libraryCount + compartmentCount])
+			  ->count();
 		}
 	};
 
@@ -1113,6 +1141,15 @@ namespace loader
 			uint8_t status =
 			  (flags & InterruptStatusMask) >> InterruptStatusShift;
 			return static_cast<InterruptStatus>(status);
+		}
+
+		/**
+		 * Returns the number of argument registers.
+		 */
+		unsigned argument_register_count()
+		{
+			// The low three bits are the number of registers to preserve.
+			return flags & 0x7;
 		}
 
 		/**

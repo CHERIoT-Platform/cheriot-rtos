@@ -185,7 +185,11 @@ toolchain("cheriot-clang", function ()
 	set_kind("standalone")
 	set_toolset("cc", "clang")
 	set_toolset("cxx", "clang++")
-	set_toolset("ld", "ld.lld")
+	-- "ld.lld" is not a dynamic linker xmake recognizes, but it recognizes "ld"
+	-- and has a mechanism (an ad-hoc stringy mechanism, alas) for
+	-- distinguishing the actual tool program from the name which xmake should
+	-- act as if it had: "${a}@${b}" means "use ${b} but perceive it as ${a}".
+	set_toolset("ld", "ld@ld.lld")
 	set_toolset("objdump", "llvm-objdump")
 	set_toolset("strip", "llvm-strip")
 	set_toolset("as", "clang")
@@ -230,12 +234,37 @@ toolchain("cheriot-clang", function ()
 		-- Assembly flags
 		self:add("asflags", default_clang_flags)
 
-		-- Rust flags
-		local default_rc_flags = {
-			"--target=riscv32cheriot-unknown-cheriotrtos",
-			"-Ctarget-cpu=" .. cpu,
+		-- Rust flags for various use-cases.
+
+		-- For now Rust uses a different target name.
+		local rust_target = "riscv32cheriot-unknown-cheriotrtos"
+
+		-- Will be used later in the cargo rule to figure out where object files are saved.
+		self:add("cheriot.rust.target", rust_target)
+
+		-- Cargo flags.
+		local default_cargo_flags = {
+			"--target=" .. rust_target,
 		}
-		self:add("rcflags", default_rc_flags)
+		self:add("cargoflags", { default_cargo_flags })
+
+		-- Rust flags used when `rustc` is invoked by `cargo`.
+		local default_rc_cargo_flags = {
+			"-Ctarget-cpu=" .. cpu,
+			-- We also set the opt-level here, because we set the default optimisation level to "smallest", which means `s` for Rust.
+			-- For now, however, we're mostly using `z`.
+			"-C opt-level=z"
+		}
+		self:add("rccargoflags", { default_rc_cargo_flags })
+
+		-- Rust flags used when `rustc` is directly invoked.
+		local default_rc_flags = table.join(default_rc_cargo_flags, {
+			"--target=" .. rust_target,
+			-- We also set the opt-level here, because we set the default optimisation level to "smallest", which means `s` for Rust.
+			-- For now, however, we're mostly using `z`.
+			"-C opt-level=z"
+		})
+		self:add("rcflags", { default_rc_flags })
 	end)
 end)
 
@@ -314,9 +343,20 @@ rule("cheriot.toolchain", function ()
 	end)
 end)
 
+-- The counterpart of cheriot.reachability_root, below
+rule("cheriot.reachability_check")
+	before_build(function (target)
+		if not target:get("cheriot.reachable") then
+			raise("target " .. target:name() .. " is being built but does not " ..
+			"appear to be connected to a firmware image.  Please either use " ..
+			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
+			"prevent it from being built when not linked")
+		end
+	end)
+
 -- Common rules for any CHERIoT component (library or compartment)
 rule("cheriot.component")
-	add_deps("cheriot.toolchain")
+	add_deps("cheriot.toolchain", "cheriot.reachability_check")
 
 	add_deps("cheriot.rust", "cheriot.rust.crate")
 
@@ -326,14 +366,6 @@ rule("cheriot.component")
 		target:set("kind", "static")
 		-- We don't want a lib prefix or equivalent.
 		target:set("prefixname", "")
-	end)
-	before_build(function (target)
-		if not target:get("cheriot.reachable") then
-			raise("target " .. target:name() .. " is being built but does not " ..
-			"appear to be connected to a firmware image.  Please either use " ..
-			"add_deps(\"" .. target:name() .. "\" to add it or use set_default(false) " ..
-			"prevent it from being built when not linked")
-		end
 	end)
 
 	-- Custom link step, link this as a compartment, with the linker script
@@ -345,7 +377,18 @@ rule("cheriot.component")
 		-- Link using the compartment's linker script.
 		batchcmds:show_progress(opt.progress, "linking " .. target:get("cheriot.type") .. ' ' .. target:filename())
 		batchcmds:mkdir(target:targetdir())
-		batchcmds:vrunv(target:tool("ld"), table.join({"--script=" .. linkerscript, "--compartment", "--gc-sections", "--relax", "-o", target:targetfile()}, target:objectfiles()), opt)
+		batchcmds:vrunv(target:tool("ld"),
+			table.join({
+					"--script=" .. linkerscript,
+					"--compartment",
+					"--gc-sections",
+					"--relax",
+					"-o", target:targetfile()
+				},
+				target:get("ldflags") or {},
+				opt.verbose and { "--print-gc-sections" } or {},
+				target:objectfiles()),
+			opt)
 		-- This depends on all of the object files and the linker script.
 		batchcmds:add_depfiles(linkerscript)
 		batchcmds:add_depfiles(target:objectfiles())
@@ -1873,7 +1916,8 @@ rule("cheriot.rust", function()
 		io.flush()
 
 		dependinfo.files = {}
-		local flags = table.join("-Copt-level=z", "--crate-type=staticlib", compflags, "-o", targetfile, sourcefile)
+
+		local flags = table.join(compflags, "--crate-type=staticlib", "-o", targetfile, sourcefile)
 
 		vprint("%s %s", compinst:program(), table.concat(flags, " "))
 		local outdata, errdata = os.iorunv(compinst:program(), flags)
@@ -1917,11 +1961,11 @@ rule("cheriot.rust.crate", function()
 		local cargo = target:tool("cargo")
 
 		-- If it wasn't found in the sdk, search using `find_tool`.
-		if not cargo then 
-		  cargo = find_tool("cargo")
-		  if cargo then 
-			cargo = cargo.program
-		  end
+		if not cargo then
+			cargo = find_tool("cargo")
+			if cargo then
+				cargo = cargo.program
+			end
 		end
 
 		assert(
@@ -1961,8 +2005,48 @@ rule("cheriot.rust.crate", function()
 
 		progress.show(opt.progress, "${color.build.object}compiling.$(mode) crate %s", crate_name)
 
-		local rustflags = rc:compflags()
-		local cargoflags = { "build", "--lib", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path }
+		-- We need to find the current toolchain to see if there are cargo/rc+cargo flags.
+		local toolchain_name = target:get("toolchains")
+		local toolchain = nil
+		for _, t in pairs(target:toolchains()) do
+			if t:name() == toolchain_name then
+				toolchain = t
+				break
+			end
+		end
+		assert(toolchain, "No toolchain found!")
+
+		local rustflags = toolchain:get("rccargoflags") or {}
+
+		-- Add flags from the user, if any.
+		local userflags = target:values("cheriot.rust.crate.rcflags")
+		if userflags then
+			if type(userflags) == "table" then
+				table.join(rustflags, userflags)
+			end
+
+			if type(userflags) == "string" then
+				table.insert(rustflags, userflags)
+			end
+		end
+
+		local cargoflags = table.join(
+			{ "build", "--target-dir=" .. build_dir, "--manifest-path=" .. manifest_path },
+			toolchain:get("cargoflags")
+		)
+
+		-- Add flags from the user, if any.
+		local userflags = target:values("cheriot.rust.crate.cargoflags")
+		if userflags then
+			if type(userflags) == "table" then
+				table.join(cargoflags, userflags)
+			end
+
+			if type(userflags) == "string" then
+				table.insert(cargoflags, userflags)
+			end
+		end
+
 		local crate_build_mode
 
 		if is_mode("release") then
@@ -1992,7 +2076,12 @@ rule("cheriot.rust.crate", function()
 		)
 
 		-- Add the resulting static library to the objectfiles() of the target and remove any Cargo.toml.o that might appear there.
-		local library_path = path.join(build_dir, crate_build_mode, "lib" .. crate_name .. ".a")
+		local library_path = path.join(
+			build_dir,
+			toolchain:get("cheriot.rust.target"),
+			crate_build_mode,
+			"lib" .. string.gsub(crate_name, "-", "_") .. ".a"
+		)
 		table.insert(target:objectfiles(), library_path)
 		for i, v in ipairs(target:objectfiles()) do
 			if v:match("Cargo.toml.o") then
