@@ -476,6 +476,89 @@ namespace
 		TEST_EQUAL(x, 1, "Run once should have run exactly once!");
 	}
 
+	/**
+	 * Test the reader-writer lock.
+	 */
+	void test_rwlock()
+	{
+		static ReadWriteLockState lock;
+		// Very long timeout.
+		Timeout t{5000};
+		auto    expect = [&](auto             fn,
+		                     auto             value,
+		                     std::string_view message) __always_inline {
+			int result;
+			if constexpr (std::is_convertible_v<decltype(fn),
+			                                    int (*)(Timeout *,
+			                                            ReadWriteLockState *)>)
+			{
+				result = fn(&t, &lock);
+			}
+			else
+			{
+				result = fn(&lock);
+			}
+			TEST_EQUAL(result, value, message);
+		};
+		expect(&read_write_lock_acquire_as_reader,
+		       0,
+		       "Failed to acquire uncontended read lock");
+		expect(&read_write_lock_acquire_as_reader,
+		       0,
+		       "Failed to acquire uncontended read lock with read lock held");
+		t = 0;
+		expect(&read_write_lock_acquire_as_writer,
+		       -ETIMEDOUT,
+		       "Should time out trying to acquire a read-write lock as writer "
+		       "with lock held by readers");
+		static int          otherThreadReturn;
+		static BarrierState barrier{2};
+		async([]() {
+			Timeout t{20};
+			otherThreadReturn = read_write_lock_acquire_as_writer(&t, &lock);
+			barrier_wait(&barrier);
+		});
+		// Try to make sure the background thread is blocked trying to release
+		// the lock.
+		sleep(5);
+		// Release the reader lock
+		expect(read_write_lock_release_as_reader, 0, "Releasing read lock (1)");
+		// Check that, with a writer held, we can't immediately acquire a read
+		// lock: we should wait behind the blocked writer.
+		t = 0;
+		expect(&read_write_lock_acquire_as_reader,
+		       -ETIMEDOUT,
+		       "Should have timed out when trying to acquire a read lock with "
+		       "a pending writer and a zero timeout");
+		// Release the reader lock (second time, should allow the other thread
+		// to acquire a write lock)
+		expect(read_write_lock_release_as_reader, 0, "Releasing read lock (2)");
+		barrier_wait(&barrier);
+
+		TEST_EQUAL(otherThreadReturn, 0, "Releasing read locks woke writers");
+		expect(read_write_lock_release_as_reader,
+		       -EINVAL,
+		       "Releasing read lock that is write locked");
+		expect(&read_write_lock_acquire_as_writer,
+		       -ETIMEDOUT,
+		       "Should have timed out when trying to acquire a write lock that "
+		       "is already held by a writer");
+		// Now release the lock
+		expect(read_write_lock_release_as_writer,
+		       0,
+		       "Releasing write lock that is write locked");
+		expect(read_write_lock_release_as_writer,
+		       -EINVAL,
+		       "Releasing write lock that is not locked");
+		expect(&read_write_lock_acquire_as_reader,
+		       0,
+		       "Should have been able to immediately acquire a read lock after "
+		       "the writer released the lock");
+		expect(read_write_lock_release_as_writer,
+		       -EINVAL,
+		       "Releasing write lock that is read locked");
+	}
+
 } // namespace
 
 int test_locks()
@@ -497,5 +580,6 @@ int test_locks()
 	test_barrier();
 	test_condition_variable();
 	test_run_once();
+	test_rwlock();
 	return 0;
 }
