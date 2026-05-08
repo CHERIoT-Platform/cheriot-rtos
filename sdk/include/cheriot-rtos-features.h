@@ -54,6 +54,12 @@
  */
 #define CHERIOT_FEATURE_FEATURES 1
 
+/**
+ * This version of CHERIoT RTOS supports reader-writer locks with their initial
+ * functionality.
+ */
+#define CHERIOT_FEATURE_RWLOCKS 1
+
 // Checks that the macros behave as expected.  Uses `FEATURES` as a feature
 // that does exist and has a version 1, `NOT_IMPLEMENTED` as a feature that
 // does not exist.
