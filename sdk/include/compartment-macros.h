@@ -380,7 +380,7 @@
  * the value in `STATIC_SEALED_VALUE` will be `CHERI_SEALED(valueType*)`.  This
  * is useful for variable length arrays at the end of the structure.
  */
-#if defined(__has_attribute) && __has_attribute(cheriot_sealed)
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
 #	define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                         \
 	  type, valueType, compartment, keyName, name)                             \
 		extern valueType __sealed_type_placeholder_##name;                     \
@@ -433,7 +433,7 @@
  * access to the sealing key.
  */
 
-#if defined(__has_attribute) && __has_attribute(cheriot_sealed)
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
 #	define DEFINE_STATIC_SEALED_VALUE(                                        \
 	  type, compartment, keyName, name, initialiser, ...)                      \
 		__if_cxx(inline) _Alignas(_Alignof(type) < 8 ? 8 : _Alignof(type))     \
@@ -491,7 +491,7 @@
  * Returns a sealed capability to the named object created with
  * `DECLARE_STATIC_SEALED_VALUE`.
  */
-#if defined(__has_attribute) && __has_attribute(cheriot_sealed)
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
 #	define STATIC_SEALED_VALUE(name, ...)                                     \
 		(CHERI_SEALED(__typeof__(__sealed_type_placeholder_##name) *))(&name)
 #else
