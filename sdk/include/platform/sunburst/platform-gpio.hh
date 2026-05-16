@@ -63,7 +63,7 @@ struct SonataGpioBase : private utils::NoCopyNoMove
 		LowLevel    = 3,
 	};
 
-	static constexpr uint32_t PcIntModeBits = 2;
+	static constexpr uint32_t PcIntModeBits = 0b11;
 	/// Status Register Fields
 	enum [[clang::flag_enum]] : uint32_t
 	{
