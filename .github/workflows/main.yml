@@ -28,7 +28,7 @@ jobs:
     strategy:
       matrix:
         build-type: [ debug, release ]
-        board: [ sail, ibex-safe-simulator ]
+        board: [ sail, ibex-safe-simulator, kudu-safe-simulator ]
         include:
           - build-type: debug
             build-flags: --debug-loader=y --debug-scheduler=y --debug-allocator=information --allocator-rendering=y -m debug  --print-doubles=y --print-floats=n
