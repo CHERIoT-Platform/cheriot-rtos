@@ -61,7 +61,7 @@ static inline __always_inline auto cheri_tag_clear(void *x)
 
 static inline __always_inline auto cheri_tag_get(void *x)
 {
-	return __builtin_cheri_tag_clear(x);
+	return __builtin_cheri_tag_get(x);
 }
 
 static inline __always_inline bool cheri_is_valid(void *x)
