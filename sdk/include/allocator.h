@@ -11,7 +11,6 @@
 #include <cdefs.h>
 #include <riscvreg.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <timeout.h>
 #include <token.h>
 
@@ -113,14 +112,14 @@ ssize_t __cheri_compartment("allocator")
  * This function is provided by the `compartment_helpers` library, which must be
  * linked for it to be available.
  */
-int __cheri_libcall heap_claim_ephemeral(Timeout         *timeout,
+int __cheri_libcall heap_claim_ephemeral(TimeoutArgument  timeout,
                                          const void      *ptr,
                                          const void *ptr2 __if_cxx(= nullptr));
 
 __attribute__((deprecated("heap_claim_fast was a bad name.  This function has "
                           "been renamed heap_claim_ephemeral")))
 __always_inline static int
-heap_claim_fast(Timeout         *timeout,
+heap_claim_fast(TimeoutArgument  timeout,
                 const void      *ptr,
                 const void *ptr2 __if_cxx(= nullptr))
 {
@@ -181,7 +180,7 @@ ssize_t __cheri_compartment("allocator")
  * not valid.
  */
 __attribute__((overloadable)) int __cheri_compartment("allocator")
-  heap_quarantine_flush(Timeout *timeout);
+  heap_quarantine_flush(TimeoutArgument timeout);
 
 /**
  * Run `heap_quarantine_flush` with unlimited timeout.
@@ -191,8 +190,7 @@ __attribute__((overloadable)) int __cheri_compartment("allocator")
  */
 static int heap_quarantine_empty()
 {
-	Timeout t = {0, UnlimitedTimeout};
-	return heap_quarantine_flush(&t);
+	return heap_quarantine_flush(TimeoutWaitForever);
 }
 
 /**

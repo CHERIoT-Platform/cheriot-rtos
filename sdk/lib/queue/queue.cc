@@ -292,7 +292,7 @@ namespace
 		/**
 		 * Try to acquire the lock.  Returns true on success, false on failure.
 		 */
-		bool try_lock(Timeout *t)
+		bool try_lock(TimeoutArgument t)
 		{
 			uint32_t value;
 			do

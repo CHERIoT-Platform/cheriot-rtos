@@ -142,7 +142,7 @@ __BEGIN_DECLS
  * Returns 0 on success, -ETIMEDOUT if the timeout expired, -EINVAL if the
  * arguments are invalid, or -ENOENT if the lock is set in destruction mode.
  */
-int __cheri_libcall flaglock_trylock(Timeout              *timeout,
+int __cheri_libcall flaglock_trylock(TimeoutArgument       timeout,
                                      struct FlagLockState *lock);
 
 /**
@@ -164,7 +164,7 @@ int __cheri_libcall flaglock_trylock(Timeout              *timeout,
  * ensure that the object remains live until after the call.
  */
 int __cheri_libcall
-flaglock_priority_inheriting_trylock(Timeout              *timeout,
+flaglock_priority_inheriting_trylock(TimeoutArgument       timeout,
                                      struct FlagLockState *lock);
 
 /**
@@ -248,7 +248,7 @@ flaglock_priority_inheriting_get_owner_thread_id(struct FlagLockState *lock)
  * arguments are invalid.  Can also return -EOVERFLOW if the lock depth would
  * overflow the depth counter.
  */
-int __cheri_libcall recursivemutex_trylock(Timeout                    *timeout,
+int __cheri_libcall recursivemutex_trylock(TimeoutArgument             timeout,
                                            struct RecursiveMutexState *lock);
 
 /**
@@ -277,7 +277,7 @@ void __cheri_libcall ticketlock_unlock(struct TicketLockState *lock);
  * success, -ETIMEDOUT if the timeout expired.  Can also return -EINVAL if the
  * arguments are invalid.
  */
-int __cheri_libcall semaphore_get(Timeout                       *timeout,
+int __cheri_libcall semaphore_get(TimeoutArgument                timeout,
                                   struct CountingSemaphoreState *semaphore);
 /**
  * Semaphore put operation.  Returns 0 on success, -EINVAL if this would push
@@ -296,7 +296,7 @@ int __cheri_libcall semaphore_put(struct CountingSemaphoreState *semaphore);
  *
  * Other errors may be propagated from `futex_timed_wait` if they fail.
  */
-int __cheriot_libcall barrier_timed_wait(Timeout             *timeout,
+int __cheriot_libcall barrier_timed_wait(TimeoutArgument      timeout,
                                          struct BarrierState *barrier);
 
 /**
@@ -346,10 +346,10 @@ condition_variable_notify(struct ConditionVariableState *conditionVariable,
  * thread calling `condition_variable_wait` will sleep forever.
  */
 int __cheriot_libcall
-condition_variable_wait(Timeout                       *t,
+condition_variable_wait(TimeoutArgument                t,
                         struct ConditionVariableState *conditionVariable,
                         void                          *mutex,
-                        int (*mutexLock)(Timeout *, void *),
+                        int (*mutexLock)(TimeoutArgument, void *),
                         int (*mutexUnlock)(void *));
 
 __always_inline static inline int run_once(struct OnceState *state,

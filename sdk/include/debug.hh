@@ -9,6 +9,7 @@
 #include <platform-uart.hh>
 #include <string.h>
 #include <switcher.h>
+#include <timeout.h>
 
 #include <string_view>
 #include <type_traits>
@@ -385,6 +386,42 @@ struct DebugFormatArgumentAdaptor<T>
 		return {static_cast<uintptr_t>(value),
 		        reinterpret_cast<uintptr_t>(&debug_enum_helper<T>)};
 #endif
+	}
+};
+
+/**
+ * Helper for printing timeouts.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<TimeoutArgument>
+{
+	__always_inline static DebugFormatArgument construct(TimeoutArgument value)
+	{
+		uintptr_t v;
+		static_assert(sizeof(v) == sizeof(value));
+		memcpy(&v, &value, sizeof(v));
+		return {v, reinterpret_cast<uintptr_t>(&print)};
+	}
+
+	private:
+	static void print(uintptr_t value, DebugWriter &writer)
+	{
+		TimeoutArgument t(0ULL);
+		static_assert(sizeof(t) == sizeof(value));
+		memcpy(&t, &value, sizeof(t));
+		if (t.is_relative())
+		{
+			writer.write("{ elapsed: ");
+			writer.write(t.relativeTimeout->elapsed);
+			writer.write(", remaining: ");
+			writer.write(t.relativeTimeout->remaining);
+			writer.write(" }");
+		}
+		else
+		{
+			writer.write(t.absoluteTimeout);
+			writer.write(" cycles");
+		}
 	}
 };
 

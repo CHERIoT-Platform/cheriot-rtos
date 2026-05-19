@@ -53,7 +53,7 @@ class FlagLockGeneric
 	 *
 	 * Returns an errno value.
 	 */
-	__always_inline int try_lock_internal(Timeout *timeout)
+	__always_inline int try_lock_internal(TimeoutArgument timeout)
 	{
 		if constexpr (IsPriorityInherited)
 		{
@@ -73,7 +73,7 @@ class FlagLockGeneric
 	 * Returns `true` if and only if the lock transitioned from being unheld to
 	 * held by the current thread.
 	 */
-	__always_inline bool try_lock(Timeout *timeout)
+	__always_inline bool try_lock(TimeoutArgument timeout)
 	{
 		return try_lock_internal(timeout) == 0;
 	}
@@ -162,7 +162,7 @@ class RecursiveMutex
 	 * Attempt to acquire the lock, blocking until a timeout specified by the
 	 * `timeout` parameter has expired.
 	 */
-	__always_inline bool try_lock(Timeout *timeout)
+	__always_inline bool try_lock(TimeoutArgument timeout)
 	{
 		return recursivemutex_trylock(timeout, &state) == 0;
 	}
@@ -247,7 +247,7 @@ class NoLock
 	/**
 	 * Attempt to acquire the lock with a timeout.  Always succeeds.
 	 */
-	bool try_lock(Timeout *timeout)
+	bool try_lock(TimeoutArgument timeout)
 	{
 		return true;
 	}
@@ -281,7 +281,7 @@ concept Lockable = requires(T l) {
 };
 
 template<typename T>
-concept TryLockable = Lockable<T> && requires(T l, Timeout *t) {
+concept TryLockable = Lockable<T> && requires(T l, TimeoutArgument t) {
 	{ l.try_lock(t) } -> std::same_as<bool>;
 };
 
@@ -325,7 +325,7 @@ class LockGuard
 	 *
 	 * The lock to be wrapped must not be held by the calling thread on entry.
 	 */
-	[[nodiscard]] explicit LockGuard(Lock &lock, Timeout *timeout)
+	[[nodiscard]] explicit LockGuard(Lock &lock, TimeoutArgument timeout)
 	    requires(TryLockable<Lock>)
 	  : wrappedLock(&lock), isOwned(false)
 	{
@@ -385,7 +385,7 @@ class LockGuard
 	 * The wrapped lock must not be held by the calling thread on entry.
 	 * Returns true if the lock has been acquired, false otherwise.
 	 */
-	bool try_lock(Timeout *timeout)
+	bool try_lock(TimeoutArgument timeout)
 	    requires(TryLockable<Lock>)
 	{
 		LockDebug::Assert(!isOwned, "Trying to lock an already-locked lock");
@@ -427,7 +427,7 @@ class LockGuard
 	/**
 	 * Drop and reacquire the lock around a yield
 	 */
-	int yield(Timeout *t, uint32_t ticks = 1)
+	int yield(TimeoutArgument t, uint32_t ticks = 1)
 	{
 		unlock();
 
@@ -437,7 +437,7 @@ class LockGuard
 			return sleepRes;
 		}
 
-		t->elapse(smallSleep.elapsed);
+		t.elapse_from(smallSleep);
 
 		return try_lock(t);
 	}
@@ -478,9 +478,9 @@ class ConditionVariable
 	 * failed due to a timeout.
 	 */
 	template<TryLockable Mutex>
-	int wait(Timeout *t, Mutex &mutex)
+	int wait(TimeoutArgument t, Mutex &mutex)
 	{
-		auto lock = [](Timeout *t, void *m) {
+		auto lock = [](TimeoutArgument t, void *m) {
 			return static_cast<Mutex *>(m)->try_lock(t) ? 0 : -ETIMEDOUT;
 		};
 		auto unlock = [](void *m) {
@@ -499,10 +499,10 @@ class ConditionVariable
 	 * fail in the same ways as the normal overload.
 	 */
 	template<Lockable Mutex>
-	int wait(Timeout *t, Mutex &mutex)
+	int wait(TimeoutArgument t, Mutex &mutex)
 	    requires(!TryLockable<Mutex>)
 	{
-		auto lock = [](Timeout *t, void *m) {
+		auto lock = [](TimeoutArgument t, void *m) {
 			static_cast<Mutex *>(m)->lock();
 			return 0;
 		};

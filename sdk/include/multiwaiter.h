@@ -72,7 +72,7 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
  * most `maxItems` event sources.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  multiwaiter_create(Timeout            *timeout,
+  multiwaiter_create(TimeoutArgument     timeout,
                      AllocatorCapability heapCapability,
                      MultiWaiter        *ret,
                      size_t              maxItems);
@@ -96,7 +96,7 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
  *    returns `-ETIMEDOUT`.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  multiwaiter_wait(Timeout                  *timeout,
+  multiwaiter_wait(TimeoutArgument           timeout,
                    MultiWaiter               waiter,
                    struct EventWaiterSource *events,
                    size_t                    newEventsCount);

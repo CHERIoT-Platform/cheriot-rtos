@@ -42,7 +42,7 @@ enum [[clang::flag_enum]] FutexWaitFlags
  *  - `-ETIMEDOUT` if the timeout expires.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  futex_timed_wait(Timeout                 *ticks,
+  futex_timed_wait(TimeoutArgument          timeout,
                    const volatile uint32_t *address,
                    uint32_t                 expected,
                    uint32_t flags           __if_cxx(= FutexNone));
@@ -59,8 +59,7 @@ enum [[clang::flag_enum]] FutexWaitFlags
 __always_inline static int futex_wait(const volatile uint32_t *address,
                                       uint32_t                 expected)
 {
-	Timeout t = {0, UnlimitedTimeout};
-	return futex_timed_wait(&t, address, expected, FutexNone);
+	return futex_timed_wait(TimeoutWaitForever, address, expected, FutexNone);
 }
 
 /**

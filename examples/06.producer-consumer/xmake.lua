@@ -20,6 +20,9 @@ firmware("producer-consumer")
     -- Both compartments need memcpy and the message queue compartment.
     add_deps("freestanding", "message_queue", "debug")
     add_deps("producer", "consumer")
+    -- Note that the stacks here are larger than they need to be in a release
+    -- build, but if scheduler debugging is enabled then the log messages use
+    -- quite a lot of stack and so we run out.
     on_load(function(target)
         target:values_set("threads", {
             {
@@ -33,7 +36,7 @@ firmware("producer-consumer")
                 compartment = "consumer",
                 priority = 1,
                 entry_point = "run",
-                stack_size = 0x400,
+                stack_size = 0x500,
                 trusted_stack_frames = 3
             }
         }, {expand = false})
