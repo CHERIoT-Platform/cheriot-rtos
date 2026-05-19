@@ -52,7 +52,7 @@ TokenKey __cheri_compartment("allocator") token_key_new(void);
  */
 CHERI_SEALED(void *)
 __cheri_compartment("allocator")
-  token_sealed_unsealed_alloc(Timeout            *timeout,
+  token_sealed_unsealed_alloc(TimeoutArgument     timeout,
                               AllocatorCapability heapCapability,
                               TokenKey            key,
                               size_t              sz,
@@ -66,7 +66,7 @@ __cheri_compartment("allocator")
  */
 CHERI_SEALED(void *)
 __cheri_compartment("allocator")
-  token_sealed_alloc(Timeout            *timeout,
+  token_sealed_alloc(TimeoutArgument     timeout,
                      AllocatorCapability heapCapability,
                      TokenKey,
                      size_t);
@@ -237,7 +237,7 @@ class Sealed
  */
 template<typename T>
 __always_inline std::pair<T *, Sealed<T>>
-token_allocate(Timeout            *timeout,
+token_allocate(TimeoutArgument     timeout,
                AllocatorCapability heapCapability,
                TokenKey            key)
 {

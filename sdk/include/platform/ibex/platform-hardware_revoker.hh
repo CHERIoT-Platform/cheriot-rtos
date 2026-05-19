@@ -186,7 +186,7 @@ namespace Ibex
 		/**
 		 * Block until the revocation epoch specified by `epoch` has completed.
 		 */
-		bool wait_for_completion(Timeout *timeout, uint32_t epoch)
+		bool wait_for_completion(TimeoutArgument timeout, uint32_t epoch)
 		{
 			uint32_t interruptValue;
 			do

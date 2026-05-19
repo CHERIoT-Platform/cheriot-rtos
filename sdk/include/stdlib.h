@@ -188,7 +188,7 @@ enum [[clang::flag_enum]] AllocateWaitFlags
  * Memory returned from this interface is guaranteed to be zeroed.
  */
 void *__cheri_compartment("allocator")
-  heap_allocate(Timeout            *timeout,
+  heap_allocate(TimeoutArgument     timeout,
                 AllocatorCapability heapCapability,
                 size_t              size,
                 uint32_t flags      __if_cxx(= AllocateWaitAny));
@@ -215,7 +215,7 @@ void *__cheri_compartment("allocator")
  * Memory returned from this interface is guaranteed to be zeroed.
  */
 void *__cheri_compartment("allocator")
-  heap_allocate_array(Timeout            *timeout,
+  heap_allocate_array(TimeoutArgument     timeout,
                       AllocatorCapability heapCapability,
                       size_t              nmemb,
                       size_t              size,
@@ -297,7 +297,7 @@ static inline void *calloc(size_t nmemb, size_t size)
 {
 	Timeout t   = {0, MALLOC_WAIT_TICKS};
 	void   *ptr = heap_allocate_array(
-      &t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitRevocationNeeded);
+	  &t, MALLOC_CAPABILITY, nmemb, size, AllocateWaitRevocationNeeded);
 	if (!__builtin_cheri_tag_get(ptr))
 	{
 		ptr = NULL;

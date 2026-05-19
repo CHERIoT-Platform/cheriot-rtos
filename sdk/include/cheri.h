@@ -382,10 +382,3 @@ bool __cheri_libcall check_pointer(const volatile void *ptr,
                                    size_t               space,
                                    uint32_t             rawPermissions,
                                    bool                 checkStackNeeded);
-
-/**
- * Check that the argument is a valid pointer to a `Timeout` structure.  This
- * must have read/write permissions, be unsealed, and must not be a heap
- * address.
- */
-bool __cheri_libcall check_timeout_pointer(const struct Timeout *timeout);

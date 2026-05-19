@@ -158,28 +158,22 @@ namespace
 		 *
 		 * Returns true on timeout, false otherwise.
 		 */
-		bool suspend(Timeout     *t,
-		             ThreadImpl **newSleepQueue,
-		             bool         yieldUnconditionally = false,
-		             bool         yieldNotSleep        = false)
+		bool suspend(TimeoutArgument t,
+		             ThreadImpl    **newSleepQueue,
+		             bool            yieldUnconditionally = false,
+		             bool            yieldNotSleep        = false)
 		{
-			if (t->remaining != 0)
+			bool mayBlock = t.may_block();
+			if (mayBlock)
 			{
-				suspend(t->remaining, newSleepQueue, yieldNotSleep);
+				suspend_internal(t, newSleepQueue, yieldNotSleep);
 			}
-			if ((t->remaining != 0) || yieldUnconditionally)
+			if (yieldUnconditionally || mayBlock)
 			{
 				auto elapsed = yield_timed();
-				if (CHERI::Capability{t}.is_valid())
-				{
-					t->elapse(elapsed);
-					if (t->remaining > 0)
-					{
-						return false;
-					}
-				}
+				t.elapse(elapsed);
 			}
-			return true;
+			return !t.may_block();
 		}
 
 		/**
@@ -216,8 +210,6 @@ namespace
 		 */
 		void ready(WakeReason reason)
 		{
-			int64_t ticksLeft;
-
 			// We must be suspended.
 			Debug::Assert(state == ThreadState::Suspended,
 			              "Waking thread that is in state {}, not suspended",
@@ -278,32 +270,6 @@ namespace
 				visitor(thread);
 				thread = next;
 			}
-		}
-
-		/**
-		 * Suspend this thread. Take it off the ready list. If it is suspended
-		 * waiting on a resource, add it to the list of that resource. No
-		 * matter what, it has to be added to the timer list.
-		 */
-		void suspend(uint32_t     waitTicks,
-		             ThreadImpl **newSleepQueue,
-		             bool         yieldNotSleep = false)
-		{
-			isYielding = yieldNotSleep;
-			Debug::Assert(state == ThreadState::Ready,
-			              "Suspending thread that is in state {}, not ready",
-			              static_cast<ThreadState>(state));
-			list_remove(&priorityList[priority]);
-			state = ThreadState::Suspended;
-			priority_map_remove();
-			if (newSleepQueue != nullptr)
-			{
-				list_insert(newSleepQueue);
-				sleepQueue = newSleepQueue;
-			}
-			expiryTime = expiry_time_for_timeout(waitTicks);
-
-			timer_list_insert(&waitingList);
 		}
 
 		/**
@@ -624,6 +590,41 @@ namespace
 		CHERI_SEALED(TrustedStack *) tStackPtr;
 
 		private:
+		/**
+		 * Suspend this thread. Take it off the ready list. If it is suspended
+		 * waiting on a resource, add it to the list of that resource. No
+		 * matter what, it has to be added to the timer list.
+		 */
+		void suspend_internal(TimeoutArgument timeout,
+		                      ThreadImpl    **newSleepQueue,
+		                      bool            yieldNotSleep = false)
+		{
+			isYielding = yieldNotSleep;
+			Debug::Assert(state == ThreadState::Ready,
+			              "Suspending thread that is in state {}, not ready",
+			              static_cast<ThreadState>(state));
+			list_remove(&priorityList[priority]);
+			state = ThreadState::Suspended;
+			priority_map_remove();
+			if (newSleepQueue != nullptr)
+			{
+				list_insert(newSleepQueue);
+				sleepQueue = newSleepQueue;
+			}
+			if (timeout.is_relative())
+			{
+				expiryTime =
+				  expiry_time_for_timeout(timeout.relativeTimeout->remaining);
+			}
+			else
+			{
+				expiryTime = timeout.absoluteTimeout;
+			}
+			Debug::log("Sleeping until {}", expiryTime);
+
+			timer_list_insert(&waitingList);
+		}
+
 		/**
 		 * Helper to remove a thread from the priority map and update the
 		 * highest priority, if it was the last runnable thread at that

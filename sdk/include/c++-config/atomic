@@ -257,10 +257,10 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 			}
 
 			__always_inline int
-			wait(Timeout       *timeout,
-			     T              old,
-			     memory_order   order = memory_order::seq_cst,
-			     FutexWaitFlags flags = FutexNone) const noexcept
+			wait(TimeoutArgument timeout,
+			     T               old,
+			     memory_order    order = memory_order::seq_cst,
+			     FutexWaitFlags  flags = FutexNone) const noexcept
 			    requires(sizeof(T) == sizeof(uint32_t))
 			{
 				// FIXME: The (1<<5) here should be
@@ -274,8 +274,9 @@ __clang_ignored_warning_push("-Watomic-alignment") namespace std
 				  flags);
 			}
 
-			__always_inline int
-			wait(Timeout *timeout, T old, FutexWaitFlags flags) const noexcept
+			__always_inline int wait(TimeoutArgument timeout,
+			                         T               old,
+			                         FutexWaitFlags  flags) const noexcept
 			    requires(sizeof(T) == sizeof(uint32_t))
 			{
 				return wait(timeout, old, memory_order::seq_cst, flags);

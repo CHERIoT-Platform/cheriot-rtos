@@ -475,12 +475,15 @@ SystickReturn __cheri_compartment("scheduler") thread_systemtick_get()
 	return ret;
 }
 
-__cheriot_minimum_stack(0x90) int __cheri_compartment("scheduler")
-  thread_sleep(Timeout *timeout, uint32_t flags)
+__cheriot_minimum_stack(0xa0) int __cheri_compartment("scheduler")
+  thread_sleep(TimeoutArgument timeout, uint32_t flags)
 {
-	STACK_CHECK(0x90);
-	if (!check_timeout_pointer(timeout))
+	// Note: This can likely be reduced if CHERIoT-Platform/llvm-project#398 is
+	// fixed or has a work around.
+	STACK_CHECK(0xa0);
+	if (!timeout.is_valid())
 	{
+		Debug::log("Invalid timeout: {}", timeout);
 		return -EINVAL;
 	}
 	// Debug::log("Thread {} sleeping for {} ticks",
@@ -490,14 +493,16 @@ __cheriot_minimum_stack(0x90) int __cheri_compartment("scheduler")
 	return 0;
 }
 
-__cheriot_minimum_stack(0xb0) int futex_timed_wait(
-  Timeout                 *timeout,
+__cheriot_minimum_stack(0xd0) int futex_timed_wait(
+  TimeoutArgument          timeout,
   const volatile uint32_t *address,
   uint32_t                 expected,
   uint32_t                 flags)
 {
-	STACK_CHECK(0xb0);
-	if (!check_timeout_pointer(timeout) ||
+	// Note: This can likely be reduced if CHERIoT-Platform/llvm-project#398 is
+	// fixed or has a work around.
+	STACK_CHECK(0xd0);
+	if (!timeout.is_valid() ||
 	    !check_pointer<PermissionSet{Permission::Load}>(address))
 	{
 		Debug::log("futex_timed_wait: invalid timeout or address");
@@ -515,7 +520,7 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(
 	Debug::log("Thread {} waiting on futex {} for {} ticks",
 	           currentThread->id_get(),
 	           key,
-	           timeout->remaining);
+	           timeout);
 	bool isPriorityInheriting              = flags & FutexPriorityInheritance;
 	currentThread->futexWaitAddress        = key;
 	currentThread->futexPriorityInheriting = isPriorityInheriting;
@@ -651,7 +656,7 @@ __cheriot_minimum_stack(0xd0) int futex_wake(const volatile uint32_t *address,
 #if SCHEDULER_MULTIWAITER != false
 
 __cheriot_minimum_stack(0x60) int multiwaiter_create(
-  Timeout            *timeout,
+  TimeoutArgument     timeout,
   AllocatorCapability heapCapability,
   MultiWaiter        *ret,
   size_t              maxItems)
@@ -683,7 +688,7 @@ __cheriot_minimum_stack(0x90) int multiwaiter_delete(
 	return deallocate<MultiWaiterInternal>(heapCapability, mw);
 }
 
-__cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
+__cheriot_minimum_stack(0xc0) int multiwaiter_wait(TimeoutArgument    timeout,
                                                    MultiWaiter        waiter,
                                                    EventWaiterSource *events,
                                                    size_t newEventsCount)
@@ -705,7 +710,7 @@ __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
 			Debug::log("Invalid new events pointer: {}", events);
 			return -EINVAL;
 		}
-		if (!check_timeout_pointer(timeout))
+		if (!timeout.is_valid())
 		{
 			return -EINVAL;
 		}
@@ -720,8 +725,8 @@ __cheriot_minimum_stack(0xc0) int multiwaiter_wait(Timeout           *timeout,
 				Debug::log("Adding events returned error");
 				return -EINVAL;
 			case MultiWaiterInternal::EventOperationResult::Sleep:
-				Debug::log("Sleeping for {} ticks", timeout->remaining);
-				if (timeout->may_block())
+				Debug::log("Sleeping for {} ticks", timeout);
+				if (timeout.may_block())
 				{
 					mw.wait(timeout);
 					// If we yielded then it's possible for either of the

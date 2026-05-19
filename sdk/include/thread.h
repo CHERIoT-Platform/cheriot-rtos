@@ -65,7 +65,7 @@ enum ThreadSleepFlags : uint32_t
  * `ThreadSleepNoEarlyWake` as the flags argument to prevent early wakeups.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  thread_sleep(struct Timeout *timeout, uint32_t flags __if_cxx(= 0));
+  thread_sleep(TimeoutArgument timeout, uint32_t flags __if_cxx(= 0));
 
 /**
  * Return the thread ID of the current running thread.
