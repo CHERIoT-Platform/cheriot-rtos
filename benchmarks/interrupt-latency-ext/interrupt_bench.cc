@@ -30,7 +30,7 @@ struct Source
 
 	auto futex()
 	{
-		return static_cast<uint32_t*>(nullptr);
+		return static_cast<uint32_t *>(nullptr);
 	}
 
 	void init()
@@ -57,7 +57,7 @@ struct Source
 
 #	include <platform/concepts/hardware_revoker.hh>
 
-template<Revocation::IsHardwareRevokerDevice T>
+template<Revocation::IsRevokerDevice T>
     requires requires(T v) {
 	    { v.interrupt_futex() } -> std::same_as<const uint32_t *>;
 	    { v.request_interrupt() } -> std::same_as<void>;
@@ -100,7 +100,8 @@ struct RevokerSource
 	}
 };
 
-struct Source : public RevokerSource<Ibex::HardwareRevoker>
+struct Source : public RevokerSource<
+                  Ibex::HardwareRevoker<uint32_t, REVOKABLE_MEMORY_START>>
 {
 	static constexpr const char *Name = "Ibex Revoker";
 };

@@ -500,7 +500,7 @@ __cheri_no_subobject_bounds MChunkHeader
 		this->clear();
 
 		// Clear the shadow bit marking our presence (set in our constructor)
-		revoker.shadow_paint_single(CHERI::Capability{this}.address(), false);
+		revoker.mark_clear_one(CHERI::Capability{this}.address());
 	}
 
 	/// Remove the default constructor
@@ -534,7 +534,7 @@ __cheri_no_subobject_bounds MChunkHeader
 	{
 		this->clear();
 		this->isCurrInUse = inUse;
-		revoker.shadow_paint_single(CHERI::Capability{this}.address(), true);
+		revoker.mark_set_one(this);
 	}
 };
 static_assert(sizeof(MChunkHeader) == 8);
@@ -1426,7 +1426,9 @@ class MState
 		if (__predict_false(skipHazardCheck))
 		{
 			// Paint before zeroing, see comment on the `else` code path.
-			revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
+			Capability bounded{mem};
+			bounded.bounds() = bodySize;
+			revoker.mark_set_range(bounded);
 		}
 		else
 		{
@@ -1468,7 +1470,7 @@ class MState
 			 * through a copy of the user capability (or its progeny) that undid
 			 * our work of zeroing!
 			 */
-			revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
+			revoker.mark_set_range(bounded);
 		}
 
 		/*
@@ -1529,11 +1531,11 @@ class MState
 		}
 		else
 		{
-			if (revoker.shadow_bit_get(address))
+			if (revoker.mark_get(address))
 			{
 				return nullptr;
 			}
-			while (!revoker.shadow_bit_get(address) && (address > base))
+			while (!revoker.mark_get(address) && (address > base))
 			{
 				address -= MallocAlignment;
 			}
@@ -1617,13 +1619,13 @@ class MState
 		if constexpr (HasTemporalSafety && AllocatorDebugEnabled)
 		{
 			bool thisShadowBit =
-			  revoker.shadow_bit_get(CHERI::Capability{p}.address());
+			  revoker.mark_get(CHERI::Capability{p}.address());
 			Debug::Assert(thisShadowBit,
 			              "Chunk header does not point to a set shadow bit: {}",
 			              p);
 			MChunkHeader *next = p->cell_next();
 			bool          nextShadowBit =
-			  revoker.shadow_bit_get(CHERI::Capability{next}.address());
+			  revoker.mark_get(CHERI::Capability{next}.address());
 			Debug::Assert(
 			  nextShadowBit,
 			  "Next chunk header does not point to a set shadow bit: {}",
@@ -2640,9 +2642,14 @@ class MState
 			heapQuarantineSize -= foreHeader->size_get();
 			heapFreeSize += foreHeader->size_get();
 
-			/* Clear the shadow bits that marked this region as quarantined */
-			revoker.shadow_paint_range<false>(foreHeader->body().address(),
-			                                  foreHeader->cell_next());
+			/*
+			 * Clear the shadow bits that marked this region as quarantined.
+			 * Because chunks in quarantine are not coalesced and come directly
+			 * from chunks that we handed out, they must have exact CHERI
+			 * capability representability.
+			 */
+			revoker.mark_clear_range(foreHeader->body().address(),
+			                         foreHeader->cell_next());
 
 			mspace_free_internal(foreHeader);
 			dequeued++;
@@ -2671,7 +2678,7 @@ class MState
 				           bool              shadowBit = true;
 				           if constexpr (HasTemporalSafety)
 				           {
-					           shadowBit = revoker.shadow_bit_get(
+					           shadowBit = revoker.mark_get(
 					             CHERI::Capability{word}.address());
 				           }
 				           return eachCap != nullptr && shadowBit;
