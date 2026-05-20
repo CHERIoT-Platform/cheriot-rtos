@@ -6,6 +6,11 @@
 #include <timeout.h>
 
 /**
+ * \file
+ * \brief C compatible interface to synchronisation primitives.
+ */
+
+/**
  * State for a flag lock.  Flag locks use a single futex word to store the lock
  * state.
  */

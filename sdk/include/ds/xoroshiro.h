@@ -10,6 +10,13 @@
 #include <debug.hh>
 #include <initializer_list>
 
+/**
+ * \file
+ * Pseudo random number generator based on Xoroshiro algorithm. Rather
+ * than using this directly you should probably use an implementation of the
+ * IsEntropySource concept so that different entropy sources may be substituted.
+ */
+
 namespace ds::xoroshiro
 {
 

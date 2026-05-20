@@ -8,6 +8,11 @@
 #include <locks.h>
 #include <thread.h>
 
+/**
+ * \file
+ * \brief C++ wrappers for synchronisation primitives.
+ */
+
 static constexpr bool DebugLocks =
 #ifdef DEBUG_LOCKS
   DEBUG_LOCKS

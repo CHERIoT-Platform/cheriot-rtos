@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * @file Bit manipulation utilities
+ * @file
+ * \brief Bit manipulation utilities
  */
 
 #pragma once
