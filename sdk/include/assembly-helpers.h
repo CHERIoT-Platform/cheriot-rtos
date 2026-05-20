@@ -3,11 +3,14 @@
 
 #pragma once
 /**
- * Helpers for exposing field offsets and structure sizes into assembly.  This
- * file provides macros that should be included in both C++ and assembly files.
- * In C++, they will check (at compile time) that the values are correct and
- * print a helpful error message if they do not.  In assembly, they will simply
- * expose the values as assembler symbol definitions.
+ * \file
+ * \brief Helpers for exposing field offsets and structure sizes into
+ * assembly.
+ *
+ * This file provides macros that should be included in both C++ and assembly
+ * files. In C++, they will check (at compile time) that the values are correct
+ * and print a helpful error message if they do not.  In assembly, they will
+ * simply expose the values as assembler symbol definitions.
  */
 
 #ifdef __cplusplus

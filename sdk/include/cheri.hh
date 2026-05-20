@@ -3,7 +3,8 @@
 
 #pragma once
 /**
- * C++ helpers for operating on capabilities.
+ * \file
+ * \brief C++ helpers for operating on capabilities.
  */
 #include <cheri.h>
 #include <cstddef>

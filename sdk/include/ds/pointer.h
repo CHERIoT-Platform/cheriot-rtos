@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * @file Pointer utilities
+ * @file
+ * Pointer utilities
  */
 
 #pragma once

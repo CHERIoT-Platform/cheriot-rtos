@@ -9,6 +9,10 @@
 #include <utils.hh>
 
 /**
+ * \file
+ */
+
+/**
  * OpenTitan UART
  *
  * This peripheral's source and documentation can be found at:

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * @file A (circular) doubly linked list, abstracted over cons cell
+ * @file
+ * A (circular) doubly linked list, abstracted over cons cell
  * representations.
  *
  * See `tests/list-test.cc` for additional information on how to use it.

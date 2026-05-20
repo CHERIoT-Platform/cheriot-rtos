@@ -5,7 +5,9 @@
 #include <ds/xoroshiro.h>
 
 /**
- * Concept for an Entropy source.
+ * \file
+ * Concept for an Entropy sources and a trivial, insecure implementation
+ * using xoroshiro PRNG.
  */
 template<typename T>
 concept IsEntropySource = requires(T source) {

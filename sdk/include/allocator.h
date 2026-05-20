@@ -1,6 +1,11 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+/**
+ * \file
+ * \brief CHERIoT RTOS heap allocator interface
+ */
+
 #pragma once
 
 #include <cdefs.h>
