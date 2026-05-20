@@ -12,6 +12,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <revoker/bitmap_direct.hh>
+
 #if !DEVICE_EXISTS(revoker) && !defined(CLANG_TIDY)
 #	error Memory map was not configured with a revoker device
 #endif
@@ -22,7 +24,8 @@ DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(revokerInterruptCapability,
                                         true);
 namespace Ibex
 {
-	class HardwareRevoker
+	template<typename WordT, ptraddr_t TCMBaseAddr>
+	class HardwareRevoker : public Revocation::BitmapDirect<WordT, TCMBaseAddr>
 	{
 		private:
 		/**
@@ -82,6 +85,8 @@ namespace Ibex
 		 */
 		void init()
 		{
+			Revocation::BitmapDirect<WordT, TCMBaseAddr>::init();
+
 			/**
 			 * These two symbols mark the region that needs revocation.  We
 			 * revoke capabilities everywhere from the start of compartment
@@ -249,5 +254,5 @@ namespace Ibex
 	};
 } // namespace Ibex
 
-template<typename WordT, size_t TCMBaseAddr>
-using HardwareRevoker = Ibex::HardwareRevoker;
+template<typename WordT, ptraddr_t TCMBaseAddr>
+using HardwareRevoker = Ibex::HardwareRevoker<WordT, TCMBaseAddr>;
