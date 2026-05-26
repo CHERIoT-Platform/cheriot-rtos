@@ -1,6 +1,7 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+#include <atomic>
 #include <cdefs.h>
 #include <debug.hh>
 #include <futex.h>
@@ -13,14 +14,13 @@ using Debug = ConditionalDebug<DEBUG_CXXRT, "cxxrt">;
  * The helper functions need to expose an unmangled name because the compiler
  * inserts calls to them.  Declare them using the asm label extension.
  */
-#define DECLARE_ATOMIC_LIBCALL(name, ret, ...)                                 \
-	[[cheriot::interrupt_state(disabled)]] __cheri_libcall ret name(           \
-	  __VA_ARGS__) asm(#name);
+#define DECLARE_ABI_LIBCALL(name, ret, ...)                                    \
+	__cheri_libcall ret name(__VA_ARGS__) asm(#name);
 
 // NOLINTBEGIN(readability-identifier-naming)
-DECLARE_ATOMIC_LIBCALL(__cxa_guard_acquire, int, uint64_t *)
-DECLARE_ATOMIC_LIBCALL(__cxa_guard_release, void, uint64_t *)
-DECLARE_ATOMIC_LIBCALL(__cxa_atexit, int, void (*)(void *), void *, void *)
+DECLARE_ABI_LIBCALL(__cxa_guard_acquire, int, uint64_t *)
+DECLARE_ABI_LIBCALL(__cxa_guard_release, void, uint64_t *)
+DECLARE_ABI_LIBCALL(__cxa_atexit, int, void (*)(void *), void *, void *)
 // NOLINTEND(readability-identifier-naming)
 
 namespace
@@ -33,9 +33,9 @@ namespace
 	class GuardWord
 	{
 		/// The low half (first on a little-endian system).
-		uint32_t low;
+		std::atomic<uint32_t> low;
 		/// The high half (second on a little-endian system).
-		uint32_t high;
+		std::atomic<uint32_t> high;
 		/// The bit used for the lock (the high bit on a little-endian system)
 		static constexpr uint32_t LockBit = static_cast<uint32_t>(1) << 31;
 
@@ -66,7 +66,7 @@ namespace
 			// Block until the lock word is 0, then set it.
 			while (high & LockBit)
 			{
-				futex_wait(&high, LockBit);
+				futex_wait(reinterpret_cast<uint32_t *>(&high), LockBit);
 			}
 			Debug::Assert(high == 0, "Corrupt guard word at {}", this);
 			high = LockBit;
@@ -79,7 +79,8 @@ namespace
 		{
 			Debug::Assert(high == LockBit, "Corrupt guard word at {}", this);
 			high    = 0;
-			int res = futex_wake(&high, std::numeric_limits<uint32_t>::max());
+			int res = futex_wake(reinterpret_cast<uint32_t *>(&high),
+			                     std::numeric_limits<uint32_t>::max());
 			Debug::Assert(res >= 0,
 			              "futex_wake failed for guard {}; possible deadlock",
 			              this);
