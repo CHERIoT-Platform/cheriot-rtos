@@ -357,19 +357,6 @@ __cheri_no_subobject_bounds MChunkHeader
 		ownerID = newOwner;
 	}
 
-	/**
-	 * Erase the header fields
-	 */
-	__always_inline void clear()
-	{
-		/*
-		 * This is spelled slightly oddly as using memset results in a call
-		 * rather than a single store instruction.
-		 */
-		static_assert(sizeof(*this) == sizeof(uintptr_t));
-		*reinterpret_cast<uintptr_t *>(this) = 0;
-	}
-
 	bool is_in_use()
 	{
 		return isCurrInUse;
@@ -432,22 +419,30 @@ __cheri_no_subobject_bounds MChunkHeader
 	 * two free chunks in a row; the caller is expected to fix this by marking
 	 * at least one of the two split chunks as in-use.
 	 *
-	 * Note that we keep the invariant that all headers correspond to shadow
-	 * bits that are set. For this to be true, new headers are assumed to be
-	 * created only by split() after initialisation which is in charge of
-	 * setting the bits.
+	 * The new header will have no claims on it.
 	 */
 	MChunkHeader *split(size_t offset)
 	{
 		auto newloc = ds::pointer::offset<void>(this, offset);
 
-		auto newnext = new (newloc) MChunkHeader();
-		newnext->clear();
-		// Invariant that headers must point to shadow bits that are set.
-		revoker.shadow_paint_single(CHERI::Capability{newloc}.address(), true);
+		auto newnext = new (newloc) MChunkHeader(this->isCurrInUse);
 
+		newnext->isPrevInUse = isCurrInUse;
+
+		/*
+		 * Insertion into the list of headers updates two linkages in the chain:
+		 * 1. between `this` and `newnext`
+		 * 2. between `newnext` and `this`'s original successor (which is now
+		 *    `newnext`-s successor), which is unnamed in the source but we will
+		 *    call `next`.
+		 *
+		 * Concretely, that means it...
+		 * 1.1. sets `this->currSize`,
+		 * 1.2. sets `newnext->prevSize`,
+		 * 2.1. sets `newnext->currSize`,
+		 * 2.2. sets `next->prevSize`
+		 */
 		ds::linked_list::emplace_after(this, newnext);
-		newnext->isCurrInUse = newnext->isPrevInUse = isCurrInUse;
 
 		return newnext;
 	}
@@ -467,31 +462,80 @@ __cheri_no_subobject_bounds MChunkHeader
 	{
 		size -= sizeof(MChunkHeader);
 
-		auto first = new (base) MChunkHeader();
-		first->clear();
-		first->currSize    = size2head(size);
+		auto first         = new (base) MChunkHeader(false);
+		first->prevSize    = 0;
 		first->isPrevInUse = true;
-		first->isCurrInUse = false;
-		revoker.shadow_paint_single(CHERI::Capability{first}.address(), true);
 
 		auto footer =
-		  new (ds::pointer::offset<void>(base, size)) MChunkHeader();
-		footer->clear();
-		footer->prevSize    = size;
+		  new (ds::pointer::offset<void>(base, size)) MChunkHeader(true);
 		footer->currSize    = size2head(sizeof(MChunkHeader));
 		footer->isPrevInUse = false;
-		footer->isCurrInUse = true;
-		revoker.shadow_paint_single(CHERI::Capability{footer}.address(), true);
+
+		first->cell_next()  = footer; // sets first->currSize
+		footer->cell_prev() = first;  // sets footer->prevSize
 
 		return first;
 	}
 
-	private:
-	/*
-	 * Hide a no-op constructor; the only calls should be make() and split()
-	 * above, which carry out initialization.
+	/**
+	 * Given a pointer to the previous chunk, merge this one back into it.
+	 *
+	 * The caller is responsible for managing indexing of chunks, which means it
+	 * must already have a handle to our predecessor.
 	 */
-	MChunkHeader() = default;
+	void unsplit(MChunkHeader * previous)
+	{
+		Debug::Assert(previous->cell_next() == this,
+		              "Unsplitting MChunkHeader into bad predecessor");
+		Debug::Assert(this->claims == 0,
+		              "Unsplitting MChunkHeader with active claims");
+
+		/*
+		 * Drop us out of the list of all chunk headers.
+		 * This updates previous->currSize and our successor's ->prevSize.
+		 */
+		ds::linked_list::unsafe_remove_link(previous, this);
+
+		// Erase our metadata fields
+		this->clear();
+
+		// Clear the shadow bit marking our presence (set in our constructor)
+		revoker.shadow_paint_single(CHERI::Capability{this}.address(), false);
+	}
+
+	/// Remove the default constructor
+	MChunkHeader() = delete;
+
+	private:
+	/**
+	 * Erase the header fields
+	 */
+	__always_inline void clear()
+	{
+		/*
+		 * This is spelled slightly oddly as using memset results in a call
+		 * rather than a single store instruction.
+		 */
+		static_assert(sizeof(*this) == sizeof(uintptr_t));
+		*reinterpret_cast<uintptr_t *>(this) = 0;
+	}
+
+	/**
+	 * Common aspects of building a `MChunkHeader`.
+	 *
+	 * These exist only in the heap arena; they are never carried as values in
+	 * registers or on the stack and are always built with placement `new`.
+	 * Their lifecycle and field updates are, as can be seen from above,
+	 * moderately nuanced, but some things are always common to their
+	 * construction and never otherwise implicitly done; those are the bits
+	 * factored out here.
+	 */
+	MChunkHeader(bool inUse)
+	{
+		this->clear();
+		this->isCurrInUse = inUse;
+		revoker.shadow_paint_single(CHERI::Capability{this}.address(), true);
+	}
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
@@ -2421,10 +2465,7 @@ class MState
 			// Consolidate backward
 			MChunkHeader *prev = p->cell_prev();
 			unlink_chunk(MChunk::from_header(prev), prev->size_get());
-			ds::linked_list::unsafe_remove_link(prev, p);
-			p->clear();
-			// p is no longer a header. Clear the shadow bit.
-			revoker.shadow_paint_single(CHERI::Capability{p}.address(), false);
+			p->unsplit(prev);
 			p = prev;
 		}
 
@@ -2433,11 +2474,7 @@ class MState
 		{
 			// Consolidate forward
 			unlink_chunk(MChunk::from_header(next), next->size_get());
-			ds::linked_list::unsafe_remove_link(p, next);
-			next->clear();
-			// next is no longer a header. Clear the shadow bit.
-			revoker.shadow_paint_single(CHERI::Capability{next}.address(),
-			                            false);
+			next->unsplit(p);
 		}
 
 		p->mark_free();
