@@ -1,10 +1,10 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+#include <atomic>
 #include <cdefs.h>
 #include <debug.hh>
-#include <futex.h>
-#include <limits>
+#include <locks.hh>
 #include <stdint.h>
 
 using Debug = ConditionalDebug<DEBUG_CXXRT, "cxxrt">;
@@ -13,14 +13,13 @@ using Debug = ConditionalDebug<DEBUG_CXXRT, "cxxrt">;
  * The helper functions need to expose an unmangled name because the compiler
  * inserts calls to them.  Declare them using the asm label extension.
  */
-#define DECLARE_ATOMIC_LIBCALL(name, ret, ...)                                 \
-	[[cheriot::interrupt_state(disabled)]] __cheri_libcall ret name(           \
-	  __VA_ARGS__) asm(#name);
+#define DECLARE_LIBCALL(name, ret, ...)                                        \
+	__cheri_libcall ret name(__VA_ARGS__) asm(#name);
 
 // NOLINTBEGIN(readability-identifier-naming)
-DECLARE_ATOMIC_LIBCALL(__cxa_guard_acquire, int, uint64_t *)
-DECLARE_ATOMIC_LIBCALL(__cxa_guard_release, void, uint64_t *)
-DECLARE_ATOMIC_LIBCALL(__cxa_atexit, int, void (*)(void *), void *, void *)
+DECLARE_LIBCALL(__cxa_guard_acquire, int, uint64_t *)
+DECLARE_LIBCALL(__cxa_guard_release, void, uint64_t *)
+DECLARE_LIBCALL(__cxa_atexit, int, void (*)(void *), void *, void *)
 // NOLINTEND(readability-identifier-naming)
 
 namespace
@@ -32,12 +31,16 @@ namespace
 	 */
 	class GuardWord
 	{
-		/// The low half (first on a little-endian system).
-		uint32_t low;
+		/**
+		 * The low half (first on a little-endian system).
+		 *
+		 * This is the word that matters for the ABI: The compiler will treat
+		 * the low bit of this being set as an indication that the value is
+		 * initialised.
+		 */
+		std::atomic<uint32_t> low;
 		/// The high half (second on a little-endian system).
-		uint32_t high;
-		/// The bit used for the lock (the high bit on a little-endian system)
-		static constexpr uint32_t LockBit = static_cast<uint32_t>(1) << 31;
+		FlagLockPriorityInherited high;
 
 		public:
 		/**
@@ -57,40 +60,34 @@ namespace
 		}
 
 		/**
-		 * Acquire the lock.
-		 *
-		 * This is safe only in IRQ-deferred context.
+		 * Acquire the lock.  Returns a lock guard that holds the lock until
+		 * destroyed.
 		 */
-		void lock()
+		auto aquire_lock()
 		{
-			// Block until the lock word is 0, then set it.
-			while (high & LockBit)
-			{
-				futex_wait(&high, LockBit);
-			}
-			Debug::Assert(high == 0, "Corrupt guard word at {}", this);
-			high = LockBit;
+			return LockGuard{high};
 		}
 
 		/**
-		 * Release the lock
+		 * Explicitly release the lock.
 		 */
 		void unlock()
 		{
-			Debug::Assert(high == LockBit, "Corrupt guard word at {}", this);
-			high    = 0;
-			int res = futex_wake(&high, std::numeric_limits<uint32_t>::max());
-			Debug::Assert(res >= 0,
-			              "futex_wake failed for guard {}; possible deadlock",
-			              this);
+			high.unlock();
 		}
 
 		/**
-		 * Returns true if the lock is held.
+		 * Check that the lock is owned by us (in debug mode);
 		 */
-		bool is_locked()
+		__always_inline void assert_owned()
 		{
-			return high == LockBit;
+			if constexpr (DEBUG_CXXRT)
+			{
+				Debug::Assert(high.get_owner_thread_id() == thread_id_get(),
+				              "Lock is owned by thread {}, not us (thread {})",
+				              high.get_owner_thread_id(),
+				              thread_id_get());
+			}
 		}
 	};
 } // namespace
@@ -103,12 +100,13 @@ namespace
  */
 int __cxa_guard_acquire(uint64_t *guard)
 {
-	auto *g = reinterpret_cast<GuardWord *>(guard);
-	if (g->is_initialised())
+	auto *guardWord = reinterpret_cast<GuardWord *>(guard);
+	auto  g         = guardWord->aquire_lock();
+	if (guardWord->is_initialised())
 	{
 		return 0;
 	}
-	g->lock();
+	g.release();
 	return 1;
 }
 
@@ -118,8 +116,9 @@ int __cxa_guard_acquire(uint64_t *guard)
 void __cxa_guard_release(uint64_t *guard)
 {
 	auto *g = reinterpret_cast<GuardWord *>(guard);
-	Debug::Assert(!g->is_initialised(), "Releasing uninitialized guard {}", g);
-	Debug::Assert(g->is_locked(), "Releasing unlocked guard {}", g);
+	Debug::Assert(
+	  !g->is_initialised(), "Releasing already-initialized guard {}", g);
+	g->assert_owned();
 	g->set_initialised();
 	g->unlock();
 }

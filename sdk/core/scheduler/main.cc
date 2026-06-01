@@ -139,7 +139,7 @@ namespace
 	{
 		Thread::walk_thread_list(futexWaitingList, [&](Thread *thread) {
 			if ((thread->futexPriorityInheriting) &&
-			    (thread->futexWaitAddress = key))
+			    (thread->futexWaitAddress == key))
 			{
 				if (thread->futexPriorityBoostedThread == threadID)
 				{
@@ -546,8 +546,8 @@ __cheriot_minimum_stack(0xb0) int futex_timed_wait(
 		owningThread->priority_boost(priority_boost_for_thread(
 		  owningThreadID, currentThread->priority_get()));
 	}
-	currentThread->suspend(timeout, &futexWaitingList);
-	bool timedout                   = currentThread->futexWaitAddress == 0;
+	bool timedout = currentThread->suspend(timeout, &futexWaitingList);
+	Debug::log("Timed out? {}", timedout);
 	currentThread->futexWaitAddress = 0;
 	if (isPriorityInheriting)
 	{

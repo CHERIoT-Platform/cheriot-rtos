@@ -138,6 +138,12 @@ using _Bool = bool;
 #	define __clang_ignored_warning_pop()
 #endif
 
+#if defined(CHERIOT_EXPERIMENTAL_APIS_WARN)
+#	define CHERIOT_EXPERIMENTAL(msg) __attribute__((deprecated(msg)))
+#else
+#	define CHERIOT_EXPERIMENTAL(msg)
+#endif
+
 #if !defined(CLANG_TIDY) && !__has_builtin(__builtin_cheri_top_get)
 #	error Your compiler is too old for this version of CHERIoT RTOS, please upgrade to a newer version
 #endif
