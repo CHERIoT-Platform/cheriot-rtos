@@ -1011,6 +1011,19 @@ task("audit")
 				end
             end
 
+			if external_modules then
+				if type(external_modules) == "table" then
+					for _, file in ipairs(external_modules) do
+						table.insert(t, "-m")
+						table.insert(t, file)
+					end
+				else
+					-- Shouldn't get here as we build tables everywhere but this is here just in case!
+					table.insert(t, "-m")
+					table.insert(t, external_modules)
+				end
+			end
+
             local ex_string = table.concat(t, ' ')
 			-- Hide the following line behind a verbose flag.
 			-- print("Executing: ", ex_string)
@@ -1213,6 +1226,7 @@ task("audit")
 			if query then
 				audit_list = tableConcat(audit_list, each_module(target, query, external_modules))
 			else
+				-- print("Check: ", target:name())
 				audit_list = tableConcat(audit_list, each_firmware(target, external_modules))
 			end
 		end
