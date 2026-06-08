@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * @file Ring/circular buffer state machine.
+ * @file
+ * Ring/circular buffer state machine.
  */
 
 #pragma once

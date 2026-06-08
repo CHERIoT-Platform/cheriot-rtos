@@ -1,6 +1,11 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+/**
+ * \file
+ * \brief Miscellaneous utility functions and classes.
+ */
+
 #pragma once
 
 #include <cdefs.h>
@@ -35,6 +40,15 @@ namespace utils
 		return N;
 	}
 
+	/**
+	 * \brief Utility class to delete copy and move contructors.
+	 *
+	 * Inherit from this if want to prevent your class from being accidentally
+	 * copied. This is especially useful for classes used for MMIO as they
+	 * must be instantiated at a specific address so copying is a bad idea.
+	 *
+	 * The default no-argument constructor and destructor is provided.
+	 */
 	class NoCopyNoMove
 	{
 		public:

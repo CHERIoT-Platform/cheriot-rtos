@@ -1,5 +1,6 @@
 #pragma once
 /**
+ * \file
  * This file implements the C11 and C++23 C atomics interfaces.  On targets
  * without hardware atomics, these will all lower to calls into the atomics
  * shared library.  You must link either atomics or atomics_fixed (if you use

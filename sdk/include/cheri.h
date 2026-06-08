@@ -1,6 +1,11 @@
 // Copyright CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+/**
+ * \file
+ * \brief C definitions for CHERI specific functionality
+ */
+
 #pragma once
 #include <__cheri_sealed.h>
 #include <compartment-macros.h>

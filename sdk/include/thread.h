@@ -1,6 +1,10 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 
+/** \file
+ * \brief Functions and types used for thread management.
+ */
+
 #pragma once
 
 #include <cdefs.h>
