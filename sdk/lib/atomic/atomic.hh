@@ -20,8 +20,9 @@
  * single load for most cases of this, rather than needing a cross-library
  * call, so eventually this will go away.
  */
+#define DECLARE_ATOMIC_LOAD(size, type)                                        \
+	DECLARE_ATOMIC_LIBCALL(__atomic_load_##size, type, const type *, int);
 #define DEFINE_ATOMIC_LOAD(size, type)                                         \
-	DECLARE_ATOMIC_LIBCALL(__atomic_load_##size, type, const type *, int);     \
 	type __atomic_load_##size(const type *ptr, int)                            \
 	{                                                                          \
 		static_assert(sizeof(type) == size, "Invalid type for size");          \
@@ -36,8 +37,9 @@
  * single store for most cases of this, rather than needing a cross-library
  * call, so eventually this will go away.
  */
+#define DECLARE_ATOMIC_STORE(size, type)                                       \
+	DECLARE_ATOMIC_LIBCALL(__atomic_store_##size, void, type *, type, int);
 #define DEFINE_ATOMIC_STORE(size, type)                                        \
-	DECLARE_ATOMIC_LIBCALL(__atomic_store_##size, void, type *, type, int);    \
 	void __atomic_store_##size(type *ptr, type value, int)                     \
 	{                                                                          \
 		static_assert(sizeof(type) == size, "Invalid type for size");          \
@@ -50,9 +52,10 @@
  * name is the name of the operation and `op` is the C++ operator that
  * implements it.
  */
-#define DEFINE_ATOMIC_FETCH_OP(size, type, name, op)                           \
+#define DECLARE_ATOMIC_FETCH_OP(size, type, name, op)                          \
 	DECLARE_ATOMIC_LIBCALL(                                                    \
-	  __atomic_fetch_##name##_##size, type, type *, type, int);                \
+	  __atomic_fetch_##name##_##size, type, type *, type, int);
+#define DEFINE_ATOMIC_FETCH_OP(size, type, name, op)                           \
 	type __atomic_fetch_##name##_##size(type *ptr, type value, int)            \
 	{                                                                          \
 		static_assert(sizeof(type) == size, "Invalid type for size");          \
@@ -65,9 +68,9 @@
  * Macro that defines a library function to implement an atomic
  * fetch-and-nand for the specified size, using the specified type.
  */
+#define DECLARE_ATOMIC_FETCH_NAND(size, type)                                  \
+	DECLARE_ATOMIC_LIBCALL(__atomic_fetch_nand_##size, type, type *, type, int);
 #define DEFINE_ATOMIC_FETCH_NAND(size, type)                                   \
-	DECLARE_ATOMIC_LIBCALL(                                                    \
-	  __atomic_fetch_nand_##size, type, type *, type, int);                    \
 	type __atomic_fetch_nand_##size(type *ptr, type value, int)                \
 	{                                                                          \
 		static_assert(sizeof(type) == size, "Invalid type for size");          \
@@ -75,6 +78,17 @@
 		*ptr     = ~(tmp & value);                                             \
 		return tmp;                                                            \
 	}
+
+/**
+ * Helper macro that declares all of the cases of atomic operations.
+ */
+#define DECLARE_ATOMIC_FETCH_OPS(size, type)                                   \
+	DECLARE_ATOMIC_FETCH_OP(size, type, add, +)                                \
+	DECLARE_ATOMIC_FETCH_OP(size, type, sub, -)                                \
+	DECLARE_ATOMIC_FETCH_OP(size, type, and, &)                                \
+	DECLARE_ATOMIC_FETCH_OP(size, type, or, |)                                 \
+	DECLARE_ATOMIC_FETCH_OP(size, type, xor, ^)                                \
+	DECLARE_ATOMIC_FETCH_NAND(size, type)
 
 /**
  * Helper macro that defines all of the cases of atomic operations.
@@ -91,8 +105,9 @@
  * Macro that defines a library function to implement an atomic exchange for the
  * specified size, using the specified type.
  */
+#define DECLARE_ATOMIC_EXCHANGE(size, type)                                    \
+	DECLARE_ATOMIC_LIBCALL(__atomic_exchange_##size, type, type *, type, int);
 #define DEFINE_ATOMIC_EXCHANGE(size, type)                                     \
-	DECLARE_ATOMIC_LIBCALL(__atomic_exchange_##size, type, type *, type, int); \
 	type __atomic_exchange_##size(type *ptr, type value, int)                  \
 	{                                                                          \
 		static_assert(sizeof(type) == size, "Invalid type for size");          \
@@ -105,9 +120,10 @@
  * Macro that defines a library function to implement an atomic compare and
  * exchange for the specified size, using the specified type.
  */
-#define DEFINE_ATOMIC_COMPARE_EXCHANGE(size, type)                             \
+#define DECLARE_ATOMIC_COMPARE_EXCHANGE(size, type)                            \
 	DECLARE_ATOMIC_LIBCALL(                                                    \
-	  __atomic_compare_exchange_##size, int, type *, type *, type, int, int);  \
+	  __atomic_compare_exchange_##size, int, type *, type *, type, int, int);
+#define DEFINE_ATOMIC_COMPARE_EXCHANGE(size, type)                             \
 	int __atomic_compare_exchange_##size(                                      \
 	  type *ptr, type *expected, type desired, int, int)                       \
 	{                                                                          \
@@ -120,9 +136,33 @@
 		*expected = *ptr;                                                      \
 		return 0;                                                              \
 	}
+
+#define DECLARE_ALL_ATOMIC_OPS(size, type)                                     \
+	DECLARE_ATOMIC_LOAD(size, type)                                            \
+	DECLARE_ATOMIC_STORE(size, type)                                           \
+	DECLARE_ATOMIC_EXCHANGE(size, type)                                        \
+	DECLARE_ATOMIC_COMPARE_EXCHANGE(size, type)                                \
+	DECLARE_ATOMIC_FETCH_OPS(size, type)
+
 #define DEFINE_ALL_ATOMIC_OPS(size, type)                                      \
 	DEFINE_ATOMIC_LOAD(size, type)                                             \
 	DEFINE_ATOMIC_STORE(size, type)                                            \
 	DEFINE_ATOMIC_EXCHANGE(size, type)                                         \
 	DEFINE_ATOMIC_COMPARE_EXCHANGE(size, type)                                 \
 	DEFINE_ATOMIC_FETCH_OPS(size, type)
+
+DECLARE_ALL_ATOMIC_OPS(1, uint8_t)
+DECLARE_ALL_ATOMIC_OPS(2, uint16_t)
+DECLARE_ALL_ATOMIC_OPS(4, uint32_t)
+DECLARE_ALL_ATOMIC_OPS(8, uint64_t)
+
+DECLARE_ATOMIC_LIBCALL(__atomic_compare_exchange_cap,
+                       int,
+                       void **,
+                       void **,
+                       void *,
+                       int,
+                       int);
+DECLARE_ATOMIC_LIBCALL(__atomic_load_cap, void *, void *const *, int)
+DECLARE_ATOMIC_LIBCALL(__atomic_store_cap, void, void **, void *, int)
+DECLARE_ATOMIC_LIBCALL(__atomic_exchange_cap, void *, void **, void *, int)
