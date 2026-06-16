@@ -7,17 +7,6 @@
  * operations on pointers.
  */
 
-DECLARE_ATOMIC_LIBCALL(__atomic_compare_exchange_cap,
-                       int,
-                       void **,
-                       void **,
-                       void *,
-                       int,
-                       int);
-DECLARE_ATOMIC_LIBCALL(__atomic_load_cap, void *, void *const *, int)
-DECLARE_ATOMIC_LIBCALL(__atomic_store_cap, void, void **, void *, int)
-DECLARE_ATOMIC_LIBCALL(__atomic_exchange_cap, void *, void **, void *, int)
-
 int __atomic_compare_exchange_cap(void **ptr,
                                   void **expected,
                                   void  *desired,

@@ -20,3 +20,4 @@ microvium
 FreeRTOS-Compat
 sunburst/v0\.2
 float\.h
+arith64\.h
