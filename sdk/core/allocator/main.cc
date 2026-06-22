@@ -81,23 +81,7 @@ namespace
 			return nullptr;
 		}
 
-		size_t msize = pad_request(sizeof(MState));
-		/*
-		 * Each memory space has the MState structure at the beginning, followed
-		 * by at least enough space for a smallest chunk, followed by a fake
-		 * malloc header at the very end.
-		 *
-		 * The memory used to initialise a memory space must have enough bytes,
-		 * but not too big that overflows what the compressed header can
-		 * support.
-		 */
-		if (tsize < msize + MinChunkSize + sizeof(MChunkHeader) ||
-		    tsize > MaxChunkSize)
-		{
-			return nullptr;
-		}
-
-		Capability m{tbase.cast<MState>()};
+		size_t msize = (sizeof(MState) + MallocAlignMask) & ~MallocAlignMask;
 
 		size_t hazardQuarantineSize =
 		  Capability{SHARED_OBJECT_WITH_PERMISSIONS(void *,
@@ -109,9 +93,34 @@ namespace
 		                                            false)}
 		    .length();
 
+		/*
+		 * Each memory space has the MState structure at the beginning,
+		 * followed by the hazard quarantine, then at least enough
+		 * space for a smallest chunk, and a fake malloc header at the
+		 * very end.
+		 *
+		 * The memory used to initialise a memory space must have enough bytes,
+		 * but not too big that overflows what the compressed header can
+		 * support.
+		 */
+		if (tsize < (msize + hazardQuarantineSize + MinChunkSize +
+		             sizeof(MChunkHeader)) ||
+		    tsize > MaxChunkSize)
+		{
+			return nullptr;
+		}
+
+		Capability m{tbase.cast<MState>()};
+
 		m.bounds()            = sizeof(*m);
 		m->heapStart          = tbase;
 		m->heapStart.bounds() = tsize;
+		/*
+		 * The address of the start of the heap must be 8-byte aligned,
+		 * but we do not need to pad here: we already did when
+		 * calculating msize, and the size of the hazard quarantine is
+		 * a multiple of 8 (number of threads * 8 * 2).
+		 */
 		m->heapStart.address() += msize + hazardQuarantineSize;
 		m->init_bins();
 

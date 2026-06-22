@@ -1061,13 +1061,10 @@ class MState
 	}
 
 	/**
-	 * @brief Called when adding the first memory chunk to this MState.
-	 * At the moment we only support one contiguous MChunk for each MState.
+	 * Called when adding the first memory chunk to this MState. At the
+	 * moment we only support one contiguous MChunk for each MState.
 	 *
-	 * @param p The chunk used to initialise the MState. It must have the
-	 * previous-in-use bit set and the next chunk's in-use bit set to prevent
-	 * free() from coalescing below and above, unless you really know what you
-	 * are doing.
+	 * Takes the base address and size of the first chunk to be added.
 	 */
 	void mspace_firstchunk_add(void *base, size_t size)
 	{
