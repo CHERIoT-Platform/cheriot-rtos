@@ -5,20 +5,9 @@
 #include "string.h"
 
 /**
- * The variable-sized libcalls have the same names as builtins and clang
- * doesn't let us define functions with the same name as builtins, so we define
- * them without the `__` prefix and expose their assembly symbol as the expected
- * name.
- */
-#define DECLARE_ATOMIC_LIBCALL_ALIAS(name, ret, ...)                           \
-	[[cheriot::interrupt_state(disabled)]] __cheri_libcall ret name(           \
-	  __VA_ARGS__) asm("__" #name);
-
-/**
  * Atomically load a variable number of bytes from `src` and store them in
  * `dest`.
  */
-DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_load, void, int, const void *, void *, int)
 void atomic_load(int size, const void *src, void *dest, int)
 {
 	memcpy(dest, src, size);
@@ -28,7 +17,6 @@ void atomic_load(int size, const void *src, void *dest, int)
  * Atomically load a variable number of bytes from `src` and store them in
  * `dest`.
  */
-DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_store, void, int, void *, const void *, int)
 void atomic_store(int size, void *dest, const void *src, int)
 {
 	memcpy(dest, src, size);
@@ -38,13 +26,6 @@ void atomic_store(int size, void *dest, const void *src, int)
  * Atomically replace the value at `ptr` with the value at `val` and the return
  * the old value via `old`.  All pointers point to at least `size` bytes.
  */
-DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_exchange,
-                             void,
-                             int,
-                             void *,
-                             void *,
-                             const void *,
-                             int)
 void atomic_exchange(int size, void *ptr, void *old, const void *val, int)
 {
 	memcpy(old, ptr, size);
@@ -57,14 +38,6 @@ void atomic_exchange(int size, void *ptr, void *old, const void *val, int)
  * by `expected`.  Returns 1 on success, 0 on failure.  In case of failure, the
  * current object stored at `ptr` will be copied over `expected`.
  */
-DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_compare_exchange,
-                             int,
-                             int,
-                             void *,
-                             void *,
-                             const void *,
-                             int,
-                             int)
 int atomic_compare_exchange(int         size,
                             void       *ptr,
                             void       *expected,

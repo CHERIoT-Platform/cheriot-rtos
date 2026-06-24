@@ -166,3 +166,31 @@ DECLARE_ATOMIC_LIBCALL(__atomic_compare_exchange_cap,
 DECLARE_ATOMIC_LIBCALL(__atomic_load_cap, void *, void *const *, int)
 DECLARE_ATOMIC_LIBCALL(__atomic_store_cap, void, void **, void *, int)
 DECLARE_ATOMIC_LIBCALL(__atomic_exchange_cap, void *, void **, void *, int)
+
+/**
+ * The variable-sized libcalls have the same names as builtins and clang
+ * doesn't let us define functions with the same name as builtins, so we define
+ * them without the `__` prefix and expose their assembly symbol as the expected
+ * name.
+ */
+#define DECLARE_ATOMIC_LIBCALL_ALIAS(name, ret, ...)                           \
+	[[cheriot::interrupt_state(disabled)]] __cheri_libcall ret name(           \
+	  __VA_ARGS__) asm("__" #name);
+
+DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_load, void, int, const void *, void *, int)
+DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_store, void, int, void *, const void *, int)
+DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_exchange,
+                             void,
+                             int,
+                             void *,
+                             void *,
+                             const void *,
+                             int)
+DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_compare_exchange,
+                             int,
+                             int,
+                             void *,
+                             void *,
+                             const void *,
+                             int,
+                             int)
