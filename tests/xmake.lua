@@ -116,6 +116,8 @@ test("debug_cxx", { name = "Debug helpers (C++)" })
 test("debug_c", { file = false, name = "Debug helpers (C)" })
     add_files("debug_c-test.c")
 
+test("isa", {name="ISA"})
+
 -- Test MMIO access
 test("mmio", { name = "MMIO" })
 
