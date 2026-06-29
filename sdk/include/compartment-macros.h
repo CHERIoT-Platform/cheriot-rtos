@@ -225,7 +225,7 @@
 			        permitStore,                                               \
 			        permitLoadStoreCapabilities,                               \
 			        permitLoadMutable,                                         \
-			        permitLoadGlobal)))) volatile extern char cValue;          \
+			        permitLoadGlobal)))) extern char cValue;                   \
 			(type *)&cValue;                                                   \
 			_Pragma("GCC diagnostic pop")                                      \
 			/* NOLINTEND(bugprone-macro-parentheses) */                        \
