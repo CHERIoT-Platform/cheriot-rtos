@@ -1471,6 +1471,466 @@ namespace
 		debug_log("End of permission restriction tests");
 	}
 
+	__noinline void test_sub_quota_operations()
+	{
+		debug_log("Beginning sub quota ID management structure tests");
+
+		Timeout               t{UnlimitedTimeout};
+		ds::xoroshiro::P32R16 rand = {};
+
+		/**
+		 * Basic functionality
+		 */
+
+		const size_t                     ArrSize = 64;
+		std::vector<AllocatorCapability> quotas;
+		quotas.resize(ArrSize);
+		AllocatorCapability child, child2, c0, c1, c2;
+
+		size_t initialQuota = heap_quota_remaining(MALLOC_CAPABILITY);
+
+		// Simple create then recombine
+		child = split_quota(&t, MALLOC_CAPABILITY, 0);
+		TEST(Capability{child}.is_valid(), "Sub quota creation failed.");
+
+		TEST_EQUAL(recombine_quota(child, MALLOC_CAPABILITY),
+		           0,
+		           "Sub quota destruction failed.");
+
+		// Create then recombine large number
+		for (size_t i = 0; i < ArrSize; ++i)
+		{
+			quotas[i] = split_quota(&t, MALLOC_CAPABILITY, 0);
+			TEST(Capability{quotas[i]}.is_valid(),
+			     "Sub quota creation failed at index {}",
+			     i);
+		}
+
+		for (size_t i = 0; i < ArrSize; ++i)
+		{
+			TEST(recombine_quota(quotas[i], MALLOC_CAPABILITY) == 0,
+			     "Sub quota destruction failed at index {}",
+			     i);
+		}
+
+		/**
+		 * Failure cases
+		 */
+		debug_log("Testing sub_quota API parameter validation");
+		size_t quotaRemaining = 0;
+
+		// create sub quota
+		child = split_quota(nullptr, MALLOC_CAPABILITY, 0);
+		TEST(!Capability{child}.is_valid(),
+		     "Creating sub quota with null timeout succeded");
+		TEST_EQUAL(static_cast<int>(reinterpret_cast<intptr_t>(child)),
+		           -EINVAL,
+		           "Creating sub quota with null timeout succeded");
+		child = split_quota(&t, nullptr, 0);
+		TEST(!Capability{child}.is_valid(),
+		     "Creating sub quota with null parent succeeded");
+		TEST_EQUAL(static_cast<int>(reinterpret_cast<intptr_t>(child)),
+		           -EPERM,
+		           "Creating sub quota with null parent succeeded");
+
+		// invalid sizes
+		child = split_quota(&t, MALLOC_CAPABILITY, MALLOC_QUOTA);
+		TEST(!Capability{child}.is_valid(),
+		     "Creating sub quota larger than parent succeeded");
+		TEST_EQUAL(
+		  static_cast<int>(reinterpret_cast<intptr_t>(child)),
+		  -ENOMEM,
+		  "Creating sub quota with quota greater than parent succeeded");
+
+		quotaRemaining = heap_quota_remaining(MALLOC_CAPABILITY);
+		child          = split_quota(
+		  &t, MALLOC_CAPABILITY, static_cast<size_t>(quotaRemaining));
+		TEST(!Capability{child}.is_valid(),
+		     "Creating sub quota whose quota + metadata exceeds parents quota "
+		     "succeded");
+		TEST_EQUAL(static_cast<int>(reinterpret_cast<intptr_t>(child)),
+		           -ENOMEM,
+		           "Creating sub quota whose quota + metadata exceeds parents "
+		           "quota succeded");
+
+		// recombine sub quota
+		child = split_quota(&t, MALLOC_CAPABILITY, 0);
+		TEST(Capability{child}.is_valid(),
+		     "Sub quota creation failed for null parent recombine test");
+		TEST_EQUAL(recombine_quota(nullptr, MALLOC_CAPABILITY),
+		           -EPERM,
+		           "recombining sub quota with null child succeeded");
+		TEST_EQUAL(recombine_quota(child, nullptr),
+		           -EPERM,
+		           "recombining sub quota with null parent succeeded");
+		child2 = split_quota(&t, MALLOC_CAPABILITY, 0);
+		TEST(Capability{child2}.is_valid(),
+		     "Sub quota creation failed for null parent recombine test");
+		TEST_EQUAL(recombine_quota(child, child2),
+		           -EPERM,
+		           "recombining sub quota with sibling as parent succeeded")
+		TEST_EQUAL(recombine_quota(child2, MALLOC_CAPABILITY),
+		           0,
+		           "Cleanup recombine of child2 failed.");
+		TEST_EQUAL(recombine_quota(child, MALLOC_CAPABILITY),
+		           0,
+		           "Cleanup recombine child failed.");
+
+		/**
+		 * Quota Accounting
+		 */
+		debug_log("Testing sub quota accounting");
+
+		size_t splitSize = 4096;
+
+		// Expect quota exactly restored after create + recombine
+		quotaRemaining = heap_quota_remaining(MALLOC_CAPABILITY);
+		child          = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		TEST(Capability{child}.is_valid(), "Sub quota creation failed");
+		TEST_EQUAL(recombine_quota(child, MALLOC_CAPABILITY),
+		           0,
+		           "Sub quota recombine failed");
+		TEST_EQUAL(heap_quota_remaining(MALLOC_CAPABILITY),
+		           static_cast<ssize_t>(quotaRemaining),
+		           "Parent quota not fully restored after create + recombine");
+
+		// Child reports exactly the requested quota
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		TEST(Capability{child}.is_valid(), "Sub quota creation failed");
+		TEST_EQUAL(heap_quota_remaining(child),
+		           splitSize,
+		           "Child quota_remaining does not equal requested size");
+		TEST_EQUAL(recombine_quota(child, MALLOC_CAPABILITY),
+		           0,
+		           "Sub quota recombine failed");
+
+		// Parent quota reduced by both the child size and the metadata overhead
+		quotaRemaining = heap_quota_remaining(MALLOC_CAPABILITY);
+		child          = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		TEST(Capability{child}.is_valid(), "Sub quota creation failed");
+		ssize_t parentAfterChild = heap_quota_remaining(MALLOC_CAPABILITY);
+		// difference must be strictly greater than splitSize due to
+		// sealed-size overhead
+		TEST(static_cast<size_t>(quotaRemaining - parentAfterChild) > splitSize,
+		     "Parent quota reduction does not account for metadata overhead");
+		TEST_EQUAL(recombine_quota(child, MALLOC_CAPABILITY),
+		           0,
+		           "Sub quota recombine failed");
+
+		/**
+		 * Linked-list integrity
+		 */
+		debug_log("Testing sub quota linked list integrity");
+		// Insertion order recombination tested earlier in suite.
+
+		// Create head, recombine so list is empty, create again.
+		child = split_quota(&t, MALLOC_CAPABILITY, 0);
+		TEST(Capability{child}.is_valid(), "Sub quota creation failed");
+		TEST_EQUAL(recombine_quota(child, MALLOC_CAPABILITY),
+		           0,
+		           "recombine of only child failed");
+		child2 = split_quota(&t, MALLOC_CAPABILITY, 0);
+		TEST(Capability{child2}.is_valid(),
+		     "split_quota failed after list became empty");
+		TEST_EQUAL(recombine_quota(child2, MALLOC_CAPABILITY),
+		           0,
+		           "recombine failed after list-empty re-creation");
+
+		// Recombine a non-head child. Neighbours' prev/next pointers
+		// must be updated so the remaining children can still be recombined
+		c0 = split_quota(&t, MALLOC_CAPABILITY, 0);
+		c1 = split_quota(&t, MALLOC_CAPABILITY, 0);
+		c2 = split_quota(&t, MALLOC_CAPABILITY, 0);
+		TEST(Capability{c0}.is_valid(), "Sub quota c0 creation failed");
+		TEST(Capability{c1}.is_valid(), "Sub quota c1 creation failed");
+		TEST(Capability{c2}.is_valid(), "Sub quota c2 creation failed");
+		TEST_EQUAL(recombine_quota(c1, MALLOC_CAPABILITY),
+		           0,
+		           "recombine of middle sub quota failed");
+		TEST_EQUAL(recombine_quota(c0, MALLOC_CAPABILITY),
+		           0,
+		           "recombine of c0 after middle removed failed");
+		TEST_EQUAL(recombine_quota(c2, MALLOC_CAPABILITY),
+		           0,
+		           "recombine of c2 after middle removed failed");
+	}
+
+	/**
+	 */
+	__noinline void test_sub_quota_semantics()
+	{
+		debug_log("Beginning sub quota semantics tests");
+
+		Timeout               t{UnlimitedTimeout};
+		ds::xoroshiro::P32R16 rand = {};
+
+		const size_t                     ArrSize   = 64;
+		size_t                           splitSize = 4096;
+		AllocatorCapability              child;
+		void                            *ptr;
+		std::vector<AllocatorCapability> quotas;
+		quotas.resize(ArrSize);
+		std::vector<void *> ptrs;
+		ptrs.resize(ArrSize);
+
+		/**
+		 * Basic quota usage
+		 */
+		debug_log("Testing basic sub quota usage for allocation and free.");
+
+		size_t initialQuota   = heap_quota_remaining(MALLOC_CAPABILITY);
+		size_t allocationSize = 128;
+
+		// Allocating from child reduces its quota and freeing restores it
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		TEST(Capability{child}.is_valid(), "Sub quota creation failed");
+		ptr = heap_allocate(&t, child, allocationSize);
+		TEST(Capability{ptr}.is_valid(), "Allocation from child quota failed");
+
+		TEST(heap_quota_remaining(child) < splitSize - allocationSize,
+		     "Child quota not reduced after allocation");
+		TEST_SUCCESS(heap_free(child, ptr));
+		TEST_EQUAL(heap_quota_remaining(child),
+		           splitSize,
+		           "Child quota not restored after free");
+		TEST_EQUAL(recombine_quota(child, MALLOC_CAPABILITY),
+		           0,
+		           "Sub quota recombine failed");
+
+		// Parent capability should not be able to free childs allocations
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		TEST(Capability{child}.is_valid(), "Sub quota creation failed");
+		ptr = heap_allocate(&t, child, allocationSize);
+		TEST(Capability{ptr}.is_valid(), "Child failed to allocate");
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr),
+		           -EPERM,
+		           "Parent successfully freed allocation of child.");
+		TEST_SUCCESS(heap_free(child, ptr));
+		TEST_EQUAL(
+		  recombine_quota(child, MALLOC_CAPABILITY), 0, "Recombine failed");
+
+		// Objects owned by the child are transferred to the parent's ownership
+		// on recombine.
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		ptr   = heap_allocate(&t, child, allocationSize);
+		TEST(Capability{ptr}.is_valid(), "Child failed to allocate");
+		TEST_EQUAL(
+		  recombine_quota(child, MALLOC_CAPABILITY), 0, "Recombine failed");
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr),
+		           0,
+		           "Parent failed to free transferred child allocation");
+
+		debug_log("Testing sub quota interactions with claims API.");
+		// If a child has a claim on an object it doesn't own, that claim is
+		// transferred to the parent. Test with parent as owner and sibling as
+		// owner.
+
+		// Parent owns object
+		ptr = heap_allocate(&t, MALLOC_CAPABILITY, allocationSize);
+		TEST(Capability{ptr}.is_valid(), "Parent allocation failed");
+
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		AllocatorCapability child2 =
+		  split_quota(&t, MALLOC_CAPABILITY, splitSize);
+
+		void *ptr2 = heap_allocate(&t, child, allocationSize);
+
+		// Child claims sibling allocation
+		TEST_EQUAL(heap_claim(child2, ptr2),
+		           allocationSize,
+		           "Child failed to claim Parent object");
+		// Child claims parent allocation
+		TEST_EQUAL(heap_claim(child, ptr),
+		           allocationSize,
+		           "Child failed to claim Parent object");
+
+		// Recombine child with sibling claim
+		TEST_EQUAL(
+		  recombine_quota(child2, MALLOC_CAPABILITY), 0, "Recombine failed");
+
+		// Parent should hold claim with single reference on allocation.
+		TEST_EQUAL(
+		  heap_free(child, ptr2), 0, "Free on claimed allocation failed");
+		TEST(Capability{ptr2}.is_valid_temporal(),
+		     "Capability freed while claimed");
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr2),
+		           0,
+		           "Free on claimed allocation with no owner failed");
+
+		// Recombine child with parent claim
+		TEST_EQUAL(
+		  recombine_quota(child, MALLOC_CAPABILITY), 0, "Recombine failed");
+
+		// Parent should now hold claim with 2 references. Freeing twice
+		// should release both claims.
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr), 0, "Free 1 failed");
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr), 0, "Free 2 failed");
+
+		// If both parent and child claim the same object, the reference counts
+		// are summed on recombine.
+		ptr = heap_allocate(&t, MALLOC_CAPABILITY, allocationSize);
+		TEST(Capability{ptr}.is_valid(), "Parent allocation failed");
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+
+		TEST_EQUAL(heap_claim(MALLOC_CAPABILITY, ptr),
+		           allocationSize,
+		           "Parent failed to claim");
+		TEST_EQUAL(
+		  heap_claim(child, ptr), allocationSize, "Child failed to claim");
+
+		TEST_EQUAL(
+		  recombine_quota(child, MALLOC_CAPABILITY), 0, "Recombine failed");
+
+		// 1 (Parent Owner) + 1 (Parent Claim) + 1 (Child Claim) = 3 refs
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr), 0, "Free 1 failed");
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr), 0, "Free 2 failed");
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr), 0, "Free 3 failed");
+
+		// If child owns an object and parent has a claim, the ownership should
+		// be converted into an additional reference on the parent's claim.
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		ptr   = heap_allocate(&t, child, allocationSize);
+		TEST(Capability{ptr}.is_valid(), "Child allocation failed");
+
+		TEST_EQUAL(heap_claim(MALLOC_CAPABILITY, ptr),
+		           allocationSize,
+		           "Parent failed to claim child object");
+
+		TEST_EQUAL(
+		  recombine_quota(child, MALLOC_CAPABILITY), 0, "Recombine failed");
+
+		// Object is now owned by parent but parent already had a claim,
+		// which should result in parent owning it with an extra ref.
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr), 0, "Free 1 failed");
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr), 0, "Free 2 failed");
+
+		// Parent should only get back the "current" remaining quota of the
+		// child, not the "initial" split size, if there are active allocations.
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+
+		ptr = heap_allocate(&t, child, 1024);
+		TEST(Capability{ptr}.is_valid(), "Child allocation failed");
+
+		size_t childRemaining = heap_quota_remaining(child);
+		TEST(childRemaining < splitSize,
+		     "Quota for allocation was not deducted from child. Remaining: {}",
+		     childRemaining);
+		TEST_EQUAL(
+		  recombine_quota(child, MALLOC_CAPABILITY), 0, "Recombine failed");
+
+		size_t parentRemaining = heap_quota_remaining(MALLOC_CAPABILITY);
+		// ptr is still live and now owned by the parent, should count against
+		// quota
+		TEST(parentRemaining < initialQuota,
+		     "Parent quota change {} to {} did not reflect active child "
+		     "allocation",
+		     initialQuota,
+		     parentRemaining);
+
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr), 0, "Free failed");
+		TEST_EQUAL(heap_quota_remaining(MALLOC_CAPABILITY),
+		           initialQuota,
+		           "Full quota not recovered");
+
+		debug_log("Testing deeply nested sub quotas.");
+		// We should be able to arbitrarily nest sub quotas, and recombing
+		// should propagate ownership of allocations up to the top.
+		splitSize = allocationSize + (2 * sizeof(AllocatorCapabilityState));
+
+		quotas[0] = MALLOC_CAPABILITY;
+		ptrs[0]   = heap_allocate(&t, MALLOC_CAPABILITY, allocationSize);
+		TEST(Capability{ptrs[0]}.is_valid(), "Root allocation failed");
+
+		for (size_t i = 1; i < ArrSize; ++i)
+		{
+			quotas[i] =
+			  split_quota(&t, quotas[i - 1], (ArrSize - i) * splitSize);
+			TEST(Capability{quotas[i]}.is_valid_temporal(),
+			     "split failed at index {}",
+			     i);
+			ptrs[i] = heap_allocate(&t, quotas[i], allocationSize);
+			TEST(Capability{ptrs[i]}.is_valid_temporal(),
+			     "allocation failed at index {}",
+			     i);
+		}
+
+		// FIXME: volatile here as temporary fix for
+		// https://github.com/CHERIoT-Platform/llvm-project/issues/360
+		for (volatile size_t i = ArrSize - 1; i > 0; i = i - 1)
+		{
+			int result = recombine_quota(quotas[i], quotas[i - 1]);
+			TEST(result == 0,
+			     "Recombine failed at index {} with code {}",
+			     i,
+			     result);
+		}
+
+		for (size_t i = 0; i < ArrSize; ++i)
+		{
+			TEST(heap_free(MALLOC_CAPABILITY, ptrs[i]) == 0,
+			     "Free failed at index {}",
+			     i);
+		}
+
+		TEST_EQUAL(heap_quota_remaining(MALLOC_CAPABILITY),
+		           initialQuota,
+		           "Full quota not recovered");
+
+		debug_log("Testing quota free under dropped lock in allocation path.");
+
+		// Test transient allocation failure, quota freed while lock dropped
+		splitSize = allocationSize + (2 * sizeof(AllocatorCapabilityState));
+
+		child = split_quota(&t, MALLOC_CAPABILITY, splitSize);
+		TEST(Capability{child}.is_valid(),
+		     "Sub quota creation failed with error {}",
+		     reinterpret_cast<int>(child));
+
+		// Consume quota such that the next allocation will incur transient
+		// failure
+		ptr = heap_allocate(&t, child, allocationSize);
+		TEST(Capability{ptr}.is_valid(), "Initial child allocation failed");
+		TEST(static_cast<size_t>(heap_quota_remaining(child)) < allocationSize,
+		     "Child quota remaining should be less than allocationSize after "
+		     "first allocation.");
+
+		static cheriot::atomic<uint32_t> state = 0;
+
+		async([child]() {
+			// Wait until main thread is about to allocate.
+			state.wait(0);
+			// Sleep to ensure main thread is suspended on futex.
+			TEST(sleep(2) >= 0, "Failed to sleep");
+			// Recombine while the main thread has dropped the lock, which
+			// frees the underlying quota object. The free inside recombine
+			// notifies the futex the allocation is blocked on, which will
+			// wake the main thread.
+			TEST_EQUAL(recombine_quota(child, MALLOC_CAPABILITY),
+			           0,
+			           "recombine_quota failed in background thread");
+			// Flush quarantine to revoke the sub quota capability held on
+			// the main thread's stack before it can reacquire the lock.
+			TEST_SUCCESS(heap_quarantine_empty());
+			state = 2;
+			state.notify_one();
+		});
+
+		// Signal and immediately enter attempt allocation. Alloc size
+		// exceeds remaining child quota, so this call should drop the lock
+		// and block.
+		state = 1;
+		state.notify_one();
+		ErrorOr<void> result{heap_allocate(&t, child, allocationSize)};
+		TEST_EQUAL(result.as_error(),
+		           -EPERM,
+		           "Expected -EPERM when sub-quota freed during allocation");
+
+		// Wait for the background thread to finish before touching ptr.
+		state.wait(1);
+		TEST_EQUAL(heap_free(MALLOC_CAPABILITY, ptr),
+		           0,
+		           "Failed to free allocation transferred to parent");
+	}
 } // namespace
 
 /**
@@ -1541,6 +2001,8 @@ int test_allocator()
 	     quotaLeft);
 	test_claims();
 	test_permissions();
+	test_sub_quota_operations();
+	test_sub_quota_semantics();
 
 	TEST(heap_address_is_valid(&t) == false,
 	     "Stack object incorrectly reported as heap address");
