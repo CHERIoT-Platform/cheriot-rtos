@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <unwind.h>
 
-int callee_seh_dereference(int *p)
+int callee_seh_dereference(const int *p)
 {
 	CHERIOT_DURING
 	{

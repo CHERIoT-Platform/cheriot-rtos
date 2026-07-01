@@ -12,7 +12,7 @@ find_sdk $1
 echo "Using SDK=$SDK"
 
 # Generate compile_commands.json for all of the extra tests and examples.
-for dir in tests.extra/*/ ex*/[[:digit:]]* ; do
+for dir in tests.extra/*/ ex*/[[:digit:]]* benchmarks/*/; do
     echo Generating compile_commands.json for $dir
     (cd $dir && xmake f --sdk="${SDK}" && xmake project -k compile_commands)
 done

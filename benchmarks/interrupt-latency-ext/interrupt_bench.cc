@@ -30,7 +30,7 @@ struct Source
 
 	auto futex()
 	{
-		return static_cast<uint32_t*>(nullptr);
+		return static_cast<uint32_t *>(nullptr);
 	}
 
 	void init()
