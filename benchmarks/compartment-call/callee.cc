@@ -15,7 +15,7 @@ int callee_stack_using_return_metric(size_t stackUse)
 	return METRIC();
 }
 
-int callee_dereference(int *p)
+int callee_dereference(const int *p)
 {
 	return *p;
 }

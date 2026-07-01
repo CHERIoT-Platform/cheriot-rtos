@@ -47,15 +47,15 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		}
 
 		int    end       = CHERI::with_interrupts_disabled([&]() {
-            uint32_t bits = 0;
-            Debug::log("Thread {} releasing ticket lock", threadID);
-            g.unlock();
-            Debug::log("Thread {} waiting on event", threadID);
-            event.wait(0);
-            int time = rdcycle();
-            Debug::Invariant(event == 1, "Futex woke spuriously");
-            return time;
-		         });
+			uint32_t bits = 0;
+			Debug::log("Thread {} releasing ticket lock", threadID);
+			g.unlock();
+			Debug::log("Thread {} waiting on event", threadID);
+			event.wait(0);
+			int time = rdcycle();
+			Debug::Invariant(event == 1, "Futex woke spuriously");
+			return time;
+		});
 		size_t stackSize = get_stack_size();
 		printf(__XSTRING(BOARD) "\t%d\t%d\n", stackSize, end - start);
 	}

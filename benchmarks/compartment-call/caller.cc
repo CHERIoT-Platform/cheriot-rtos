@@ -10,7 +10,7 @@
 
 using Debug = ConditionalDebug<DEBUG_CALLER, "Compartment call benchmark">;
 
-DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(MALLOC_CAP_TWO, 1024);
+DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(mallocCapTwo, 1024);
 
 __noinline int local_noop_return_metric()
 {
@@ -187,8 +187,7 @@ int __cheri_compartment("caller") run()
 		  [](int) { return local_check_pointer_return_metric(&nextResult); });
 
 		Timeout t{UnlimitedTimeout};
-		void   *alloc =
-		  heap_allocate(&t, STATIC_SEALED_VALUE(MALLOC_CAP_TWO), 10);
+		void *alloc = heap_allocate(&t, STATIC_SEALED_VALUE(mallocCapTwo), 10);
 
 		printf("#heap_claim_ephemeral\n");
 		benchWithMiddle(
