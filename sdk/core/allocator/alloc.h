@@ -1422,6 +1422,10 @@ class MState
 		// capability.
 		Capability mem{chunk.body()};
 
+		Debug::Assert(
+		  (bodySize + sizeof(MChunkHeader)) <= chunk.size_get(),
+		  "mspace_free with claimed body that would exceeed chunk size");
+
 		bool isDoubleFree = false;
 
 		if (__predict_false(skipHazardCheck))
