@@ -1,3 +1,4 @@
+#include "cdefs.h"
 #include <cheri.hh>
 #include <platform-rdcycle.h>
 
@@ -46,10 +47,9 @@ namespace
 
 	void use_stack(size_t s)
 	{
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wvla-cxx-extension"
+		__clang_ignored_warning_push("-Wvla-cxx-extension");
 		volatile uint8_t stackArray[s];
-#pragma clang diagnostic pop
+		__clang_ignored_warning_pop();
 		stackArray[0] = 1;
 	}
 
