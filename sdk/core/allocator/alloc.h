@@ -1000,6 +1000,18 @@ class MState
 		return cap;
 	}
 
+	/**
+	 * Rederive a capability to a `T` from the heap range by relative offset.
+	 * This does not apply bounds to the result.
+	 */
+	template<typename T>
+	T *rederive_relative(ptraddr_t address)
+	{
+		CHERI::Capability<T> cap{heapStart.cast<T>()};
+		cap.address() += address;
+		return cap;
+	}
+
 	// Returns the smallbin head for index i.
 	auto smallbin_at(BIndex i)
 	{
