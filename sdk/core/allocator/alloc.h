@@ -314,8 +314,17 @@ __cheri_no_subobject_bounds MChunkHeader
 	bool isSealedObject : 1;
 	bool isPrevInUse : 1;
 	bool isCurrInUse : 1;
+
 	/// Head of a linked list of claims on this allocation
-	uint16_t claims;
+	enum class ClaimChain : ptraddr_t
+	{
+		None = 0,
+	};
+
+	/// Actual bit-width of a claims chain pointer
+	static constexpr size_t ClaimChainWidth = 16;
+
+	ClaimChain claims : ClaimChainWidth;
 
 	__always_inline auto cell_prev()
 	{
@@ -493,10 +502,6 @@ __cheri_no_subobject_bounds MChunkHeader
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
-static_assert(
-  offsetof(MChunkHeader, claims) == 2 * sizeof(SmallSize) + sizeof(uint16_t),
-  "Metadata is no longer 16 bits.  Update the OwnerIDWidth constant to correct "
-  "the space used for the owner ID to match the remaining space.");
 
 // the maximum requested size that is still categorised as a small bin
 constexpr size_t MaxSmallRequest = MaxSmallSize - sizeof(MChunkHeader);
@@ -1341,7 +1346,7 @@ class MState
 				Capability heap{heapStart};
 				heap.address() = ptr.address();
 				auto chunk     = MChunkHeader::from_body(heap);
-				if (chunk->claims > 0)
+				if (chunk->claims != MChunkHeader::ClaimChain::None)
 				{
 					/*
 					 * The chunk was freed but ended up in
