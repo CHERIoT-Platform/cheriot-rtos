@@ -715,8 +715,8 @@ namespace
 	 */
 	bool claim_add(PrivateAllocatorCapabilityState &owner, MChunkHeader &chunk)
 	{
-		Debug::log("Adding claim for {}", owner.identifier);
 		auto [next, claim] = claim_find(owner.identifier, chunk);
+		Debug::log("Adding claim on {} for {}", &chunk, owner.identifier);
 		if (claim)
 		{
 			Debug::log("Adding reference to existing claim");
@@ -770,7 +770,7 @@ namespace
 	                bool                             freeAll = false)
 	{
 		Debug::log(
-		  "Trying to drop claim with {} ({})", owner.identifier, &owner);
+		  "Trying to drop claim on {} with {}", &chunk, owner.identifier);
 		auto [next, claim] = claim_find(owner.identifier, chunk);
 		// If there is no claim, fail.
 		if (claim == nullptr)
