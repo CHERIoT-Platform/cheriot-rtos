@@ -49,8 +49,6 @@ constexpr size_t MaxSmallSize = 1U << TreeBinShift;
 using SmallSize               = uint16_t;
 constexpr size_t MaxChunkSize = (1U << utils::bytes2bits(sizeof(SmallSize)))
                                 << MallocAlignShift;
-// the compressed pointer. Used to point to prev and next in free lists.
-using SmallPtr = size_t;
 // the index to one of the bins
 using BIndex = uint32_t;
 // the bit map of all the bins. 1 for in-use and 0 for empty.
@@ -316,8 +314,17 @@ __cheri_no_subobject_bounds MChunkHeader
 	bool isSealedObject : 1;
 	bool isPrevInUse : 1;
 	bool isCurrInUse : 1;
+
 	/// Head of a linked list of claims on this allocation
-	uint16_t claims;
+	enum class ClaimChain : ptraddr_t
+	{
+		None = 0,
+	};
+
+	/// Actual bit-width of a claims chain pointer
+	static constexpr size_t ClaimChainWidth = 16;
+
+	ClaimChain claims : ClaimChainWidth;
 
 	__always_inline auto cell_prev()
 	{
@@ -495,10 +502,6 @@ __cheri_no_subobject_bounds MChunkHeader
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
-static_assert(
-  offsetof(MChunkHeader, claims) == 2 * sizeof(SmallSize) + sizeof(uint16_t),
-  "Metadata is no longer 16 bits.  Update the OwnerIDWidth constant to correct "
-  "the space used for the owner ID to match the remaining space.");
 
 // the maximum requested size that is still categorised as a small bin
 constexpr size_t MaxSmallRequest = MaxSmallSize - sizeof(MChunkHeader);
@@ -630,12 +633,6 @@ class __packed __aligned(MallocAlignment) MChunk
 	{
 		return reinterpret_cast<MChunk *>(reinterpret_cast<uintptr_t>(c) -
 		                                  offsetof(MChunk, ring));
-	}
-
-	// the internal small pointer representation of this chunk
-	SmallPtr ptr()
-	{
-		return CHERI::Capability{this}.address();
 	}
 
 	/**
@@ -957,10 +954,22 @@ class MState
 	/// Rederive a capability to a `T` from the heap range.  This does not
 	/// apply bounds to the result.
 	template<typename T>
-	T *rederive(SmallPtr ptr)
+	T *rederive(ptraddr_t address)
 	{
 		CHERI::Capability<T> cap{heapStart.cast<T>()};
-		cap.address() = ptr;
+		cap.address() = address;
+		return cap;
+	}
+
+	/**
+	 * Rederive a capability to a `T` from the heap range by relative offset.
+	 * This does not apply bounds to the result.
+	 */
+	template<typename T>
+	T *rederive_relative(ptraddr_t address)
+	{
+		CHERI::Capability<T> cap{heapStart.cast<T>()};
+		cap.address() += address;
 		return cap;
 	}
 
@@ -1337,7 +1346,7 @@ class MState
 				Capability heap{heapStart};
 				heap.address() = ptr.address();
 				auto chunk     = MChunkHeader::from_body(heap);
-				if (chunk->claims > 0)
+				if (chunk->claims != MChunkHeader::ClaimChain::None)
 				{
 					/*
 					 * The chunk was freed but ended up in
@@ -1373,6 +1382,10 @@ class MState
 		// address that we're looking at to the base of the requested
 		// capability.
 		Capability mem{chunk.body()};
+
+		Debug::Assert(
+		  (bodySize + sizeof(MChunkHeader)) <= chunk.size_get(),
+		  "mspace_free with claimed body that would exceeed chunk size");
 
 		bool isDoubleFree = false;
 
@@ -1962,7 +1975,7 @@ class MState
 		              small_index2size(i));
 
 		if (RTCHECK(&p->ring == bin->last() ||
-		            (ok_address(f->ptr()) && f->bk_equals(p))))
+		            (ok_address(f) && f->bk_equals(p))))
 		{
 			if (br == fr)
 			{
@@ -1971,7 +1984,7 @@ class MState
 				bin->reset();
 			}
 			else if (RTCHECK(&p->ring == smallbin_at(i)->first() ||
-			                 (ok_address(b->ptr()) && b->fd_equals(p))))
+			                 (ok_address(b) && b->fd_equals(p))))
 			{
 				ds::linked_list::unsafe_remove(&p->ring);
 			}
@@ -2000,8 +2013,7 @@ class MState
 
 		MChunk *p = MChunk::from_ring(b->unsafe_take_first());
 
-		Debug::Assert(
-		  ok_address(p->ptr()), "Removed chunk {} has bad address", p);
+		Debug::Assert(ok_address(p), "Removed chunk {} has bad address", p);
 
 		if (b->is_empty())
 		{
@@ -2066,8 +2078,8 @@ class MState
 				{
 					TChunk *back =
 					  TChunk::from_ring(t->mchunk.ring.cell_prev());
-					if (RTCHECK(ok_address(t->mchunk.ptr()) &&
-					            ok_address(back->mchunk.ptr())))
+					if (RTCHECK(ok_address(&t->mchunk) &&
+					            ok_address(&back->mchunk)))
 					{
 						t->ring_emplace(i, xHeader);
 						break;
@@ -2105,7 +2117,7 @@ class MState
 		{
 			TChunk *f = TChunk::from_ring(x->mchunk.ring.cell_next());
 			r         = TChunk::from_ring(x->mchunk.ring.cell_prev());
-			if (RTCHECK(ok_address(f->mchunk.ptr()) &&
+			if (RTCHECK(ok_address(&f->mchunk) &&
 			            f->mchunk.bk_equals(&x->mchunk) &&
 			            r->mchunk.fd_equals(&x->mchunk)))
 			{
@@ -2149,7 +2161,7 @@ class MState
 					treemap_clear(x->index);
 				}
 			}
-			else if (RTCHECK(ok_address(xp->mchunk.ptr())))
+			else if (RTCHECK(ok_address(&xp->mchunk)))
 			{
 				if (xp->child[0] == x)
 				{
@@ -2166,13 +2178,13 @@ class MState
 			}
 			if (r != nullptr)
 			{
-				if (RTCHECK(ok_address(r->mchunk.ptr())))
+				if (RTCHECK(ok_address(&r->mchunk)))
 				{
 					TChunk *c0, *c1;
 					r->parent = xp;
 					if ((c0 = x->child[0]) != nullptr)
 					{
-						if (RTCHECK(ok_address(c0->mchunk.ptr())))
+						if (RTCHECK(ok_address(&c0->mchunk)))
 						{
 							r->child[0] = c0;
 							c0->parent  = r;
@@ -2184,7 +2196,7 @@ class MState
 					}
 					if ((c1 = x->child[1]) != nullptr)
 					{
-						if (RTCHECK(ok_address(c1->mchunk.ptr())))
+						if (RTCHECK(ok_address(&c1->mchunk)))
 						{
 							r->child[1] = c1;
 							c1->parent  = r;
@@ -2272,7 +2284,7 @@ class MState
 		 */
 		v = TChunk::from_ring(v->mchunk.ring.cell_next());
 
-		if (RTCHECK(ok_address(v->mchunk.ptr())))
+		if (RTCHECK(ok_address(&v->mchunk)))
 		{
 			auto vHeader = MChunkHeader::from_body(v);
 

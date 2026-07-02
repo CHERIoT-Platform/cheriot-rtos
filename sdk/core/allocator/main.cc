@@ -446,12 +446,13 @@ namespace
 		/**
 		 * The identifier of the owning allocation capability.
 		 */
-		uint16_t allocatorIdentifier = 0;
+		uint16_t allocatorIdentifier : MChunkHeader::OwnerIDWidth = 0;
 		/**
 		 * Next 'pointer' encoded as a shifted offset from the start of the
 		 * heap.
 		 */
-		uint16_t encodedNext = 0;
+		MChunkHeader::ClaimChain encodedNext : MChunkHeader::ClaimChainWidth =
+		  MChunkHeader::ClaimChain::None;
 		/**
 		 * Saturating reference count.  We use one to indicate a single
 		 * reference count rather than zero to slightly simplify the logic at
@@ -468,7 +469,7 @@ namespace
 		 * Private constructor, creates a new claim with a single reference
 		 * count.
 		 */
-		Claim(uint16_t identifier, uint16_t nextClaim)
+		Claim(uint16_t identifier, MChunkHeader::ClaimChain nextClaim)
 		  : allocatorIdentifier(identifier), encodedNext(nextClaim)
 		{
 		}
@@ -479,9 +480,80 @@ namespace
 		 */
 		~Claim() = default;
 
-		friend class Iterator;
+		/**
+		 * Decode an encoded offset and return a pointer to the claim.
+		 */
+		static Claim *from_encoded_offset(MChunkHeader::ClaimChain offset)
+		{
+			if (offset == MChunkHeader::ClaimChain::None)
+			{
+				return nullptr;
+			}
+			Capability<Claim> ret = gm->rederive_relative<Claim>(
+			  std::to_underlying(offset) << MallocAlignShift);
+			ret.bounds() = sizeof(Claim);
+			return ret;
+		}
+
+		/**
+		 * Encode the address of this object in a 16-bit value.
+		 */
+		MChunkHeader::ClaimChain encode_address()
+		{
+			static_assert(
+			  std::same_as<std::underlying_type_t<MChunkHeader::ClaimChain>,
+			               ptraddr_t>);
+
+			ptraddr_t address = Capability{this}.address();
+			address -= gm->heapStart.address();
+			Debug::Assert((address & MallocAlignMask) == 0,
+			              "Claim at address {} is insufficiently aligned",
+			              address);
+			address >>= MallocAlignShift;
+			Debug::Assert(address <= std::numeric_limits<uint16_t>::max(),
+			              "Encoded claim address is too large: {}",
+			              address);
+			return static_cast<MChunkHeader::ClaimChain>(address);
+		}
 
 		public:
+		/**
+		 * Two things can point at a Claim: another Claim or a MChunkHeader,
+		 * This is a tagged union with getter and setter for those
+		 * possibilities.
+		 */
+		struct ChainPredecessor
+		{
+			std::variant<MChunkHeader *, Claim *> value;
+
+			[[nodiscard]] MChunkHeader::ClaimChain get() const
+			{
+				if (std::holds_alternative<MChunkHeader *>(this->value))
+				{
+					return std::get<MChunkHeader *>(this->value)->claims;
+				}
+
+				return std::get<Claim *>(this->value)->encodedNext;
+			}
+
+			void set(MChunkHeader::ClaimChain encoded) const
+			{
+				if (std::holds_alternative<MChunkHeader *>(this->value))
+				{
+					std::get<MChunkHeader *>(this->value)->claims = encoded;
+				}
+				else
+				{
+					std::get<Claim *>(this->value)->encodedNext = encoded;
+				}
+			}
+
+			void set(Claim &claim) const
+			{
+				this->set(claim.encode_address());
+			}
+		};
+
 		/**
 		 * Returns the owner of this claim.
 		 */
@@ -491,105 +563,17 @@ namespace
 		}
 
 		/**
-		 * Returns the value of the compressed next pointer.
-		 */
-		[[nodiscard]] uint16_t encoded_next() const
-		{
-			return encodedNext;
-		}
-
-		/**
-		 * Claims list iterator.  This wraps a next pointer and so can be used
-		 * both to inspect a value and update it.
-		 */
-		class Iterator
-		{
-			/**
-			 * Placeholder value for end iterators.
-			 */
-			static inline const uint16_t EndPlaceholder = 0;
-
-			/**
-			 * A pointer to the encoded next pointer.
-			 */
-			uint16_t *encodedNextPointer =
-			  const_cast<uint16_t *>(&EndPlaceholder);
-
-			public:
-			/**
-			 * Default constructor returns a generic end iterator.
-			 */
-			Iterator() = default;
-
-			/// Copy constructor.
-			__always_inline Iterator(const Iterator &other) = default;
-
-			/// Constructor from an explicit next pointer.
-			__always_inline Iterator(uint16_t *nextPointer)
-			  : encodedNextPointer(nextPointer)
-			{
-			}
-
-			/**
-			 * Dereference.  Returns the claim that this iterator points to.
-			 */
-			__always_inline Claim *operator*()
-			{
-				return Claim::from_encoded_offset(*encodedNextPointer);
-			}
-
-			/**
-			 * Dereference.  Returns the claim that this iterator points to.
-			 */
-			__always_inline Claim *operator->()
-			{
-				return Claim::from_encoded_offset(*encodedNextPointer);
-			}
-
-			/// Iteration termination condition.
-			__always_inline bool operator!=(const Iterator Other)
-			{
-				return *encodedNextPointer != *Other.encodedNextPointer;
-			}
-
-			/**
-			 * Preincrement, moves to the next element.
-			 */
-			Iterator &operator++()
-			{
-				Claim *next        = **this;
-				encodedNextPointer = &next->encodedNext;
-				return *this;
-			}
-
-			/**
-			 * Assignment, replaces the claim that this iterator points to with
-			 * the new one.
-			 */
-			Iterator &operator=(Claim *claim)
-			{
-				*encodedNextPointer = claim->encode_address();
-				return *this;
-			}
-
-			/**
-			 * Returns the next pointer that this iterator refers to.
-			 */
-			uint16_t *pointer()
-			{
-				return encodedNextPointer;
-			}
-		};
-
-		/**
 		 * Allocate a new claim.  This will fail if space is not immediately
 		 * available.
+		 *
+		 * If successful, the resulting `Claim` is threaded onto the chain
+		 * after the given `ChainPredecessor`.
 		 *
 		 * Returns a pointer to the new allocation on success, nullptr on
 		 * failure.
 		 */
 		static Claim *create(PrivateAllocatorCapabilityState &capability,
-		                     uint16_t                         next)
+		                     const ChainPredecessor           Previous)
 		{
 			auto space = gm->mspace_dispatch(
 			  sizeof(Claim), capability.quota, QuotaIdentifierAllocatorOwned);
@@ -597,24 +581,31 @@ namespace
 			{
 				return nullptr;
 			}
-			auto claim = std::get<Capability<void>>(space);
-			return new (claim) Claim(capability.identifier, next);
+			auto spaceCap = std::get<Capability<void>>(space);
+			auto claim =
+			  new (spaceCap) Claim(capability.identifier, Previous.get());
+			Previous.set(*claim);
+			return claim;
 		}
 
 		/**
-		 * Destroy a claim, which must have been allocated with `capability`.
+		 * Destroy a claim, which must have been allocated with `capability` and
+		 * must be pointed to by `Previous`.
 		 */
-		static void destroy(PrivateAllocatorCapabilityState &capability,
-		                    Claim                           *claim)
+		void destroy(PrivateAllocatorCapabilityState &capability,
+		             const ChainPredecessor           Previous)
 		{
-			Capability heap{gm->heapStart};
-			heap.address() = Capability{claim}.address();
-			auto chunk     = MChunkHeader::from_body(heap);
-			capability.quota += chunk->size_get();
+			auto   thisBody  = gm->rederive<Claim>(Capability{this}.address());
+			auto   thisChunk = MChunkHeader::from_body(thisBody);
+			size_t chunkSize = thisChunk->size_get();
+			capability.quota += chunkSize;
+
+			Previous.set(this->encodedNext);
+
 			// We could skip quarantine for these objects, since we know that
 			// they haven't escaped, but they're small so it's probably not
 			// worthwhile.
-			gm->mspace_free(*chunk, sizeof(Claim));
+			gm->mspace_free(*thisChunk, sizeof(Claim));
 		}
 
 		/**
@@ -645,69 +636,38 @@ namespace
 		}
 
 		/**
-		 * Decode an encoded offset and return a pointer to the claim.
+		 * Find a claim if one exists.  Returns a reference to the next pointer
+		 * that refers to this claim.
 		 */
-		static Claim *from_encoded_offset(uint16_t offset)
+		static std::pair<const ChainPredecessor, Claim *>
+		find(uint16_t owner, MChunkHeader &chunk)
 		{
-			if (offset == 0)
-			{
-				return nullptr;
-			}
-			Capability<Claim> ret{gm->heapStart.cast<Claim>()};
-			ret.address() += offset << MallocAlignShift;
-			ret.bounds() = sizeof(Claim);
-			return ret;
-		}
+			ChainPredecessor pred{&chunk};
+			Claim           *claim = Claim::from_encoded_offset(chunk.claims);
 
-		/**
-		 * Encode the address of this object in a 16-bit value.
-		 */
-		uint16_t encode_address()
-		{
-			ptraddr_t address = Capability{this}.address();
-			address -= gm->heapStart.address();
-			Debug::Assert((address & MallocAlignMask) == 0,
-			              "Claim at address {} is insufficiently aligned",
-			              address);
-			address >>= MallocAlignShift;
-			Debug::Assert(address <= std::numeric_limits<uint16_t>::max(),
-			              "Encoded claim address is too large: {}",
-			              address);
-			return address;
+			while (claim != nullptr)
+			{
+				if (claim->owner() == owner)
+				{
+					return {pred, claim};
+				}
+
+				pred  = {claim};
+				claim = Claim::from_encoded_offset(claim->encodedNext);
+			}
+
+			/*
+			 * If no such claim is found, choose the head of the chain (that is,
+			 * the pointer in the MChunkHeader) as the appropriate predecessor,
+			 *
+			 * This is completely arbitrary; we could also return `pred`, which
+			 * holds the tail of the chain, or any other Claim on the chain.
+			 */
+			return {{&chunk}, nullptr};
 		}
 	};
 	static_assert(sizeof(Claim) <= (1 << MallocAlignShift),
-	              "Claims should fit in the smallest possible allocation");
-
-	/**
-	 * Find a claim if one exists.  Returns a reference to the next pointer
-	 * that refers to this claim.
-	 */
-	std::pair<uint16_t &, Claim *> claim_find(uint16_t      owner,
-	                                          MChunkHeader &chunk)
-	{
-		for (Claim::Iterator i{&chunk.claims}, end; i != end; ++i)
-		{
-			Claim *claim = *i;
-			if (claim->owner() == owner)
-			{
-				/*
-				 * While in many cases it would be fine to bound the pointer to
-				 * the encoded location of the found claim, the head of this
-				 * list is within the MChunkHeader for this `chunk`.  That
-				 * location in memory is marked in the revocation bitmap, and so
-				 * any tightly-bounded pointer to any subobject of a live,
-				 * in-heap MChunkHeader cannot round-trip through memory
-				 * correctly.
-				 *
-				 * See discussion at
-				 * https://github.com/CHERIoT-Platform/llvm-project/issues/320
-				 */
-				return {__builtin_no_change_bounds(*i.pointer()), claim};
-			}
-		}
-		return {chunk.claims, nullptr};
-	}
+	              "Claim should fit in the smallest possible allocation");
 
 	/**
 	 * Add a claim to a chunk, owned by `owner`.  This returns true if the
@@ -715,8 +675,8 @@ namespace
 	 */
 	bool claim_add(PrivateAllocatorCapabilityState &owner, MChunkHeader &chunk)
 	{
-		Debug::log("Adding claim for {}", owner.identifier);
-		auto [next, claim] = claim_find(owner.identifier, chunk);
+		Debug::log("Adding claim on {} for {}", &chunk, owner.identifier);
+		auto [previous, claim] = Claim::find(owner.identifier, chunk);
 		if (claim)
 		{
 			Debug::log("Adding reference to existing claim");
@@ -734,7 +694,7 @@ namespace
 			}
 			owner.quota -= size;
 		}
-		claim = Claim::create(owner, next);
+		claim = Claim::create(owner, previous);
 		if (claim != nullptr)
 		{
 			Debug::log("Allocated new claim for {}", chunk.body());
@@ -745,7 +705,6 @@ namespace
 				chunk.ownerID = 0;
 				claim->reference_add();
 			}
-			next = claim->encode_address();
 			return true;
 		}
 		// If we failed to allocate the claim object, undo adding this to our
@@ -759,10 +718,10 @@ namespace
 	}
 
 	/**
-	 * Drop a claim on an object by the specified allocator capability.  If
-	 * `reallyDrop` is false then this does not actually drop the claim but
-	 * returns true if it *could have* dropped a claim.
-	 * Returns true if a claim was dropped, false otherwise.
+	 * Find and drop a claim on an object by the specified allocator capability.
+	 *
+	 * Returns true if a claim was found (and dropped, if reallyDrop is true),
+	 * and false otherwise.
 	 */
 	bool claim_drop(PrivateAllocatorCapabilityState &owner,
 	                MChunkHeader                    &chunk,
@@ -770,8 +729,8 @@ namespace
 	                bool                             freeAll = false)
 	{
 		Debug::log(
-		  "Trying to drop claim with {} ({})", owner.identifier, &owner);
-		auto [next, claim] = claim_find(owner.identifier, chunk);
+		  "Trying to drop claim on {} with {}", &chunk, owner.identifier);
+		auto [previous, claim] = Claim::find(owner.identifier, chunk);
 		// If there is no claim, fail.
 		if (claim == nullptr)
 		{
@@ -786,13 +745,12 @@ namespace
 		// delete the claim unconditionally.
 		if (freeAll || claim->reference_remove())
 		{
-			next        = claim->encoded_next();
 			size_t size = chunk.size_get();
-			owner.quota += size;
-			Claim::destroy(owner, claim);
 			Debug::log("Dropped last claim, refunding {}-byte quota for {}",
 			           size,
 			           chunk.body());
+			owner.quota += size;
+			claim->destroy(owner, previous);
 		}
 		return true;
 	}
@@ -825,7 +783,7 @@ namespace
 			}
 			size_t chunkSize = chunk.size_get();
 			chunk.ownerID    = 0;
-			if (chunk.claims == 0)
+			if (chunk.claims == MChunkHeader::ClaimChain::None)
 			{
 				int ret = gm->mspace_free(chunk, bodySize);
 				// If free fails, don't manipulate the quota.
@@ -845,7 +803,8 @@ namespace
 		// claim.
 		if (claim_drop(owner, chunk, reallyFree, freeAll))
 		{
-			if ((chunk.claims == 0) && (chunk.ownerID == 0))
+			if ((chunk.claims == MChunkHeader::ClaimChain::None) &&
+			    (chunk.ownerID == 0))
 			{
 				return gm->mspace_free(chunk, bodySize);
 			}
@@ -984,10 +943,10 @@ __cheriot_minimum_stack(0x220) void *heap_allocate(
 	  .as_raw();
 }
 
-__cheriot_minimum_stack(0x1c0) ssize_t
+__cheriot_minimum_stack(0x1d0) ssize_t
   heap_claim(AllocatorCapability heapCapability, void *pointer)
 {
-	STACK_CHECK(0x1c0);
+	STACK_CHECK(0x1d0);
 	LockGuard g{lock};
 	auto     *cap =
 	  malloc_capability_unseal(heapCapability, AllocatorPermitAllocate);
