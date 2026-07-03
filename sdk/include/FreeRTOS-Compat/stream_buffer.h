@@ -3,6 +3,20 @@
 #include <queue.h>
 
 /**
+ * \file
+ * \brief FreeRTOS stream compatibility APIs.
+ *
+ * This file defines the compatibility wrappers for FreeRTOS's stream
+ * abstraction. This is intended for porting code from FreeRTOS and should not
+ * be used in new CHERIoT software.  The functions in this file wrap the APIs
+ * exposed in queue.h.  Streams are implemented as queues of bytes (CHERIoT RTOS
+ * message queues allow inserting and receiving multiple queue elements at the
+ * same time).  These are implemented in the `message_queue_library` library
+ * and, if used across a trust boundary, the `message_queue` compartment, which
+ * must be linked to the final firmware image.
+ */
+
+/**
  * Stream handle.  This is used to reference streams in the API functions.
  */
 typedef struct MessageQueue *StreamBufferHandle_t;
@@ -94,7 +108,7 @@ static inline size_t xStreamBufferReceive(StreamBufferHandle_t xStreamBuffer,
 {
 	struct Timeout timeout = {0, xTicksToWait};
 	int            rv      = queue_receive_multiple(
-      &timeout, xStreamBuffer, pvRxData, xBufferLengthBytes);
+	  &timeout, xStreamBuffer, pvRxData, xBufferLengthBytes);
 	if (rv < 0)
 	{
 		return 0;
