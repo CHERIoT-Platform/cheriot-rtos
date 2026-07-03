@@ -5,6 +5,18 @@
 #define INC_TASK_H
 
 /**
+ * \file
+ * \brief Minimal FreeRTOS task compatibility APIs.
+ *
+ * This file defines the compatibility wrappers for FreeRTOS's task APIs.
+ *
+ * FreeRTOS's task abstraction is similar to a UNIX process and does not map
+ * directly to a CHERIoT RTOS concept.  CHERIoT RTOS also does not support
+ * dynamic thread creation and so the task-creation APIs are defined to give
+ * compile-time errors.
+ */
+
+/**
  * Initialise a timeout with the current number of elapsed ticks.  This is used
  * in a blocking function in conjunction with `xTaskCheckForTimeOut()`.  The
  * value returned here should be passed as the first argument of

@@ -2,6 +2,18 @@
 #include "FreeRTOS.h"
 #include <queue.h>
 
+/**
+ * \file
+ * \brief FreeRTOS queue compatibility APIs.
+ *
+ * This file defines the compatibility wrappers for FreeRTOS's queue APIs.
+ * This is intended for porting code from FreeRTOS and should not be used in
+ * new CHERIoT software.  The functions in this file wrap the APIs exposed in
+ * queue.h.  These are implemented in the `message_queue_library` library and,
+ * if used across a trust boundary, the `message_queue` compartment, which must
+ * be linked to the final firmware image.
+ */
+
 #define errQUEUE_EMPTY pdFALSE
 #define errQUEUE_FULL pdFALSE
 
@@ -24,7 +36,7 @@ static inline BaseType_t
 xQueueReceive(QueueHandle_t queueHandle, void *buffer, TickType_t waitTicks)
 {
 	struct Timeout timeout = {0, waitTicks};
-	int            rv = queue_receive(&timeout, queueHandle, buffer);
+	int            rv      = queue_receive(&timeout, queueHandle, buffer);
 
 	if (rv == 0)
 		return pdPASS;
@@ -76,13 +88,10 @@ xQueueSendToBackFromISR(QueueHandle_t queueHandle,
 static inline QueueHandle_t xQueueCreate(UBaseType_t uxQueueLength,
                                          UBaseType_t uxItemSize)
 {
-	QueueHandle_t  ret = NULL;
+	QueueHandle_t  ret     = NULL;
 	struct Timeout timeout = {0, UnlimitedTimeout};
-	int rc = queue_create(&timeout,
-	                      MALLOC_CAPABILITY,
-	                      &ret,
-	                      uxItemSize,
-	                      uxQueueLength);
+	int            rc      = queue_create(
+	  &timeout, MALLOC_CAPABILITY, &ret, uxItemSize, uxQueueLength);
 	return ret;
 }
 #endif

@@ -1,5 +1,8 @@
 #pragma once
 /**
+ * \file
+ * \brief Event-group APIs
+ *
  * This file contains the interface for an event-group API, implemented in the
  * `event_group` library, which provides a mechanism for wait for one or more
  * events from a set of 24 to occur.

@@ -3,6 +3,15 @@
 
 #pragma once
 
+/**
+ * \file
+ * \brief FreeRTOS-compatible `errno` values.
+ *
+ * These are mapped to the CHERIoT RTOS values.  Note that this also means that
+ * the values without the `pdFREERTOS_ERRNO_` prefix are exposed in the global
+ * namespace.
+ */
+
 #include <errno.h>
 
 /**
@@ -37,23 +46,27 @@
 #define pdFREERTOS_ERRNO_EROFS EROFS             // Read only file system
 #define pdFREERTOS_ERRNO_EUNATCH EUNATCH         // Protocol driver not attached
 #define pdFREERTOS_ERRNO_EBADE EBADE             // Invalid exchange
-#define pdFREERTOS_ERRNO_EFTYPE EFTYPE           // Inappropriate file type or format
-#define pdFREERTOS_ERRNO_ENOTEMPTY ENOTEMPTY     // Directory not empty
+#define pdFREERTOS_ERRNO_EFTYPE EFTYPE // Inappropriate file type or format
+#define pdFREERTOS_ERRNO_ENOTEMPTY ENOTEMPTY       // Directory not empty
 #define pdFREERTOS_ERRNO_ENAMETOOLONG ENAMETOOLONG // File or path name too long
-#define pdFREERTOS_ERRNO_EOPNOTSUPP EOPNOTSUPP   // Operation not supported on transport endpoint
-#define pdFREERTOS_ERRNO_EAFNOSUPPORT EAFNOSUPPORT // Address family not supported by protocol
+#define pdFREERTOS_ERRNO_EOPNOTSUPP                                            \
+	EOPNOTSUPP // Operation not supported on transport endpoint
+#define pdFREERTOS_ERRNO_EAFNOSUPPORT                                          \
+	EAFNOSUPPORT // Address family not supported by protocol
 #define pdFREERTOS_ERRNO_ENOBUFS ENOBUFS         // No buffer space available
 #define pdFREERTOS_ERRNO_ENOPROTOOPT ENOPROTOOPT // Protocol not available
 #define pdFREERTOS_ERRNO_EADDRINUSE EADDRINUSE   // Address already in use
 #define pdFREERTOS_ERRNO_ETIMEDOUT ETIMEDOUT     // Connection timed out
-#define pdFREERTOS_ERRNO_EINPROGRESS EINPROGRESS // Connection already in progress
-#define pdFREERTOS_ERRNO_EALREADY EALREADY       // Socket already connected
+#define pdFREERTOS_ERRNO_EINPROGRESS                                           \
+	EINPROGRESS                            // Connection already in progress
+#define pdFREERTOS_ERRNO_EALREADY EALREADY // Socket already connected
 #define pdFREERTOS_ERRNO_EADDRNOTAVAIL EADDRNOTAVAIL // Address not available
-#define pdFREERTOS_ERRNO_EISCONN EISCONN         // Socket is already connected
-#define pdFREERTOS_ERRNO_ENOTCONN ENOTCONN       // Socket is not connected
-#define pdFREERTOS_ERRNO_ENOMEDIUM ENOMEDIUM     // No medium inserted
-#define pdFREERTOS_ERRNO_EILSEQ EILSEQ           // An invalid UTF-16 sequence was encountered
-#define pdFREERTOS_ERRNO_ECANCELED ECANCELED     // Operation canceled
+#define pdFREERTOS_ERRNO_EISCONN EISCONN     // Socket is already connected
+#define pdFREERTOS_ERRNO_ENOTCONN ENOTCONN   // Socket is not connected
+#define pdFREERTOS_ERRNO_ENOMEDIUM ENOMEDIUM // No medium inserted
+#define pdFREERTOS_ERRNO_EILSEQ                                                \
+	EILSEQ // An invalid UTF-16 sequence was encountered
+#define pdFREERTOS_ERRNO_ECANCELED ECANCELED // Operation canceled
 
 /**
  * These errno codes are non-standard, assign them a code outside our errno
