@@ -1,4 +1,3 @@
-#include "cdefs.h"
 #include <cheri.hh>
 #include <platform-rdcycle.h>
 
