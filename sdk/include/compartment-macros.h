@@ -2,114 +2,38 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include <__cheri_sealed.h>
-#include <cdefs.h>
-#include <stdbool.h>
+#include <__compartment-macros.h>
 
 /**
- * Helper macro for MMIO and pre-shared object imports, should not be used
- * directly.
+ * \file
+ *
+ * Macros for interacting with the compartmentalisation model in CHERIoT.
  */
-#define IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                        \
-                                                  name,                        \
-                                                  prefix,                      \
-                                                  mangledName,                 \
-                                                  permitLoad,                  \
-                                                  permitStore,                 \
-                                                  permitLoadStoreCapabilities, \
-                                                  permitLoadMutable,           \
-                                                  permitLoadGlobal)            \
-	({                                                                         \
-		type *ret; /* NOLINT(bugprone-macro-parentheses) */                    \
-		__asm(".ifndef " mangledName "\n"                                      \
-		      "  .type     " mangledName ",@object\n"                          \
-		      "  .section  .compartment_imports." #name                        \
-		      ",\"awG\",@progbits," mangledName ",comdat\n"                    \
-		      "  .globl    " mangledName "\n"                                  \
-		      "  .p2align  3\n" mangledName ":\n"                              \
-		      "  .word " #prefix #name "\n"                                    \
-		      "  .word " #prefix #name "_end - " #prefix #name " + %c1\n"      \
-		      "  .size " mangledName ", 8\n"                                   \
-		      " .previous\n"                                                   \
-		      ".endif\n"                                                       \
-		      "1:"                                                             \
-		      "  auipcc  %0,"                                                  \
-		      "      %%cheriot_compartment_hi(" mangledName ")\n"              \
-		      "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"             \
-		      : "=C"(ret)                                                      \
-		      : "i"(((permitLoad) ? (1 << 31) : 0) +                           \
-		            ((permitStore) ? (1 << 30) : 0) +                          \
-		            ((permitLoadStoreCapabilities) ? (1 << 29) : 0) +          \
-		            ((permitLoadMutable) ? (1 << 28) : 0) +                    \
-		            ((permitLoadGlobal) ? (1 << 27) : 0)));                    \
-		ret;                                                                   \
-	})
 
 /**
  * Provide a capability of the type `volatile type *` referring to the MMIO
  * region exported in the linker script with `name` as its name.  This macro
  * can be used only in code (it cannot be used to initialise a global).
  *
- * The last arguments specify the set of permissions that this capability
+ * The last arguments specify the set of permissions that this capability holds:
  *
- * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), Load
- * Mutable (LM), and Load Global (LG).
+ *  - `permitLoad` if this should have load / read (R) permission.
+ *  - `permitStore` if this should have store / write (W) permission.
+ *  - `permitLoadStoreCapabilities` if this should have load/store capability
+ *    permission (C).
+ *  - `permitLoadMutable` if this should have load-mutable (m) permission.  This
+ *    permission requires R and C.
+ *  - `permitLoadGlobal` if this should have load-global (g) permission.  This
+ * permission requires R and C.
  *
- * MMIO capabilities are always global (GL) and without store local (SL).
+ *  At least one out of `permitLoad` and `permitStore` should be provided.
+ *
+ * MMIO capabilities are always global (G) and without store-local (l)
+ * permission.
+ *
+ * \hideinitializer
  */
-
-// NOLINTBEGIN
-#define CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG_true(flag) flag
-#define CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG_1(flag) flag
-#define CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG_false(flag) ""
-#define CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG_0(flag) ""
-
-#define CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(cond, flag)                     \
-	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG_##cond(flag)
-// NOLINTEND
-
-#define CHERIOT_COMPARTMENT_MACROS_JOIN_FLAGS(pL, pS, pC, pM, pG)              \
-	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pL, "R")                            \
-	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pS, "W")                            \
-	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pC, "c")                            \
-	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pM, "m")                            \
-	CHERIOT_COMPARTMENT_MACROS_PERMIT_FLAG(pG, "g")
-
-#define CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE_INNER(x, y) x##y
-#define CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(x, y)                           \
-	CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE_INNER(x, y)
-
 #if defined(__has_attribute) && __has_attribute(cheriot_mmio)
-#	define MMIO_CAPABILITY_WITH_PERMISSIONS_INNER(                            \
-	  type,                                                                    \
-	  name,                                                                    \
-	  permitLoad,                                                              \
-	  permitStore,                                                             \
-	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable,                                                       \
-	  permitLoadGlobal,                                                        \
-	  cValue)                                                                  \
-		({                                                                     \
-			/* NOLINTBEGIN(bugprone-macro-parentheses) */                      \
-			_Static_assert(permitLoad || permitStore,                          \
-			               "Importing an MMIO capability with no permissions " \
-			               "is not allowed.");                                 \
-			_Pragma("GCC diagnostic push")                                     \
-			  _Pragma("GCC diagnostic ignored \"-Wundefined-internal\"")       \
-			    __attribute__((cheri_no_subobject_bounds))                     \
-			    __attribute__((cheriot_mmio(                                   \
-			      #name,                                                       \
-			      CHERIOT_COMPARTMENT_MACROS_JOIN_FLAGS(                       \
-			        permitLoad,                                                \
-			        permitStore,                                               \
-			        permitLoadStoreCapabilities,                               \
-			        permitLoadMutable,                                         \
-			        permitLoadGlobal)))) volatile extern char cValue;          \
-			(type *)&cValue;                                                   \
-			_Pragma("GCC diagnostic pop")                                      \
-			/* NOLINTEND(bugprone-macro-parentheses) */                        \
-		})
-
 #	define MMIO_CAPABILITY_WITH_PERMISSIONS(type,                             \
 	                                         name,                             \
 	                                         permitLoad,                       \
@@ -130,29 +54,6 @@
 		    CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(name, __COUNTER__)))
 
 #else
-
-/**
- * Helper macro, should not be used directly.
- */
-#	define MMIO_CAPABILITY_WITH_PERMISSIONS_HELPER(                           \
-	  type,                                                                    \
-	  name,                                                                    \
-	  mangledName,                                                             \
-	  permitLoad,                                                              \
-	  permitStore,                                                             \
-	  permitLoadStoreCapabilities,                                             \
-	  permitLoadMutable,                                                       \
-	  permitLoadGlobal)                                                        \
-		IMPORT_CAPABILITY_WITH_PERMISSIONS_HELPER(type,                        \
-		                                          name,                        \
-		                                          __export_mem_,               \
-		                                          mangledName,                 \
-		                                          permitLoad,                  \
-		                                          permitStore,                 \
-		                                          permitLoadStoreCapabilities, \
-		                                          permitLoadMutable,           \
-		                                          permitLoadGlobal)
-
 #	define MMIO_CAPABILITY_WITH_PERMISSIONS(type,                             \
 	                                         name,                             \
 	                                         permitLoad,                       \
@@ -175,62 +76,36 @@
 #endif
 
 /**
- * Provide a capability of the type `volatile type *` referring to the MMIO
- * region exported in the linker script with `name` as its name.  This macro
- * can be used only in code (it cannot be used to initialise a global).
+ * Provide a capability of the type `volatile type *` referring
+ * to the MMIO region exported in the linker script with `name`
+ * as its name.  This macro can be used only in code (it cannot
+ * be used to initialise a global).
  *
- * MMIO capabilities produced by this macro have load and store permissions but
- * cannot hold capabilities.  For richer permissions use
- * MMIO_CAPABILITY_WITH_PERMISSIONS.
+ * MMIO capabilities produced by this macro have load and store
+ * permissions but cannot hold capabilities.  For richer
+ * permissions use MMIO_CAPABILITY_WITH_PERMISSIONS.
+ *
+ * \hideinitializer
  */
 #define MMIO_CAPABILITY(type, name)                                            \
 	MMIO_CAPABILITY_WITH_PERMISSIONS(                                          \
 	  type, name, true, true, false, false, false)
 
 /**
- * Provide a capability of the type `type *` referring to the pre-shared object
- * with `name` as its name.  This macro can be used only in code (it cannot be
- * used to initialise a global).
+ * Provide a capability of the type `type *` referring to the
+ * pre-shared object with `name` as its name.  This macro can be
+ * used only in code (it cannot be used to initialise a global).
  *
- * The last arguments specify the set of permissions that this capability
- * holds: Load Data (LD), Store Data (SD), Memory Capabilities (MC), Load
- * Mutable (LM), and Load Global (LG).
+ * The last arguments specify the set of permissions that this
+ * capability holds: Load Data (LD), Store Data (SD), Memory
+ * Capabilities (MC), Load Mutable (LM), and Load Global (LG).
  *
- * Capabilities to pre-shared objects are always global (GL) and without store
- * local (SL).
+ * Capabilities to pre-shared objects are always global (G) and without
+ * store-local (l) permission.
+ *
+ * \hideinitializer
  */
-
 #if defined(__has_attribute) && __has_attribute(cheriot_shared_object)
-#	define SHARED_OBJECT_WITH_PERMISSIONS_INNER(type,                         \
-	                                             name,                         \
-	                                             permitLoad,                   \
-	                                             permitStore,                  \
-	                                             permitLoadStoreCapabilities,  \
-	                                             permitLoadMutable,            \
-	                                             permitLoadGlobal,             \
-	                                             cValue)                       \
-		({                                                                     \
-			/* NOLINTBEGIN(bugprone-macro-parentheses) */                      \
-			_Static_assert(                                                    \
-			  permitLoad || permitStore,                                       \
-			  "Importing a shared object capability with no permissions "      \
-			  "is not allowed.");                                              \
-			_Pragma("GCC diagnostic push")                                     \
-			  _Pragma("GCC diagnostic ignored \"-Wundefined-internal\"")       \
-			    __attribute__((cheri_no_subobject_bounds))                     \
-			    __attribute__((cheriot_shared_object(                          \
-			      #name,                                                       \
-			      CHERIOT_COMPARTMENT_MACROS_JOIN_FLAGS(                       \
-			        permitLoad,                                                \
-			        permitStore,                                               \
-			        permitLoadStoreCapabilities,                               \
-			        permitLoadMutable,                                         \
-			        permitLoadGlobal)))) extern char cValue;                   \
-			(type *)&cValue;                                                   \
-			_Pragma("GCC diagnostic pop")                                      \
-			/* NOLINTEND(bugprone-macro-parentheses) */                        \
-		})
-
 #	define SHARED_OBJECT_WITH_PERMISSIONS(type,                               \
 	                                       name,                               \
 	                                       permitLoad,                         \
@@ -249,9 +124,7 @@
 		  CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(                              \
 		    __cheriot_so__,                                                    \
 		    CHERIOT_COMPARTMENT_MACROS_TOKEN_PASTE(name, __COUNTER__)))
-
 #else
-
 #	define SHARED_OBJECT_WITH_PERMISSIONS(type,                               \
 	                                       name,                               \
 	                                       permitLoad,                         \
@@ -274,25 +147,31 @@
 #endif
 
 /**
- * Provide a capability of the type `type *` referring to the pre-shared object
- * with `name` as its name.  This macro can be used only in code (it cannot be
- * used to initialise a global).
+ * Provide a capability of the type `type *` referring to the
+ * pre-shared object with `name` as its name.  This macro can be
+ * used only in code (it cannot be used to initialise a global).
  *
- * Pre-shared object capabilities produced by this macro have load, store,
- * load-mutable, and load/store-capability permissions.  To define a reduced
- * set of permissions use `SHARED_OBJECT_WITH_PERMISSIONS`.
+ * Pre-shared object capabilities produced by this macro have
+ * load, store, load-mutable, and load/store-capability
+ * permissions.  To define a reduced set of permissions use
+ * `SHARED_OBJECT_WITH_PERMISSIONS`.
+ *
+ * \hideinitializer
  */
 #define SHARED_OBJECT(type, name)                                              \
 	SHARED_OBJECT_WITH_PERMISSIONS(type, name, true, true, true, true, true)
 
 /**
- * Provide a capability of the type `type *` referring to the pre-shared object
- * with `name` as its name.  This macro can be used only in code (it cannot be
- * used to initialise a global).
+ * Provide a capability of the type `type *` referring to the
+ * pre-shared object with `name` as its name.  This macro can be
+ * used only in code (it cannot be used to initialise a global).
  *
- * Pre-shared object capabilities produced by this macro have the indicated load
- * and store permission, but no load/store-capability permissions (and,
- * therefore, no load-mutable or load-global permissions).
+ * Pre-shared object capabilities produced by this macro have
+ * the indicated load and store permission, but no
+ * load/store-capability permissions (and, therefore, no
+ * load-mutable or load-global permissions).
+ *
+ * \hideinitializer
  */
 #define SHARED_OBJECT_WITH_DATA_PERMISSIONS(                                   \
   type, name, permitLoad, permitStore)                                         \
@@ -300,61 +179,24 @@
 	  type, name, permitLoad, permitStore, false, false, false)
 
 /**
- * Macro to test whether a device with a specific name exists in the board
- * definition for the current target.
+ * Macro to test whether a device with a specific name exists in
+ * the board definition for the current target.
+ *
+ * \hideinitializer
  */
 #define DEVICE_EXISTS(x) defined(DEVICE_EXISTS_##x)
 
 /**
- * Helper macro, used by `STATIC_SEALING_TYPE`.  Do not use this directly, it
- * exists to avoid error-prone copying and pasting of the mangled name for a
- * static sealing type.
- */
-#define CHERIOT_EMIT_STATIC_SEALING_TYPE(name)                                 \
-	({                                                                         \
-		TokenKey ret; /* NOLINT(bugprone-macro-parentheses) */                 \
-		__asm(                                                                 \
-		  ".ifndef __import." name "\n"                                        \
-		  "  .type     __import." name ",@object\n"                            \
-		  "  .section  .compartment_imports." name ",\"awG\",@progbits," name  \
-		  ",comdat\n"                                                          \
-		  "  .globl    __import." name "\n"                                    \
-		  "  .p2align  3\n"                                                    \
-		  "__import." name ":\n"                                               \
-		  "  .word __export." name "\n"                                        \
-		  "  .word 0\n"                                                        \
-		  " .previous\n"                                                       \
-		  ".endif\n"                                                           \
-		  ".ifndef __export." name "\n"                                        \
-		  "  .type     __export." name ",@object\n"                            \
-		  "  .section  .compartment_exports." name ",\"awG\",@progbits," name  \
-		  ",comdat\n"                                                          \
-		  "  .globl    __export." name "\n"                                    \
-		  "  .p2align  2\n"                                                    \
-		  "__export." name ":\n"                                               \
-		  "  .half 0\n" /* function start and stack size initialised to 0 */   \
-		  "  .byte 0\n"                                                        \
-		  "  .byte 0b100000\n" /* Set the flag that indicates that this is a   \
-		                          sealing key. */                              \
-		  "  .size __export." name ", 4\n"                                     \
-		  " .previous\n"                                                       \
-		  ".endif\n"                                                           \
-		  "1:\n"                                                               \
-		  "  auipcc  %0, %%cheriot_compartment_hi(__import." name ")\n"        \
-		  "  clc     %0, %%cheriot_compartment_lo_i(1b)(%0)\n"                 \
-		  : "=C"(ret));                                                        \
-		ret;                                                                   \
-	})
-
-/**
- * Helper macro that evaluates to the compartment of the current compilation
- * unit, as a string.
- */
-#define COMPARTMENT_NAME_STRING __XSTRING(__CHERI_COMPARTMENT__)
-
-/**
- * Macro that evaluates to a static sealing type that is local to this
- * compartment.
+ * Macro that evaluates to a static sealing type that is local
+ * to this compartment.
+ *
+ * The `name` is a unique identifier.  This matches the `keyName` passed to
+ * `DECLARE_STATIC_SEALED_VALUE` and related macros and will appear in the
+ * audit log when linking the firmware image.  Names within a compartment may
+ * be unique but two compartments may expose sealing types of the same name
+ * without conflicts.
+ *
+ * \hideinitializer
  */
 #if defined(__has_builtin) && __has_builtin(__builtin_cheriot_sealing_type)
 #	define STATIC_SEALING_TYPE(name)                                          \
@@ -365,20 +207,26 @@
 		CHERIOT_EMIT_STATIC_SEALING_TYPE(                                      \
 		  "sealing_type." COMPARTMENT_NAME_STRING "." #name)
 #endif
+
 /**
- * Forward-declare a static sealed object.  This declares an object of type
- * `type` that can be referenced with the `STATIC_SEALED_VALUE` macro using
- * `name`.  The pointer returned by the latter macro will be sealed with the
- * sealing key exported from `compartment` as `keyName` with the
+ * Forward-declare a static sealed object.  This declares an
+ * object of type `type` that can be referenced with the
+ * `STATIC_SEALED_VALUE` macro using `name`.  The pointer
+ * returned by the latter macro will be sealed with the sealing
+ * key exported from `compartment` as `keyName` with the
  * `STATIC_SEALING_TYPE` macro.
  *
- * The object created with this macro can be accessed only by code that has
- * access to the sealing key.
+ * The object created with this macro can be accessed only by
+ * code that has access to the sealing key.
  *
- * Unlike `DECLARE_STATIC_SEALED_VALUE`, this allows the type that value should
- * be read as to be different to the type used to initialise it.  The type of
- * the value in `STATIC_SEALED_VALUE` will be `CHERI_SEALED(valueType*)`.  This
- * is useful for variable length arrays at the end of the structure.
+ * Unlike `DECLARE_STATIC_SEALED_VALUE`, this allows the type
+ * that value should be read as to be different to the type used
+ * to initialise it.  The type of the value in
+ * `STATIC_SEALED_VALUE` will be `CHERI_SEALED(valueType*)`.
+ * This is useful for variable length arrays at the end of the
+ * structure.
+ *
+ * \hideinitializer
  */
 #if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
 #	define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                         \
@@ -409,30 +257,38 @@
 #endif
 
 /**
- * Forward-declare a static sealed object.  This declares an object of type
- * `type` that can be referenced with the `STATIC_SEALED_VALUE` macro using
- * `name`.  The pointer returned by the latter macro will be sealed with the
- * sealing key exported from `compartment` as `keyName` with the
+ * Forward-declare a static sealed object.  This declares an
+ * object of type `type` that can be referenced with the
+ * `STATIC_SEALED_VALUE` macro using `name`.  The pointer
+ * returned by the latter macro will be sealed with the sealing
+ * key exported from `compartment` as `keyName` with the
  * `STATIC_SEALING_TYPE` macro.
  *
- * The object created with this macro can be accessed only by code that has
- * access to the sealing key.
+ * The object created with this macro can be accessed only by
+ * code that has access to the sealing key.
+ *
+ * \hideinitializer
  */
 #define DECLARE_STATIC_SEALED_VALUE(type, compartment, keyName, name)          \
 	DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                                 \
 	  type, type, compartment, keyName, name)
 
 /**
- * Define a static sealed object.  This creates an object of type `type`,
- * initialised with `initialiser`, that can be referenced with the
- * `STATIC_SEALED_VALUE` macro using `name`.  The pointer returned by the
- * latter macro will be sealed with the sealing key exported from `compartment`
- * as `keyName` with the `STATIC_SEALING_TYPE` macro.
+ * Define a static sealed object.  This creates an object of
+ * type `type`, initialised with `initialiser`, that can be
+ * referenced with the `STATIC_SEALED_VALUE` macro using `name`.
+ * The pointer returned by the latter macro will be sealed with
+ * the sealing key exported from `compartment` as `keyName` with
+ * the `STATIC_SEALING_TYPE` macro.
  *
- * The object created with this macro can be accessed only by code that has
- * access to the sealing key.
+ * The object created with this macro can be accessed only by
+ * code that has access to the sealing key.
+ *
+ * If you do not need a separate forward definition, use
+ * `DECLARE_AND_DEFINE_STATIC_SEALED_VALUE` instead.
+ *
+ * \hideinitializer
  */
-
 #if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
 #	define DEFINE_STATIC_SEALED_VALUE(                                        \
 	  type, compartment, keyName, name, initialiser, ...)                      \
@@ -457,11 +313,14 @@
 /**
  * Helper macro that declares and defines a sealed value.
  *
- * Unlike `DECLARE_AND_DEFINE_STATIC_SEALED_VALUE`, this allows the type that
- * value should be read as to be different to the type used to initialise it.
- * The type of the value in `STATIC_SEALED_VALUE` will be
- * `CHERI_SEALED(valueType*)`.  This is useful for variable length arrays at
- * the end of the structure.
+ * Unlike `DECLARE_AND_DEFINE_STATIC_SEALED_VALUE`, this allows
+ * the type that value should be read as to be different to the
+ * type used to initialise it. The type of the value in
+ * `STATIC_SEALED_VALUE` will be `CHERI_SEALED(valueType*)`.
+ * This is useful for variable length arrays at the end of the
+ * structure.
+ *
+ * \hideinitializer
  */
 #define DECLARE_AND_DEFINE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                  \
   type, valueType, compartment, keyName, name, initialiser, ...)               \
@@ -481,6 +340,11 @@
 
 /**
  * Helper macro that declares and defines a sealed value.
+ *
+ * The arguments for this are the same as `DEFINE_STATIC_SEALED_VALUE`.  Use
+ * this version when you do not need a separate forward declaration.
+ *
+ * \hideinitializer
  */
 #define DECLARE_AND_DEFINE_STATIC_SEALED_VALUE(                                \
   type, compartment, keyName, name, initialiser, ...)                          \
@@ -490,6 +354,8 @@
 /**
  * Returns a sealed capability to the named object created with
  * `DECLARE_STATIC_SEALED_VALUE`.
+ *
+ * \hideinitializer
  */
 #if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
 #	define STATIC_SEALED_VALUE(name, ...)                                     \
@@ -524,9 +390,14 @@
 #endif
 
 /**
- * Declare a CHERIoT initialiser function.  This macro can be used in place of
- * a prototype for a function called `function`.  Initialiser functions are
- * called in ascending priority order.
+ * Declare a CHERIoT initialiser function.  This macro can be
+ * used in place of a prototype for a function called
+ * `function`.  Initialiser functions are called in ascending
+ * priority order.
+ *
+ * Initialiser functions take no arguments and return `void`.
+ *
+ * \hideinitializer
  */
 #define CHERIOT_INITIALISER(function, priority)                                \
 	__asm("  .section .cheriot_initialiser." #priority ",\"aR\",@progbits\n"   \
@@ -536,4 +407,4 @@
 	      "  .previous\n");                                                    \
 	__if_cxx(extern "C") __cheriot_callback                                    \
 	  [[cheriot::interrupt_state(disabled)]] void                              \
-	  function()
+	  function(__if_c(void))
