@@ -3,6 +3,8 @@
 
 #pragma once
 /**
+ * \file
+ *
  * This file describes the interfaces for compartments to wait for interrupts.
  * Interrupts are exposed to compartments as futexes that contain the count of
  * the number of times that an interrupt has fired.  This count can wrap but

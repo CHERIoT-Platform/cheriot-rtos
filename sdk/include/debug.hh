@@ -14,6 +14,22 @@
 #include <string_view>
 #include <type_traits>
 
+/**
+ * \file
+ *
+ * C++ APIs for assertions, invariants, and writing formatted debug messages to
+ * a UART.
+ *
+ * When enabled (for template parameter) the implementations of these are in
+ * the `debug` library, which must be linked into the firmware image.
+ *
+ * Most of the functionality in this file is exposed via the `ConditionalDebug`
+ * template.
+ */
+
+/**
+ * Concepts used for matching types in the debug code.
+ */
 namespace DebugConcepts
 {
 	/// Helper concept for matching booleans
@@ -30,10 +46,15 @@ namespace DebugConcepts
 		{ v() } -> IsBool;
 	};
 
+	/// Helper for identifying pointers that are (probably) not C strings.
 	template<typename T>
 	concept IsPointerButNotCString =
 	  std::is_pointer_v<T> && !std::is_same_v<T, const char *>;
 
+	/**
+	 * Helper concept for things that can be converted to addresses but are
+	 * not enumerations.
+	 */
 	template<typename T>
 	concept IsConvertibleToAddress =
 	  std::convertible_to<T, ptraddr_t> && !IsEnum<T>;

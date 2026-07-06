@@ -6,6 +6,15 @@
 #include <stdint.h>
 #include <timeout.h>
 
+/**
+ * \file
+ *
+ * Futex (compare-and-wait) APIs.
+ */
+
+/**
+ * Flags for `futex_timed_wait`.
+ */
 enum [[clang::flag_enum]] FutexWaitFlags
 {
 	/// No flags
