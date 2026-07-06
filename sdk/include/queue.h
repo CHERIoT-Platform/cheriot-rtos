@@ -1,6 +1,8 @@
 // Copyright Microsoft and CHERIoT Contributors.
 // SPDX-License-Identifier: MIT
 /**
+ * \file
+ *
  * This file contains the interface for a simple message queue.  This is split
  * into two layers.  The core functionality is implemented as a shared library.
  * This allows message queues to be used for inter-thread communication without

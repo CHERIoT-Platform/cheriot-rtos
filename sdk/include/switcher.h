@@ -4,6 +4,12 @@
 #include <stdint.h>
 
 /**
+ * \file
+ *
+ * APIs for interacting with the switcher.
+ */
+
+/**
  * Returns true if the trusted stack contains at least `requiredFrames` frames
  * past the current one, false otherwise.
  *

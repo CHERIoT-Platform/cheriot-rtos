@@ -4,6 +4,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/**
+ * \file
+ *
+ * API for accessing a shared entropy source in the `randombytes` compartment.
+ */
+
 __BEGIN_DECLS
 
 /**
