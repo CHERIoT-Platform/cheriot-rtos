@@ -446,7 +446,7 @@ ssize_t queue_allocation_size(size_t elementSize, size_t elementCount)
 	return allocSize;
 }
 
-int queue_create(Timeout              *timeout,
+int queue_create(TimeoutArgument       timeout,
                  AllocatorCapability   heapCapability,
                  struct MessageQueue **outQueue,
                  size_t                elementSize,
@@ -469,7 +469,7 @@ int queue_create(Timeout              *timeout,
 	return 0;
 }
 
-int queue_send_multiple(Timeout             *timeout,
+int queue_send_multiple(TimeoutArgument      timeout,
                         struct MessageQueue *handle,
                         const void          *src,
                         size_t               count)
@@ -583,12 +583,14 @@ int queue_send_multiple(Timeout             *timeout,
 	return ret;
 }
 
-int queue_send(Timeout *timeout, struct MessageQueue *handle, const void *src)
+int queue_send(TimeoutArgument      timeout,
+               struct MessageQueue *handle,
+               const void          *src)
 {
 	return std::min(0, queue_send_multiple(timeout, handle, src, 1));
 }
 
-int queue_reset(Timeout *timeout, struct MessageQueue *queue)
+int queue_reset(TimeoutArgument timeout, struct MessageQueue *queue)
 {
 	HighBitFlagLock producerLock{queue->producer};
 	HighBitFlagLock consumerLock{queue->consumer};
@@ -604,7 +606,7 @@ int queue_reset(Timeout *timeout, struct MessageQueue *queue)
 	return -ETIMEDOUT;
 }
 
-int queue_receive_multiple(Timeout             *timeout,
+int queue_receive_multiple(TimeoutArgument      timeout,
                            struct MessageQueue *handle,
                            void                *dst,
                            size_t               count)
@@ -723,7 +725,9 @@ int queue_receive_multiple(Timeout             *timeout,
 	return ret;
 }
 
-int queue_receive(Timeout *timeout, struct MessageQueue *handle, void *dst)
+int queue_receive(TimeoutArgument      timeout,
+                  struct MessageQueue *handle,
+                  void                *dst)
 {
 	return std::min(0, queue_receive_multiple(timeout, handle, dst, 1));
 }

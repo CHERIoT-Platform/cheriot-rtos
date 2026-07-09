@@ -113,7 +113,7 @@ ssize_t __cheri_libcall queue_allocation_size(size_t elementSize,
  * arguments are invalid (for example, if the requested number of elements
  * multiplied by the element size would overflow).
  */
-int __cheri_libcall queue_create(Timeout              *timeout,
+int __cheri_libcall queue_create(TimeoutArgument       timeout,
                                  AllocatorCapability   heapCapability,
                                  struct MessageQueue **outQueue,
                                  size_t                elementSize,
@@ -155,7 +155,7 @@ int __cheri_libcall queue_destroy(AllocatorCapability  heapCapability,
  * This expects to be called with a valid queue handle.  It does not validate
  * that this is correct.
  */
-int __cheri_libcall queue_send(Timeout             *timeout,
+int __cheri_libcall queue_send(TimeoutArgument      timeout,
                                struct MessageQueue *handle,
                                const void          *src);
 
@@ -170,7 +170,7 @@ int __cheri_libcall queue_send(Timeout             *timeout,
  * This expected to be called with a valid queue handle.  It does not validate
  * that this is correct.
  */
-int __cheri_libcall queue_send_multiple(Timeout             *timeout,
+int __cheri_libcall queue_send_multiple(TimeoutArgument      timeout,
                                         struct MessageQueue *handle,
                                         const void          *src,
                                         size_t               count);
@@ -184,7 +184,7 @@ int __cheri_libcall queue_send_multiple(Timeout             *timeout,
  * Returns 0 on success, `-ETIMEDOUT` if the timeout was exhausted, `-EINVAL` on
  * invalid arguments.
  */
-int __cheri_libcall queue_receive(Timeout             *timeout,
+int __cheri_libcall queue_receive(TimeoutArgument      timeout,
                                   struct MessageQueue *handle,
                                   void                *dst);
 
@@ -199,7 +199,7 @@ int __cheri_libcall queue_receive(Timeout             *timeout,
  * This expected to be called with a valid queue handle.  It does not validate
  * that this is correct.
  */
-int __cheri_libcall queue_receive_multiple(Timeout             *timeout,
+int __cheri_libcall queue_receive_multiple(TimeoutArgument      timeout,
                                            struct MessageQueue *handle,
                                            void                *dst,
                                            size_t               count);
@@ -225,7 +225,7 @@ int __cheri_libcall queue_items_remaining(struct MessageQueue *handle,
  * receiving.
  */
 int __cheri_compartment("message_queue")
-  queue_create_sealed(Timeout            *timeout,
+  queue_create_sealed(TimeoutArgument     timeout,
                       AllocatorCapability heapCapability,
                       CHERI_SEALED(struct MessageQueue *) * outQueue,
                       size_t elementSize,
@@ -237,7 +237,8 @@ int __cheri_compartment("message_queue")
  * Returns 0 on success, `-ETIMEDOUT` if this cannot be done in the available
  * timeout.
  */
-int __cheri_libcall queue_reset(Timeout *timeout, struct MessageQueue *queue);
+int __cheri_libcall queue_reset(TimeoutArgument      timeout,
+                                struct MessageQueue *queue);
 
 /**
  * Destroy a queue.  This requires a handle with `MessageQueuePermitDestroy`
@@ -247,7 +248,7 @@ int __cheri_libcall queue_reset(Timeout *timeout, struct MessageQueue *queue);
  * or lacks the relevant permissions.
  */
 int __cheri_compartment("message_queue")
-  queue_destroy_sealed(Timeout            *timeout,
+  queue_destroy_sealed(TimeoutArgument     timeout,
                        AllocatorCapability heapCapability,
                        CHERI_SEALED(struct MessageQueue *) queueHandle);
 
@@ -258,7 +259,7 @@ int __cheri_compartment("message_queue")
  * destroyed during the call.
  */
 int __cheri_compartment("message_queue")
-  queue_send_sealed(Timeout *timeout,
+  queue_send_sealed(TimeoutArgument timeout,
                     CHERI_SEALED(struct MessageQueue *) handle,
                     const void *src);
 
@@ -269,7 +270,7 @@ int __cheri_compartment("message_queue")
  * `-ECOMPARTMENTFAIL` if the queue is destroyed during the call.
  */
 int __cheri_compartment("message_queue")
-  queue_send_multiple_sealed(Timeout *timeout,
+  queue_send_multiple_sealed(TimeoutArgument timeout,
                              CHERI_SEALED(struct MessageQueue *) handle,
                              const void *src,
                              size_t      count);
@@ -281,7 +282,7 @@ int __cheri_compartment("message_queue")
  * queue is destroyed during the call.
  */
 int __cheri_compartment("message_queue")
-  queue_receive_sealed(Timeout *timeout,
+  queue_receive_sealed(TimeoutArgument timeout,
                        CHERI_SEALED(struct MessageQueue *) handle,
                        void *dst);
 
@@ -292,7 +293,7 @@ int __cheri_compartment("message_queue")
  * `-ECOMPARTMENTFAIL` if the queue is destroyed during the call.
  */
 int __cheri_compartment("message_queue")
-  queue_receive_multiple_sealed(Timeout *timeout,
+  queue_receive_multiple_sealed(TimeoutArgument timeout,
                                 CHERI_SEALED(struct MessageQueue *) handle,
                                 void  *dst,
                                 size_t count);
@@ -386,7 +387,7 @@ static inline CHERI_SEALED(struct MessageQueue *)
 static inline int __attribute__((
   deprecated("Restricted handles have been replaced by permissions on queue "
              "capabilities, controlled with queue_permissions_and")))
-queue_receive_handle_create_sealed(struct Timeout     *timeout,
+queue_receive_handle_create_sealed(TimeoutArgument     timeout,
                                    AllocatorCapability heapCapability,
                                    CHERI_SEALED(struct MessageQueue *) handle,
                                    CHERI_SEALED(struct MessageQueue *) *
@@ -407,7 +408,7 @@ queue_receive_handle_create_sealed(struct Timeout     *timeout,
 static inline int __attribute__((
   deprecated("Restricted handles have been replaced by permissions on queue "
              "capabilities, controlled with queue_permissions_and")))
-queue_send_handle_create_sealed(struct Timeout     *timeout,
+queue_send_handle_create_sealed(TimeoutArgument     timeout,
                                 AllocatorCapability heapCapability,
                                 CHERI_SEALED(struct MessageQueue *) handle,
                                 CHERI_SEALED(struct MessageQueue *) * outHandle)
