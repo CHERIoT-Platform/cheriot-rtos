@@ -55,7 +55,7 @@ namespace
 	}
 } // namespace
 
-int queue_create_sealed(Timeout            *timeout,
+int queue_create_sealed(TimeoutArgument     timeout,
                         AllocatorCapability heapCapability,
                         CHERI_SEALED(MessageQueue *) * outQueue,
                         size_t elementSize,
@@ -81,7 +81,7 @@ int queue_create_sealed(Timeout            *timeout,
 	return 0;
 }
 
-int queue_destroy_sealed(Timeout            *timeout,
+int queue_destroy_sealed(TimeoutArgument     timeout,
                          AllocatorCapability heapCapability,
                          CHERI_SEALED(MessageQueue *) queueHandle)
 {
@@ -100,11 +100,11 @@ int queue_destroy_sealed(Timeout            *timeout,
 	  });
 }
 
-int queue_send_sealed(Timeout *timeout,
+int queue_send_sealed(TimeoutArgument timeout,
                       CHERI_SEALED(MessageQueue *) handle,
                       const void *src)
 {
-	if (!check_timeout_pointer(timeout))
+	if (!timeout.is_valid())
 	{
 		return -EINVAL;
 	}
@@ -113,12 +113,12 @@ int queue_send_sealed(Timeout *timeout,
 	});
 }
 
-int queue_send_multiple_sealed(Timeout *timeout,
+int queue_send_multiple_sealed(TimeoutArgument timeout,
                                CHERI_SEALED(MessageQueue *) handle,
                                const void *src,
                                size_t      count)
 {
-	if (!check_timeout_pointer(timeout))
+	if (!timeout.is_valid())
 	{
 		return -EINVAL;
 	}
@@ -127,11 +127,11 @@ int queue_send_multiple_sealed(Timeout *timeout,
 	});
 }
 
-int queue_receive_sealed(Timeout *timeout,
+int queue_receive_sealed(TimeoutArgument timeout,
                          CHERI_SEALED(MessageQueue *) handle,
                          void *dst)
 {
-	if (!check_timeout_pointer(timeout))
+	if (!timeout.is_valid())
 	{
 		return -EINVAL;
 	}
@@ -141,12 +141,12 @@ int queue_receive_sealed(Timeout *timeout,
 	  });
 }
 
-int queue_receive_multiple_sealed(Timeout *timeout,
+int queue_receive_multiple_sealed(TimeoutArgument timeout,
                                   CHERI_SEALED(MessageQueue *) handle,
                                   void  *dst,
                                   size_t count)
 {
-	if (!check_timeout_pointer(timeout))
+	if (!timeout.is_valid())
 	{
 		return -EINVAL;
 	}

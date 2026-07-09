@@ -33,7 +33,7 @@ struct EventGroup
 	EventWaiter waiters[];
 };
 
-int eventgroup_create(Timeout            *timeout,
+int eventgroup_create(TimeoutArgument     timeout,
                       AllocatorCapability heapCapability,
                       EventGroup        **outGroup)
 {
@@ -54,12 +54,12 @@ int eventgroup_create(Timeout            *timeout,
 	return 0;
 }
 
-int eventgroup_wait(Timeout    *timeout,
-                    EventGroup *group,
-                    uint32_t   *outBits,
-                    uint32_t    bitsWanted,
-                    bool        waitForAll,
-                    bool        clearOnExit)
+int eventgroup_wait(TimeoutArgument timeout,
+                    EventGroup     *group,
+                    uint32_t       *outBits,
+                    uint32_t        bitsWanted,
+                    bool            waitForAll,
+                    bool            clearOnExit)
 {
 	// Bits wanted can be only a 24-bit value.
 	if (bitsWanted & 0xff000000)
@@ -112,10 +112,10 @@ int eventgroup_wait(Timeout    *timeout,
 	return -ETIMEDOUT;
 }
 
-int eventgroup_clear(Timeout    *timeout,
-                     EventGroup *group,
-                     uint32_t   *outBits,
-                     uint32_t    bitsToClear)
+int eventgroup_clear(TimeoutArgument timeout,
+                     EventGroup     *group,
+                     uint32_t       *outBits,
+                     uint32_t        bitsToClear)
 {
 	if (LockGuard g{group->lock, timeout})
 	{
@@ -129,10 +129,10 @@ int eventgroup_clear(Timeout    *timeout,
 	return -ETIMEDOUT;
 }
 
-int eventgroup_set(Timeout    *timeout,
-                   EventGroup *group,
-                   uint32_t   *outBits,
-                   uint32_t    bitsToSet)
+int eventgroup_set(TimeoutArgument timeout,
+                   EventGroup     *group,
+                   uint32_t       *outBits,
+                   uint32_t        bitsToSet)
 {
 	if (LockGuard g{group->lock, timeout})
 	{
