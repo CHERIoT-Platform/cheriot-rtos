@@ -705,7 +705,7 @@ __cheriot_minimum_stack(0xc0) int multiwaiter_wait(TimeoutArgument    timeout,
 		if (!check_pointer<PermissionSet{Permission::Load,
 		                                 Permission::Store,
 		                                 Permission::LoadStoreCapability}>(
-		      events, newEventsCount * sizeof(newEventsCount)))
+		      events, newEventsCount * sizeof(EventWaiterSource)))
 		{
 			Debug::log("Invalid new events pointer: {}", events);
 			return -EINVAL;
