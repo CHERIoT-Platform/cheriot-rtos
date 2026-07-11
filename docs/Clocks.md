@@ -83,7 +83,7 @@ struct ExampleClockSource
 	 * this time source is that this is a good time.  Larger values indicate
 	 * more confidence.
 	 */
-    int get_time(uint64_t &outRealTime, uint64_t &outMonotonicTime, int &outPriority);
+    int get_time(TimeoutArgument timeout, uint64_t &outRealTime, uint64_t &outMonotonicTime, int &outPriority);
 
 	/**
 	 * Set the current wall-clock time.  This return 0 on succcess, some
