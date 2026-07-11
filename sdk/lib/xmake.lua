@@ -10,6 +10,7 @@ option("print-doubles")
 
 includes(
 	"atomic",
+	"clock",
 	"compartment_helpers",
 	"crt",
 	"cxxrt",
