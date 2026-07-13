@@ -105,16 +105,16 @@ struct OpenTitanUart : private utils::NoCopyNoMove
 		BITPACK_MEMBER_ADD_ENUM_BOOL(Receive, AsIs, Reset, 0);
 		BITPACK_MEMBER_ADD_ENUM_BOOL(Transmit, AsIs, Reset, 1);
 
-		BITPACK_MEMBER_ADD_ENUM(TransmitWatermark, uint8_t, 2, 4) {
+		BITPACK_MEMBER_ADD_ENUM(ReceiveWatermark, uint8_t, 2, 4) {
 			Level1  = 0b000,
 			Level2  = 0b001,
 			Level4  = 0b010,
 			Level8  = 0b011,
 			Level16 = 0b100,
 			Level32 = 0b101,
-			Level64 = 0b110,
+			Level62 = 0b110,
 		};
-		BITPACK_MEMBER_ADD_ENUM(ReceiveWatermark, uint8_t, 5, 7) {
+		BITPACK_MEMBER_ADD_ENUM(TransmitWatermark, uint8_t, 5, 7) {
 			Level1  = 0b000,
 			Level2  = 0b001,
 			Level4  = 0b010,
