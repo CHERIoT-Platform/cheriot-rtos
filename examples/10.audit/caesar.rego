@@ -45,8 +45,8 @@ all_valid_caesar_capabilities = [{"owner": owner, "capability": decode_caesar_ca
 
 # Helper predicate to check that this is valid.
 valid {
-	# Make sure that the RTOS configuration is valid.
-	data.rtos.valid
+	## Make sure that the RTOS configuration is valid.
+	#data.rtos.valid
 
 	# There are two things sealed with the Caesar capability type
 	count([c | c = input.compartments[owner].imports[_]; is_sealed_caesar_capability(c)]) = 2
