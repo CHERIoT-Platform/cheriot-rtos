@@ -1050,7 +1050,8 @@ struct BitpackDerived : B
  * There is no `BITPACK_MEMBER_TYPE(b, T)` analogue, because that's just
  * `b.member<T>()`.
  */
-#define BITPACK_MEMBER_DECLTYPE(b, T) (b).template member<decltype(b)::T>()
+#define BITPACK_MEMBER_DECLTYPE(b, T)                                          \
+	(b).template member<std::remove_reference_t<decltype(b)>::T>()
 
 /**
  * Like BITPACK_MEMBER_DECLTYPE, but with additional an "typename" keyword so we
@@ -1058,7 +1059,7 @@ struct BitpackDerived : B
  * more generally, involves a template argument).
  */
 #define BITPACK_MEMBER_DEPENDENT(b, T)                                         \
-	(b).template member<typename decltype(b)::T>()
+	(b).template member<typename std::remove_reference_t<decltype(b)>::T>()
 
 /// @}
 
@@ -1234,14 +1235,16 @@ struct BitpackDerived : B
  * that qualified value's type and said value.
  */
 #define BITPACK_OPERATE_VALUE_DECLTYPE(b, operator, value)                     \
-	BITPACK_OPERATE_VALUE(b, operator, decltype(b)::value)
+	BITPACK_OPERATE_VALUE(                                                     \
+	  b, operator, std::remove_reference_t<decltype(b)>::value)
 
 /**
  * BITPACK_OPERATE_VALUE with dependent qualification for the type of the
  * bitpack.
  */
 #define BITPACK_OPERATE_VALUE_DEPENDENT(b, operator, value)                    \
-	BITPACK_OPERATE_VALUE(b, operator, typename decltype(b)::value)
+	BITPACK_OPERATE_VALUE(                                                     \
+	  b, operator, typename std::remove_reference_t<decltype(b)>::value)
 
 /// A specialization of BITPACK_OPERATE_VALUE using `.with` as the operator
 #define BITPACK_WITH_VALUE(b, value) BITPACK_OPERATE_VALUE(b, .with, value)
@@ -1361,7 +1364,8 @@ struct BitpackDerived : B
 	}() > 1)
 
 /// Map function for BITPACK_MAP_DECLTYPE
-#define BITPACK_MAP_DECLTYPE_HELPER(x, b) decltype(b)::x
+#define BITPACK_MAP_DECLTYPE_HELPER(x, b)                                      \
+	std::remove_reference_t<decltype(b)>::x
 
 /**
  * Given bitpack `b`, qualify each additional argument with `decltype(b)`.  That
@@ -1377,7 +1381,8 @@ struct BitpackDerived : B
 	CHERIOT_MAP_LIST_UD(BITPACK_MAP_DECLTYPE_HELPER, b, __VA_ARGS__)
 
 /// Map function for BITPACK_MAP_DEPENDENT
-#define BITPACK_MAP_DEPENDENT_HELPER(x, b) typename decltype(b)::x
+#define BITPACK_MAP_DEPENDENT_HELPER(x, b)                                     \
+	typename std::remove_reference_t<decltype(b)>::x
 
 /**
  * Given bitpack `b`, qualify each additional argument with `typename
