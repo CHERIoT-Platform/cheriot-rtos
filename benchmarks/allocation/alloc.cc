@@ -4,6 +4,10 @@
 #include <debug.hh>
 #include <locks.hh>
 
+#ifndef DEBUG_ALLOCBENCH
+#	define DEBUG_ALLOCBENCH false
+#endif
+
 using Debug = ConditionalDebug<DEBUG_ALLOCBENCH, "Allocator benchmark">;
 
 void run(size_t allocSize, size_t allocations, size_t inHeap)
