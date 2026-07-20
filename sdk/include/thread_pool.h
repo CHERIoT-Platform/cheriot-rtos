@@ -161,7 +161,7 @@ namespace thread_pool
 	{
 		// If this is a stateless function, just send a callback function
 		// pointer, don't copy zero bytes of state to the heap.
-		if constexpr (std::is_convertible_v<T, void (*)(void)>)
+		if constexpr (std::is_convertible_v<T, void (*)()>)
 		{
 			return thread_pool_async(
 			  &detail::wrap_callback_function<std::remove_cvref_t<T>>, nullptr);
