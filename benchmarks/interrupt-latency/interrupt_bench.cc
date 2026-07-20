@@ -74,16 +74,15 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 	if (--threadCounter == 0)
 	{
 		Debug::log("Thread {} exiting simulator", threadID);
-		simulation_exit(0);
+		simulation_exit(0); // Never returns
+		__builtin_unreachable();
 	}
-	else
-	{
-		// Other threads sleep forever. we could exit (return) instead but this
-		// seems to trigger a bug sometimes where the low priority thread
-		// doesn't wake up.
-		Debug::Invariant(thread_sleep(&t) >= 0,
-		                 "Compartment call to thread_sleep failed");
-	}
+
+	// Other threads sleep forever. we could exit (return) instead but this
+	// seems to trigger a bug sometimes where the low priority thread
+	// doesn't wake up.
+	Debug::Invariant(thread_sleep(&t) >= 0,
+	                 "Compartment call to thread_sleep failed");
 
 	return 0;
 }
