@@ -4,6 +4,8 @@
 #include <compartment.h>
 #include <stdint.h>
 
+// NOLINTBEGIN(readability-identifier-naming)
+
 /**
  * The helper functions need to expose an unmangled name because the compiler
  * inserts calls to them.  Declare them using the asm label extension.
@@ -194,3 +196,5 @@ DECLARE_ATOMIC_LIBCALL_ALIAS(atomic_compare_exchange,
                              const void *,
                              int,
                              int)
+
+// NOLINTEND(readability-identifier-naming)

@@ -41,10 +41,14 @@ EXPORT_ASSEMBLY_OFFSET(SchedulerEntryInfo, schedulerExportEntry, 8);
 EXPORT_ASSEMBLY_OFFSET(SchedulerEntryInfo, initialiserList, 16);
 EXPORT_ASSEMBLY_OFFSET(SchedulerEntryInfo, threads, 24);
 EXPORT_ASSEMBLY_SIZE(SchedulerEntryInfo, 32);
+
+// NOLINTBEGIN(readability-identifier-naming)
 EXPORT_ASSEMBLY_EXPRESSION(MIE_MEIE, priv::MIE_MEIE, 0x800);
 EXPORT_ASSEMBLY_EXPRESSION(MIE_MTIE, priv::MIE_MTIE, 0x080);
 EXPORT_ASSEMBLY_EXPRESSION(MSTATUS_MIE, priv::MSTATUS_MIE, 8);
 EXPORT_ASSEMBLY_EXPRESSION(ThreadHeapHazards_size,
                            HazardPointersPerThread * sizeof(void *),
                            16);
+// NOLINTEND(readability-identifier-naming)
+
 EXPORT_ASSEMBLY_SIZE(ThreadLoaderInfo, 16);
