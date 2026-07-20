@@ -80,7 +80,7 @@ enum ThreadSleepFlags : uint32_t
  *
  * This is implemented in the switcher.
  */
-uint16_t __cheri_libcall thread_id_get(void);
+uint16_t __cheri_libcall thread_id_get(/*Pre-C23 compatibility*/ __if_c(void));
 
 /**
  * Returns the number of cycles accounted to the idle thread.
