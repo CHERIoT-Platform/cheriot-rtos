@@ -8,6 +8,10 @@
 #include <token.h>
 #include <vector>
 
+#ifndef DEBUG_CALLER
+#	define DEBUG_CALLER false
+#endif
+
 using Debug = ConditionalDebug<DEBUG_CALLER, "Compartment call benchmark">;
 
 DECLARE_AND_DEFINE_ALLOCATOR_CAPABILITY(mallocCapTwo, 1024);

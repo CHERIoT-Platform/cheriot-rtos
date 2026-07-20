@@ -6,6 +6,11 @@
 #include <simulator.h>
 #include <thread.h>
 #include <timeout.h>
+
+#ifndef DEBUG_INTERRUPT_BENCH
+#	define DEBUG_INTERRUPT_BENCH false
+#endif
+
 #if DEBUG_INTERRUPT_BENCH
 #	include <fail-simulator-on-error.h>
 #endif
