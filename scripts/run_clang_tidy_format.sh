@@ -21,11 +21,7 @@ if [ ! -x ${CLANG_FORMAT} ] ; then
 	exit 1
 fi
 
-if which nproc ; then
-	PARALLEL_JOBS=$(nproc)
-else
-	PARALLEL_JOBS=$(sysctl -n kern.smp.cpus)
-fi
+PARALLEL_JOBS=$(nproc || sysctl -n kern.smp.cpus 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)
 DIRECTORIES="sdk tests examples tests.extra benchmarks"
 # Standard headers should be included once we move to a clang-tidy that
 # supports NOLINTBEGIN to disable specific checks over a whole file.
