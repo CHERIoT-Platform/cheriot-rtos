@@ -574,13 +574,13 @@ class OpenTitanUsbdev : private utils::NoCopyNoMove
 	void packet_data_get(ReceiveBufferInfo bufferInfo,
 	                     uint32_t         *destination) volatile
 	{
-		const auto [id, size] =
+		const auto [ID, Size] =
 		  std::pair{bufferInfo.buffer_id(), bufferInfo.size()};
 		// Reception of Zero Length Packets occurs in the Status Stage of IN
 		// Control Transfers.
-		if (size > 0)
+		if (Size > 0)
 		{
-			usbdev_transfer(destination, buffer(id), size, false);
+			usbdev_transfer(destination, buffer(ID), Size, false);
 		}
 	}
 
