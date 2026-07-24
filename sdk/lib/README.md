@@ -8,6 +8,7 @@ This collection currently includes:
 
  - [atomic](atomic/) provides atomic support functions.
  - [compartment_helpers](compartment_helpers/) contains helpers for checking / ensuring that pointers are valid.
+ - [clock](clock/) provides support for wall-clock time.
  - [crt](crt/) provides C runtime functions that the compiler may emit.
  - [cxxrt](cxxrt/) provides a minimal C++ runtime (no exceptions or RTTI support).
  - [debug](debug/) contains functions to support the debug logging APIs.
