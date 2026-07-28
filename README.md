@@ -2,8 +2,6 @@ CHERIoT RTOS
 ============
 
 This repository contains the core RTOS for the [CHERIoT platform](https://aka.ms/cheriot-tech-report).
-This is currently a *research project* that has been open sourced to enable wider collaboration.
-It is not yet in a state where it should be used in production: in particular, security issues will currently be fixed in the main branch of the repo with no coordinated disclosure.
 
 To use this, you will also need to install some dependencies.
 The [getting started guide](docs/GettingStarted.md) describes in detail how to build these:
