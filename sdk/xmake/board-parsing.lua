@@ -7,7 +7,10 @@ local function board_file_for_name(boardfile, searchDir)
 	-- If this isn't a path, look in searchDir
 	if not os.isfile(boardfile) then
 		boarddir = searchDir
-		local fullBoardPath = path.join(boarddir, boardfile .. '.json')
+		local fullBoardPath = path.join(boarddir, boardfile)
+		if not os.isfile(fullBoardPath) then
+			fullBoardPath = path.join(boarddir, boardfile .. '.json')
+		end
 		if not os.isfile(fullBoardPath) then
 			fullBoardPath = path.join(boarddir, boardfile .. '.patch')
 		end
