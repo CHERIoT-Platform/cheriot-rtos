@@ -12,6 +12,7 @@ includes(
 	"atomic",
 	"clock",
 	"compartment_helpers",
+	"cancellation_token",
 	"crt",
 	"cxxrt",
 	"debug",
