@@ -214,6 +214,9 @@ test("rust", { name = "Rust", not_most = true })
 
 test("bitpacks")
 
+test("cancellation")
+  add_deps("cancellation_token")
+
 includes(path.join(sdkdir, "lib"))
 
 rule("cheriot.tests")
