@@ -697,6 +697,15 @@ namespace
 			{
 				if (contains<ExportEntry>(lib.exportTable, possibleLibcall))
 				{
+					auto libsize =
+					  lib.importTableSize + lib.code.size() + lib.data.size();
+					if (libsize > (1 << 16))
+					{
+						Debug::log(
+						  "Libcall import at {} refers to a library whose size "
+						  "is greater than 64KiB. The libcall may not work. ",
+						  possibleLibcall);
+					}
 					// Library export tables are not used after the loader has
 					// run; our linker script places them to the end of the
 					// image, which we make available for the heap.
