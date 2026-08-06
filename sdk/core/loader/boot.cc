@@ -697,13 +697,11 @@ namespace
 			{
 				if (contains<ExportEntry>(lib.exportTable, possibleLibcall))
 				{
-					auto libsize =
-					  lib.importTableSize + lib.code.size() + lib.data.size();
-					if (libsize > (1 << 16))
+					if (lib.code.size() > (1 << 16))
 					{
 						Debug::log(
 						  "Libcall import at {} refers to a library whose size "
-						  "is greater than 64KiB. The libcall may not work. ",
+						  "is greater than 64KiB. The libcall may not work.",
 						  possibleLibcall);
 					}
 					// Library export tables are not used after the loader has
