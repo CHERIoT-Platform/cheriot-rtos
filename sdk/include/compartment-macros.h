@@ -228,13 +228,14 @@
  *
  * \hideinitializer
  */
-#if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed) &&             \
+  __CHERIOT__ >= 20260806
 #	define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                         \
 	  type, valueType, compartment, keyName, name)                             \
 		extern valueType __sealed_type_placeholder_##name;                     \
-		typedef type     __##name##_type                                       \
-		  __attribute__((cheriot_sealed(#compartment, #keyName)));             \
-		extern __##name##_type name;
+		typedef type     __##name##_type;                                      \
+		extern __##name##_type                                                 \
+		  __attribute__((cheriot_sealed(#compartment, #keyName))) name;
 #else
 #	define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                         \
 	  type, valueType, compartment, keyName, name)                             \
@@ -289,7 +290,8 @@
  *
  * \hideinitializer
  */
-#if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed) &&             \
+  __CHERIOT__ >= 20260806
 #	define DEFINE_STATIC_SEALED_VALUE(                                        \
 	  type, compartment, keyName, name, initialiser, ...)                      \
 		__if_cxx(inline) _Alignas(_Alignof(type) < 8 ? 8 : _Alignof(type))     \
@@ -357,7 +359,8 @@
  *
  * \hideinitializer
  */
-#if defined(__has_attribute) && __has_attribute(cheriot_sealed) && 0
+#if defined(__has_attribute) && __has_attribute(cheriot_sealed) &&             \
+  __CHERIOT__ >= 20260806
 #	define STATIC_SEALED_VALUE(name, ...)                                     \
 		(CHERI_SEALED(__typeof__(__sealed_type_placeholder_##name) *))(&name)
 #else
