@@ -742,6 +742,14 @@ namespace
 			if (contains<ExportEntry>(sourceCompartment.exportTable,
 			                          possibleLibcall))
 			{
+				if (sourceCompartment.code.size() > (1 << 16))
+				{
+					Debug::log(
+					  "Libcall import at {} refers to a library whose size "
+					  "is greater than 64KiB. The libcall may not work.",
+					  possibleLibcall);
+				}
+
 				return createLibCall(build_pcc(sourceCompartment));
 			}
 			// Otherwise this is an MMIO space entry (we allow byte-granularity
