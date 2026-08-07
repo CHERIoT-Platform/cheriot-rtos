@@ -214,6 +214,9 @@ test("rust", { name = "Rust", not_most = true })
 
 test("bitpacks")
 
+test("time")
+	add_deps("time")
+
 includes(path.join(sdkdir, "lib"))
 
 rule("cheriot.tests")
