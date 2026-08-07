@@ -25,5 +25,6 @@ includes(
 	"stdio",
 	"string",
 	"strtol",
+	"time",
 	"thread_pool",
 	"unwind_error_handler")
