@@ -131,6 +131,85 @@ __cheriot_compartment("wall_clock") int clock_update_wall_clock(
  */
 __cheriot_libcall time_t time(time_t *tloc);
 
+/**
+ * Structure representing a date in the Gregorian calendar.
+ *
+ * This is intended to be compatible with C/POSIX, not all fields are used by
+ * all APIs.
+ */
+struct tm
+{
+	/// Seconds, in the range 0--60 (to account for leap seconds).
+	int tm_sec;
+	/// Minutes, in the range 0--59.
+	int tm_min;
+	/// Hours, in the range 0--23.
+	int tm_hour;
+	/**
+	 * Day of the month, in the range 1--31, or less if the month has fewer
+	 * than 31 days.
+	 */
+	int tm_mday;
+	/**
+	 * Month of the year, in the range 0--11.  Note that this counts from 0,
+	 * whereas days of the month count from 1.
+	 */
+	int tm_mon;
+	/// Year, as an offset from 1900 (so, for example, 2023 is 123).
+	int tm_year;
+	/**
+	 * Day of the week, in the range 0--6.  Sunday is 0, Saturday is 6.
+	 */
+	int tm_wday;
+	/**
+	 * Day of the year, in the range 0--365 (0--364 if this is not a leap year).
+	 */
+	int tm_yday;
+	/**
+	 * Daylight savings flag.
+	 */
+	int tm_isdst;
+};
+
+/**
+ * Convert a `struct tm` to a `time_t`.  This is intended to be compatible with
+ * the BSD extension and is equivalent to the POSIX `mktime` with a UTC locale.
+ *
+ * The `tm_wday` and `tm_yday` fields are ignored as inputs.  Other fields may
+ * be out of range, for example an hour of -1 means hour 22 in the previous day,
+ * a day of 40 in a month with 31 days means day 9 in the next month, and so on.
+ *
+ * The values of the `tm_wday` and `tm_yday` fields will be set on successful
+ * completion.
+ *
+ * NOTE: UNIX time stamps do not include leap seconds.  If a leap second (the
+ * 60th second at the end of June or December in a year that contains one) is
+ * specified in `time`, it will be treated as an overflow and the result of
+ * this function will be off by one.
+ */
+time_t __cheriot_libcall timegm(struct tm *time);
+
+/**
+ * C standard function to calculate a human-readable UTC date and time in a
+ * `struct tm` from a UNIX timestamp passed indirectly as `timer`.  The
+ * `result` argument is used to provide space for the output.  The return value
+ * is `result`, or an untagged value if an error occurs.
+ */
+struct tm *__cheriot_libcall gmtime_r(const time_t *__restrict timer,
+                                      struct tm *__restrict result);
+
+/**
+ * C standard function to calculate a human-readable UTC date and time in a
+ * `struct tm` from a UNIX timestamp.  This uses an internal buffer that is
+ * invalidated on each subsequent call and is not thread safe.  `gmtime_r`
+ * should be used instead.
+ */
+static inline struct tm *gmtime(const time_t *timer)
+{
+	static struct tm result;
+	return gmtime_r(timer, &result);
+}
+
 __END_DECLS
 
 // NOLINTEND(readability-identifier-naming,modernize-redundant-void-arg)
