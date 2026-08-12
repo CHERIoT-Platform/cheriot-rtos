@@ -79,6 +79,8 @@ __export_mem_heap = @heap_start@;
 
 ASSERT(__export_mem_heap >= ., "Heap would overlap static data")
 
+ASSERT(__export_mem_heap < __export_mem_heap_end, "Heap has no available space")
+
 # This is sdk/core/allocator/alloc.h's MaxChunkSize + sizeof(MChunkHeader),
 # since right now the heap requires that we be able to represent the whole thing
 # in a single chunk.
