@@ -161,10 +161,12 @@ by passing a comma-separated list of file paths to the `--board-mixins` option.
 These mixins are just JSON arrays of JSON Patch "add", "remove", and "replace" operations,
 which are all applied, in order, to the (patched) board definition computed above.
 
-Board patch base file names and board mixin names are subject to the following expansions:
+Board patch base file names, board mixin names, and paths within board files are subject to the following expansions:
 - `${sdk}` will be replaced with an absolute path to the RTOS SDK directory
 - `${sdkboards}` will be replaced with an absolute path to the RTOS SDK's boards/ directory
 - `${project}` will be replaced with an absolute path to the project being built
-- `${board}` will be replaced with an absolute path to the board file
+- `${board}` will be replaced with an absolute path to the board file given to the `--board` option.
+* `${boardBase}` will be replaced with the absolute path to the JSON file to which all board patches apply.
 
 The first three of these are also applicable to the argument given to the `--board` option.
+`${boardBase}` is not available during the initial descent through board patches, but it is available to mixin paths and paths within board descriptions.

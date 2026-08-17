@@ -146,6 +146,7 @@ end
 -- functions at the top level.
 local function load_board_file_inner(boardDir, boardFile, boardPathSubstitutes)
 	if path.extension(boardFile) == ".json" then
+		boardPathSubstitutes.boardBase = boardDir
 		return json.loadfile(boardFile)
 	end
 	if path.extension(boardFile) ~= ".patch" then
@@ -156,6 +157,7 @@ local function load_board_file_inner(boardDir, boardFile, boardPathSubstitutes)
 		raise("Board file " .. boardFile .. " does not specify a base")
 	end
 
+	-- Naturally, boardBase is not available on the descent.
 	substitutedBase = patch.base:gsub("${(%w)}", boardPathSubstitutes)
 
 	local baseDir, baseFile = board_file_for_name(substitutedBase, boardDir)
