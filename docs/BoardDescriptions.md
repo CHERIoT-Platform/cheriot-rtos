@@ -160,6 +160,7 @@ Multiple patches may also be "mixed in" to a board definition, incremental or no
 by passing a comma-separated list of file paths to the `--board-mixins` option.
 These mixins are just JSON arrays of JSON Patch "add", "remove", and "replace" operations,
 which are all applied, in order, to the (patched) board definition computed above.
+Mixins specified by relative paths are looked for in the project root, next to the file given to the `--board` option, and in the SDK's `boards/` directory, in that order.
 
 Board patch base file names, board mixin names, and paths within board files are subject to the following expansions:
 - `${sdk}` will be replaced with an absolute path to the RTOS SDK directory

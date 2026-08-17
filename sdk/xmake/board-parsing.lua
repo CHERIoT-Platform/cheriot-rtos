@@ -184,10 +184,14 @@ local function load_board_file(boardDir, boardFile, mixinString, boardPathSubsti
 
 		mixinName = mixinName:gsub("${(%w)}", boardPathSubstitutes)
 
-		-- Initially, look next to the board file
-		local mixinDir, mixinFile = board_file_for_name(mixinName, boardDir)
+		-- Initially, look in the project directory if it isn't absolute after substitutions
+		local mixinDir, mixinFile = board_file_for_name(mixinName, os.projectdir())
 		if not mixinDir then
-			-- Fall back to looking in the SDK/ boards dir (which might be the same thing)
+			-- Try relative to the provided board file
+			mixinDir, mixinFile = board_file_for_name(mixinName, boardDir)
+		end
+		if not mixinDir then
+			-- Fall back to looking in the SDK/ boards dir
 			mixinDir, mixinFile = board_file_for_name(mixinName, path.join(scriptdir, "boards"))
 		end
 		if not mixinDir then
