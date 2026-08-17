@@ -130,9 +130,9 @@
         "STDERR_TO_STDOUT=1"
     ],
     "driver_includes" : [
-        "../include/platform/sunburst",
-        "../include/platform/ibex",
-        "../include/platform/generic-riscv"
+        "${sdk}/include/platform/sunburst",
+        "${sdk}/include/platform/ibex",
+        "${sdk}/include/platform/generic-riscv"
     ],
     "timer_hz" : 40000000,
     "tickrate_hz" : 100,

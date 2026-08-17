@@ -76,9 +76,9 @@
         "CHERIOT_NO_SAIL_83"
     ],
     "driver_includes" : [
-        "../include/platform/sunburst/v0.2",
-        "../include/platform/sunburst",
-        "../include/platform/generic-riscv"
+        "${sdk}/include/platform/sunburst/v0.2",
+        "${sdk}/include/platform/sunburst",
+        "${sdk}/include/platform/generic-riscv"
     ],
     "timer_hz" : 30000000,
     "tickrate_hz" : 100,

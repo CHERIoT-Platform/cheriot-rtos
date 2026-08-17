@@ -32,8 +32,8 @@
         "RISCV_HTIF"
     ],
     "driver_includes" : [
-        "../include/platform/sail",
-        "../include/platform/generic-riscv"
+        "${sdk}/include/platform/sail",
+        "${sdk}/include/platform/generic-riscv"
     ],
     "timer_hz" : 2000,
     "tickrate_hz" : 10,
