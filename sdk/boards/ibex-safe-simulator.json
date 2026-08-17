@@ -41,9 +41,9 @@
         "MICROSOFT_CHERIOT_SAFE"
     ],
     "driver_includes" : [
-        "../include/platform/ibex",
-        "../include/platform/microsoft_cheriot_safe",
-        "../include/platform/generic-riscv"
+        "${sdk}/include/platform/ibex",
+        "${sdk}/include/platform/microsoft_cheriot_safe",
+        "${sdk}/include/platform/generic-riscv"
     ],
     "timer_hz" : 100000,
     "tickrate_hz" : 10,

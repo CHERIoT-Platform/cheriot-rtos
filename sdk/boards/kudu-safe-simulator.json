@@ -37,9 +37,9 @@
         "RDCYCLE_OVERRIDE_CSR=mcycle"
     ],
     "driver_includes" : [
-        "../include/platform/kudu",
-        "../include/platform/microsoft_cheriot_safe",
-        "../include/platform/generic-riscv"
+        "${sdk}/include/platform/kudu",
+        "${sdk}/include/platform/microsoft_cheriot_safe",
+        "${sdk}/include/platform/generic-riscv"
     ],
     "timer_hz" : 100000,
     "tickrate_hz" : 10,
