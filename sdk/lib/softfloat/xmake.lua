@@ -45,6 +45,13 @@ softfloat_library(3264, "convert")
 	add_files("../../third_party/compiler-rt/fixunsdfsi.c")
 	add_files("../../third_party/compiler-rt/floatunsidf.c")
 
+-- Conversions between 32-bit floats and 16-bit floats.
+-- These are not included as part of any other library, and there
+-- is no other support for 16-bit floats.
+softfloat_library(3216, "convert")
+    add_files("../../third_party/compiler-rt/extendhfsf2.c")
+    add_files("../../third_party/compiler-rt/truncsfhf2.c")
+
 softfloat_library(32, "convert")
 	add_files("../../third_party/compiler-rt/fixsfsi.c")
 	add_files("../../third_party/compiler-rt/fixsfdi.c")
