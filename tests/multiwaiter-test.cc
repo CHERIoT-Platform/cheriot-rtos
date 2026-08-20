@@ -3,6 +3,7 @@
 
 #define TEST_NAME "Multiwaiter"
 #include "tests.hh"
+#include <atomic>
 #include <cheri.hh>
 #include <errno.h>
 #include <futex.h>
@@ -16,11 +17,11 @@ using namespace thread_pool;
 
 int test_multiwaiter()
 {
-	static uint32_t futex  = 0;
-	static uint32_t futex2 = 0;
-	int             ret;
-	MultiWaiter     mw;
-	Timeout         t{0};
+	static _Atomic(uint32_t) futex  = 0;
+	static _Atomic(uint32_t) futex2 = 0;
+	int                      ret;
+	MultiWaiter              mw;
+	Timeout                  t{0};
 	ret = multiwaiter_create(&t, MALLOC_CAPABILITY, &mw, 4);
 	TEST((ret == 0) && (mw != nullptr),
 	     "Allocating multiwaiter failed {} ({})",
@@ -46,12 +47,13 @@ int test_multiwaiter()
 	ret         = multiwaiter_wait(&t, mw, events, 1);
 	TEST(ret == 0, "multiwaiter returned {}, expected 0", ret);
 
-	auto setFutex = [](uint32_t *futexWord, uint32_t value) {
+	auto setFutex = [](_Atomic(uint32_t) *futexWord, uint32_t value) {
 		async([=]() {
 			sleep(1);
 			debug_log("Waking futex from background thread");
 			*futexWord = value;
-			TEST(futex_wake(futexWord, 1) >= 0, "futex_wait failed");
+			TEST(futex_wake(reinterpret_cast<uint32_t *>(futexWord), 1) >= 0,
+			     "futex_wait failed");
 		});
 	};
 

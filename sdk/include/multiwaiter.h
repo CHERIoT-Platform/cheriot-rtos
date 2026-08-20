@@ -43,7 +43,7 @@ struct EventWaiterSource
 	 * A pointer to the event source.  This is the futex that is monitored for
 	 * the multiwaiter.
 	 */
-	void *eventSource;
+	const _Atomic(uint32_t) *eventSource;
 	/**
 	 * Event value.  This field is modified during the wait
 	 * call.
