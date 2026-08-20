@@ -202,7 +202,7 @@ test("eventgroup", { name = "Event groups" })
 
 -- Test the multiwaiter
 test("multiwaiter", { name = "Multiwatier" })
-    add_deps("cxxrt", "message_queue")
+    add_deps("cxxrt", "message_queue", "atomic")
 
 -- Test the allocator and the revoker.
 test("allocator", { name = "Allocator" })

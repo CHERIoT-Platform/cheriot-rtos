@@ -64,7 +64,7 @@ namespace
 		 * Reset method.  Takes a pointer to the futex word and the
 		 * user-provided value describing when it should fire.
 		 */
-		bool reset(uint32_t *address, uint32_t value)
+		bool reset(const _Atomic(uint32_t) *address, uint32_t value)
 		{
 			eventSource = reinterpret_cast<void *>(
 			  static_cast<uintptr_t>(Capability{address}.address()));
@@ -235,8 +235,7 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 		// Reset the events that this contains.
 		for (size_t i = 0; i < count; i++)
 		{
-			void *ptr     = newEvents[i].eventSource;
-			auto *address = static_cast<uint32_t *>(ptr);
+			auto *address = newEvents[i].eventSource;
 			if (!check_pointer<PermissionSet{Permission::Load}>(address))
 			{
 				return EventOperationResult::Error;
