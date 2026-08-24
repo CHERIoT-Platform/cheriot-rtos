@@ -235,7 +235,7 @@
 		extern valueType __sealed_type_placeholder_##name;                     \
 		typedef type     __##name##_type;                                      \
 		extern __##name##_type                                                 \
-		  __attribute__((cheriot_sealed(#compartment, #keyName))) name;
+		  __attribute__((cheriot_sealed(#compartment, #keyName))) (name);
 #else
 #	define DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                         \
 	  type, valueType, compartment, keyName, name)                             \
