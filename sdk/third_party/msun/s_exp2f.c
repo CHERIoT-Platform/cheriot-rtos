@@ -41,7 +41,7 @@ static const float
     P3	    = 0x1.c6b348p-5f,
     P4	    = 0x1.3b2c9cp-7f;
 
-static volatile float
+static const volatile float
     huge    = 0x1p100f,
     twom100 = 0x1p-100f;
 
