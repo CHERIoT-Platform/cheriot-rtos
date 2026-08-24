@@ -63,7 +63,7 @@ template<typename T, size_t N>
     requires std::is_arithmetic_v<T>
 __always_inline int randombytes(T (&output)[N])
 {
-	return randombytes(reinterpret_cast<uint8_t *>(&output), sizeof(T));
+	return randombytes(reinterpret_cast<uint8_t *>(&output), sizeof(output));
 }
 
 /**
