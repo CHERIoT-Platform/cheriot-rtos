@@ -673,9 +673,9 @@ namespace
  * Scaled down version of vsnprintf(3).
  */
 int __cheri_libcall
-vsnprintf(char *str, // NOLINT (clang-tidy spuriously thinks this should be
-                     // const, even though it's being written to)
-          size_t      size,
+vsnprintf(char  *str, // NOLINT (clang-tidy spuriously thinks this should be
+                      // const, even though it's being written to)
+          size_t size,
           const char *format,
           va_list     ap)
 {

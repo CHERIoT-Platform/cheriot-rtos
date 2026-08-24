@@ -563,8 +563,8 @@ class BITPACK_DECL_ANNOTATION Bitpack
 		 */
 		template<typename DerivedBitpack, typename RefTypeParam>
 		    requires std::is_base_of_v<Bitpack, DerivedBitpack> &&
-		             std::is_lvalue_reference_v<RefTypeParam> &&
-		             std::is_same_v<Storage, std::remove_cvref_t<RefTypeParam>>
+			         std::is_lvalue_reference_v<RefTypeParam> &&
+			         std::is_same_v<Storage, std::remove_cvref_t<RefTypeParam>>
 		class Proxy
 		{
 			/// A qualified reference to the containing `Bitpack`'s `Storage`.
@@ -878,8 +878,8 @@ class BITPACK_DECL_ANNOTATION Bitpack
 	template<typename Self>
 	constexpr void alter(this Self &&self, auto &&f)
 	    requires std::is_invocable_r_v<std::remove_cvref_t<Self>,
-	                                   decltype(f),
-	                                   std::remove_cvref_t<Self>>
+		                               decltype(f),
+		                               std::remove_cvref_t<Self>>
 	{
 		std::remove_cvref_t<Self> value{self.value};
 		self = f(value);
@@ -893,8 +893,8 @@ class BITPACK_DECL_ANNOTATION Bitpack
 	template<typename Self>
 	constexpr void assign_from(this Self &&self, auto &&f)
 	    requires std::is_invocable_r_v<std::remove_cvref_t<Self>,
-	                                   decltype(f),
-	                                   std::remove_cvref_t<Self>>
+		                               decltype(f),
+		                               std::remove_cvref_t<Self>>
 	{
 		self = f(std::remove_cvref_t<Self>(0));
 	}

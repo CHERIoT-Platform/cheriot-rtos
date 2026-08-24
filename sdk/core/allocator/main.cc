@@ -206,7 +206,7 @@ namespace
 	                                 LockGuard<decltype(lock)> &g,
 	                                 T                         &r = revoker)
 	    requires(Revocation::SupportsInterruptNotification<T> &&
-	             Revocation::Revoker::IsAsynchronous)
+		         Revocation::Revoker::IsAsynchronous)
 	{
 		// Release the lock before sleeping
 		g.unlock();
@@ -232,7 +232,7 @@ namespace
 	                                 LockGuard<decltype(lock)> &g,
 	                                 T                         &r = revoker)
 	    requires(!Revocation::SupportsInterruptNotification<T> ||
-	             !Revocation::Revoker::IsAsynchronous)
+		         !Revocation::Revoker::IsAsynchronous)
 	{
 		/*
 		 * Yield and poll until a revocation pass has finished.
@@ -1271,8 +1271,8 @@ namespace
 			    payload.bounds() = payload.top() - payload.address();
 
 			    Debug::Assert(payload.is_valid(),
-			                  "Unsealed object {} is not representable",
-			                  payload);
+				              "Unsealed object {} is not representable",
+				              payload);
 			    return std::pair<SealedTokenHandle, TokenHandle<false>>{
 			      sealed, payload};
 		    },

@@ -305,7 +305,7 @@
 		__attribute__((section(".sealed_objects"), used)) __if_cxx(            \
 		  inline) _Alignas(_Alignof(type) < 8                                  \
 		                     ? 8                                               \
-		                     : _Alignof(type)) struct __##name##_type          \
+							 : _Alignof(type)) struct __##name##_type          \
 		  name = /* NOLINT(bugprone-macro-parentheses) */                      \
 		  {(uint32_t)&__sealing_key_##compartment##_##keyName,                 \
 		   0,                                                                  \
@@ -326,19 +326,12 @@
  */
 #define DECLARE_AND_DEFINE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                  \
   type, valueType, compartment, keyName, name, initialiser, ...)               \
+	/* NOLINTBEGIN(bugprone-macro-parentheses) */                              \
 	DECLARE_STATIC_SEALED_VALUE_EXPLICIT_TYPE(                                 \
-	  type,                                                                    \
-	  valueType,                                                               \
-	  compartment,                                                             \
-	  keyName,                                                                 \
-	  name); /* NOLINT(bugprone-macro-parentheses) */                          \
+	  type, valueType, compartment, keyName, name);                            \
 	DEFINE_STATIC_SEALED_VALUE(                                                \
-	  type,                                                                    \
-	  compartment,                                                             \
-	  keyName,                                                                 \
-	  name,                                                                    \
-	  initialiser,                                                             \
-	  ##__VA_ARGS__); /* NOLINT(bugprone-macro-parentheses) */
+	  type, compartment, keyName, name, initialiser, ##__VA_ARGS__);           \
+	/* NOLINTEND(bugprone-macro-parentheses) */
 
 /**
  * Helper macro that declares and defines a sealed value.

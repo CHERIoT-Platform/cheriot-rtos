@@ -58,7 +58,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 		  registerNumber,
 		  registerNumber == CHERI::RegisterNumber::CZR
 		    ? nullptr
-		    : *frame->get_register_value(registerNumber));
+			: *frame->get_register_value(registerNumber));
 	}
 	else
 	{
