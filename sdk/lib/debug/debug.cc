@@ -351,7 +351,7 @@ namespace
 							  DebugFormatArgumentBool:
 								write(static_cast<bool>(argument.value)
 								        ? "true"
-								        : "false");
+										: "false");
 								break;
 							case DebugFormatArgumentKind::
 							  DebugFormatArgumentCharacter:

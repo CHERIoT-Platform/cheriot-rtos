@@ -362,9 +362,9 @@ namespace
 [[cheriot::interrupt_state(disabled)]] CHERI_SEALED(TrustedStack *)
   __cheri_compartment("scheduler")
     exception_entry(CHERI_SEALED(TrustedStack *) sealedTStack,
-                    size_t mcause,
-                    size_t mepc,
-                    size_t mtval)
+	                size_t mcause,
+	                size_t mepc,
+	                size_t mtval)
 {
 	if constexpr (DebugScheduler)
 	{

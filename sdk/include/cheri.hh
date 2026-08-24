@@ -1314,7 +1314,7 @@ namespace CHERI
 	  check_pointer(auto  &ptr,
 	                size_t space = sizeof(std::remove_pointer<decltype(ptr)>))
 	    requires(std::is_pointer_v<std::remove_cvref_t<decltype(ptr)>> ||
-	             IsSmartPointerLike<std::remove_cvref_t<decltype(ptr)>>)
+		         IsSmartPointerLike<std::remove_cvref_t<decltype(ptr)>>)
 	{
 		// We can skip a stack check if we've asked for Global because the
 		// stack does not have this permission.
@@ -1645,12 +1645,12 @@ namespace CHERI
 		__always_inline auto either(auto &&onT,
 		                            auto &&onE) /* 🏳️‍⚧️ */
 		    requires std::is_invocable_v<decltype(onT),
-		                                 Capability<T, IsSealed>> &&
-		             std::is_invocable_v<decltype(onE), int> &&
-		             std::convertible_to<
+			                             Capability<T, IsSealed>> &&
+			         std::is_invocable_v<decltype(onE), int> &&
+			         std::convertible_to<
 		               std::invoke_result_t<decltype(onE), int>,
 		               std::invoke_result_t<decltype(onT),
-		                                    Capability<T, IsSealed>>>
+					                        Capability<T, IsSealed>>>
 		{
 			if (is_error())
 			{
@@ -1664,7 +1664,7 @@ namespace CHERI
 				 */
 				if constexpr (std::is_void_v<
 				                std::invoke_result_t<decltype(onT),
-				                                     Capability<T, IsSealed>>>)
+								                     Capability<T, IsSealed>>>)
 				{
 					return onE(e);
 				}
@@ -1739,7 +1739,7 @@ namespace CHERI
 		 */
 		auto and_then(auto &&function)
 		    requires std::is_convertible_v<decltype(pointer), T *> &&
-		             std::is_void_v<
+			         std::is_void_v<
 		               std::invoke_result_t<decltype(function), T *>>
 		{
 			either([function](T *t) { function(t); }, [](int) { return; });
@@ -1755,9 +1755,9 @@ namespace CHERI
 		   * constructor in the success case.
 		   */
 		    requires std::is_convertible_v<decltype(pointer), T *> &&
-		             requires(std::invoke_result_t<decltype(function), T *> r) {
+			         requires(std::invoke_result_t<decltype(function), T *> r) {
 			             requires std::is_same_v<decltype(CHERI::ErrorOr(r)),
-			                                     decltype(r)>;
+						                         decltype(r)>;
 		             }
 		{
 			return either(function, [](int e) {
@@ -1774,7 +1774,7 @@ namespace CHERI
 		 */
 		int and_then(auto &&function)
 		    requires std::is_convertible_v<decltype(pointer), T *> &&
-		             std::is_same_v<
+			         std::is_same_v<
 		               std::invoke_result_t<decltype(function), T *>,
 		               int>
 		{

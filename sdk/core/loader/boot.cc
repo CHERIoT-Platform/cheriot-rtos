@@ -634,8 +634,8 @@ namespace
 			  ((entry.address >= LA_ABS(__mmio_region_start)) &&
 			   (entry.address + entry.size() <= LA_ABS(__mmio_region_end))) ||
 			    ((entry.address >= LA_ABS(__shared_objects_start)) &&
-			     (entry.address + entry.size() <=
-			      LA_ABS(__shared_objects_end))),
+				 (entry.address + entry.size() <=
+				  LA_ABS(__shared_objects_end))),
 			  "{}--{} is not in the MMIO range ({}--{}) or the shared object "
 			  "range ({}--{})",
 			  entry.address,
