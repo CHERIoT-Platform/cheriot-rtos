@@ -563,8 +563,8 @@ class BITPACK_DECL_ANNOTATION Bitpack
 		 */
 		template<typename DerivedBitpack, typename RefTypeParam>
 		    requires std::is_base_of_v<Bitpack, DerivedBitpack> &&
-		             std::is_lvalue_reference_v<RefTypeParam> &&
-		             std::is_same_v<Storage, std::remove_cvref_t<RefTypeParam>>
+			         std::is_lvalue_reference_v<RefTypeParam> &&
+			         std::is_same_v<Storage, std::remove_cvref_t<RefTypeParam>>
 		class Proxy
 		{
 			/// A qualified reference to the containing `Bitpack`'s `Storage`.
@@ -788,16 +788,18 @@ class BITPACK_DECL_ANNOTATION Bitpack
 		/*
 		 * Guide template deduction to conclude that a Field has a RefType
 		 * that is as CV-qualified as the `Bitpack` of which it is a part, with
-		 * the further possibility of const-qualification for fields annotated
-		 * as constant.
+		 * the further possibility of `const`-qualification for fields annotated
+		 * as constant coming from volatile bitpacks; isConst is ignored if the
+		 * bitpack is not volatile to make large scale .alter()-ations easier.
 		 *
 		 * Yes, the `decltype(())` is deliberate: we want the lvalue expression
 		 * rather than the prvalue expression.
 		 */
 		template<typename BitpackType>
-		Proxy(BitpackType &r)
-		  -> Proxy<std::remove_cvref_t<BitpackType>,
-		           ConditionalConstRef<Info.isConst, decltype((r.value))>>;
+		Proxy(BitpackType &r) -> Proxy<
+		  std::remove_cvref_t<BitpackType>,
+		  ConditionalConstRef<Info.isConst && std::is_volatile_v<BitpackType>,
+		                      decltype((r.value))>>;
 	};
 
 	protected:
@@ -878,8 +880,8 @@ class BITPACK_DECL_ANNOTATION Bitpack
 	template<typename Self>
 	constexpr void alter(this Self &&self, auto &&f)
 	    requires std::is_invocable_r_v<std::remove_cvref_t<Self>,
-	                                   decltype(f),
-	                                   std::remove_cvref_t<Self>>
+		                               decltype(f),
+		                               std::remove_cvref_t<Self>>
 	{
 		std::remove_cvref_t<Self> value{self.value};
 		self = f(value);
@@ -893,8 +895,8 @@ class BITPACK_DECL_ANNOTATION Bitpack
 	template<typename Self>
 	constexpr void assign_from(this Self &&self, auto &&f)
 	    requires std::is_invocable_r_v<std::remove_cvref_t<Self>,
-	                                   decltype(f),
-	                                   std::remove_cvref_t<Self>>
+		                               decltype(f),
+		                               std::remove_cvref_t<Self>>
 	{
 		self = f(std::remove_cvref_t<Self>(0));
 	}

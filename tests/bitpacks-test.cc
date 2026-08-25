@@ -133,9 +133,17 @@ static_assert(CanAssignFieldV<decltype(std::declval<Foo::Control>()
 static_assert(
   CanAssignFieldV<decltype(std::declval<Foo::More::ReusedT>().f1())>);
 
-// ... but not an alias of it that's marked constant.
+// ... and even an alias of it that's marked constant, in a non-volatile bitpack
 static_assert(
-  !CanAssignFieldV<decltype(std::declval<Foo::More::ReusedT>().f1c())>);
+  CanAssignFieldV<decltype(std::declval<Foo::More::ReusedT>().f1c())>);
+
+// Given a volatile ReusedT, we can assign into its f1() field...
+static_assert(
+  CanAssignFieldV<decltype(std::declval<volatile Foo::More::ReusedT>().f1())>);
+
+// ... but not into an alias of it marked as constant.
+static_assert(!CanAssignFieldV<
+              decltype(std::declval<volatile Foo::More::ReusedT>().f1c())>);
 
 constexpr static auto C0 = Foo::Control();
 static_assert(C0.raw() == 0);
@@ -282,16 +290,19 @@ __noinline static void test_volatile(volatile Foo *vfp)
 	m.r1().alter([](auto r1) {
 		/*
 		 * m.r1() was volatile, but .alter() has performed a read, and so the
-		 * value shown to us is not volatile.
-		 *
-		 * We can, however, verify that our "this field is constant in an
-		 * otherwise non-constant Bitpack" logic works, so .f1c() qualifies its
-		 * reference to the bitpack's underlying storage as constant.
+		 * value shown to us is not volatile, and therefore .f1c() is non-const.
 		 */
 		static_assert(
 		  std::is_same_v<uint8_t &, typename decltype(r1.f1())::RefType>);
-		static_assert(std::is_same_v<const uint8_t &,
-		                             typename decltype(r1.f1c())::RefType>);
+		static_assert(
+		  std::is_same_v<uint8_t &, typename decltype(r1.f1c())::RefType>);
+
+		// But in a volatile context, isConst has teeth
+		volatile auto r1v = r1;
+		static_assert(std::is_same_v<volatile uint8_t &,
+		                             typename decltype(r1v.f1())::RefType>);
+		static_assert(std::is_same_v<const volatile uint8_t &,
+		                             typename decltype(r1v.f1c())::RefType>);
 
 		return r1.f1()
 		  .with(Foo::More::ReusedE::A)
