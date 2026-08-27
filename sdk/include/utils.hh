@@ -16,11 +16,13 @@
 
 namespace utils
 {
+	/// Turn a byte count into a bit count
 	constexpr size_t bytes2bits(size_t in)
 	{
 		return in * __CHAR_BIT__;
 	}
 
+	/// Compute the log base 2 of a power of 2
 	template<size_t N>
 	constexpr size_t log2()
 	{
@@ -34,7 +36,9 @@ namespace utils
 		return 0;
 	}
 
+	/// Return the extent of an array
 	template<typename T, size_t N>
+	[[deprecated("Use std::extent_v<decltype(arr)> for array_size(arr)")]]
 	constexpr size_t array_size(T (&a)[N])
 	{
 		return N;
