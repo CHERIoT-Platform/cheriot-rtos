@@ -2,6 +2,7 @@
 #include <cdefs.h>
 #include <debug.hh>
 #include <stdint.h>
+#include <utils.hh>
 
 /**
  * The interrupts of the OpenTitan's I2C block.
@@ -247,11 +248,7 @@ struct OpenTitanI2c
 	 */
 	static uint16_t round_up_divide(uint32_t a, uint32_t b)
 	{
-		if (a == 0)
-		{
-			return 0;
-		}
-		const uint32_t Res = ((a - 1) / b) + 1;
+		const uint32_t Res = utils::round_up_divide(a, b);
 		Debug::Assert(Res <= UINT16_MAX,
 		              "Division result too large to fit in uint16_t.");
 		return static_cast<uint16_t>(Res);

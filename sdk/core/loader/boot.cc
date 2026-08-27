@@ -29,21 +29,6 @@ using namespace CHERI;
 
 namespace
 {
-
-	/**
-	 * Round up to a multiple of `Multiple`, which must be a power of two.
-	 */
-	template<size_t Multiple>
-	constexpr size_t round_up(size_t value)
-	{
-		static_assert((Multiple & (Multiple - 1)) == 0,
-		              "Multiple must be a power of two");
-		return (value + Multiple - 1) & -Multiple;
-	}
-	static_assert(round_up<16>(15) == 16);
-	static_assert(round_up<16>(28) == 32);
-	static_assert(round_up<8>(17) == 24);
-
 	__BEGIN_DECLS
 	static_assert(CheckSize<CHERIOT_LOADER_TRUSTED_SPILL_SIZE,
 	                        sizeof(TrustedStackGeneric<0>)>::Value,
