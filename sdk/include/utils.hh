@@ -13,6 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <type_traits>
+#include <utility>
 
 namespace utils
 {
@@ -43,6 +44,53 @@ namespace utils
 	{
 		return N;
 	}
+
+	/**
+	 * Divide `value` by `divisor`, rounding up, unlike `/`.
+	 *
+	 * If `value + divisor` overflows their type `T`, the result is
+	 * correct in a modular sense, but likely not useful in practice.
+	 */
+	template<typename T>
+	    requires std::is_integral_v<T>
+	constexpr T round_up_divide(T value, T divisor)
+	{
+		return (value + divisor - 1) / divisor;
+	}
+
+	/**
+	 * Return the smallest `multiple` greater than or equal to `value`.
+	 *
+	 * If `value + multiple` overflows their type `T`, the result is
+	 * correct in a modular sense, but likely not useful in practice.
+	 */
+	template<typename T>
+	    requires std::is_integral_v<T>
+	constexpr T align_up(T value, T multiple)
+	{
+		return round_up_divide(value, multiple) * multiple;
+	}
+	static_assert(align_up(15, 16) == 16);
+	static_assert(align_up(28, 16) == 32);
+	static_assert(align_up(17, 8) == 24);
+
+	/**
+	 * Return the smallest `Multiple` greater than or equal to `value`,
+	 * for the special case where Multiple is a static power of two.
+	 *
+	 * If `value + Multiple` overflows the type `T`, the result is correct
+	 * in a modular sense, but likely not useful in practice.
+	 */
+	template<auto Multiple, typename T>
+	    requires std::is_integral_v<T> && (std::in_range<T>(Multiple)) &&
+		         ((Multiple & (Multiple - 1)) == 0)
+	constexpr T align_up(T value)
+	{
+		return (value + Multiple - 1) & -Multiple;
+	}
+	static_assert(align_up<16>(15) == 16);
+	static_assert(align_up<16>(28) == 32);
+	static_assert(align_up<8>(17) == 24);
 
 	/**
 	 * \brief Utility class to delete copy and move contructors.

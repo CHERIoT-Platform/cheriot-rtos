@@ -301,19 +301,9 @@ struct OpenTitanI2c : private utils::NoCopyNoMove
 	/// Helper for conditional debug logs and assertions.
 	using Debug = ConditionalDebug<DebugOpenTitanI2c, "OpenTitan I2C">;
 
-	/**
-	 * Performs a 32-bit integer unsigned division, rounding up. The bottom
-	 * 16 bits of the result are then returned.
-	 *
-	 * As usual, a divisor of 0 is still Undefined Behavior.
-	 */
 	static uint16_t round_up_divide(uint32_t a, uint32_t b)
 	{
-		if (a == 0)
-		{
-			return 0;
-		}
-		const uint32_t Res = ((a - 1) / b) + 1;
+		const uint32_t Res = utils::round_up_divide(a, b);
 		Debug::Assert(Res <= UINT16_MAX,
 		              "Division result too large to fit in uint16_t.");
 		return static_cast<uint16_t>(Res);
