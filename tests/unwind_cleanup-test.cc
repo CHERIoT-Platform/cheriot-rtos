@@ -19,19 +19,18 @@ namespace
 	{
 		jmp_buf      env;
 		volatile int x = 0;
-		if (int r = setjmp(env); r == 0)
+		int          r = setjmp(env);
+		if (r == 0)
 		{
 			TEST_EQUAL(x, 0, "setjmp should return 0 the first time");
 			x = 42;
-			longjmp(env, 1);
+			longjmp(env, 1); // Never returns
+			__builtin_unreachable();
 		}
-		else
-		{
-			TEST_EQUAL(r, 1, "setjmp should return 1 the second time");
-			TEST_EQUAL(
-			  x, 42, "On the second return, x should have been modified");
-			x = 53;
-		}
+
+		TEST_EQUAL(r, 1, "setjmp should return 1 the second time");
+		TEST_EQUAL(x, 42, "On the second return, x should have been modified");
+		x = 53;
 		TEST_EQUAL(x, 53, "After longjmp, x should have been modified");
 	}
 

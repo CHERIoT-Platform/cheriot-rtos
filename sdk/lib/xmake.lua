@@ -10,6 +10,7 @@ option("print-doubles")
 
 includes(
 	"atomic",
+	"clock",
 	"compartment_helpers",
 	"crt",
 	"cxxrt",
@@ -24,5 +25,6 @@ includes(
 	"stdio",
 	"string",
 	"strtol",
+	"time",
 	"thread_pool",
 	"unwind_error_handler")

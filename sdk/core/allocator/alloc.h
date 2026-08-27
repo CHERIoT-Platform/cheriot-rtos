@@ -46,11 +46,9 @@ constexpr size_t TreeBinShift = MallocAlignShift + NSmallBinsShift;
 constexpr size_t MaxSmallSize = 1U << TreeBinShift;
 
 // the compressed size. The actual size is SmallSize * MallocAlignment.
-using SmallSize               = uint16_t;
-constexpr size_t MaxChunkSize = (1U << utils::bytes2bits(sizeof(SmallSize)))
-                                << MallocAlignShift;
-// the compressed pointer. Used to point to prev and next in free lists.
-using SmallPtr = size_t;
+using SmallSize = uint16_t;
+constexpr size_t MaxChunkSize =
+  ((1U << utils::bytes2bits(sizeof(SmallSize))) - 1) << MallocAlignShift;
 // the index to one of the bins
 using BIndex = uint32_t;
 // the bit map of all the bins. 1 for in-use and 0 for empty.
@@ -357,19 +355,6 @@ __cheri_no_subobject_bounds MChunkHeader
 		ownerID = newOwner;
 	}
 
-	/**
-	 * Erase the header fields
-	 */
-	__always_inline void clear()
-	{
-		/*
-		 * This is spelled slightly oddly as using memset results in a call
-		 * rather than a single store instruction.
-		 */
-		static_assert(sizeof(*this) == sizeof(uintptr_t));
-		*reinterpret_cast<uintptr_t *>(this) = 0;
-	}
-
 	bool is_in_use()
 	{
 		return isCurrInUse;
@@ -432,22 +417,30 @@ __cheri_no_subobject_bounds MChunkHeader
 	 * two free chunks in a row; the caller is expected to fix this by marking
 	 * at least one of the two split chunks as in-use.
 	 *
-	 * Note that we keep the invariant that all headers correspond to shadow
-	 * bits that are set. For this to be true, new headers are assumed to be
-	 * created only by split() after initialisation which is in charge of
-	 * setting the bits.
+	 * The new header will have no claims on it.
 	 */
 	MChunkHeader *split(size_t offset)
 	{
 		auto newloc = ds::pointer::offset<void>(this, offset);
 
-		auto newnext = new (newloc) MChunkHeader();
-		newnext->clear();
-		// Invariant that headers must point to shadow bits that are set.
-		revoker.shadow_paint_single(CHERI::Capability{newloc}.address(), true);
+		auto newnext = new (newloc) MChunkHeader(this->isCurrInUse);
 
+		newnext->isPrevInUse = isCurrInUse;
+
+		/*
+		 * Insertion into the list of headers updates two linkages in the chain:
+		 * 1. between `this` and `newnext`
+		 * 2. between `newnext` and `this`'s original successor (which is now
+		 *    `newnext`-s successor), which is unnamed in the source but we will
+		 *    call `next`.
+		 *
+		 * Concretely, that means it...
+		 * 1.1. sets `this->currSize`,
+		 * 1.2. sets `newnext->prevSize`,
+		 * 2.1. sets `newnext->currSize`,
+		 * 2.2. sets `next->prevSize`
+		 */
 		ds::linked_list::emplace_after(this, newnext);
-		newnext->isCurrInUse = newnext->isPrevInUse = isCurrInUse;
 
 		return newnext;
 	}
@@ -467,31 +460,80 @@ __cheri_no_subobject_bounds MChunkHeader
 	{
 		size -= sizeof(MChunkHeader);
 
-		auto first = new (base) MChunkHeader();
-		first->clear();
-		first->currSize    = size2head(size);
+		auto first         = new (base) MChunkHeader(false);
+		first->prevSize    = 0;
 		first->isPrevInUse = true;
-		first->isCurrInUse = false;
-		revoker.shadow_paint_single(CHERI::Capability{first}.address(), true);
 
 		auto footer =
-		  new (ds::pointer::offset<void>(base, size)) MChunkHeader();
-		footer->clear();
-		footer->prevSize    = size;
+		  new (ds::pointer::offset<void>(base, size)) MChunkHeader(true);
 		footer->currSize    = size2head(sizeof(MChunkHeader));
 		footer->isPrevInUse = false;
-		footer->isCurrInUse = true;
-		revoker.shadow_paint_single(CHERI::Capability{footer}.address(), true);
+
+		first->cell_next()  = footer; // sets first->currSize
+		footer->cell_prev() = first;  // sets footer->prevSize
 
 		return first;
 	}
 
-	private:
-	/*
-	 * Hide a no-op constructor; the only calls should be make() and split()
-	 * above, which carry out initialization.
+	/**
+	 * Given a pointer to the previous chunk, merge this one back into it.
+	 *
+	 * The caller is responsible for managing indexing of chunks, which means it
+	 * must already have a handle to our predecessor.
 	 */
-	MChunkHeader() = default;
+	void unsplit(MChunkHeader * previous)
+	{
+		Debug::Assert(previous->cell_next() == this,
+		              "Unsplitting MChunkHeader into bad predecessor");
+		Debug::Assert(this->claims == 0,
+		              "Unsplitting MChunkHeader with active claims");
+
+		/*
+		 * Drop us out of the list of all chunk headers.
+		 * This updates previous->currSize and our successor's ->prevSize.
+		 */
+		ds::linked_list::unsafe_remove_link(previous, this);
+
+		// Erase our metadata fields
+		this->clear();
+
+		// Clear the shadow bit marking our presence (set in our constructor)
+		revoker.mark_clear_one(CHERI::Capability{this}.address());
+	}
+
+	/// Remove the default constructor
+	MChunkHeader() = delete;
+
+	private:
+	/**
+	 * Erase the header fields
+	 */
+	__always_inline void clear()
+	{
+		/*
+		 * This is spelled slightly oddly as using memset results in a call
+		 * rather than a single store instruction.
+		 */
+		static_assert(sizeof(*this) == sizeof(uintptr_t));
+		*reinterpret_cast<uintptr_t *>(this) = 0;
+	}
+
+	/**
+	 * Common aspects of building a `MChunkHeader`.
+	 *
+	 * These exist only in the heap arena; they are never carried as values in
+	 * registers or on the stack and are always built with placement `new`.
+	 * Their lifecycle and field updates are, as can be seen from above,
+	 * moderately nuanced, but some things are always common to their
+	 * construction and never otherwise implicitly done; those are the bits
+	 * factored out here.
+	 */
+	MChunkHeader(bool inUse)
+	{
+		this->clear();
+		this->isCurrInUse = inUse;
+		revoker.mark_set_one(this);
+	}
 };
 static_assert(sizeof(MChunkHeader) == 8);
 static_assert(std::is_standard_layout_v<MChunkHeader>);
@@ -630,12 +672,6 @@ class __packed __aligned(MallocAlignment) MChunk
 	{
 		return reinterpret_cast<MChunk *>(reinterpret_cast<uintptr_t>(c) -
 		                                  offsetof(MChunk, ring));
-	}
-
-	// the internal small pointer representation of this chunk
-	SmallPtr ptr()
-	{
-		return CHERI::Capability{this}.address();
 	}
 
 	/**
@@ -957,10 +993,10 @@ class MState
 	/// Rederive a capability to a `T` from the heap range.  This does not
 	/// apply bounds to the result.
 	template<typename T>
-	T *rederive(SmallPtr ptr)
+	T *rederive(ptraddr_t address)
 	{
 		CHERI::Capability<T> cap{heapStart.cast<T>()};
-		cap.address() = ptr;
+		cap.address() = address;
 		return cap;
 	}
 
@@ -1061,13 +1097,10 @@ class MState
 	}
 
 	/**
-	 * @brief Called when adding the first memory chunk to this MState.
-	 * At the moment we only support one contiguous MChunk for each MState.
+	 * Called when adding the first memory chunk to this MState. At the
+	 * moment we only support one contiguous MChunk for each MState.
 	 *
-	 * @param p The chunk used to initialise the MState. It must have the
-	 * previous-in-use bit set and the next chunk's in-use bit set to prevent
-	 * free() from coalescing below and above, unless you really know what you
-	 * are doing.
+	 * Takes the base address and size of the first chunk to be added.
 	 */
 	void mspace_firstchunk_add(void *base, size_t size)
 	{
@@ -1382,7 +1415,9 @@ class MState
 		if (__predict_false(skipHazardCheck))
 		{
 			// Paint before zeroing, see comment on the `else` code path.
-			revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
+			Capability bounded{mem};
+			bounded.bounds() = bodySize;
+			revoker.mark_set_range(bounded);
 		}
 		else
 		{
@@ -1424,7 +1459,7 @@ class MState
 			 * through a copy of the user capability (or its progeny) that undid
 			 * our work of zeroing!
 			 */
-			revoker.shadow_paint_range<true>(mem.address(), chunk.cell_next());
+			revoker.mark_set_range(bounded);
 		}
 
 		/*
@@ -1485,11 +1520,11 @@ class MState
 		}
 		else
 		{
-			if (revoker.shadow_bit_get(address))
+			if (revoker.mark_get(address))
 			{
 				return nullptr;
 			}
-			while (!revoker.shadow_bit_get(address) && (address > base))
+			while (!revoker.mark_get(address) && (address > base))
 			{
 				address -= MallocAlignment;
 			}
@@ -1573,13 +1608,13 @@ class MState
 		if constexpr (HasTemporalSafety && AllocatorDebugEnabled)
 		{
 			bool thisShadowBit =
-			  revoker.shadow_bit_get(CHERI::Capability{p}.address());
+			  revoker.mark_get(CHERI::Capability{p}.address());
 			Debug::Assert(thisShadowBit,
 			              "Chunk header does not point to a set shadow bit: {}",
 			              p);
 			MChunkHeader *next = p->cell_next();
 			bool          nextShadowBit =
-			  revoker.shadow_bit_get(CHERI::Capability{next}.address());
+			  revoker.mark_get(CHERI::Capability{next}.address());
 			Debug::Assert(
 			  nextShadowBit,
 			  "Next chunk header does not point to a set shadow bit: {}",
@@ -1965,7 +2000,7 @@ class MState
 		              small_index2size(i));
 
 		if (RTCHECK(&p->ring == bin->last() ||
-		            (ok_address(f->ptr()) && f->bk_equals(p))))
+		            (ok_address(f) && f->bk_equals(p))))
 		{
 			if (br == fr)
 			{
@@ -1974,7 +2009,7 @@ class MState
 				bin->reset();
 			}
 			else if (RTCHECK(&p->ring == smallbin_at(i)->first() ||
-			                 (ok_address(b->ptr()) && b->fd_equals(p))))
+			                 (ok_address(b) && b->fd_equals(p))))
 			{
 				ds::linked_list::unsafe_remove(&p->ring);
 			}
@@ -2003,8 +2038,7 @@ class MState
 
 		MChunk *p = MChunk::from_ring(b->unsafe_take_first());
 
-		Debug::Assert(
-		  ok_address(p->ptr()), "Removed chunk {} has bad address", p);
+		Debug::Assert(ok_address(p), "Removed chunk {} has bad address", p);
 
 		if (b->is_empty())
 		{
@@ -2069,8 +2103,8 @@ class MState
 				{
 					TChunk *back =
 					  TChunk::from_ring(t->mchunk.ring.cell_prev());
-					if (RTCHECK(ok_address(t->mchunk.ptr()) &&
-					            ok_address(back->mchunk.ptr())))
+					if (RTCHECK(ok_address(&t->mchunk) &&
+					            ok_address(&back->mchunk)))
 					{
 						t->ring_emplace(i, xHeader);
 						break;
@@ -2108,7 +2142,7 @@ class MState
 		{
 			TChunk *f = TChunk::from_ring(x->mchunk.ring.cell_next());
 			r         = TChunk::from_ring(x->mchunk.ring.cell_prev());
-			if (RTCHECK(ok_address(f->mchunk.ptr()) &&
+			if (RTCHECK(ok_address(&f->mchunk) &&
 			            f->mchunk.bk_equals(&x->mchunk) &&
 			            r->mchunk.fd_equals(&x->mchunk)))
 			{
@@ -2152,7 +2186,7 @@ class MState
 					treemap_clear(x->index);
 				}
 			}
-			else if (RTCHECK(ok_address(xp->mchunk.ptr())))
+			else if (RTCHECK(ok_address(&xp->mchunk)))
 			{
 				if (xp->child[0] == x)
 				{
@@ -2169,13 +2203,13 @@ class MState
 			}
 			if (r != nullptr)
 			{
-				if (RTCHECK(ok_address(r->mchunk.ptr())))
+				if (RTCHECK(ok_address(&r->mchunk)))
 				{
 					TChunk *c0, *c1;
 					r->parent = xp;
 					if ((c0 = x->child[0]) != nullptr)
 					{
-						if (RTCHECK(ok_address(c0->mchunk.ptr())))
+						if (RTCHECK(ok_address(&c0->mchunk)))
 						{
 							r->child[0] = c0;
 							c0->parent  = r;
@@ -2187,7 +2221,7 @@ class MState
 					}
 					if ((c1 = x->child[1]) != nullptr)
 					{
-						if (RTCHECK(ok_address(c1->mchunk.ptr())))
+						if (RTCHECK(ok_address(&c1->mchunk)))
 						{
 							r->child[1] = c1;
 							c1->parent  = r;
@@ -2275,7 +2309,7 @@ class MState
 		 */
 		v = TChunk::from_ring(v->mchunk.ring.cell_next());
 
-		if (RTCHECK(ok_address(v->mchunk.ptr())))
+		if (RTCHECK(ok_address(&v->mchunk)))
 		{
 			auto vHeader = MChunkHeader::from_body(v);
 
@@ -2421,10 +2455,7 @@ class MState
 			// Consolidate backward
 			MChunkHeader *prev = p->cell_prev();
 			unlink_chunk(MChunk::from_header(prev), prev->size_get());
-			ds::linked_list::unsafe_remove_link(prev, p);
-			p->clear();
-			// p is no longer a header. Clear the shadow bit.
-			revoker.shadow_paint_single(CHERI::Capability{p}.address(), false);
+			p->unsplit(prev);
 			p = prev;
 		}
 
@@ -2433,11 +2464,7 @@ class MState
 		{
 			// Consolidate forward
 			unlink_chunk(MChunk::from_header(next), next->size_get());
-			ds::linked_list::unsafe_remove_link(p, next);
-			next->clear();
-			// next is no longer a header. Clear the shadow bit.
-			revoker.shadow_paint_single(CHERI::Capability{next}.address(),
-			                            false);
+			next->unsplit(p);
 		}
 
 		p->mark_free();
@@ -2603,9 +2630,14 @@ class MState
 			heapQuarantineSize -= foreHeader->size_get();
 			heapFreeSize += foreHeader->size_get();
 
-			/* Clear the shadow bits that marked this region as quarantined */
-			revoker.shadow_paint_range<false>(foreHeader->body().address(),
-			                                  foreHeader->cell_next());
+			/*
+			 * Clear the shadow bits that marked this region as quarantined.
+			 * Because chunks in quarantine are not coalesced and come directly
+			 * from chunks that we handed out, they must have exact CHERI
+			 * capability representability.
+			 */
+			revoker.mark_clear_range(foreHeader->body().address(),
+			                         foreHeader->cell_next());
 
 			mspace_free_internal(foreHeader);
 			dequeued++;
@@ -2634,7 +2666,7 @@ class MState
 				           bool              shadowBit = true;
 				           if constexpr (HasTemporalSafety)
 				           {
-					           shadowBit = revoker.shadow_bit_get(
+					           shadowBit = revoker.mark_get(
 					             CHERI::Capability{word}.address());
 				           }
 				           return eachCap != nullptr && shadowBit;

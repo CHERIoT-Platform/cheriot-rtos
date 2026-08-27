@@ -10,10 +10,10 @@ int condition_variable_notify(ConditionVariableState *conditionVariable,
 	  waiters);
 }
 
-int condition_variable_wait(Timeout                *timeout,
+int condition_variable_wait(TimeoutArgument         timeout,
                             ConditionVariableState *conditionVariable,
                             void                   *mutex,
-                            int (*mutexLock)(Timeout *, void *),
+                            int (*mutexLock)(TimeoutArgument, void *),
                             int (*mutexUnlock)(void *))
 {
 	auto counter = conditionVariable->sequenceCounter.load();

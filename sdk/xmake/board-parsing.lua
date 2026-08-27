@@ -7,7 +7,10 @@ local function board_file_for_name(boardfile, searchDir)
 	-- If this isn't a path, look in searchDir
 	if not os.isfile(boardfile) then
 		boarddir = searchDir
-		local fullBoardPath = path.join(boarddir, boardfile .. '.json')
+		local fullBoardPath = path.join(boarddir, boardfile)
+		if not os.isfile(fullBoardPath) then
+			fullBoardPath = path.join(boarddir, boardfile .. '.json')
+		end
 		if not os.isfile(fullBoardPath) then
 			fullBoardPath = path.join(boarddir, boardfile .. '.patch')
 		end
@@ -141,8 +144,9 @@ end
 -- Helper to load a board file.  This must be passed the json object provided
 -- by import("core.base.json") because import does not work in helper
 -- functions at the top level.
-local function load_board_file_inner(boardDir, boardFile)
+local function load_board_file_inner(boardDir, boardFile, boardPathSubstitutes)
 	if path.extension(boardFile) == ".json" then
+		boardPathSubstitutes.boardBase = boardDir
 		return json.loadfile(boardFile)
 	end
 	if path.extension(boardFile) ~= ".patch" then
@@ -152,11 +156,15 @@ local function load_board_file_inner(boardDir, boardFile)
 	if not patch.base then
 		raise("Board file " .. boardFile .. " does not specify a base")
 	end
-	local baseDir, baseFile = board_file_for_name(patch.base, boardDir)
+
+	-- Naturally, boardBase is not available on the descent.
+	substitutedBase = patch.base:gsub("${(%w)}", boardPathSubstitutes)
+
+	local baseDir, baseFile = board_file_for_name(substitutedBase, boardDir)
 	if not baseDir then
 		raise("unable to find base board file " .. patch.base .. " with search dir " .. boardDir .. ".  Try specifying a full path")
 	end
-	local base = load_board_file_inner(baseDir, baseFile)
+	local base = load_board_file_inner(baseDir, baseFile, boardPathSubstitutes)
 
 	patch_board(base, patch.patch)
 
@@ -165,18 +173,25 @@ end
 
 -- Load a board (patch) file (recursively) and then apply the configuration's
 -- mixins as well.
-local function load_board_file(boardDir, boardFile, mixinString)
-	local base = load_board_file_inner(boardDir, boardFile)
+local function load_board_file(boardDir, boardFile, mixinString, boardPathSubstitutes)
+	local base = load_board_file_inner(boardDir, boardFile, boardPathSubstitutes)
 
 	if not mixinString or mixinString == "" then
 		return base
 	end
 
 	for mixinName in mixinString:gmatch("([^,]*),?") do
-		-- Initially, look next to the board file
-		local mixinDir, mixinFile = board_file_for_name(mixinName, boardDir)
+
+		mixinName = mixinName:gsub("${(%w)}", boardPathSubstitutes)
+
+		-- Initially, look in the project directory if it isn't absolute after substitutions
+		local mixinDir, mixinFile = board_file_for_name(mixinName, os.projectdir())
 		if not mixinDir then
-			-- Fall back to looking in the SDK/ boards dir (which might be the same thing)
+			-- Try relative to the provided board file
+			mixinDir, mixinFile = board_file_for_name(mixinName, boardDir)
+		end
+		if not mixinDir then
+			-- Fall back to looking in the SDK/ boards dir
 			mixinDir, mixinFile = board_file_for_name(mixinName, path.join(scriptdir, "boards"))
 		end
 		if not mixinDir then
@@ -227,7 +242,10 @@ function main(boardPathSubstitutes, boardName, boardMixins)
 	if not boarddir then
 		raise("unable to find board file " .. boardName .. ".  Try specifying a full path")
 	end
-	local board = load_board_file(boarddir, boardfile, boardMixins)
+
+	boardPathSubstitutes.board = boarddir
+
+	local board = load_board_file(boarddir, boardfile, boardMixins, boardPathSubstitutes)
 
 	local jsonpath = {"devices"}
 	for name, extent in table.orderpairs(board.devices) do
@@ -254,8 +272,6 @@ function main(boardPathSubstitutes, boardName, boardMixins)
 	-- loader component asserts that this value matches what the rest of
 	-- the system sees.
 	board.trusted_spill_size = board.stack_high_water_mark and 192 or 176
-
-	boardPathSubstitutes.board = boarddir
 
 	return {
 		info = board,

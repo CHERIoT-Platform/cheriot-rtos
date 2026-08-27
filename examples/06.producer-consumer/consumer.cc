@@ -47,9 +47,9 @@ int __cheri_compartment("consumer") run()
 	                 "Compartment call to futex_wake failed");
 	Debug::log("Waiting for messages");
 	// Get a message from the queue and print it.  This blocks indefinitely.
-	int     value = 0;
-	Timeout t{UnlimitedTimeout};
-	while ((value != 199) && (queue_receive_sealed(&t, queue, &value) == 0))
+	int value = 0;
+	while ((value != 199) &&
+	       (queue_receive_sealed(TimeoutWaitForever, queue, &value) == 0))
 	{
 		Debug::log("Read {} from queue", value);
 	}

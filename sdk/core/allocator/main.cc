@@ -82,22 +82,6 @@ namespace
 		}
 
 		size_t msize = pad_request(sizeof(MState));
-		/*
-		 * Each memory space has the MState structure at the beginning, followed
-		 * by at least enough space for a smallest chunk, followed by a fake
-		 * malloc header at the very end.
-		 *
-		 * The memory used to initialise a memory space must have enough bytes,
-		 * but not too big that overflows what the compressed header can
-		 * support.
-		 */
-		if (tsize < msize + MinChunkSize + sizeof(MChunkHeader) ||
-		    tsize > MaxChunkSize)
-		{
-			return nullptr;
-		}
-
-		Capability m{tbase.cast<MState>()};
 
 		size_t hazardQuarantineSize =
 		  Capability{SHARED_OBJECT_WITH_PERMISSIONS(void *,
@@ -109,9 +93,34 @@ namespace
 		                                            false)}
 		    .length();
 
+		/*
+		 * Each memory space has the MState structure at the beginning,
+		 * followed by the hazard quarantine, then at least enough
+		 * space for a smallest chunk, and a fake malloc header at the
+		 * very end.
+		 *
+		 * The memory used to initialise a memory space must have enough bytes,
+		 * but not too big that overflows what the compressed header can
+		 * support.
+		 */
+		if (tsize < (msize + hazardQuarantineSize + MinChunkSize +
+		             sizeof(MChunkHeader)) ||
+		    tsize > MaxChunkSize)
+		{
+			return nullptr;
+		}
+
+		Capability m{tbase.cast<MState>()};
+
 		m.bounds()            = sizeof(*m);
 		m->heapStart          = tbase;
 		m->heapStart.bounds() = tsize;
+		/*
+		 * The address of the start of the heap must be 8-byte aligned,
+		 * but we do not need to pad here: we already did when
+		 * calculating msize, and the size of the hazard quarantine is
+		 * a multiple of 8 (number of threads * 8 * 2).
+		 */
 		m->heapStart.address() += msize + hazardQuarantineSize;
 		m->init_bins();
 
@@ -133,6 +142,16 @@ namespace
 	{
 		if (gm == nullptr)
 		{
+			/*
+			 * We'd love this to be static, but getting a constant to C++ and a
+			 * linker script sounds like a headache.  Settle for it being a
+			 * runtime assertion in debug builds.
+			 */
+			Debug::Invariant(
+			  LA_ABS(__export_mem_heap_maximum_size) ==
+			    MaxChunkSize + sizeof(MChunkHeader),
+			  "Linker script mis-computed the maximum heap size");
+
 			// Access without LoadGlobal to help ensure we don't break isolation
 			Capability heap = const_cast<void *>(
 			  MMIO_CAPABILITY_WITH_PERMISSIONS(void,
@@ -156,18 +175,6 @@ namespace
 	cheriot::atomic<int32_t> freeFutex = -1;
 
 	/**
-	 * Helper that returns true if the timeout value permits sleeping.
-	 *
-	 * This assumes that the pointer was checked with `check_pointer` earlier
-	 * but defends against the case where the timeout object was freed by
-	 * another thread while the thread using it slept.
-	 */
-	bool may_block(Timeout *timeout)
-	{
-		return timeout->may_block();
-	}
-
-	/**
 	 * Helper to reacquire the lock after sleeping.  This adds any time passed
 	 * as `elapsed` to the timeout and then tries to reacquire the lock,
 	 * blocking for no longer than the remaining time on this timeout.
@@ -175,11 +182,11 @@ namespace
 	 * Returns `true` if the lock has been successfully reacquired, `false`
 	 * otherwise.
 	 */
-	bool reacquire_lock(Timeout                   *timeout,
+	bool reacquire_lock(TimeoutArgument            timeout,
 	                    LockGuard<decltype(lock)> &g,
 	                    Ticks                      elapsed = 0)
 	{
-		timeout->elapse(elapsed);
+		timeout.elapse(elapsed);
 		return g.try_lock(timeout);
 	}
 
@@ -194,7 +201,7 @@ namespace
 	 *
 	 */
 	template<typename T = Revocation::Revoker>
-	bool wait_for_background_revoker(Timeout                   *timeout,
+	bool wait_for_background_revoker(TimeoutArgument            timeout,
 	                                 uint32_t                   epoch,
 	                                 LockGuard<decltype(lock)> &g,
 	                                 T                         &r = revoker)
@@ -220,7 +227,7 @@ namespace
 	 *
 	 */
 	template<typename T = Revocation::Revoker>
-	bool wait_for_background_revoker(Timeout                   *timeout,
+	bool wait_for_background_revoker(TimeoutArgument            timeout,
 	                                 uint32_t                   epoch,
 	                                 LockGuard<decltype(lock)> &g,
 	                                 T                         &r = revoker)
@@ -275,7 +282,7 @@ namespace
 	ErrorOr<void> malloc_internal(size_t                           bytes,
 	                              LockGuard<decltype(lock)>      &&g,
 	                              PrivateAllocatorCapabilityState *capability,
-	                              Timeout                         *timeout,
+	                              TimeoutArgument                  timeout,
 	                              bool     isSealedAllocation = false,
 	                              uint32_t flags              = AllocateWaitAny)
 	{
@@ -313,7 +320,7 @@ namespace
 					return -EAGAIN;
 				}
 
-				if (!may_block(timeout))
+				if (!timeout.may_block())
 				{
 					return -ETIMEDOUT;
 				}
@@ -378,12 +385,16 @@ namespace
 				// If there are things on the hazard list, wake after one tick
 				// and see if they have gone away.  Otherwise, wait until we
 				// have some newly freed objects.
-				Timeout t{gm->hazard_quarantine_is_empty() ? timeout->remaining
-				                                           : 1};
+				Timeout         oneTick(1);
+				TimeoutArgument t = &oneTick;
+				if (gm->hazard_quarantine_is_empty())
+				{
+					t = timeout;
+				}
 				// Drop the lock while yielding
 				g.unlock();
-				freeFutex.wait(&t, expected);
-				timeout->elapse(t.elapsed);
+				freeFutex.wait(t, expected);
+				timeout.elapse_from(oneTick);
 				Debug::log("Woke from futex wake");
 				if (!reacquire_lock(timeout, g))
 				{
@@ -392,7 +403,7 @@ namespace
 				}
 				continue;
 			}
-		} while (may_block(timeout));
+		} while (timeout.may_block());
 		// Exhausted the timeout period while retrying the allocation.
 		return -ETIMEDOUT;
 	}
@@ -424,7 +435,7 @@ namespace
 		// The value of 0 is used in allocator capabilities as a marker for
 		// uninitialised capabilities.  It is used internally in the heap for
 		// objects that are owned by the allocator.
-		if (state->identifier == 0)
+		if (state->identifier == QuotaIdentifierAllocatorOwned)
 		{
 			static uint32_t nextIdentifier = 1;
 			if (nextIdentifier >= (1 << MChunkHeader::OwnerIDWidth))
@@ -844,7 +855,8 @@ namespace
 		// claim.
 		if (claim_drop(owner, chunk, reallyFree, freeAll))
 		{
-			if ((chunk.claims == 0) && (chunk.ownerID == 0))
+			if ((chunk.claims == 0) &&
+			    (chunk.ownerID == QuotaIdentifierAllocatorOwned))
 			{
 				return gm->mspace_free(chunk, bodySize);
 			}
@@ -896,10 +908,12 @@ namespace
 
 } // namespace
 
-__cheriot_minimum_stack(0xa0) ssize_t
+__cheriot_minimum_stack(0xb0) ssize_t
   heap_quota_remaining(AllocatorCapability heapCapability)
 {
-	STACK_CHECK(0xa0);
+	// Note: This can likely be reduced if CHERIoT-Platform/llvm-project#398 is
+	// fixed or has a work around.
+	STACK_CHECK(0xb0);
 	LockGuard g{lock};
 	// Querying quota is always allowed
 	auto *cap = malloc_capability_unseal(heapCapability, AllocatorPermitNone);
@@ -910,11 +924,11 @@ __cheriot_minimum_stack(0xa0) ssize_t
 	return cap->quota;
 }
 
-__cheriot_minimum_stack(0xe0) int heap_quarantine_flush(Timeout *timeout)
+__cheriot_minimum_stack(0xe0) int heap_quarantine_flush(TimeoutArgument timeout)
 {
 	STACK_CHECK(0xe0);
 
-	if (!check_timeout_pointer(timeout))
+	if (!timeout.is_valid())
 	{
 		return -EINVAL;
 	}
@@ -959,13 +973,13 @@ __cheriot_minimum_stack(0xe0) int heap_quarantine_flush(Timeout *timeout)
 }
 
 __cheriot_minimum_stack(0x220) void *heap_allocate(
-  Timeout            *timeout,
+  TimeoutArgument     timeout,
   AllocatorCapability heapCapability,
   size_t              bytes,
   uint32_t            flags)
 {
 	STACK_CHECK(0x220);
-	if (!check_timeout_pointer(timeout))
+	if (!timeout.is_valid())
 	{
 		return reinterpret_cast<void *>(-EINVAL);
 	}
@@ -1107,14 +1121,14 @@ __cheriot_minimum_stack(0x1a0) ssize_t
 }
 
 __cheriot_minimum_stack(0x230) void *heap_allocate_array(
-  Timeout            *timeout,
+  TimeoutArgument     timeout,
   AllocatorCapability heapCapability,
   size_t              nElements,
   size_t              elemSize,
   uint32_t            flags)
 {
 	STACK_CHECK(0x230);
-	if (!check_timeout_pointer(timeout))
+	if (!timeout.is_valid())
 	{
 		return reinterpret_cast<void *>(-EINVAL);
 	}
@@ -1160,13 +1174,13 @@ namespace
 	 * all of the permissions in `permissions`.
 	 */
 	std::pair<SealedTokenHandle, TokenHandle<false>>
-	  __noinline allocate_sealed_unsealed(Timeout            *timeout,
+	  __noinline allocate_sealed_unsealed(TimeoutArgument     timeout,
 	                                      AllocatorCapability heapCapability,
 	                                      SealingKey          key,
 	                                      size_t              requestedSize,
 	                                      PermissionSet       permissions)
 	{
-		if (!check_timeout_pointer(timeout))
+		if (!timeout.is_valid())
 		{
 			return {nullptr, nullptr};
 		}
@@ -1295,14 +1309,14 @@ TokenKey token_key_new()
 }
 
 __cheriot_minimum_stack(0x290) CHERI_SEALED(void *)
-  token_sealed_unsealed_alloc(Timeout            *timeout,
+  token_sealed_unsealed_alloc(TimeoutArgument     timeout,
                               AllocatorCapability heapCapability,
                               TokenKey            key,
                               size_t              sz,
                               void              **unsealed)
 {
 	STACK_CHECK(0x290);
-	if (!check_timeout_pointer(timeout))
+	if (!timeout.is_valid())
 	{
 		return nullptr;
 	}
@@ -1330,7 +1344,7 @@ __cheriot_minimum_stack(0x290) CHERI_SEALED(void *)
 }
 
 __cheriot_minimum_stack(0x260) CHERI_SEALED(void *)
-  token_sealed_alloc(Timeout            *timeout,
+  token_sealed_alloc(TimeoutArgument     timeout,
                      AllocatorCapability heapCapability,
                      TokenKey            rawKey,
                      size_t              sz)

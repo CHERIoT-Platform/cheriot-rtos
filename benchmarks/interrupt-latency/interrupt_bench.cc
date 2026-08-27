@@ -6,6 +6,11 @@
 #include <simulator.h>
 #include <thread.h>
 #include <timeout.h>
+
+#ifndef DEBUG_INTERRUPT_BENCH
+#	define DEBUG_INTERRUPT_BENCH false
+#endif
+
 #if DEBUG_INTERRUPT_BENCH
 #	include <fail-simulator-on-error.h>
 #endif
@@ -47,15 +52,15 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		}
 
 		int    end       = CHERI::with_interrupts_disabled([&]() {
-            uint32_t bits = 0;
-            Debug::log("Thread {} releasing ticket lock", threadID);
-            g.unlock();
-            Debug::log("Thread {} waiting on event", threadID);
-            event.wait(0);
-            int time = rdcycle();
-            Debug::Invariant(event == 1, "Futex woke spuriously");
-            return time;
-		         });
+			uint32_t bits = 0;
+			Debug::log("Thread {} releasing ticket lock", threadID);
+			g.unlock();
+			Debug::log("Thread {} waiting on event", threadID);
+			event.wait(0);
+			int time = rdcycle();
+			Debug::Invariant(event == 1, "Futex woke spuriously");
+			return time;
+		});
 		size_t stackSize = get_stack_size();
 		printf(__XSTRING(BOARD) "\t%d\t%d\n", stackSize, end - start);
 	}
@@ -69,16 +74,15 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 	if (--threadCounter == 0)
 	{
 		Debug::log("Thread {} exiting simulator", threadID);
-		simulation_exit(0);
+		simulation_exit(0); // Never returns
+		__builtin_unreachable();
 	}
-	else
-	{
-		// Other threads sleep forever. we could exit (return) instead but this
-		// seems to trigger a bug sometimes where the low priority thread
-		// doesn't wake up.
-		Debug::Invariant(thread_sleep(&t) >= 0,
-		                 "Compartment call to thread_sleep failed");
-	}
+
+	// Other threads sleep forever. we could exit (return) instead but this
+	// seems to trigger a bug sometimes where the low priority thread
+	// doesn't wake up.
+	Debug::Invariant(thread_sleep(&t) >= 0,
+	                 "Compartment call to thread_sleep failed");
 
 	return 0;
 }

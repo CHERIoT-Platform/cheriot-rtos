@@ -5,6 +5,17 @@
 #include <stdlib.h>
 
 /**
+ * \file
+ * \brief FreeRTOS event-group compatibility APIs.
+ *
+ * This file defines the compatibility wrappers for FreeRTOS's event groups.
+ * This is intended for porting code from FreeRTOS and should not be used in
+ * new CHERIoT software.  The functions in this file wrap the APIs exposed in
+ * event.h.  These are implemented in the `event_group` shared library, which
+ * must be linked to the final firmware image.
+ */
+
+/**
  * Type for bits in an event group.
  */
 typedef uint32_t EventBits_t;

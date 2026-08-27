@@ -6,6 +6,17 @@
 #include <cdefs.h>
 
 /**
+ * \file
+ *
+ * APIs for an example thread pool.  This does not provide any availability
+ * guarantees (work dispatched to it can block a thread indefinitely) so this
+ * should be used with care.
+ *
+ * The thread pool exposed by this header is implemented in the `thread_pool`
+ * compartment, which must be linked to the final firmware image.
+ */
+
+/**
  * The type of a thread-pool callback.  This is a CHERI callback so that it can
  * run in the compartment that schedule the work to run, but a different
  * thread.
@@ -150,7 +161,7 @@ namespace thread_pool
 	{
 		// If this is a stateless function, just send a callback function
 		// pointer, don't copy zero bytes of state to the heap.
-		if constexpr (std::is_convertible_v<T, void (*)(void)>)
+		if constexpr (std::is_convertible_v<T, void (*)()>)
 		{
 			return thread_pool_async(
 			  &detail::wrap_callback_function<std::remove_cvref_t<T>>, nullptr);

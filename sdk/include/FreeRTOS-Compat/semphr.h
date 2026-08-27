@@ -1,5 +1,6 @@
 #pragma once
 /**
+ * \file
  * FreeRTOS semaphore compatibility layer.  This maps FreeRTOS semaphore types
  * to their CHERIoT RTOS equivalents.
  *

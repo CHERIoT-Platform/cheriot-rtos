@@ -26,6 +26,19 @@ int test_futex()
 	static uint32_t futex;
 	int             ret;
 	int             sleeps;
+
+	// Test sleeping for a short amount of time.
+	AbsoluteMonotonicTimeout absoluteTimeout = platform_monotonic_time_read();
+	// Sleep for a couple of thousand cycles
+	absoluteTimeout += 2000;
+	ret                 = thread_sleep(absoluteTimeout, ThreadSleepNoEarlyWake);
+	auto afterTimestamp = platform_monotonic_time_read();
+	TEST_EQUAL(ret, 0, "Thread sleep for an absolute timeout failed");
+	TEST(afterTimestamp >= absoluteTimeout,
+	     "Timeout until {} finished at {}, before expected",
+	     absoluteTimeout,
+	     afterTimestamp);
+
 	// Make sure that waking a futex with no sleepers doesn't crash!
 	ret = futex_wake(&futex, 1);
 	TEST(ret == 0, "Waking a futex with no sleepers should return 0");

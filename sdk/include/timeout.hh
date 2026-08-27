@@ -12,8 +12,7 @@
 template<auto Fn, typename... Args>
 __always_inline auto blocking_forever(Args... args)
 {
-	Timeout t{UnlimitedTimeout};
-	return Fn(&t, std::forward<Args>(args)...);
+	return Fn(TimeoutWaitForever, std::forward<Args>(args)...);
 }
 
 /**
@@ -22,6 +21,5 @@ __always_inline auto blocking_forever(Args... args)
 template<auto Fn, typename... Args>
 __always_inline auto non_blocking(Args... args)
 {
-	Timeout t{0};
-	return Fn(&t, std::forward<Args>(args)...);
+	return Fn(TimeoutNoWait, std::forward<Args>(args)...);
 }

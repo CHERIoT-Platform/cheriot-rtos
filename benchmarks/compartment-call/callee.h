@@ -11,9 +11,9 @@ int __cheri_compartment("callee") callee_check_pointer_return_metric(void *);
 int __cheri_compartment("callee") callee_ephemeral_claim_return_metric(void *);
 int __cheri_compartment("callee") callee_claim_release_return_metric(void *);
 
-int __cheri_compartment("callee") callee_dereference(int *);
+int __cheri_compartment("callee") callee_dereference(const int *);
 
-int __cheri_compartment("callee_ueh") callee_ueh_dereference(int *);
-int __cheri_compartment("callee_seh") callee_seh_dereference(int *);
+int __cheri_compartment("callee_ueh") callee_ueh_dereference(const int *);
+int __cheri_compartment("callee_seh") callee_seh_dereference(const int *);
 
 int __cheri_libcall lib_noop_return_metric();

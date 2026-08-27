@@ -39,31 +39,50 @@ __clang_ignored_warning_push("-Watomic-alignment");
  * requires mutual exclusion in the presence of mutual distrust should
  * consider an using a lock manager compartment with an API that returns a
  * single-use capability to unlock on any lock call.
+ *
+ * Flag locks are not recursive; if needed, use a `RecursiveMutex` instead.
  */
 template<bool IsPriorityInherited>
 class FlagLockGeneric
 {
 	FlagLockState state;
 
+	/**
+	 * Attempt to acquire the lock, blocking until a timeout specified by the
+	 * `timeout` parameter has expired.
+	 *
+	 * Returns an errno value.
+	 */
+	__always_inline int try_lock_internal(TimeoutArgument timeout)
+	{
+		if constexpr (IsPriorityInherited)
+		{
+			return flaglock_priority_inheriting_trylock(timeout, &state);
+		}
+		else
+		{
+			return flaglock_trylock(timeout, &state);
+		}
+	}
+
 	public:
 	/**
 	 * Attempt to acquire the lock, blocking until a timeout specified by the
 	 * `timeout` parameter has expired.
+	 *
+	 * Returns `true` if and only if the lock transitioned from being unheld to
+	 * held by the current thread.
 	 */
-	__always_inline bool try_lock(Timeout *timeout)
+	__always_inline bool try_lock(TimeoutArgument timeout)
 	{
-		if constexpr (IsPriorityInherited)
-		{
-			return flaglock_priority_inheriting_trylock(timeout, &state) == 0;
-		}
-		else
-		{
-			return flaglock_trylock(timeout, &state) == 0;
-		}
+		return try_lock_internal(timeout) == 0;
 	}
 
 	/**
 	 * Try to acquire the lock, do not block.
+	 *
+	 * Returns `true` if and only if the lock transitioned from being unheld to
+	 * held by the current thread.
 	 */
 	__always_inline bool try_lock()
 	{
@@ -73,11 +92,26 @@ class FlagLockGeneric
 
 	/**
 	 * Acquire the lock, potentially blocking forever.
+	 *
+	 * This function returns `void` despite that this is a bad idea.
+	 * Because the C++ standard library has `void`-returning `::lock()` methods,
+	 * templated callers would not check a return value,
+	 * making it unsafe to return in the event of failed lock acquisition.
+	 * Failures instead manifest as tripping a `Debug::Invariant`,
+	 * causing this function not to return (and yet not block forever).
+	 * Thus, it is not safe with locks that may be put into "destrucion mode"
+	 * (see `flaglock_upgrade_for_destruction`).
+	 * Attempting to recursively `lock` a held priority inheriting flag lock
+	 * (acquired by either `lock` or `try_lock`) will trip the same Invariant.
+	 * (Recall that flag locks explicitly do not support recursive acquisition;
+	 * the failure mode is, however, not one of blocking forever.)
+	 * In general, defensive code should prefer `try_lock`.
 	 */
 	__always_inline void lock()
 	{
 		Timeout t{UnlimitedTimeout};
-		try_lock(&t);
+		auto    res = try_lock_internal(&t);
+		LockDebug::Invariant(res == 0, "FlagLock lock() failed: {}", res);
 	}
 
 	/**
@@ -128,7 +162,7 @@ class RecursiveMutex
 	 * Attempt to acquire the lock, blocking until a timeout specified by the
 	 * `timeout` parameter has expired.
 	 */
-	__always_inline bool try_lock(Timeout *timeout)
+	__always_inline bool try_lock(TimeoutArgument timeout)
 	{
 		return recursivemutex_trylock(timeout, &state) == 0;
 	}
@@ -213,7 +247,7 @@ class NoLock
 	/**
 	 * Attempt to acquire the lock with a timeout.  Always succeeds.
 	 */
-	bool try_lock(Timeout *timeout)
+	bool try_lock(TimeoutArgument timeout)
 	{
 		return true;
 	}
@@ -247,7 +281,7 @@ concept Lockable = requires(T l) {
 };
 
 template<typename T>
-concept TryLockable = Lockable<T> && requires(T l, Timeout *t) {
+concept TryLockable = Lockable<T> && requires(T l, TimeoutArgument t) {
 	{ l.try_lock(t) } -> std::same_as<bool>;
 };
 
@@ -269,15 +303,29 @@ class LockGuard
 	bool isOwned;
 
 	public:
-	/// Constructor, acquires the lock.
+	/**
+	 * Constructor, acquires the lock with unbounded wait.
+	 *
+	 * The lock to be wrapped must not be held by the calling thread on entry.
+	 * Further, for this constructor to be safe to invoke,
+	 * the `Lock` type must have an unfailable `lock` member;
+	 * for example, this precludes the use of `FlagLock`-s
+	 * that may be placed in "destruction mode".
+	 *
+	 * In general, prefer the `LockGuard` constructor that takes a `Timeout`.
+	 */
 	[[nodiscard]] explicit LockGuard(Lock &lock)
 	  : wrappedLock(&lock), isOwned(true)
 	{
 		wrappedLock->lock();
 	}
 
-	/// Constructor, attempts to acquire the lock with a timeout.
-	[[nodiscard]] explicit LockGuard(Lock &lock, Timeout *timeout)
+	/**
+	 * Constructor, attempts to acquire the lock with a timeout.
+	 *
+	 * The lock to be wrapped must not be held by the calling thread on entry.
+	 */
+	[[nodiscard]] explicit LockGuard(Lock &lock, TimeoutArgument timeout)
 	    requires(TryLockable<Lock>)
 	  : wrappedLock(&lock), isOwned(false)
 	{
@@ -293,7 +341,14 @@ class LockGuard
 	}
 
 	/**
-	 * Explicitly lock the wrapped lock. Must be called with the lock unlocked.
+	 * Explicitly lock the wrapped lock.
+	 *
+	 * The wrapped lock must not be held by the calling thread on entry.
+	 * For this method to be safe to call,
+	 * the `Lock` type must have an unfailable `lock` member;
+	 * for example, this precludes the use of `FlagLock`-s
+	 * that may be placed in "destruction mode".
+	 * In general, prefer `try_lock`.
 	 */
 	void lock()
 	{
@@ -324,11 +379,13 @@ class LockGuard
 	}
 
 	/**
-	 * If the underlying lock type supports locking with a timeout, try to lock
-	 * it with the specified timeout. This must be called with the lock
-	 * unlocked.  Returns true if the lock has been acquired, false otherwise.
+	 * If the wrapped lock type supports locking with a timeout,
+	 * try to lock it with the specified timeout.
+	 *
+	 * The wrapped lock must not be held by the calling thread on entry.
+	 * Returns true if the lock has been acquired, false otherwise.
 	 */
-	bool try_lock(Timeout *timeout)
+	bool try_lock(TimeoutArgument timeout)
 	    requires(TryLockable<Lock>)
 	{
 		LockDebug::Assert(!isOwned, "Trying to lock an already-locked lock");
@@ -370,7 +427,7 @@ class LockGuard
 	/**
 	 * Drop and reacquire the lock around a yield
 	 */
-	int yield(Timeout *t, uint32_t ticks = 1)
+	int yield(TimeoutArgument t, uint32_t ticks = 1)
 	{
 		unlock();
 
@@ -380,7 +437,7 @@ class LockGuard
 			return sleepRes;
 		}
 
-		t->elapse(smallSleep.elapsed);
+		t.elapse_from(smallSleep);
 
 		return try_lock(t);
 	}
@@ -421,9 +478,9 @@ class ConditionVariable
 	 * failed due to a timeout.
 	 */
 	template<TryLockable Mutex>
-	int wait(Timeout *t, Mutex &mutex)
+	int wait(TimeoutArgument t, Mutex &mutex)
 	{
-		auto lock = [](Timeout *t, void *m) {
+		auto lock = [](TimeoutArgument t, void *m) {
 			return static_cast<Mutex *>(m)->try_lock(t) ? 0 : -ETIMEDOUT;
 		};
 		auto unlock = [](void *m) {
@@ -442,10 +499,10 @@ class ConditionVariable
 	 * fail in the same ways as the normal overload.
 	 */
 	template<Lockable Mutex>
-	int wait(Timeout *t, Mutex &mutex)
+	int wait(TimeoutArgument t, Mutex &mutex)
 	    requires(!TryLockable<Mutex>)
 	{
-		auto lock = [](Timeout *t, void *m) {
+		auto lock = [](TimeoutArgument t, void *m) {
 			static_cast<Mutex *>(m)->lock();
 			return 0;
 		};

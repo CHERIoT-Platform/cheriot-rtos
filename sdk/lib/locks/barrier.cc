@@ -2,7 +2,7 @@
 #include <errno.h>
 #include <locks.h>
 
-int barrier_timed_wait(Timeout *timeout, struct BarrierState *barrier)
+int barrier_timed_wait(TimeoutArgument timeout, struct BarrierState *barrier)
 {
 	auto remaining = --barrier->remaining;
 	Debug::Assert(remaining < std::numeric_limits<int32_t>::max(),

@@ -100,6 +100,12 @@ On FreeBSD:
 # pkg ins cmake ninja
 ```
 
+On MacOS (requires [Homebrew](https://brew.sh/):
+
+```sh
+$ brew install ninja cmake
+```
+
 The version of LLVM that you need is in the `cheriot` branch of the [CHERI LLVM repository](https://github.com/CHERIoT-Platform/llvm-project/tree/cheriot).
 This branch is temporary and will eventually be merged into the main CHERI LLVM branch and upstreamed to LLVM.
 

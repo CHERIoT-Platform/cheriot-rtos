@@ -26,7 +26,7 @@ namespace
 		 * The object (queue, event channel, or `uint32_t` address for futexes)
 		 * that is monitored by this event waiter.
 		 */
-		void *eventSource = nullptr;
+		const void *eventSource = nullptr;
 		/**
 		 * Event-type value.
 		 */
@@ -64,9 +64,9 @@ namespace
 		 * Reset method.  Takes a pointer to the futex word and the
 		 * user-provided value describing when it should fire.
 		 */
-		bool reset(uint32_t *address, uint32_t value)
+		bool reset(const uint32_t *address, uint32_t value)
 		{
-			eventSource = reinterpret_cast<void *>(
+			eventSource = reinterpret_cast<const void *>(
 			  static_cast<uintptr_t>(Capability{address}.address()));
 			eventValue  = value;
 			flags       = 0;
@@ -180,7 +180,7 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	 * The result is a *sealed* multiwaiter handle.
 	 */
 	static CHERI_SEALED(MultiWaiterInternal *)
-	  create(Timeout            *timeout,
+	  create(TimeoutArgument     timeout,
 	         AllocatorCapability heapCapability,
 	         size_t              length,
 	         int                &error)
@@ -235,8 +235,8 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 		// Reset the events that this contains.
 		for (size_t i = 0; i < count; i++)
 		{
-			void *ptr     = newEvents[i].eventSource;
-			auto *address = static_cast<uint32_t *>(ptr);
+			const void *ptr     = newEvents[i].eventSource;
+			auto       *address = static_cast<const uint32_t *>(ptr);
 			if (!check_pointer<PermissionSet{Permission::Load}>(address))
 			{
 				return EventOperationResult::Error;
@@ -317,7 +317,7 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 	 * Wait on this multi-waiter object until either the timeout expires or
 	 * one or more events have fired.
 	 */
-	void wait(Timeout *timeout)
+	void wait(TimeoutArgument timeout)
 	{
 		Thread *currentThread      = Thread::current_get();
 		currentThread->multiWaiter = this;

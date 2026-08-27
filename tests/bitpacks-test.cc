@@ -235,6 +235,21 @@ static_assert(BITPACK_MEMBER_DECLTYPE(F1.control, Scalar) == 0x7F);
 static_assert(F1.control.raw() == 0x7F32);
 static_assert(F1.more.raw() == 0x1312);
 
+// test that macros work on arrays of bitpacks: sometimes this is complicated
+// by the need to remove the implicit reference created by decltype on array
+// members
+constexpr static Foo::Control BitpackArray[2] = {C0, C1};
+static_assert(BITPACK_MEMBER_DECLTYPE(BitpackArray[1], Scalar) == 7);
+static_assert(BITPACK_MEMBER_DEPENDENT(BitpackArray[1], Scalar) == 7);
+constexpr static auto C1array = []() {
+	return BITPACK_WITHS_DECLTYPE(BitpackArray[0], Scalar{7}, Drive::Up);
+}();
+static_assert(C1 == C1array);
+constexpr static bool ArrayOperationValue = []() {
+	return BITPACK_OPERATE_VALUE_DECLTYPE(BitpackArray[1], ==, Scalar{7});
+}();
+static_assert(ArrayOperationValue);
+
 __noinline static void test_volatile(volatile Foo *vfp)
 {
 	static_assert(std::is_same_v<volatile Foo::More &, decltype((vfp->more))>);

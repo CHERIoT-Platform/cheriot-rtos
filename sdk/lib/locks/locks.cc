@@ -33,8 +33,9 @@ namespace
 		 * Attempt to acquire the lock, blocking until a timeout specified by
 		 * the `timeout` parameter has expired.
 		 */
-		int
-		try_lock(Timeout *timeout, uint32_t threadID, bool isPriorityInherited)
+		int try_lock(TimeoutArgument timeout,
+		             uint32_t        threadID,
+		             bool            isPriorityInherited)
 		{
 			while (true)
 			{
@@ -57,7 +58,7 @@ namespace
 					return -ENOENT;
 				}
 
-				if (!timeout->may_block())
+				if (!timeout.may_block())
 				{
 					return -ETIMEDOUT;
 				}
@@ -233,7 +234,7 @@ namespace
 
 } // namespace
 
-int __cheri_libcall flaglock_trylock(Timeout *t, FlagLockState *lock)
+int __cheri_libcall flaglock_trylock(TimeoutArgument t, FlagLockState *lock)
 {
 	// The thread ID is only used for debugging, or priority inheriting
 	// (which is not relevant here). To avoid a useless call to
@@ -246,8 +247,8 @@ int __cheri_libcall flaglock_trylock(Timeout *t, FlagLockState *lock)
 
 	return static_cast<InternalFlagLock *>(lock)->try_lock(t, threadID, false);
 }
-int __cheri_libcall flaglock_priority_inheriting_trylock(Timeout       *t,
-                                                         FlagLockState *lock)
+int __cheri_libcall flaglock_priority_inheriting_trylock(TimeoutArgument t,
+                                                         FlagLockState  *lock)
 {
 	return static_cast<InternalFlagLock *>(lock)->try_lock(
 	  t, thread_id_get(), true);
@@ -272,7 +273,7 @@ void __cheri_libcall ticketlock_unlock(TicketLockState *lock)
 	static_cast<InternalTicketLock *>(lock)->unlock();
 }
 
-int recursivemutex_trylock(Timeout *timeout, RecursiveMutexState *mutex)
+int recursivemutex_trylock(TimeoutArgument timeout, RecursiveMutexState *mutex)
 {
 	auto              threadID = thread_id_get();
 	InternalFlagLock *internalLock =

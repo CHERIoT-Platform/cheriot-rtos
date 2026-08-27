@@ -42,7 +42,7 @@ compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval)
 	}
 	if (shouldCorruptCSP)
 	{
-		asm volatile("cmove csp, cnull\n"
+		asm volatile("li sp, 0\n"
 		             "cjr %0\n"
 		             :
 		             : "C"(__builtin_return_address(0)));

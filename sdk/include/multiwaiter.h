@@ -43,7 +43,7 @@ struct EventWaiterSource
 	 * A pointer to the event source.  This is the futex that is monitored for
 	 * the multiwaiter.
 	 */
-	void *eventSource;
+	const void *eventSource;
 	/**
 	 * Event value.  This field is modified during the wait
 	 * call.
@@ -72,7 +72,7 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
  * most `maxItems` event sources.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  multiwaiter_create(Timeout            *timeout,
+  multiwaiter_create(TimeoutArgument     timeout,
                      AllocatorCapability heapCapability,
                      MultiWaiter        *ret,
                      size_t              maxItems);
@@ -96,7 +96,7 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
  *    returns `-ETIMEDOUT`.
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
-  multiwaiter_wait(Timeout                  *timeout,
+  multiwaiter_wait(TimeoutArgument           timeout,
                    MultiWaiter               waiter,
                    struct EventWaiterSource *events,
                    size_t                    newEventsCount);

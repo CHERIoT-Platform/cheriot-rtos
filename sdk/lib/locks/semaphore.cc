@@ -6,7 +6,7 @@ namespace
 	constexpr uint32_t WaitersBit = 1 << 31;
 } // namespace
 
-int semaphore_get(Timeout *timeout, CountingSemaphoreState *semaphore)
+int semaphore_get(TimeoutArgument timeout, CountingSemaphoreState *semaphore)
 {
 	do
 	{

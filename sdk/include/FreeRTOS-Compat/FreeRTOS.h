@@ -5,6 +5,16 @@
 #include <tick_macros.h>
 #include <timeout.h>
 
+/**
+ * \file
+ * \brief FreeRTOS porting layer.
+ *
+ * This file defines the top-level include for FreeRTOS.  FreeRTOS supports
+ * including either this file, or the individual headers that this includes.
+ * The individual API families (event groups, queues, streams) are exposed in
+ * headers matching their FreeRTOS counterparts.
+ */
+
 #define pdMS_TO_TICKS(x) MS_TO_TICKS((x))
 
 /**
@@ -13,18 +23,48 @@
  */
 #define INC_FREERTOS_H
 
+/**
+ * Macro used to define a privileged function.  This concept does not map to
+ * CHERIoT RTOS, where no compartment is privileged, and so is discarded.
+ */
 #define PRIVILEGED_FUNCTION
 
+/**
+ * Value used to indicate a little-endian system.  `pdFREERTOS_LITTLE_ENDIAN`
+ * and `pdFREERTOS_BIG_ENDIAN` form an enumeration but are exposed in FreeRTOS
+ * as macros with integer values.
+ */
 #define pdFREERTOS_LITTLE_ENDIAN 0
+/**
+ * Value used to indicate a big-endian system.  `pdFREERTOS_LITTLE_ENDIAN` and
+ * `pdFREERTOS_BIG_ENDIAN` form an enumeration but are exposed in FreeRTOS as
+ * macros with integer values.
+ */
 #define pdFREERTOS_BIG_ENDIAN 1
 
+/**
+ * FreeRTOS definition of false.
+ */
 #define pdFALSE ((BaseType_t)0)
+/**
+ * FreeRTOS definition of true.
+ */
 #define pdTRUE ((BaseType_t)1)
 
+/**
+ * FreeRTOS definition indicating failure.
+ */
 #define pdFAIL pdFALSE
+/**
+ * FreeRTOS definition indicating success.
+ */
 #define pdPASS pdTRUE
 
 #ifdef NDEBUG
+/**
+ * FreeRTOS assertion macro, which behaves identically to the standard
+ * `assert()`.
+ */
 #	define configASSERT(x)                                                    \
 		do                                                                     \
 		{                                                                      \

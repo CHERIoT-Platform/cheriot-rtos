@@ -7,7 +7,9 @@
 #include <futex.h>
 #include <switcher.h>
 
-int heap_claim_ephemeral(Timeout *timeout, const void *ptr, const void *ptr2)
+int heap_claim_ephemeral(TimeoutArgument timeout,
+                         const void     *ptr,
+                         const void     *ptr2)
 {
 	void   **hazards = switcher_thread_hazard_slots();
 	auto    *epochCounter{const_cast<cheriot::atomic<uint32_t> *>(
@@ -40,7 +42,7 @@ int heap_claim_ephemeral(Timeout *timeout, const void *ptr, const void *ptr2)
 	{
 		while (epoch & 1)
 		{
-			if (timeout->may_block())
+			if (timeout.may_block())
 			{
 				Timeout t{1};
 				(void)futex_timed_wait(
@@ -48,7 +50,7 @@ int heap_claim_ephemeral(Timeout *timeout, const void *ptr, const void *ptr2)
 				  reinterpret_cast<uint32_t *>(epochCounter),
 				  epoch,
 				  FutexPriorityInheritance);
-				timeout->elapse(t.elapsed);
+				timeout.elapse_from(t);
 			}
 			else
 			{

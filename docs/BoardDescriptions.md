@@ -109,8 +109,8 @@ Conditional compilation
 The `defines` property specifies any pre-defined macros that should be set when building for this board.
 The `driver_includes` property contains an array (in priority order) of include directories that should be added for this target.
 Each of the paths in `driver_includes` is, by default, relative to the location of the board file (which allows the board file and drivers to be distributed together).
-Optionally, it may include the string `$(sdk)`, which will be replaced by the full path of the SDK directory.
-For example, `"$(sdk)/include/platform/generic-riscv"` will expand to the generic RISC-V directory in the SDK.
+Optionally, it may include the string `${sdk}`, which will be replaced by the full path of the SDK directory.
+For example, `"${sdk}/include/platform/generic-riscv"` will expand to the generic RISC-V directory in the SDK.
 
 The driver headers use `#include_next` to include more generic files and so it is important to list the directories containing your overrides first.
 
@@ -126,3 +126,48 @@ This will be run from the build directory and will be passed the absolute path o
 The build system will look for the simulator in the SDK directory and, failing that, in the path.
 Exact paths can be provided by using `${sdk}` or `${board}` in the name of the simulator.
 These will be expanded to the full path of the SDK or the directory containing the board description file, respectively.
+
+Specifying A Build's Target Board
+---------------------------------
+
+Pass a path to the board file as the argument to the `xmake config` `--board` option.
+
+Due to limitations of `xmake`,
+- Each build directory should be used with exactly one board
+  (note that `xmake` supports out-of-tree builds quite well; see its `--project` option).
+- Changes to the board file may not be seen by incremental builds;
+  perform clean builds whenever changing board definitions.
+
+Board Patch Files and Mixins
+============================
+
+In addition to taking whole board descriptions in a single file,
+the CHERIoT-RTOS `xmake` build system understands incremental definition of boards
+by having a stack of _patches_ atop a base definition.
+Such board patch files have names that end in `.patch`
+and contain JSON dictionaries with two keys:
+
+- "patch", which is an array of [JSON Patch](https://jsonpatch.com) "add", "remove", and "replace" operations.
+
+- "base", which names a board file or another board patch file to which the above operations apply.
+  If the base is not an absolute path, the build system looks to find the base file next to the patch file.
+  The build system will look, in order, for a file named exactly as given, named with a `.json` suffix, or named with a `.patch` suffix.
+
+If using an incremental board definition,
+a path to its top-most patch should be given as the argument to the `xmake config` `--board` option.
+
+Multiple patches may also be "mixed in" to a board definition, incremental or not, at `xmake config` time,
+by passing a comma-separated list of file paths to the `--board-mixins` option.
+These mixins are just JSON arrays of JSON Patch "add", "remove", and "replace" operations,
+which are all applied, in order, to the (patched) board definition computed above.
+Mixins specified by relative paths are looked for in the project root, next to the file given to the `--board` option, and in the SDK's `boards/` directory, in that order.
+
+Board patch base file names, board mixin names, and paths within board files are subject to the following expansions:
+- `${sdk}` will be replaced with an absolute path to the RTOS SDK directory
+- `${sdkboards}` will be replaced with an absolute path to the RTOS SDK's boards/ directory
+- `${project}` will be replaced with an absolute path to the project being built
+- `${board}` will be replaced with an absolute path to the board file given to the `--board` option.
+* `${boardBase}` will be replaced with the absolute path to the JSON file to which all board patches apply.
+
+The first three of these are also applicable to the argument given to the `--board` option.
+`${boardBase}` is not available during the initial descent through board patches, but it is available to mixin paths and paths within board descriptions.

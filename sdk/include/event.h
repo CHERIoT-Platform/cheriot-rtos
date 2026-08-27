@@ -1,5 +1,8 @@
 #pragma once
 /**
+ * \file
+ * \brief Event-group APIs
+ *
  * This file contains the interface for an event-group API, implemented in the
  * `event_group` library, which provides a mechanism for wait for one or more
  * events from a set of 24 to occur.
@@ -12,8 +15,6 @@
  * abstraction on top of futexes directly.
  */
 
-#include "cdefs.h"
-#include "thread.h"
 #include <compartment-macros.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -29,7 +30,7 @@ struct EventGroup;
  * If the timeout expires then this returns `-ETIMEDOUT`, if memory cannot be
  * allocated it returns `-ENOMEM`.
  */
-int __cheri_libcall eventgroup_create(struct Timeout     *timeout,
+int __cheri_libcall eventgroup_create(TimeoutArgument     timeout,
                                       AllocatorCapability heapCapability,
                                       struct EventGroup **outGroup);
 
@@ -54,7 +55,7 @@ int __cheri_libcall eventgroup_create(struct Timeout     *timeout,
  * If `clearOnExit` is true and this returns successfully then the bits in
  * `bitsWanted` will be cleared in the event group before this returns.
  */
-int __cheri_libcall eventgroup_wait(Timeout           *timeout,
+int __cheri_libcall eventgroup_wait(TimeoutArgument    timeout,
                                     struct EventGroup *group,
                                     uint32_t          *outBits,
                                     uint32_t           bitsWanted,
@@ -72,7 +73,7 @@ int __cheri_libcall eventgroup_wait(Timeout           *timeout,
  * Independent of success or failure, `outBits` will be used to return the set
  * of currently set bits in this event group.
  */
-int __cheri_libcall eventgroup_set(Timeout           *timeout,
+int __cheri_libcall eventgroup_set(TimeoutArgument    timeout,
                                    struct EventGroup *group,
                                    uint32_t          *outBits,
                                    uint32_t           bitsToSet);
@@ -87,7 +88,7 @@ int __cheri_libcall eventgroup_set(Timeout           *timeout,
  * Independent of success or failure, `outBits` will be used to return the set
  * of currently set bits in this event group.
  */
-int __cheri_libcall eventgroup_clear(Timeout           *timeout,
+int __cheri_libcall eventgroup_clear(TimeoutArgument    timeout,
                                      struct EventGroup *group,
                                      uint32_t          *outBits,
                                      uint32_t           bitsToClear);

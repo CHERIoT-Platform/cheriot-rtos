@@ -527,11 +527,6 @@ namespace
 		           -EPERM,
 		           "Non-blocking heap allocation did not fail on null "
 		           "heap capability");
-		TEST_EQUAL(
-		  ErrorOr{heap_allocate(nullptr, MALLOC_CAPABILITY, 64)}.as_error(),
-		  -EINVAL,
-		  "Non-blocking heap allocation did not fail on null "
-		  "timeout");
 		// Wake up the thread that will free memory
 		freeStart = 1;
 		debug_log("Notifying deallocation thread to start with futex {}",
@@ -1557,10 +1552,16 @@ int test_allocator()
 	    .as_error(),
 	  -EINVAL,
 	  "Allocating array with size overflow succeeded");
-	TEST_EQUAL(ErrorOr{heap_allocate_array(nullptr, MALLOC_CAPABILITY, 64, 2)}
-	             .as_error(),
-	           -EINVAL,
-	           "Allocating array with null timeout succeeded");
+	Timeout *invalidTimeout = static_cast<Timeout *>(
+	  heap_allocate(TimeoutNoWait, MALLOC_CAPABILITY, sizeof(Timeout)));
+	TimeoutArgument testArg = invalidTimeout;
+	TEST(!testArg.is_valid(), "{} should not be valid!", testArg);
+	TEST_EQUAL(
+	  ErrorOr{heap_allocate_array(invalidTimeout, MALLOC_CAPABILITY, 64, 2)}
+	    .as_error(),
+	  -EINVAL,
+	  "Allocating array with invalid timeout succeeded");
+	heap_free(MALLOC_CAPABILITY, invalidTimeout);
 	TEST_EQUAL(ErrorOr{heap_allocate_array(&t, nullptr, 64, 2)}.as_error(),
 	           -EPERM,
 	           "Allocating array with null quota succeeded");

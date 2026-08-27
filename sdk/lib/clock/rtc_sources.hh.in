@@ -1,0 +1,27 @@
+#include <tuple>
+#include <platform/concepts/wall_clock_source.hh>
+
+@include_implementations@
+
+/**
+ * Placeholder for systems with no wall clock.
+ */
+struct NoWallClockSource
+{
+	/// This doesn't set the time
+	static constexpr bool SupportsTimeSetting = false;
+	/// This does noting, it is cheap.
+	static constexpr bool IsCheap = true;
+	/// Return a zero time.
+	__always_inline int get_time(TimeoutArgument, clock_t &outRealTime, clock_t &outMonotonicTime, int &outPriority)
+	{
+		outRealTime = 0;
+		outMonotonicTime = 0;
+		outPriority = std::numeric_limits<int>::min();
+		return 0;
+	}
+};
+
+static_assert(IsWallClockSource<NoWallClockSource>, "Placeholder is not a valid wall clock soure");
+
+using ClockSources = std::tuple<@clock_sources@ NoWallClockSource>;

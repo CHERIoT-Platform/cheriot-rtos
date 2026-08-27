@@ -8,9 +8,28 @@
 #include <stdlib.h>
 #include <timeout.h>
 
+/**
+ * \file
+ *
+ * APIs for dealing with type-safe opaque handles (sealed objects).
+ */
+
+/// Type used for `TokenKey`, do not use this directly.
 struct TokenKeyType;
+
+/**
+ * Sealing keys in CHERI are represented as capabilities.  They have the same
+ * representation as pointers but have permissions that allow their address to
+ * refer to an abstract space of types, rather than a space of addresses on the
+ * memory bus.  CHERIoT uses a pointer to a specific opaque type to expose this
+ * in the C/C++ type systems.  Sealing keys should be created with the
+ * `STATIC_SEALING_TYPE` macro or the `token_key_new` function.  Although they
+ * appear to be pointers, there is no way to dereference them that will not
+ * trap.
+ */
 typedef struct TokenKeyType *TokenKey;
 
+/// The old name for TokenKey, do not use in new code.
 typedef TokenKey SKey __attribute__((deprecated("SKey renamed to TokenKey")));
 
 __BEGIN_DECLS
@@ -52,7 +71,7 @@ TokenKey __cheri_compartment("allocator") token_key_new(void);
  */
 CHERI_SEALED(void *)
 __cheri_compartment("allocator")
-  token_sealed_unsealed_alloc(Timeout            *timeout,
+  token_sealed_unsealed_alloc(TimeoutArgument     timeout,
                               AllocatorCapability heapCapability,
                               TokenKey            key,
                               size_t              sz,
@@ -66,7 +85,7 @@ __cheri_compartment("allocator")
  */
 CHERI_SEALED(void *)
 __cheri_compartment("allocator")
-  token_sealed_alloc(Timeout            *timeout,
+  token_sealed_alloc(TimeoutArgument     timeout,
                      AllocatorCapability heapCapability,
                      TokenKey,
                      size_t);
@@ -237,7 +256,7 @@ class Sealed
  */
 template<typename T>
 __always_inline std::pair<T *, Sealed<T>>
-token_allocate(Timeout            *timeout,
+token_allocate(TimeoutArgument     timeout,
                AllocatorCapability heapCapability,
                TokenKey            key)
 {
@@ -259,6 +278,11 @@ token_allocate(Timeout            *timeout,
 	};
 }
 
+/**
+ * Type-safe helper that unseal a `Sealed<T>` and returns a `T*`.
+ * If `key` matches the type used for sealing `sealed`, this returns the
+ * unsealed value, otherwise it returns `NULL` / `nullptr`.
+ */
 template<typename T>
 __always_inline T *token_unseal(TokenKey key, Sealed<T> sealed)
 {
@@ -267,6 +291,11 @@ __always_inline T *token_unseal(TokenKey key, Sealed<T> sealed)
 
 #endif // __cplusplus
 
+/**
+ * Type-safe helper that unseal a `T *__sealed_capability` and returns a `T*`.
+ * If `key` matches the type used for sealing `sealed`, this returns the
+ * unsealed value, otherwise it returns `NULL` / `nullptr`.
+ */
 #if __has_extension(cheri_sealed_pointers) &&                                  \
   !defined(CHERIOT_NO_SEALED_POINTERS)
 #	ifdef __cplusplus

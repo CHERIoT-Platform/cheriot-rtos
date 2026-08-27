@@ -9,10 +9,27 @@
 #include <platform-uart.hh>
 #include <string.h>
 #include <switcher.h>
+#include <timeout.h>
 
 #include <string_view>
 #include <type_traits>
 
+/**
+ * \file
+ *
+ * C++ APIs for assertions, invariants, and writing formatted debug messages to
+ * a UART.
+ *
+ * When enabled (for template parameter) the implementations of these are in
+ * the `debug` library, which must be linked into the firmware image.
+ *
+ * Most of the functionality in this file is exposed via the `ConditionalDebug`
+ * template.
+ */
+
+/**
+ * Concepts used for matching types in the debug code.
+ */
 namespace DebugConcepts
 {
 	/// Helper concept for matching booleans
@@ -29,10 +46,15 @@ namespace DebugConcepts
 		{ v() } -> IsBool;
 	};
 
+	/// Helper for identifying pointers that are (probably) not C strings.
 	template<typename T>
 	concept IsPointerButNotCString =
 	  std::is_pointer_v<T> && !std::is_same_v<T, const char *>;
 
+	/**
+	 * Helper concept for things that can be converted to addresses but are
+	 * not enumerations.
+	 */
 	template<typename T>
 	concept IsConvertibleToAddress =
 	  std::convertible_to<T, ptraddr_t> && !IsEnum<T>;
@@ -385,6 +407,42 @@ struct DebugFormatArgumentAdaptor<T>
 		return {static_cast<uintptr_t>(value),
 		        reinterpret_cast<uintptr_t>(&debug_enum_helper<T>)};
 #endif
+	}
+};
+
+/**
+ * Helper for printing timeouts.
+ */
+template<>
+struct DebugFormatArgumentAdaptor<TimeoutArgument>
+{
+	__always_inline static DebugFormatArgument construct(TimeoutArgument value)
+	{
+		uintptr_t v;
+		static_assert(sizeof(v) == sizeof(value));
+		memcpy(&v, &value, sizeof(v));
+		return {v, reinterpret_cast<uintptr_t>(&print)};
+	}
+
+	private:
+	static void print(uintptr_t value, DebugWriter &writer)
+	{
+		TimeoutArgument t(0ULL);
+		static_assert(sizeof(t) == sizeof(value));
+		memcpy(&t, &value, sizeof(t));
+		if (t.is_relative())
+		{
+			writer.write("{ elapsed: ");
+			writer.write(t.relativeTimeout->elapsed);
+			writer.write(", remaining: ");
+			writer.write(t.relativeTimeout->remaining);
+			writer.write(" }");
+		}
+		else
+		{
+			writer.write(t.absoluteTimeout);
+			writer.write(" cycles");
+		}
 	}
 };
 

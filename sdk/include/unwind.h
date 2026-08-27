@@ -5,7 +5,16 @@
 #include <thread.h>
 
 /**
+ * \file
+ *
+ * APIs for synchronously handling traps.
+ */
+
+/**
  * On-stack linked list of cleanup handlers.
+ *
+ * This is managed by the `CHERIOT_HANDLER` macro and should not be used
+ * directly.
  */
 struct CleanupList
 {
@@ -23,6 +32,9 @@ struct CleanupList
  * This is stored in the space that the switcher reserves at the top of the
  * stack.  The stack is zeroed on entry to a compartment and so this will be
  * null until explicitly written to.
+ *
+ * This is managed by the `CHERIOT_HANDLER` macro and should not be used
+ * directly.
  */
 __always_inline static inline struct CleanupList **cleanup_list_head()
 {
@@ -37,6 +49,16 @@ __always_inline static inline struct CleanupList **cleanup_list_head()
 
 /**
  * Unwind the stack to the most recent `CHERIOT_HANDLER` block.
+ *
+ * The equivalent of this code is run automatically if you add
+ * `unwind_error_handler` as a dependency for your compartment.  If you
+ * implement a stackfull error handler then you can call this function to
+ * return to the last cleanup block.  Such error handlers should call
+ * `switcher_handler_invocation_count_reset` if they do not wish the
+ * compartment to be forcibly unwound after an error limit is reached.
+ *
+ * This can also be called directly to unwind to the closest handler on the
+ * stack.
  */
 __always_inline static inline void cleanup_unwind(void)
 {
@@ -56,6 +78,8 @@ __always_inline static inline void cleanup_unwind(void)
  *
  * Any automatic-storage values accessed in both blocks must be declared
  * `volatile`.
+ *
+ * \hideinitializer
  */
 #define CHERIOT_DURING                                                         \
 	{                                                                          \
@@ -65,15 +89,22 @@ __always_inline static inline void cleanup_unwind(void)
 		*__head                     = &cleanupListEntry;                       \
 		if (setjmp(&cleanupListEntry.env) == 0)                                \
 		{
-/// See CHERIOT_DURING.
+/**
+ * See `CHERIOT_DURING`.
+ *
+ * \hideinitializer
+ */
 #define CHERIOT_HANDLER                                                        \
 	*__head = cleanupListEntry.next;                                           \
 	}                                                                          \
 	else                                                                       \
 	{                                                                          \
 		*__head = cleanupListEntry.next;
-
-/// See CHERIOT_DURING.
+/**
+ * See `CHERIOT_DURING`.
+ *
+ * \hideinitializer
+ */
 #define CHERIOT_END_HANDLER                                                    \
 	}                                                                          \
 	}

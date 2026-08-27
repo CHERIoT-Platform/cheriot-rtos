@@ -66,15 +66,20 @@ struct OpenTitanUart : private utils::NoCopyNoMove
 		BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(Transmit, 0);
 		BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(Receive, 1);
 		BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(NoiseFilter, 2);
-		BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(SystemLoopback, 3);
-		BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(LineLoopback, 4);
-		BITPACK_MEMBER_ADD_ENUM(Parity, uint8_t, 5, 6) {
+		BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(SystemLoopback, 4);
+		BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(LineLoopback, 5);
+		BITPACK_MEMBER_ADD_ENUM(Parity, uint8_t, 6, 7) {
 			None = 0b00,
 			Even = 0b01,
 			Odd  = 0b11,
 		};
 
-		BITPACK_MEMBER_ADD_NUMERIC(BreakLevel, uint8_t, 8, 9);
+		BITPACK_MEMBER_ADD_ENUM(BreakLevel, uint8_t, 8, 9) {
+			Level2  = 0b00,
+			Level4  = 0b01,
+			Level8  = 0b10,
+			Level16 = 0b11,
+		};
 		BITPACK_MEMBER_ADD_NUMERIC(Nco, uint16_t, 16, 31);
 	} control;
 
@@ -105,16 +110,16 @@ struct OpenTitanUart : private utils::NoCopyNoMove
 		BITPACK_MEMBER_ADD_ENUM_BOOL(Receive, AsIs, Reset, 0);
 		BITPACK_MEMBER_ADD_ENUM_BOOL(Transmit, AsIs, Reset, 1);
 
-		BITPACK_MEMBER_ADD_ENUM(TransmitWatermark, uint8_t, 2, 4) {
+		BITPACK_MEMBER_ADD_ENUM(ReceiveWatermark, uint8_t, 2, 4) {
 			Level1  = 0b000,
 			Level2  = 0b001,
 			Level4  = 0b010,
 			Level8  = 0b011,
 			Level16 = 0b100,
 			Level32 = 0b101,
-			Level64 = 0b110,
+			Level62 = 0b110,
 		};
-		BITPACK_MEMBER_ADD_ENUM(ReceiveWatermark, uint8_t, 5, 7) {
+		BITPACK_MEMBER_ADD_ENUM(TransmitWatermark, uint8_t, 5, 7) {
 			Level1  = 0b000,
 			Level2  = 0b001,
 			Level4  = 0b010,
