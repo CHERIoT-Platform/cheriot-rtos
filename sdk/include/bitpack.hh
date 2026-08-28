@@ -287,6 +287,7 @@
  * @{
  */
 
+#include <__macro_map.h>
 #include <cdefs.h>
 #include <concepts>
 #include <limits.h>
@@ -1327,42 +1328,6 @@ struct BitpackDerived : B
  * @{
  */
 
-/**
- * An in-situ probe for the #include-sion of <__macro_map.h>.
- *
- * While we could gate our behavior on `#if defined(CHERIOT_EVAL0)`, for
- * example, that would require that <__macro_map.h> be included before us, which
- * is slightly rude.  Instead, we can take creative advantage of the syntactic
- * primitives __macro_map.h uses internally and some C++ quirks to (ab)usefully
- * test the behavior of `CHERIOT_EVAL0` at each expansion of this macro.
- *
- * In terms of operation, this relies on `U CHERIOT_EVAL0(T);` meaning one of
- *  two very different things and so dramatically changing what the subsequent
- * `sizeof(T)` means.
- *
- *  - If CHERIOT_EVAL0 hasn't been #defined, then this defines a function named
- *    CHERIOT_EVAL0 which takes a `struct T` and returns a `U`.  In this case,
- *    the `T` in `sizeof(T)` means `struct T`, and that's 1 by definition,
- *    since `sizeof(char)` is defined to be 1.
- *
- *  - If CHERIOT_EVAL0 has been defined as per <__macro_map.h>, then this is
- *    preprocessed into `U T;`, a variable declaration, and the `T` in
- *    `sizeof(T)` now refers to that variable and evaluates to 2.
- */
-#define BITPACK_HAS_MACRO_MAP                                                  \
-	([]() {                                                                    \
-		struct BITPACK_HAS_MACRO_MAP_T                                         \
-		{                                                                      \
-			char t;                                                            \
-		};                                                                     \
-		struct BITPACK_HAS_MACRO_MAP_U                                         \
-		{                                                                      \
-			char u[2];                                                         \
-		};                                                                     \
-		BITPACK_HAS_MACRO_MAP_U CHERIOT_EVAL0(BITPACK_HAS_MACRO_MAP_T);        \
-		return sizeof(BITPACK_HAS_MACRO_MAP_T);                                \
-	}() > 1)
-
 /// Map function for BITPACK_MAP_DECLTYPE
 #define BITPACK_MAP_DECLTYPE_HELPER(x, b)                                      \
 	std::remove_reference_t<decltype(b)>::x
@@ -1371,11 +1336,6 @@ struct BitpackDerived : B
  * Given bitpack `b`, qualify each additional argument with `decltype(b)`.  That
  * is, `BITPACK_MAP_DECLTYPE(b, X, Y)` evalutes to
  * `decltype(b)::X, decltype(b)::Y`.
- *
- * This requires #include <__macro_map.h> (and will give confusing error
- * messages if not included).  (Because this is very much a C++ token level
- * hack, unlike the other __macro_map users, it's hard for us to statically
- * assert and give nice error messages.)
  */
 #define BITPACK_MAP_DECLTYPE(b, ...)                                           \
 	CHERIOT_MAP_LIST_UD(BITPACK_MAP_DECLTYPE_HELPER, b, __VA_ARGS__)
@@ -1388,8 +1348,6 @@ struct BitpackDerived : B
  * Given bitpack `b`, qualify each additional argument with `typename
  * decltype(b)`.  That is, `BITPACK_DEPENDENT(b, X, Y)` evalutes to
  * `typename decltype(b)::X, typename decltype(b)::Y`.
- *
- * This requires #include <__macro_map.h>.
  */
 #define BITPACK_MAP_DEPENDENT(b, ...)                                          \
 	CHERIOT_MAP_LIST_UD(BITPACK_MAP_DEPENDENT_HELPER, b, __VA_ARGS__)
@@ -1401,14 +1359,10 @@ struct BitpackDerived : B
 
 /**
  * Construct a chain of .with() whose arguments are all qualified with the type
- * of the bitpack.  #include <__macro_map.h> if you want to use this.
+ * of the bitpack.
  */
 #define BITPACK_WITHS(b, ...)                                                  \
-	({                                                                         \
-		static_assert(BITPACK_HAS_MACRO_MAP,                                   \
-		              "BITPACK_WITHS requires __macro_map.h");                 \
-		(b) CHERIOT_MAP(BITPACK_MAP_WITHS_HELPER, __VA_ARGS__);                \
-	})
+	(b) CHERIOT_MAP(BITPACK_MAP_WITHS_HELPER, __VA_ARGS__)
 
 /**
  * A version of BITPACK_WITHS where the arguments to `.with()` are qualified
@@ -1444,12 +1398,10 @@ struct BitpackDerived : B
  * the mask of these fields and the bitpack value holding these field values,
  * then mask `b` with the computed mask, and then use `operator` to relate the
  * result with the computed bitpack value.  The last value for each field is
- * used.  #include <__macro_map.h> if you want to use this.
+ * used.
  */
 #define BITPACK_RELATE_MASKED(b, operator, ...)                                \
 	({                                                                         \
-		static_assert(BITPACK_HAS_MACRO_MAP,                                   \
-		              "BITPACK_MASKED_REL requires __macro_map.h");            \
 		constexpr decltype(b.raw()) __bitpack_mask =                           \
 		  (0)CHERIOT_MAP_UD(BITPACK_RELATE_MASKED_HELPER, b, __VA_ARGS__);     \
 		constexpr auto __bitpack_query =                                       \
