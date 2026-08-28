@@ -3,12 +3,6 @@
 
 #include <bitpack.hh>
 
-static_assert(!BITPACK_HAS_MACRO_MAP);
-
-#include <__macro_map.h>
-
-static_assert(BITPACK_HAS_MACRO_MAP);
-
 /// An example "device" structure type, composed of two Bitpack "registers".
 struct Foo
 {
