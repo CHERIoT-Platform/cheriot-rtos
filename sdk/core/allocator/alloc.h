@@ -31,7 +31,7 @@ constexpr bool HasTemporalSafety =
   !std::is_same_v<Revocation::Revoker, Revocation::NoTemporalSafety>;
 
 // the byte and bit size of a size_t
-constexpr size_t BitsInSizeT = utils::bytes2bits(sizeof(size_t));
+constexpr size_t BitsInSizeT = utils::bytes_to_bits(sizeof(size_t));
 
 constexpr size_t NSmallBinsShift = 3U;
 // number of small bins
@@ -48,13 +48,13 @@ constexpr size_t MaxSmallSize = 1U << TreeBinShift;
 // the compressed size. The actual size is SmallSize * MallocAlignment.
 using SmallSize = uint16_t;
 constexpr size_t MaxChunkSize =
-  ((1U << utils::bytes2bits(sizeof(SmallSize))) - 1) << MallocAlignShift;
+  ((1U << utils::bytes_to_bits(sizeof(SmallSize))) - 1) << MallocAlignShift;
 // the index to one of the bins
 using BIndex = uint32_t;
 // the bit map of all the bins. 1 for in-use and 0 for empty.
 using Binmap = uint32_t;
-static_assert(NSmallBins < utils::bytes2bits(sizeof(Binmap)));
-static_assert(NTreeBins < utils::bytes2bits(sizeof(Binmap)));
+static_assert(NSmallBins < utils::bytes_to_bits(sizeof(Binmap)));
+static_assert(NTreeBins < utils::bytes_to_bits(sizeof(Binmap)));
 
 /// Quota identifier 0 is reserved for allocator-owned objects.
 constexpr uint16_t QuotaIdentifierAllocatorOwned = 0;
@@ -101,7 +101,7 @@ static inline BIndex compute_tree_index(size_t s)
 	{
 		return NTreeBins - 1;
 	}
-	k          = utils::bytes2bits(sizeof(x)) - 1 - clz(x);
+	k          = utils::bytes_to_bits(sizeof(x)) - 1 - clz(x);
 	BIndex ret = (k << 1) + ((s >> (k + (TreeBinShift - 1)) & 1));
 	Debug::Assert(
 	  ret < NTreeBins, "Return value {} is out of range 0-{}", ret, NTreeBins);
