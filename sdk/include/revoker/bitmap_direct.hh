@@ -35,7 +35,7 @@ namespace Revocation
 
 		/// The number of bits in a single load or store of the shadow memory.
 		static constexpr size_t ShadowWordSizeBits =
-		  utils::bytes2bits(sizeof(*shadowCap));
+		  utils::bytes_to_bits(sizeof(*shadowCap));
 
 		/// The shift required to translate an offset in bytes in memory into
 		/// an offset in bytes in the shadow memory.

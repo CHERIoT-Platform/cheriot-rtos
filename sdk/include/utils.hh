@@ -18,7 +18,7 @@
 namespace utils
 {
 	/// Turn a byte count into a bit count
-	constexpr size_t bytes2bits(size_t in)
+	constexpr size_t bytes_to_bits(size_t in)
 	{
 		return in * __CHAR_BIT__;
 	}
