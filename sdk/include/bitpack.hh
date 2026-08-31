@@ -789,16 +789,18 @@ class BITPACK_DECL_ANNOTATION Bitpack
 		/*
 		 * Guide template deduction to conclude that a Field has a RefType
 		 * that is as CV-qualified as the `Bitpack` of which it is a part, with
-		 * the further possibility of const-qualification for fields annotated
-		 * as constant.
+		 * the further possibility of `const`-qualification for fields annotated
+		 * as constant coming from volatile bitpacks; isConst is ignored if the
+		 * bitpack is not volatile to make large scale .alter()-ations easier.
 		 *
 		 * Yes, the `decltype(())` is deliberate: we want the lvalue expression
 		 * rather than the prvalue expression.
 		 */
 		template<typename BitpackType>
-		Proxy(BitpackType &r)
-		  -> Proxy<std::remove_cvref_t<BitpackType>,
-		           ConditionalConstRef<Info.isConst, decltype((r.value))>>;
+		Proxy(BitpackType &r) -> Proxy<
+		  std::remove_cvref_t<BitpackType>,
+		  ConditionalConstRef<Info.isConst && std::is_volatile_v<BitpackType>,
+		                      decltype((r.value))>>;
 	};
 
 	protected:
