@@ -18,6 +18,7 @@ includes(
 	"event_group",
 	"freestanding",
 	"locks",
+	"math",
 	"microvium",
 	"queue",
 	"randombytes",
