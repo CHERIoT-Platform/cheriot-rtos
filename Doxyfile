@@ -2546,6 +2546,7 @@ INCLUDE_FILE_PATTERNS  =
 PREDEFINED             = \
 	__cplusplus \
 	__if_cxx(x)= \
+	__if_c(x)= \
 	__cheri_compartment(x)= \
 	__BEGIN_DECLS= \
 	__END_DECLS= \
