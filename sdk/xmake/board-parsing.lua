@@ -265,14 +265,6 @@ function main(boardPathSubstitutes, boardName, boardMixins)
 		end
 	end
 
-	-- The size of a register spill frame in a trusted stack is a function
-	-- of the board.  While *most* of the system gets this from
-	-- core/switcher/trusted-stack-assembly.h, we need it when sizing
-	-- thread trusted stacks over in the generated linker scripts.  The
-	-- loader component asserts that this value matches what the rest of
-	-- the system sees.
-	board.trusted_spill_size = board.stack_high_water_mark and 192 or 176
-
 	return {
 		info = board,
 		dir = boarddir,

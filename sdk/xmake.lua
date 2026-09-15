@@ -551,8 +551,6 @@ target("cheriot.board")
 		self:set("cheriot.board_dir", board_conf.dir)
 		self:set("cheriot.board_file", board_conf.file)
 		self:set("cheriot.board_info", { board_conf.info })
-		self:set("cheriot.trusted_spill_size",
-			board_conf.info.trusted_spill_size)
 	end)
 
 target("cheriot.board.file")
@@ -1057,7 +1055,8 @@ rule("cheriot.firmware.ldscript.conf")
 			"\n\t.thread_trusted_stack_${thread_id} : CAPALIGN" ..
 			"\n\t{" ..
 			"\n\t\t.thread_${thread_id}_trusted_stack_start = .;" ..
-			"\n\t\t. += ${trusted_stack_size};" ..
+			"\n\t\t. += __cheriot_switcher_trusted_stack_base_size;" ..
+			"\n\t\t. += __cheriot_switcher_trusted_stack_frame_size * ${trusted_stack_frames};" ..
 			"\n\t\t.thread_${thread_id}_trusted_stack_end = .;" ..
 			"\n\t}\n"
 		-- Build a `class ThreadConfig` for a thread
@@ -1077,14 +1076,9 @@ rule("cheriot.firmware.ldscript.conf")
 		local stack_size_limit = 65280
 
 		-- Initial pass through thread sequence to derive values within each
-		local trusted_spill_size = board_target:get("cheriot.trusted_spill_size")
 		for i, thread in ipairs(threads) do
 			thread.mangled_entry_point = string.format("\"__export_%s__Z%d%sv\"", thread.compartment, string.len(thread.entry_point), thread.entry_point)
 			thread.thread_id = i
-			-- Trusted stack frame is 24 bytes.  If this size is too small, the
-			-- loader will fail.  If it is too big, we waste space.
-			thread.trusted_stack_size = trusted_spill_size + (24 * thread.trusted_stack_frames)
-
 			if thread.stack_size > stack_size_limit then
 				raise("thread " .. i .. " requested a " .. thread.stack_size ..
 				" stack.  Stacks over " .. stack_size_limit ..
@@ -1503,8 +1497,6 @@ rule("cheriot.loader.base")
 		local board_target = target:dep("cheriot.board")
 		local board = board_target:get("cheriot.board_info")
 		target:add("defines", board.rtos_defines and board.rtos_defines.loader)
-		target:add('defines',
-			"CHERIOT_LOADER_TRUSTED_SPILL_SIZE=" .. board_target:get("cheriot.trusted_spill_size"))
 	end)
 
 -- Build the loader.

@@ -7,6 +7,7 @@
 #include <cheri.hh>
 #include <stddef.h>
 #include <stdint.h>
+#include <type_traits>
 
 struct TrustedStackFrame
 {
@@ -32,6 +33,8 @@ struct TrustedStackFrame
 	 * will forcibly unwind the stack.
 	 */
 	uint16_t errorHandlerCount;
+
+	uint16_t pad[3];
 };
 
 /**
@@ -67,11 +70,23 @@ struct TrustedStackGeneric
 	uint32_t mshwm;
 	uint32_t mshwmb;
 #endif
+
+	/**
+	 * Byte offset into the frames[] array of the first inactive frame, which
+	 * might be "one past the end".  This will always be of the form
+	 *
+	 *   offsetof(TrustedStackGenric, frames) + k * sizeof(TrustedStackFrame)
+	 *
+	 * for some non-negative integer k, but it's fewer cycles in the switcher to
+	 * have it in this format than as k.
+	 */
 	uint16_t frameoffset;
+
 	/**
 	 * The ID of the current thread.  Never modified during execution.
 	 */
 	uint16_t threadID;
+
 	// Padding up to multiple of 16-bytes.
 	uint8_t padding[
 #ifdef CONFIG_MSHWM
@@ -88,6 +103,8 @@ struct TrustedStackGeneric
 	TrustedStackFrame frames[NFrames + 1];
 };
 using TrustedStack = TrustedStackGeneric<0>;
+
+static_assert(std::has_unique_object_representations_v<TrustedStack>);
 
 #define STATIC_ASSERT_TRUSTED_STACK_REGISTER_OFFSET(field, regname)            \
 	static_assert(offsetof(TrustedStack, field) ==                             \
