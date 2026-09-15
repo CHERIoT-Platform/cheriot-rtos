@@ -883,10 +883,6 @@ rule("cheriot.board.targets.conf")
 			add_defines_each_dependency("SIMULATION")
 		end
 
-		if board.stack_high_water_mark then
-			add_defines_each_dependency("CONFIG_MSHWM")
-		end
-
 		-- Build the MMIO space for the board
 		for name, _ in table.orderpairs(board.devices) do
 			add_defines_each_dependency("DEVICE_EXISTS_" .. name)

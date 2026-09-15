@@ -66,10 +66,9 @@ struct TrustedStackGeneric
 	void  *hazardPointers;
 	size_t mstatus;
 	size_t mcause;
-#ifdef CONFIG_MSHWM
+
 	uint32_t mshwm;
 	uint32_t mshwmb;
-#endif
 
 	/**
 	 * Byte offset into the frames[] array of the first inactive frame, which
@@ -87,14 +86,11 @@ struct TrustedStackGeneric
 	 */
 	uint16_t threadID;
 
-	// Padding up to multiple of 16-bytes.
-	uint8_t padding[
-#ifdef CONFIG_MSHWM
-	  12
-#else
-	  4
-#endif
-	];
+	/**
+	 * Pad back up to alignof(void *)
+	 */
+	uint32_t pad;
+
 	/**
 	 * The trusted stack.  There is always one frame, describing the entry
 	 * point.  If this is popped then we have run off the stack and the thread
