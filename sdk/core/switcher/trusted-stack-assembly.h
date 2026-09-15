@@ -54,6 +54,3 @@ EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, errorHandlerCount, 16)
 // If you change this value, you must replace size_to_trusted_stack_frames in
 // entry.S with something that divides by the new size.
 EXPORT_ASSEMBLY_SIZE(TrustedStackFrame, (8 * 3))
-
-#define TSTACKOFFSET_FIRSTFRAME                                                \
-	(TrustedStack_offset_frameoffset + TSTACK_HEADER_SZ)

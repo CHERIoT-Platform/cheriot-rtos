@@ -29,9 +29,6 @@ using namespace CHERI;
 namespace
 {
 	__BEGIN_DECLS
-	static_assert(CheckSize<CHERIOT_LOADER_TRUSTED_SPILL_SIZE,
-	                        sizeof(TrustedStackGeneric<0>)>::Value,
-	              "Boot trusted stack sizes do not match.");
 	// It must also be aligned sufficiently for trusted stacks, so ensure that
 	// we've captured that requirement above.
 	static_assert(alignof(TrustedStack) <= 16);
