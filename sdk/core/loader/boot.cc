@@ -11,7 +11,6 @@
 #include <string.h>
 
 #include "../allocator/token_types.h"
-#include "../switcher/tstack.h"
 #include "constants.h"
 #include "debug.hh"
 #include "defines.h"
