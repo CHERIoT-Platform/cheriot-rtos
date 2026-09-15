@@ -1068,10 +1068,8 @@ namespace
 			{
 				threadTStack->mstatus &= ~MSTATUS_MPIE;
 			}
-#ifdef CONFIG_MSHWM
 			threadTStack->mshwm  = stack.top();
 			threadTStack->mshwmb = stack.base();
-#endif
 			// Set the thread ID that the switcher will return for this thread.
 			// This is indexed from 1, so 0 can be used to indicate the idle
 			// thread.
