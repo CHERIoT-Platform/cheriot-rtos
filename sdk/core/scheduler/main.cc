@@ -12,7 +12,6 @@
 #	include "interrupt_controller.hh"
 #endif
 
-#include "../switcher/tstack.h"
 #include "multiwait.h"
 #include "thread.h"
 #include <cdefs.h>
