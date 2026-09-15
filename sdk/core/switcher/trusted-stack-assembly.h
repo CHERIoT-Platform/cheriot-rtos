@@ -37,5 +37,6 @@ EXPORT_ASSEMBLY_SIZE(TrustedStack, (20 * 8) + (3 * 8))
 
 EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, csp, 0)
 EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, calleeExportTable, 8)
-EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, errorHandlerCount, 16)
+EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, cpuFeatures, 16)
+EXPORT_ASSEMBLY_OFFSET(TrustedStackFrame, errorHandlerCount, 18)
 EXPORT_ASSEMBLY_SIZE(TrustedStackFrame, (3 * 8))
