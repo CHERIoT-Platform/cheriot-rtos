@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <platform-switcher_cpu_features.hh>
+
 using namespace CHERI;
 
 namespace
@@ -1079,7 +1081,8 @@ namespace
 			threadTStack->frames[0].calleeExportTable =
 			  build(compartment.exportTable);
 			// Special case: The first frame has the initial csp.
-			threadTStack->frames[0].csp = stack;
+			threadTStack->frames[0].csp         = stack;
+			threadTStack->frames[0].cpuFeatures = SWITCHER_CPU_FEATURE_DEFAULT;
 
 			Debug::log("Thread's trusted stack is {}", threadTStack);
 

@@ -6,6 +6,38 @@
 #include "misc-assembly.h"
 #include <errno.h>
 
+/*
+ * Platforms may provide an "interpreter" of the TrustedStack::cpuFeatures
+ * word.  These manifest as a pair of assembler macros:
+ *
+ * - `platform_switcher_cpu_features_mask newValue, scratch`
+ *
+ *   This is called within switcher_invocation_cpu_features_set to map to mask
+ *   out values beyond those understood by the platform.  It should update the
+ *   `newValue` register in place and may use `scratch` as a temporary.
+ *   `scratch` must not contain values unsafe to return to application code at
+ *   the end of this macro.
+ *
+ * - `platform_switcher_cpu_features_activate newValue, scratch`
+ *
+ *   This is called within switcher_invocation_cpu_features_set and in
+ *   cross-compartment return to bring a (necessarily masked) cpuFeatures value
+ *   already in a register into effect.  `scratch` may be used as as a temporary
+ *   but must not contain values unsafe to return to application code at the end
+ *   of this macro.
+ *
+ * - `platform_switcher_cpu_features_load_activate scratch1, scratch2, ty, mem`
+ *
+ *   Like `platform_switcher_cpu_features_activate`, this also brings a
+ *   cpuFeatures value into effect, but it sources it from the memory location
+ *   `mem` using the RISC-V assembler mnemonic type `ty` to perform the transfer
+ *   (that is, `cl\ty`).  `scratch1` and `scratch2` may be used as temporaries
+ *   and will be cleared before return to application code (as this is called
+ *   only in cross-thread transitions with registers that will later be
+ *   clobbered).
+ */
+#include <platform-switcher_cpu_features.inc>
+
 .include "assembly-helpers.s"
 
 #  Symbolic names for the stack high water mark registers until
@@ -499,6 +531,14 @@ __Z26compartment_switcher_entryz:
 	 */
 	csc                cnull, TrustedStackFrame_offset_calleeExportTable(ctp)
 	/*
+	 * 4. Copying the current frame's cpuFeatures value forward into the new
+	 *    frame.  Because this value reflects the on-core value, no activation
+	 *    is required.
+	 */
+	clhu               s1, (TrustedStackFrame_offset_cpuFeatures - \
+	                           TrustedStackFrame_size)(ctp)
+	csh                s1, TrustedStackFrame_offset_cpuFeatures(ctp)
+	/*
 	 * Update the frame offset, using s1 to hold a scratch scalar.  Any fault
 	 * before this point (wrong target cap, unaligned stack, etc.) is seen as a
 	 * fault in the caller. After writing the new TrustedSstack::frameoffset,
@@ -838,6 +878,14 @@ switcher_after_compartment_call:
 	 *  t1: pointer to the TrustedStackFrame to bring on core
 	 *  t2: the TrustedStack::frameoffset associated with t1
 	 */
+
+	/*
+	 * Restore the cpuFeatures value from the caller's frame.  This value is
+	 * presumed already masked, so we need not spend the instructions here.
+	 */
+	platform_switcher_cpu_features_load_activate s0, s1, hu, \
+	  TrustedStackFrame_offset_cpuFeatures(ct1)
+	// Atlas update: s0, s1: dead (again)
 
 	/*
 	 * Restore the untrusted stack pointer from the trusted stack.  This points
@@ -1185,6 +1233,19 @@ exception_entry_asm:
 	 * IRQ REQUIRE: deferred (TrustedStack spill frame is precious)
 	 * Atlas update: mtdc: TrustedStack pointer
 	 */
+
+	/*
+	 * This is, uniquely of all paths into .Lcommon_context_install, potentially
+	 * a cross-thread switch.  Restore the cpuFeatures value from the
+	 * innermost compartment invocation.
+	 *
+	 * Recall "The TrustedStack::frameoffset Invariants".
+	 */
+	clhu               s0, TrustedStack_offset_frameoffset(csp)
+	cincoffset         cs0, csp, s0
+	clhu               s0, (TrustedStackFrame_offset_cpuFeatures - \
+	                           TrustedStackFrame_size)(cs0)
+	platform_switcher_cpu_features_activate s0, s1
 
 	/*
 	 * Environment call from M-mode is exception code 11.
@@ -2091,6 +2152,67 @@ __Z39switcher_handler_invocation_count_resetv:
 	li                 a1, 0
 	cret
 
+// Read and update the current compartment activation's cpuFeatures value
+	.section .text, "ax", @progbits
+	.p2align 2
+	.type __Z36switcher_invocation_cpu_features_setjj,@function
+__Z36switcher_invocation_cpu_features_setjj:
+	/*
+	 * FROM: malice
+	 * IRQ ASSUME: deferred
+	 * LIVE IN: mtdc, callee-save, ra
+	 *
+	 * Atlas:
+	 *   mtdc: pointer to TrustedStack (or nullptr if buggy scheduler)
+	 *   ra: return pointer (guaranteed because this symbol is reachable only
+	 *       through an interrupt-disabling forward-arc sentry)
+	 *
+	 *   a0: cpuFeatures AND mask
+	 *   a1: cpuFeatures OR mask
+	 *
+	 * Specifically, computes, stores, and activates:
+	 *
+	 *   frame->cpuFeatures =
+	 *     platform_switcher_cpu_features_mask(frame->cpuFeatures & a0) | a1;
+	 */
+
+	cspecialr          ca3, mtdc
+	// Atlas update: a3: copy of mtdc
+	clhu               a2, TrustedStack_offset_frameoffset(ca3)
+	addi               a2, a2, -TrustedStackFrame_size
+	// Atlas update: a2: offset of the current trusted stack frame
+	cincoffset         ca3, ca3, a2
+	/*
+	 * Atlas update:
+	 *  a3: pointer to current TrustedStack::frame
+	 *  a2: dead
+	 */
+	clhu               a2, TrustedStackFrame_offset_cpuFeatures(ca3)
+	// Atlas update: a2: current cpuFeatures value
+
+	// Compute the new value from arguments
+	and                a0, a0, a2
+	or                 a1, a0, a1
+	move               a0, a2
+	platform_switcher_cpu_features_mask a1, a2
+	/*
+	 * Atlas update:
+	 *  a0: original cpuFeatures value
+	 *  a1: updated cpuFeatures value
+	 *  a2: dead
+	 */
+
+	// Store the updated value back
+	csh                a1, TrustedStackFrame_offset_cpuFeatures(ca3)
+	zeroOne            a3
+	// Atlas update: a3: zeroed
+
+	// Activate the updated value
+	platform_switcher_cpu_features_activate a1, a2
+	// Atlas update: a1, a2: dead, safe to return
+
+	cret
+
 // The linker expects export tables to start with space for cgp and pcc, then
 // the compartment error handler.  We should eventually remove that requirement
 // for library export tables, but since they don't consume RAM after loading
@@ -2127,3 +2249,4 @@ export __Z28switcher_thread_hazard_slotsv
 export __Z13thread_id_getv
 export __Z25stack_lowest_used_addressv
 export __Z39switcher_handler_invocation_count_resetv
+export __Z36switcher_invocation_cpu_features_setjj
