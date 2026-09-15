@@ -117,6 +117,66 @@
  * result are also GL(obal).
  */
 
+/*
+ * "The TrustedStack Pointer Invariants"
+ *
+ * All purported, unsealed `TrustedStack *`-s held by the switcher and its
+ * library calls...
+ *
+ * - point to, and precisely bound, a `TrustedStack` structure
+ *
+ * - always have offset 0 (address equal to base)
+ *
+ * A proof sketch would rely on initial constructions, CHERI sealing semantics,
+ * and observing that the switcher never writes back or seals an offset
+ * `TrustedStack` pointer.
+ *
+ * TODO: For formal verification, prove that.  A full proof will require
+ * demonstrating that the (un)sealing rights for `TrustedStack` pointers do not
+ * escape the switcher, perhaps in tandem.
+ */
+/*
+ * "The TrustedStack::frameoffset Invariants"
+ *
+ * Assuming all threads begin execution with their `TrustedStack`-s obeying
+ *
+ *   `frameoffset == offsetof(TrustedStack, frames[1])`
+ *
+ * that is, with their initial frame filled out, it is an invariant of
+ * `TrustedStack`-s throughout the system's (and in particular the switcher's)
+ * execution that
+ *
+ *   `frameoffset >= offsetof(TrustedStack, frames[1])`
+ *
+ * In fact, `frameoffset`-s will always satisfy, for some positive integer `k`
+ *
+ *   `frameoffset == offsetof(TrustedStack, frames)
+ *                   + k * sizeof(TrustedStackFrame)`
+ *
+ * It is therefore *always* safe to refer to fields of the frame at
+ * `frameoffset - sizeof(TrustedStackFrame)` within any `TrustedStack *` held by
+ * the swithcher.  Accesses to the frame at `frameoffset` must be checked for
+ * being "one past the end"; the switcher never advances `frameoffset` further.
+ * That is, for all `TrustedStack *ts` to which it has access,
+ *
+ *   `ts->frameoffset <= __builtin_cheri_length_get(ts)`
+ *
+ * is also an invariant.
+ *
+ * A proof sketch for the first would rely on `.frameoffset` being decreased
+ * only in `switcher_after_compartment_call`, which checks the value against
+ * `offsetof(TrustedStack, frames[0])`, not updating the value and jumping over
+ * to `.Lcommon_defer_irqs_and_thread_exit` if the new value would go below.
+ *
+ * A proof sketch for the last would rely on `.frameoffset` being increased only
+ * in `.Lswitch_trusted_stack_push`, which performs explicit comparison between
+ * the two sides of the invariant expression and writes the incremented value
+ * only if the current `.frameoffset` is strictly in bounds.
+ *
+ * A proof sketch for the middle invariant would rely on initial construction,
+ * the above two, and each increment and decrement always being by
+ * `sizeof(TrustedStackFrame)`.
+ */
 
 switcher_code_start:
 
@@ -809,7 +869,7 @@ switcher_after_compartment_call:
 	clhu               t2, TrustedStack_offset_frameoffset(ctp)
 	li                 t0, TrustedStack_offset_frames
 	/*
-	 * 2. Decreasing frameoffset by one frame.  This will go below
+	 * 2. Decreasing frameoffset by one frame.  This will become equal to
 	 *    offsetof(TrustedStack, frames) if there are no active frames.
 	 */
 	addi               t2, t2, -TrustedStackFrame_size
@@ -1313,6 +1373,9 @@ exception_entry_asm:
 	 * pointing at TrustedStack::frames[0] -- that is, if the stack has no
 	 * active frames on it -- then just go back to the context we came from,
 	 * effectively parking this thread in a (slow) infinite loop.
+	 *
+	 * TODO: For formal verification, prove that this branch will never be taken
+	 * in a correctly initialized system.
 	 */
 	clhu               tp, TrustedStack_offset_frameoffset(csp)
 	li                 t1, TrustedStack_offset_frames
@@ -1777,7 +1840,8 @@ exception_entry_asm:
 .Lcommon_thread_exit:
 	/*
 	 * FROM: above
-	 * FROM: .Lhandle_error_not_switcher
+	 * FROM: .Lhandle_error_not_switcher (nominally, anyway; the
+	 *       TrustedStack::frameoffset invariants mean we never take that arc).
 	 * IRQ REQUIRE: deferred (about to zero out MTDC and join exception path)
 	 * LIVE IN: mtdc
 	 *
