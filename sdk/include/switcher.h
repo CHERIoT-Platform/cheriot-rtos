@@ -12,9 +12,6 @@
 /**
  * Returns true if the trusted stack contains at least `requiredFrames` frames
  * past the current one, false otherwise.
- *
- * Note: This is faster than calling either `trusted_stack_index` or
- * `trusted_stack_size` and so should be preferred in guards.
  */
 __cheri_libcall _Bool trusted_stack_has_space(int requiredFrames);
 

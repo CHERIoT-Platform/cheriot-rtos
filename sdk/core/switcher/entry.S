@@ -178,6 +178,19 @@
  * `sizeof(TrustedStackFrame)`.
  */
 
+/*
+ * Absolute symbols that we export for use by the linker scripts!
+ *
+ * sdk/xmake.lua enumerates trusted stacks in terms of the size of a
+ * TrustedStack, which includes the 0th TrustedStackFrame, and then the number
+ * of nested cross-calls supported.
+ */
+	.global __cheriot_switcher_trusted_stack_base_size
+__cheriot_switcher_trusted_stack_base_size = TrustedStack_size;
+
+	.global __cheriot_switcher_trusted_stack_frame_size
+__cheriot_switcher_trusted_stack_frame_size = TrustedStackFrame_size;
+
 switcher_code_start:
 
 # Global for the sealing key.  Stored in the switcher's code section.
