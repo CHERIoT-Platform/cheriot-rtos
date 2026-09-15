@@ -984,7 +984,8 @@ struct BitpackDerived : B
  * See `BITPACK_MEMBER_ADD_ENUM`, which this uses, for more details.
  */
 #define BITPACK_MEMBER_ADD_ENUM_BOOL(Type, FalseVal, TrueVal, BitIndex, ...)   \
-	BITPACK_MEMBER_ADD_ENUM(Type, bool, BitIndex, BitIndex, __VA_ARGS__)       \
+	BITPACK_MEMBER_ADD_ENUM(                                                   \
+	  Type, bool, BitIndex, BitIndex __VA_OPT__(, __VA_ARGS__))                \
 	{                                                                          \
 		FalseVal = false, TrueVal = true,                                      \
 	}
@@ -994,14 +995,16 @@ struct BitpackDerived : B
  * and "Asserted" (1) at the given bit index.
  */
 #define BITPACK_MEMBER_ADD_ENUM_BOOL_CLEARED_ASSERTED(Type, BitIndex, ...)     \
-	BITPACK_MEMBER_ADD_ENUM_BOOL(Type, Cleared, Asserted, BitIndex, __VA_ARGS__)
+	BITPACK_MEMBER_ADD_ENUM_BOOL(                                              \
+	  Type, Cleared, Asserted, BitIndex __VA_OPT__(, __VA_ARGS__))
 
 /**
  * Define a new boolean scoped enumeration with values named "Disabled" (0)
  * and "Enabled" (1) at the given bit index.
  */
 #define BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(Type, BitIndex, ...)     \
-	BITPACK_MEMBER_ADD_ENUM_BOOL(Type, Disabled, Enabled, BitIndex, __VA_ARGS__)
+	BITPACK_MEMBER_ADD_ENUM_BOOL(                                              \
+	  Type, Disabled, Enabled, BitIndex __VA_OPT__(, __VA_ARGS__))
 
 /**
  * Encapsulate the gyrations required to define a `Numeric`-typed field and its
@@ -1034,7 +1037,8 @@ struct BitpackDerived : B
  * See `BITPACK_MEMBER_ADD_NUMERIC`, which this uses, for more details.
  */
 #define BITPACK_MEMBER_ADD_BOOL(Type, BitIndex, ...)                           \
-	BITPACK_MEMBER_ADD_NUMERIC(Type, bool, BitIndex, BitIndex, __VA_ARGS__)
+	BITPACK_MEMBER_ADD_NUMERIC(                                                \
+	  Type, bool, BitIndex, BitIndex __VA_OPT__(, __VA_ARGS__))
 
 /// @}
 
