@@ -19,12 +19,23 @@ struct TrustedStackFrame
 	 * given to the callee.
 	 */
 	void *csp;
+
 	/**
 	 * The callee's export table.  This is stored here so that we can find the
 	 * compartment's error handler, if we need to invoke the error handler
 	 * during this call.
 	 */
 	void *calleeExportTable;
+
+	/**
+	 * Callee's per-thread platform-specific state, used to implement
+	 * switcher_invocation_cpu_features_set.
+	 *
+	 * Copied into callee from caller's frame on cross-call, mutated in callee
+	 * as desired, restored from caller's frame on cross-return.
+	 */
+	uint16_t cpuFeatures;
+
 	/**
 	 * Value indicating the number of times that this compartment invocation
 	 * has faulted.  This is incremented whenever we hit a fault in the
@@ -34,7 +45,7 @@ struct TrustedStackFrame
 	 */
 	uint16_t errorHandlerCount;
 
-	uint16_t pad[3];
+	uint16_t pad[2];
 };
 
 /**
