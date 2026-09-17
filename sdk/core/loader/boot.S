@@ -5,7 +5,7 @@
 #include "defines.h"
 #include "../switcher/trusted-stack-assembly.h"
 #include <cheri-builtins.h>
-
+#include <platform-switcher_cpu_features.inc>
 
 /**
  * Machine-mode stack high water mark CSR
@@ -183,8 +183,21 @@
 	cspecialr		ca0, mscratchc // mscratch still has the RW (G+SL) root
 	csetaddr		ca3, ca0, a3
 	csetboundsexact	ca3, ca3, a1
-	li				a1, TSTACKOFFSET_FIRSTFRAME + TrustedStackFrame_size
+	/*
+	 * Fib to the switcher that we've been created by the loader and so have an
+	 * active 0-th TrustedStackFrame.  This matters only for invoking the
+	 * initializers below and keeps the switcher from taking a cross-return out
+	 * of the 0th frame as a thread exit.
+	 */
+	li				a1, TrustedStack_size
 	csh				a1, TrustedStack_offset_frameoffset(ca3)
+
+	// Install the default value cpuFeatures for our idle thread.
+	li				a1, SWITCHER_CPU_FEATURE_DEFAULT
+	platform_switcher_cpu_features_activate a1, a2
+	csh				a1, (TrustedStack_offset_frames + \
+					      TrustedStackFrame_offset_cpuFeatures)(ca3)
+
 	cspecialw		mtdc, ca3
 	// Initialise the stack high-water mark registers
 	cgetbase		a1, csp

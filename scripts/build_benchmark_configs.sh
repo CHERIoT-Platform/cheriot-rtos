@@ -61,18 +61,15 @@ xmake f > /dev/null
 rm xmake.lua basic.json
 rm -rf .xmake
 
-# Create variants of the board with different versions of the revoker and with
-# and without the stack high watermark.
+# Create variants of the board with different versions of the revoker
 
-jq '.revoker="software" | .stack_high_water_mark=false' < standard.json > ${BOARDNAME}-software-revoker.json
-jq '.revoker="software" | .stack_high_water_mark=true' < standard.json > ${BOARDNAME}-software-revoker-shwm.json
-jq '.revoker="hardware" | .stack_high_water_mark=false' < standard.json > ${BOARDNAME}-hardware-revoker.json
-jq '.revoker="hardware" | .stack_high_water_mark=true' < standard.json > ${BOARDNAME}-hardware-revoker-shwm.json
-jq 'del(.revoker) | .stack_high_water_mark=false' < standard.json > ${BOARDNAME}-no-revoker.json
-jq 'del(.revoker) | .stack_high_water_mark=false | .defines[.defines| length]|= .+"CHERIOT_FAKE_REVOKER"' < standard.json > ${BOARDNAME}-fake-revoker.json
+jq '.revoker="software"' < standard.json > ${BOARDNAME}-software-revoker.json
+jq '.revoker="hardware"' < standard.json > ${BOARDNAME}-hardware-revoker.json
+jq 'del(.revoker)' < standard.json > ${BOARDNAME}-no-revoker.json
+jq 'del(.revoker) | .defines[.defines| length]|= .+"CHERIOT_FAKE_REVOKER"' < standard.json > ${BOARDNAME}-fake-revoker.json
 rm standard.json
 
-CONFIGS="${BOARDNAME}-software-revoker ${BOARDNAME}-software-revoker-shwm ${BOARDNAME}-hardware-revoker ${BOARDNAME}-hardware-revoker-shwm ${BOARDNAME}-no-revoker ${BOARDNAME}-fake-revoker"
+CONFIGS="${BOARDNAME}-software-revoker ${BOARDNAME}-hardware-revoker ${BOARDNAME}-no-revoker ${BOARDNAME}-fake-revoker"
 
 # Patch the include directories so that relative paths become absolute relative
 # to the board file.

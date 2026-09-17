@@ -3,6 +3,16 @@
 #include <cstddef>
 #include <cstdint>
 
+/**
+ * Forward declaration of the "trusted stack" structure used by the switcher.
+ * The scheduler sees these only as the target types of sealed capabilities, so
+ * this incomplete type suffices.
+ *
+ * However, this file is shared between the scheduler and the loader.  The
+ * latter has the actual, complete definitions of TrustedStackGeneric and
+ * TrustedStack (from sdk/core/switcher/trusted-stack.hh) in scope, so we have
+ * to match its use of a template type and a using declaration.
+ */
 template<size_t NFrames>
 struct TrustedStackGeneric;
 
