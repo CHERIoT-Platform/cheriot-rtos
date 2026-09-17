@@ -52,7 +52,7 @@
  * In general, atlases should cover all (including dead) registers.  Point
  * changes to the atlas are denoted with "Atlas update", to emphasize that
  * registers not named are not dead but instead retain their meaning from the
- * last full atlas.
+ * last full atlas or update.
  *
  * Labels associated with interesting control flow are annotated with
  *
@@ -86,9 +86,8 @@
  * Control flow instructions may be annotated with "LIVE OUT:" labels.  These
  * capture the subset of live registers meant to be available to the target.
  *
- * For all annotations, optional commentary given in parentheses and may
+ * For all annotations, optional commentary is given in parentheses and may
  * continue onto adjacent lines.
- *
  */
 /*
  * Multiple points in the switcher are exposed to callers via sentries (either
@@ -335,10 +334,9 @@ __Z26compartment_switcher_entryz:
 	 * below the base (lowest address) of the stack capability.
 	 *
 	 * Certain other kinds of less plausibly accidental malice (for example, an
-	 * untagged or sealed or SD-permission-less capability in sp, or a csp that
-	 * is not capability aligned) will have survived the above checks but will
-	 * also be caught by this first spill.  In some sense we should forcibly
-	 * unwind the caller, but it's acceptable, in the sense that no
+	 * untagged or sealed capability in csp) will have survived the above checks
+	 * but will also be caught by this first spill.  In some sense we should
+	 * forcibly unwind the caller, but it's acceptable, in the sense that no
 	 * would-be-callee can be harmed, to just return an error instead.
 	 *
 	 * By virtue of having checked stack permissions above, we have ruled out
@@ -606,7 +604,11 @@ __Z26compartment_switcher_entryz:
 	// Atlas update: gp: target compartment CGP
 	clc                cra, ExportTable_offset_pcc(ct1)
 	cincoffset         cra, cra, s0
-	// Atlas update: ra: target function entrypoint (pcc base + offset from s0)
+	/*
+	 * Atlas update:
+	 *  ra: target function entrypoint (pcc base + offset from s0)
+	 *  s0: dead
+	 */
 
 	// Zero any unused argument registers
 	/*
@@ -623,7 +625,8 @@ __Z26compartment_switcher_entryz:
 	andi               t2, tp, 0x7 // loader/types.h's ExportEntry::flags
 	/*
 	 * Change from the number of registers to pass into the number of 2-byte
-	 * instructions to skip.
+	 * instructions to skip (here we rely on zeroRegisters always using the
+	 * `c.li` 2-byte instruction for each register and in the order given).
 	 */
 	sll                t2, t2, 1
 	// Offset the jump target by the number of instructions to skip
@@ -690,9 +693,12 @@ switcher_after_compartment_call:
 	 *  mtdc: pointer to this thread's TrustedStack
 	 *  a0, a1: return value(s).  The callee function must ensure that it clears
 	 *          these as appropriate if it is returning 0 or 1 values and not 2.
-	 *  ra, sp, gp: dead or callee state (to be replaced by caller state)
-	 *  tp, s0, s1, t0, t1, t2, a2, a3, a4, a5: dead or callee state (to be
-	 *                                          zeroed before return to caller)
+	 *  ra, sp, gp, s0, s1: dead (psABI callee-saves; since the callee is not
+	 *                      trusted, we replace them with the caller state
+	 *                      captured at time of cross-call onto the untrusted
+	 *                      stack; recall .Lswitch_entry_first_spill .)
+	 *  tp, t0, t1, t2, a2, a3, a4, a5: dead or callee state (to be zeroed
+	 *                                  before return to caller)
 	 */
 	/*
 	 * Pop a frame from the trusted stack, leaving all registers in the state
@@ -756,7 +762,7 @@ switcher_after_compartment_call:
 	 * that we would be loading is the csp on entry, which does not have a
 	 * spilled area.  In this case, we would fault when loading (because the
 	 * stack cursor is at its limit), so would exit the thread, but we should
-	 * instead gracefully exit the thread.
+	 * instead gracefully exit the thread here.
 	 */
 	bgeu               t0, t2, .Lcommon_defer_irqs_and_thread_exit
 	cincoffset         ct1, ctp, t2
