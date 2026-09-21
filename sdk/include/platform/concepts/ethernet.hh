@@ -11,10 +11,15 @@
  * This is not required to be copyable.
  */
 template<typename T>
-concept ReceivedEthernetFrame = requires(T frame) {
+concept EthernetReceivedFrame = requires(T frame) {
 	{ frame->length } -> std::convertible_to<uint16_t>;
 	{ frame->buffer } -> std::convertible_to<const uint8_t *>;
-	{ frame->buffer } -> std::convertible_to<bool>;
+};
+
+template<typename T>
+concept EthernetReceiveResult = requires(T result) {
+	{ std::get_if<0>(&result) } -> EthernetReceivedFrame;
+	{ std::get_if<const uint32_t>(&result) } -> std::same_as<const uint32_t *>;
 };
 
 /**
@@ -54,7 +59,7 @@ concept EthernetAdaptor = requires(T                      adaptor,
 	 * has a length and a buffer.  The return value owns the buffer for its
 	 * lifetime.
 	 */
-	{ adaptor.receive_frame() } -> ReceivedEthernetFrame;
+	{ adaptor.receive_frame() } -> EthernetReceiveResult;
 
 	/**
 	 * Send a frame identified by a base and length.  Returns true if the frame

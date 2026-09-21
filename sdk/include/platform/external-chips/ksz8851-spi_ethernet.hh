@@ -731,41 +731,63 @@ namespace Ksz8851
 			return (status & Port1Status::LinkGood) != 0;
 		}
 
-		std::optional<Frame> receive_frame()
+		const std::variant<Frame, uint32_t> receive_frame()
 		{
 			LockGuard g{chipSelectLock};
-			if (framesToProcess == 0)
-			{
-				uint16_t isr = register_read(RegisterOffset::InterruptStatus);
 
-				if (isr & LinkupDetectInterrupt)
+			while (true)
+			{
+				while (framesToProcess == 0)
 				{
-					/* Acknowledge the power management event */
-					register_set(
-					  RegisterOffset::PowerManagementEventControl,
-					  PowerManagementEventControl::WakeUpEventLinkup);
+					/*
+					 * TODO: We could do a "double-checked IRQs" dance here.
+					 * `irqFutexValue` is live-out only if there are no IRQs for
+					 * us to which to attend.  We could therefore defer calling
+					 * `receive_interrupt_value()` until we were in such a
+					 * state, so long as we then re-loaded and re-checked the
+					 * `isr` value.
+					 *
+					 * That said, on supported platforms to date,
+					 * `register_read` (and its SPI transaction with the MAC) is
+					 * significantly more expensive than
+					 * `receive_interrupt_value`, and so the need to do another
+					 * `register_read` likely does not save us anything.
+					 */
+
+					uint32_t irqFutexValue = provider.receive_interrupt_value();
+					__c11_atomic_signal_fence(__ATOMIC_SEQ_CST);
+
+					uint16_t isr =
+					  register_read(RegisterOffset::InterruptStatus);
+
+					if (isr & LinkupDetectInterrupt)
+					{
+						/* Acknowledge the power management event */
+						register_set(
+						  RegisterOffset::PowerManagementEventControl,
+						  PowerManagementEventControl::WakeUpEventLinkup);
+					}
+
+					if (!(isr & ReceiveInterrupt))
+					{
+						return {irqFutexValue};
+					}
+
+					// Acknowledge the interrupt
+					register_write(RegisterOffset::InterruptStatus,
+					               ReceiveInterrupt);
+
+					// Read number of frames pending.
+					// Note that this is only updated when we acknowledge the
+					// interrupt.
+					framesToProcess =
+					  register_read(
+					    RegisterOffset::ReceiveFrameCountThreshold) >>
+					  8;
 				}
 
-				if (!(isr & ReceiveInterrupt))
-				{
-					return std::nullopt;
-				}
+				framesToProcess--;
 
-				// Acknowledge the interrupt
-				register_write(RegisterOffset::InterruptStatus,
-				               ReceiveInterrupt);
-
-				// Read number of frames pending.
-				// Note that this is only updated when we acknowledge the
-				// interrupt.
-				framesToProcess =
-				  register_read(RegisterOffset::ReceiveFrameCountThreshold) >>
-				  8;
-			}
-
-			// Get number of frames pending
-			for (; framesToProcess; framesToProcess--)
-			{
 				uint16_t status =
 				  register_read(RegisterOffset::ReceiveFrameHeaderStatus);
 				uint16_t length =
@@ -834,7 +856,6 @@ namespace Ksz8851
 
 				register_clear(RegisterOffset::ReceiveQueueCommand,
 				               StartDmaAccess);
-				framesToProcess -= 1;
 
 				Capability<uint8_t> boundedBuffer{receiveBuffer.get()};
 				boundedBuffer.bounds().set_inexact(length);
@@ -845,8 +866,6 @@ namespace Ksz8851
 
 				return Frame{std::move(guard), boundedBuffer, length};
 			}
-
-			return std::nullopt;
 		}
 
 		/**
