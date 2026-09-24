@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../switcher/tstack.h"
+#include "../switcher/trusted-stack.hh"
 #include "assembly-helpers.h"
 #include "debug.hh"
 #include "defines.h"

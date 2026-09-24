@@ -45,3 +45,7 @@ __cheri_compartment(
   "compartment_calls_inner_with_"
   "handler") int test_incorrect_export_table_with_handler(__cheri_callback int (*fn)());
 constexpr int ConstantValue = 0x41414141;
+
+__cheri_compartment(
+  "compartment_calls_"
+  "inner") int test_switcher_cpu_features_inner(__cheri_callback int (*fn)());

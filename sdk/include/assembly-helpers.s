@@ -26,7 +26,7 @@
 	.endif
 .endm
 
-/// Zero all of the registers in a list
+/// Zero all of the registers in a list (in order and with a 2-byte c.li each)
 .macro zeroRegisters reg1, regs:vararg
 	forall zeroOne, \reg1, \regs
 .endm

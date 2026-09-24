@@ -9,6 +9,11 @@
 #include <string.h>
 #include <timeout.h>
 
+#if defined(IBEX) && defined(MICROSOFT_CHERIOT_SAFE)
+#	include <platform-rdcycle.h>
+#	include <platform-switcher_cpu_features.hh>
+#endif
+
 using namespace CHERI;
 
 namespace
@@ -457,6 +462,83 @@ namespace
 		}
 	}
 
+#if defined(IBEX) && defined(MICROSOFT_CHERIOT_SAFE)
+	void check_safe_ibex_constant_time()
+	{
+		/*
+		 * SAFE builds Ibex without its SecureIbex flag, meaning that while we
+		 * can write to the CSR bit to our heart's content, it isn't actually
+		 * wired up to any effects (and will always read zero).  Even we change
+		 * that, SAFE still builds Ibex with its "fast" muldiv implementation of
+		 * the RISC-V M extension, wherein data independent timing influences
+		 * solely the behavior of division (and remainder) by zero.
+		 *
+		 * So we don't expect these numbers to differ unless you've built your
+		 * own Ibex core.  As such, we don't test anything about them.
+		 */
+
+		auto testBody = []() -> uint32_t {
+			return CHERI::with_interrupts_disabled([]() -> uint32_t {
+				uint32_t cyclesBefore = rdcycle();
+
+				uint32_t dividend = 0x98765432U;
+				uint32_t divisor  = 0;
+				__asm__ volatile("div %[dividend], %[dividend], %[divisor]"
+				                 : [dividend] "+r"(dividend)
+				                 : [divisor] "r"(divisor));
+
+				uint32_t cyclesAfter = rdcycle();
+
+				return cyclesAfter - cyclesBefore;
+			});
+		};
+
+		// Grab the current features so we can restore them later.
+		uint32_t cpuFeatures0 = switcher_invocation_cpu_features_set(~0, 0);
+
+		// Turn on Data Independent Timing, preserving all other bits
+		uint32_t cpuFeatures1 = switcher_invocation_cpu_features_set(
+		  ~0, SWITCHER_CPU_FEATURE_PLATFORM_DATA_INDEPENDENT_TIMING);
+
+		uint32_t cyclesDataIndependent = testBody();
+
+		// Turn off Data Independent Timing and verify that it was on
+		uint32_t cpuFeatures2 = switcher_invocation_cpu_features_set(
+		  ~SWITCHER_CPU_FEATURE_PLATFORM_DATA_INDEPENDENT_TIMING, 0);
+
+		uint32_t cyclesDataDependent = testBody();
+
+		// Restore CPU features to values at entry
+		switcher_invocation_cpu_features_set(0, cpuFeatures0);
+
+		debug_log(
+		  "Ibex data independent timing probe: with({})={} without({})={}",
+		  cpuFeatures1,
+		  cyclesDataIndependent,
+		  cpuFeatures2,
+		  cyclesDataDependent);
+
+		if (cpuFeatures1 != cpuFeatures2)
+		{
+			TEST((cpuFeatures1 &
+			      SWITCHER_CPU_FEATURE_PLATFORM_DATA_INDEPENDENT_TIMING) != 0,
+			     "Switcher failed to set Ibex data independent timing");
+
+			TEST((cpuFeatures2 &
+			      SWITCHER_CPU_FEATURE_PLATFORM_DATA_INDEPENDENT_TIMING) == 0,
+			     "Switcher failed to clear Ibex data independent timing");
+
+			TEST(
+			  cyclesDataIndependent > cyclesDataDependent,
+			  "Unexpected cycle counts for Ibex data independent timing test");
+		}
+		else
+		{
+			debug_log("Ibex not built with data independent timing support?");
+		}
+	}
+#endif
+
 	const char *testString = "Hello world";
 
 	bool initialiserRun1;
@@ -570,6 +652,10 @@ int test_misc()
 	check_sealed_scoping();
 	check_cils();
 	check_erroror();
+
+#if defined(IBEX) && defined(MICROSOFT_CHERIOT_SAFE)
+	check_safe_ibex_constant_time();
+#endif
 
 	debug_log("Testing shared objects.");
 	check_shared_object("exampleK",
