@@ -63,14 +63,16 @@ struct SonataGpioBase : private utils::NoCopyNoMove
 		LowLevel    = 3,
 	};
 
-	static constexpr uint32_t PcIntModeBits = 2;
+	static constexpr uint32_t PcIntModeBits = 0b11;
 	/// Status Register Fields
 	enum [[clang::flag_enum]] : uint32_t
 	{
 		/// Pin-change interrupt mode.
 		/// See PcIntMode enums.
-		PcIntModeSelect = PcIntModeBits << 0,
-		/// Select between the raw (0) and debounced input (1).
+		PcIntModeSelect =
+		  PcIntModeBits
+		  << 0, // NOLINT(clang-diagnostic-flag-enum)
+		        /// Select between the raw (0) and debounced input (1).
 		PcIntInputSelect = 1U << 3,
 		/// Enable the pin-change interrupt instance-wide.
 		PcIntEnable = 1U << 31,
