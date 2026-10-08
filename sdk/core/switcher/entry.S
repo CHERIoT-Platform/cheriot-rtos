@@ -1735,6 +1735,15 @@ exception_entry_asm:
 	 * need the stack pointer so just put zero there.
 	 */
 	zeroOne            sp
+
+	/*
+	 * Zero the MEPCC.  This will be spilled later and will be the place that
+	 * the thread resumes.  A thread that has exited will not resume, so
+	 * setting its PCC to 0 ensures that attempting to resume it will trap
+	 * immediately.
+	 */
+	cspecialrw         cnull, mepcc, csp
+
 	cspecialrw         csp, mtdc, csp
 	// LIVE OUT: mtdc, sp
 	j                  .Lexception_exiting_threads_rejoin
@@ -1812,6 +1821,7 @@ exception_entry_asm:
 	j                  .Lexception_reentered
 
 .size exception_entry_asm, . - exception_entry_asm
+
 
 /*******************************************************************************
  * Switcher-exported library functions.
