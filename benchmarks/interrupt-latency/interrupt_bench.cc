@@ -105,7 +105,7 @@ int __cheri_compartment("interrupt_bench") entry_low_priority()
 			Debug::log("Low thread setting event");
 			event = 1;
 			start = rdcycle();
-			event.notify_all();
+			event.notify_one();
 		});
 	}
 

@@ -59,7 +59,7 @@ firmware("interrupt-benchmark")
                 compartment = "interrupt_bench",
                 priority = 1,
                 entry_point = "entry_low_priority",
-                stack_size = 0x100,
+                stack_size = 0x200,
                 trusted_stack_frames = 4
             },
         }, {expand = false})
