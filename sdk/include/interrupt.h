@@ -133,3 +133,60 @@ __cheri_compartment("scheduler") const uint32_t *interrupt_futex_get(
  */
 __cheri_compartment("scheduler") int interrupt_complete(
   InterruptCapability interruptcapability);
+
+#if defined(__cplusplus)
+
+#	include <futex.h>
+
+/**
+ * Packaged common design pattern for waiting for an event using an interrupt
+ * futex.
+ *
+ * Invokes the `check` callback and `futex_timed_wait(timeout, futex,...)` in a
+ * loop until either returns nonzero then returns that value. The loop is
+ * structured to use the interrupt futex correctly to avoid missed wakeups.
+ *
+ * The `enableInterrupts` callback is invoked if the first call to `check`
+ * returns zero and is expected to ensure that the given `futex` will increment
+ * at least when `check`'s return value would (meaningfully) change.  In the
+ * case where the event source is not shared across threads, it is likely
+ * acceptable for this callback to disable its other interrupt sources.
+ */
+template<typename EnableInterrupts, typename Check>
+    requires std::is_invocable_r_v<void, EnableInterrupts> &&
+	         std::is_invocable_v<Check> &&
+	         std::convertible_to<std::invoke_result_t<Check>, int>
+__always_inline int interrupt_wait(TimeoutArgument          timeout,
+                                   const volatile uint32_t *futex,
+                                   EnableInterrupts         enableInterrupts,
+                                   Check                    check)
+{
+	int      res;
+	uint32_t lastFutexValue;
+
+	// Probe the status register without doing any IRQ dance first
+	if ((res = static_cast<int>(check())) != 0)
+	{
+		return res;
+	}
+
+	enableInterrupts();
+
+	do
+	{
+		// Prevent prior writes from reordering after the futex read below
+		__c11_atomic_signal_fence(__ATOMIC_RELEASE);
+		lastFutexValue = *futex;
+		// Prevent subsequent loads from reordering prior to the futex read
+		__c11_atomic_signal_fence(__ATOMIC_ACQUIRE);
+
+		if ((res = static_cast<int>(check())) != 0)
+		{
+			return res;
+		}
+	} while ((res = futex_timed_wait(timeout, futex, lastFutexValue)) == 0);
+
+	return res;
+}
+
+#endif
