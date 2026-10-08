@@ -9,6 +9,7 @@
 
 #include <cdefs.h>
 #include <compartment.h>
+#include <errno.h>
 #include <riscvreg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -219,4 +220,41 @@ __always_inline T *&invocation_state()
 	return *reinterpret_cast<T **>(invocation_state_slot(Index));
 }
 
+/**
+ * Packaged common design pattern for spinning, until a call to `check` returns
+ * a nonzero value.
+ *
+ * If the `Yield` template parameter is `true`, after each `check` that returns
+ * zero, this loop will call `yield()` so that other threads at the same
+ * priority level can run.
+ *
+ * If the `MaximumAttempts` template parameter is nonzero, then no more than
+ * `MaximumAttempts` loops will be attempted.
+ *
+ * This function returns either the aforementioned nonzero return from `check`
+ * or, if `MaximumAttempts` is nonzero, `-ETIMEDOUT` if all `MaximumAttempts`
+ * have returned zero.
+ */
+template<bool Yield = false, uint16_t MaximumAttempts = 0, typename Check>
+    requires std::is_invocable_v<Check> &&
+	         std::convertible_to<std::invoke_result_t<Check>, int>
+int thread_spin_wait(Check check)
+{
+	for (uint16_t attempt = 0;
+	     (MaximumAttempts == 0) || (attempt < MaximumAttempts);
+	     attempt++)
+	{
+		int res = static_cast<int>(check());
+		if (res != 0)
+		{
+			return res;
+		}
+		if constexpr (Yield)
+		{
+			yield();
+		}
+	}
+
+	return -ETIMEDOUT;
+}
 #endif
