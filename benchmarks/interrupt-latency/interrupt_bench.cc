@@ -24,11 +24,14 @@ namespace
 } // namespace
 
 /**
- * N threads of equal priority will enter here with different stack sizes. They
- * will all wait on a ticket lock so that only one of them runs at a time. They
- * will then wait on a futex that will be set by the low-priority thread.
+ * N threads of equal priority will enter here with different stack sizes (the
+ * stack size actually makes no difference, but was used an experimental
+ * variable). They will all wait on a ticket lock so that only one of them runs
+ * at a time. One of them will write a TSV header and they will all wait on a
+ * futex that will be set by the low-priority thread.
  *
- * All of these threads will be waiting for the futex.
+ * When all the threads are waiting on the futex the low-priority thread will
+ * run and wake them up one at a time.
  */
 int __cheri_compartment("interrupt_bench") entry_high_priority()
 {
@@ -46,13 +49,12 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 
 		if (!headerWritten)
 		{
-			Debug::log("Thread {} creating event", threadID);
+			Debug::log("Thread {} writing header", threadID);
 			printf("#board\tstack size\ttotal\n");
 			headerWritten = true;
 		}
 
 		int    end       = CHERI::with_interrupts_disabled([&]() {
-			uint32_t bits = 0;
 			Debug::log("Thread {} releasing ticket lock", threadID);
 			g.unlock();
 			Debug::log("Thread {} waiting on event", threadID);
@@ -78,23 +80,26 @@ int __cheri_compartment("interrupt_bench") entry_high_priority()
 		__builtin_unreachable();
 	}
 
+	// XXX this doesn't seem to be required any more?!
 	// Other threads sleep forever. we could exit (return) instead but this
 	// seems to trigger a bug sometimes where the low priority thread
 	// doesn't wake up.
-	Debug::Invariant(thread_sleep(&t) >= 0,
-	                 "Compartment call to thread_sleep failed");
+	// Debug::Invariant(thread_sleep(&t) >= 0,
+	//                  "Compartment call to thread_sleep failed");
 
 	return 0;
 }
 
 /**
  * This lower priority thread will run once all the higher priority threads are
- * waiting (either on the ticket lock or the event). It sets the event without
- * yielding, puts the starting cycle counter in a global then yields(), which
- * does an 'ecall' simulating an interrupt waking the waiting thread, which
- * reads the cycle counter again to calculate the interrupt latency. We repeat
- * this until all the higher priority threads have run, with the last one
- * calling exiting.
+ * waiting on event: it can't run earlier because one of the higher priority
+ * threads will always be runnable until that point. It sets event to 1, puts
+ * the starting cycle counter in a global then calls notify_one(), which will do
+ * a futex_notify() simulating an interrupt waking the waiting thread. That
+ * thread will be run immediately due to being higher priority and it will then
+ * read the cycle counter again to calculate the interrupt latency and exit. We
+ * repeat this until all the higher priority threads have run, with the last one
+ * calling simulation_exit to exit the simulator if applicable.
  */
 int __cheri_compartment("interrupt_bench") entry_low_priority()
 {
