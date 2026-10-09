@@ -102,9 +102,10 @@ int __cheri_compartment("test_runner") run_tests()
 			Capability switcherCrossCall{switcherCrossCallRaw};
 			TEST(!switcherCrossCall.permissions().contains(Permission::Global),
 			     "Switcher cross-call sentry should be local");
-			TEST(switcherCrossCall.type() == CheriSealTypeSentryDisabling,
-			     "Switcher cross-call sentry should be IRQ-disabling forward "
-			     "sentry");
+			TEST(
+			  switcherCrossCall.type() == CheriSealTypeSentryEnabling,
+			  "Switcher cross-call sentry should be interrupt-enabling forward "
+			  "sentry");
 		}
 
 		// This is started as an interrupts-disabled thread, make sure that it
