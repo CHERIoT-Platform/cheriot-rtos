@@ -5,6 +5,7 @@
 #include "trusted-stack-assembly.h"
 #include "misc-assembly.h"
 #include <errno.h>
+#include <cheri-builtins.h>
 
 .include "assembly-helpers.s"
 
@@ -1729,12 +1730,29 @@ exception_entry_asm:
 	 * scheduler's event handler.
 	 */
 	csrw               mtval, MCAUSE_THREAD_EXIT
+
+	/**
+	 * Set the thread's MEPCC (i.e. the PCC if the thread is resumed) to the
+	 * idle loop.  This ensures that any malicious scheduler that tries to run
+	 * this thread will simply get an additional idle thread, not a thread that
+	 * might be used to attack the rest of the system in any way.
+	 */
+0:
+	auipcc             csp, %cheriot_compartment_hi(.Lexited_thread)
+	cincoffset         csp, csp, %cheriot_compartment_lo_i(0b)
+	csetbounds         csp, csp, 8
+	li                 a0, CHERI_PERM_EXECUTE | CHERI_PERM_LOAD | CHERI_PERM_GLOBAL
+	candperm           csp, csp, a0
+	cspecialrw         cnull, mepcc, csp
+
 	/*
 	 * The thread exit code expects the TrustedStack pointer to be in csp and
 	 * the thread's stack pointer to be in mtdc.  After thread exit, we don't
 	 * need the stack pointer so just put zero there.
 	 */
 	zeroOne            sp
+
+
 	cspecialrw         csp, mtdc, csp
 	// LIVE OUT: mtdc, sp
 	j                  .Lexception_exiting_threads_rejoin
@@ -1812,6 +1830,23 @@ exception_entry_asm:
 	j                  .Lexception_reentered
 
 .size exception_entry_asm, . - exception_entry_asm
+
+/**
+ * The thread body for an idle thread.  Threads that have exited will have
+ * their PCC set to this (with bounds precisely applied to exactly this
+ * sequence).  This allows a malicious scheduler to use an exited thread as an
+ * additional idle thread but does not provide it with any abilities that it
+ * did not have already.
+ */
+.Lexited_thread:
+	// The following two instructions don't have compressed variants, make sure
+	// that any future versions don't shrink this and make the applied bounds
+	// too big.
+.option push
+.option norvc
+	wfi
+	j .Lexited_thread
+.option pop
 
 /*******************************************************************************
  * Switcher-exported library functions.
@@ -2027,6 +2062,8 @@ __Z39switcher_handler_invocation_count_resetv:
 	// Atlas update: a1: dead (to be zeroed)
 	li                 a1, 0
 	cret
+
+
 
 // The linker expects export tables to start with space for cgp and pcc, then
 // the compartment error handler.  We should eventually remove that requirement
