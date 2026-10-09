@@ -120,15 +120,21 @@
 
 switcher_code_start:
 
-# Global for the sealing key.  Stored in the switcher's code section.
+# Globals for the sealing keys.  Stored at the start of the switcher's code section.
 	.section .text, "ax", @progbits
 	.globl compartment_switcher_sealing_key
 	.p2align 3
 compartment_switcher_sealing_key:
+# Sealing key for unsealing trusted-stack pointers
 .Lsealing_key_trusted_stacks:
 	.long 0
 	.long 0
+# Sealing key that allows unsealing import tables
 .Lunsealing_key_import_tables:
+	.long 0
+	.long 0
+# Sealing key that allows sealing interrupt-disabling sentries
+.Lsealing_key_interrupt_sentries:
 	.long 0
 	.long 0
 # Global for the scheduler's PCC.  Stored in the switcher's code section.
@@ -244,7 +250,7 @@ __Z26compartment_switcher_entryz:
 	/*
 	 * FROM: cross-call
 	 * FROM: malice
-	 * IRQ ASSUME: deferred (loader/boot.cc constructs only IRQ-deferring
+	 * IRQ ASSUME: enabled (loader/boot.cc constructs only IRQ-enabled
 	 *             sentries to this function; the export entry at the end
 	 *             of this file is somewhat fictitious)
 	 * LIVE IN: mtdc, ra, sp, gp, s0, s1, t0, t1, a0, a1, a2, a3, a4, a5
@@ -255,7 +261,7 @@ __Z26compartment_switcher_entryz:
 	 *        (may be 0 from buggy/malicious scheduler thread)
 	 *  ra: caller return address
 	 *      (at the moment, this is ensured because we enter via an
-	 *      IRQ-disabling forward sentry, which requires ra as the destination
+	 *      IRQ-enabled forward sentry, which requires ra as the destination
 	 *      register of the cjalr the caller used, but we are not relying on
 	 *      this property, and we hope to relax the switcher's IRQ posture)
 	 *  sp: nominally, caller's stack pointer; will check integrity below
@@ -635,15 +641,22 @@ __Z26compartment_switcher_entryz:
 	zeroRegisters      a0, a1, a2, a3, a4, a5, t0
 
 	/*
-	 * Enable interrupts if the interrupt-disable bit is not set in flags.  See
+	 * Disable interrupts if the interrupt-disable bit is set in flags.  See
 	 * loader/types.h's InterruptStatus and ExportEntry::InterruptStatusMask.
 	 * InterruptStatus::Inherited is prohibited on export entries, so we need
 	 * look only at one bit.
 	 */
 	andi               t1, tp, ExportEntryInterruptStatusSwitcherMask
-	bnez               t1, .Lswitch_skip_interrupt_enable
-	csrsi              mstatus, 0x8
-.Lswitch_skip_interrupt_enable:
+	beqz               t1, .Lswitch_skip_interrupt_disable
+	/*
+	 * If we need to disable interrupts, convert the function pointer into an
+	 * interrupts-disabled sentry.  This will ensure that the callee runs with
+	 * interrupts disabled but preserves our interrupts-enabled status on
+	 * return.
+	 */
+	LoadCapPCC         ctp, .Lsealing_key_interrupt_sentries
+	cseal              cra, cra, ctp
+.Lswitch_skip_interrupt_disable:
 	/*
 	 * FROM: above
 	 * IRQ REQUIRE: any (have adopted callee disposition)
@@ -679,11 +692,7 @@ switcher_after_compartment_call:
 	 * IFROM: above
 	 * FROM: .Lswitch_stack_too_small
 	 * FROM: .Lcommon_force_unwind
-	 * IRQ ASSUME: any (both IRQ-deferring and IRQ-enabling sentries are
-	 *             provided to the callees and can escape for malice's use, and
-	 *             the TrustedStack spill frame is not precious, and nothing
-	 *             that would happen were we are preempted would shift our
-	 *             TrustedStack::frameoffset or the contents of ::frames)
+	 * IRQ ASSUME: enabled
 	 * LIVE IN: mtdc, a0, a1
 	 *
 	 * Atlas:
@@ -853,6 +862,7 @@ switcher_after_compartment_call:
 .Lswitch_stack_too_small:
 	/*
 	 * FROM: .Lswitch_stack_check_length
+	 * IRQ ASSUME: enabled (entry set the interrupt state to enabled)
 	 * IRQ REQUIRE: any (TrustedStack spill frame is not precious)
 	 * LIVE IN: mtdc
 	 *
@@ -873,6 +883,7 @@ switcher_after_compartment_call:
 .Lswitch_trusted_stack_exhausted:
 	/*
 	 * FROM: .Lswitch_trusted_stack_push
+	 * IRQ ASSUME: enabled (entry set the interrupt state to enabled)
 	 * IRQ REQUIRE: any (all state is in registers, TrustedStack spill frame is
 	 *              not precious)
 	 * LIVE IN: mtdc, sp
@@ -1588,17 +1599,7 @@ exception_entry_asm:
 	 * pointer, and we may try to dereference the provided sp, but we are
 	 * prepared for that to trap (and induce forced-unwinding).
 	 */
-
-	/*
-	 * Now that we're back, defer interrupts again before we do anything that
-	 * manipulates the TrustedStack.
-	 *
-	 * TODO: Eventually we'd like to move this down onto the paths where it
-	 * actually matters and let most of this code run with IRQs enabled.
-	 */
-	csrci              mstatus, 0x8
-//.Lhandle_error_handler_return_irqs:
-	// IRQ ASSUME: deferred
+	// IRQ ASSUME: enabled
 
 	/*
 	 * Return values are compartment.h's enum ErrorRecoveryBehaviour :
