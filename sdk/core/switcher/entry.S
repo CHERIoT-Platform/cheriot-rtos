@@ -1707,7 +1707,8 @@ exception_entry_asm:
 	// IRQ ASSUME: deferred
 
 /**
- * Signal to the scheduler that the current thread is finished
+ * Signal to the scheduler that the current thread is finished and arrange for
+ * it to return here if it is ever re-activated.
  */
 .Lcommon_thread_exit:
 	/*
@@ -1729,6 +1730,69 @@ exception_entry_asm:
 	 * scheduler's event handler.
 	 */
 	csrw               mtval, MCAUSE_THREAD_EXIT
+
+	/*
+	 * Once we've gotten here, ensure that we come back here if the scheduler
+	 * tries to re-activate us.  This `mepcc` will be spilled to the
+	 * `TrustedStack` spill area over in `.Lexception_exiting_threads_rejoin`.
+	 * Moreover, therein, we will capture the current `mstatus`, which means we
+	 * are guaranteed to resume with IRQs deferred.  (Thus, it's OK to use
+	 * `.Lcommon_thread_exit` here, over `.Lcommon_defer_irqs_and_thread_exit`;
+	 * we don't need to go further back to `switcher_after_compartment_call`,
+	 * since that will do nothing that isn't idempotent before beginning its
+	 * journey to `.Lcommon_thread_exit`.)
+	 *
+	 * This is the primary defense against a malicious scheduler in the sense of
+	 * https://github.com/CHERIoT-Platform/cheriot-rtos/issues/774 .
+	 */
+1:
+	auipcc             cs0, %cheriot_compartment_hi(.Lcommon_thread_exit)
+	cincoffset         cs0, cs0, %cheriot_compartment_lo_i(1b)
+	cspecialw          mepcc, cs0
+
+	/*
+	 * We may have reached here (specifically, from
+	 * `.Lcommon_defer_irqs_and_thread_exit` and in turn from
+	 * `switcher_after_compartment_call`) without having gone through an
+	 * architectural exception.  As a consequence, the TrustedStack spill area
+	 * is potentially full of interesting things (from as far back in time as
+	 * the last exception), and we'd like to expunge those.
+	 *
+	 * While a malicious scheduler reactivating an exited thread is primarily
+	 * mitigated by the above rewriting of `mepcc`, which ensures that none of
+	 * these values are meaningfully available to software thereafter, this is
+	 * some defense in depth and may simplify formal analysis.
+	 *
+	 * In fact, the TrustedStack::frameoffset invariants mean that we cannot
+	 * have gotten here any other way (`.Lhandle_error_not_switcher` does not
+	 * jump here).
+	 */
+	csc                cnull, TrustedStack_offset_cra(csp)
+	csc                cnull, TrustedStack_offset_csp(csp)
+	csc                cnull, TrustedStack_offset_cgp(csp)
+	csc                cnull, TrustedStack_offset_ctp(csp)
+	csc                cnull, TrustedStack_offset_ct0(csp)  // 5
+	csc                cnull, TrustedStack_offset_ct1(csp)
+	csc                cnull, TrustedStack_offset_ct2(csp)
+	csc                cnull, TrustedStack_offset_cs0(csp)
+	csc                cnull, TrustedStack_offset_cs1(csp)
+	csc                cnull, TrustedStack_offset_ca0(csp)  // 10
+	csc                cnull, TrustedStack_offset_ca1(csp)
+	csc                cnull, TrustedStack_offset_ca2(csp)
+	csc                cnull, TrustedStack_offset_ca3(csp)
+	csc                cnull, TrustedStack_offset_ca4(csp)
+	csc                cnull, TrustedStack_offset_ca5(csp)  // 15
+
+	/*
+	 * Zero out the thread's hazard pointers.
+	 *
+	 * This is done for us already in the paths that reach us via
+	 * `switcher_after_compartment_call`, but it can't hurt to do twice.
+	 * (Nominally, we could reach here from `.Lhandle_error_not_switcher`, but
+	 * again, not in practice, assuming invariants hold.)
+	 */
+	clear_hazard_slots /* trusted stack = */ csp, /* scratch = */ cs0
+
 	/*
 	 * The thread exit code expects the TrustedStack pointer to be in csp and
 	 * the thread's stack pointer to be in mtdc.  After thread exit, we don't
