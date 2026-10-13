@@ -133,3 +133,103 @@ __cheri_compartment("scheduler") const uint32_t *interrupt_futex_get(
  */
 __cheri_compartment("scheduler") int interrupt_complete(
   InterruptCapability interruptcapability);
+
+#if defined(__cplusplus)
+
+#	include <futex.h>
+
+/**
+ * Packaged common design pattern for handlers of edge-triggered interrupts for
+ * seamless transitions between polling and waiting for an interrupt.  As long
+ * as events arrive quickly, this pattern avoids interaction with the scheduler
+ * and interrupt controller.  Only once processing looks to have no more events
+ * to process will the thread call in to the scheduler to atomically notify the
+ * interrupt controller and then sleep until the next event (interrupt) arrives.
+ *
+ * Roughly, this method invokes `body()` every time `check()` returns `true`.
+ * When `check` returns `false`, this method instead enters the scheduler to
+ * atomically, indefinitely wait for the arrival of an interrupt that notifies
+ * `futex`.  If such an interrupt arrives between the invocation of `check()`
+ * and this thread sleeping, the attempted wait will instead immediately return.
+ *
+ * In fact, the return type of `check` is templated; if it is not `bool`, then
+ * the result from `check()` first interpreted by explicit conversion to `bool`
+ * to determine whether or not `body` is invoked and, if `true`, then it is
+ * passed as an argument to `body()`.  This is useful for communicating, for
+ * example, the observed fill level of a FIFO that will be processed in `body`.
+ *
+ * `body` may have return type `void` or `bool`.  In the latter case, if any
+ * invocation of `body` returns `false`, this method returns immediately.
+ *
+ * The observed value of the futex is not passed to check or body, as its exact
+ * value is unlikely to be of interest.
+ */
+template<typename T, typename Check>
+    requires std::is_nothrow_invocable_r_v<T, Check> &&
+	         requires { static_cast<bool>(std::declval<T>()); }
+__always_inline void
+interrupt_handler_with_futex(const uint32_t *futex, Check check, auto body)
+{
+	while (true)
+	{
+		uint32_t futexValue;
+		T        checkResult;
+
+		for (futexValue = *futex;
+		     (checkResult = check()), static_cast<bool>(checkResult);
+		     futexValue = *futex)
+		{
+			if constexpr (std::is_same_v<bool, T>)
+			{
+				if constexpr (std::is_nothrow_invocable_r_v<bool,
+				                                            decltype(body)>)
+				{
+					if (!body())
+					{
+						return;
+					}
+				}
+				else if constexpr (std::is_nothrow_invocable_r_v<
+				                     void,
+				                     decltype(body)>)
+				{
+					body();
+				}
+				else
+				{
+					static_assert(
+					  false,
+					  "Interrupt handler body must take no arguments and"
+					  " return bool or void");
+				}
+			}
+			else
+			{
+				if constexpr (std::is_nothrow_invocable_r_v<bool,
+				                                            decltype(body),
+				                                            T>)
+				{
+					if (!body(checkResult))
+					{
+						return;
+					}
+				}
+				else if constexpr (std::is_nothrow_invocable_r_v<void,
+				                                                 decltype(body),
+				                                                 T>)
+				{
+					body(checkResult);
+				}
+				else
+				{
+					static_assert(
+					  false,
+					  "Interrupt handler body must take a T and return bool or"
+					  " void");
+				}
+			}
+		}
+		futex_wait(futex, futexValue);
+	}
+}
+#endif
