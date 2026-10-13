@@ -204,8 +204,7 @@
  * within derived classes, code using `Bitpack`-s often needs to use qualified
  * names or wrap values in type constructors (in addition to qualifying the
  * field type with the bitpack's type when constructing the field proxy as in
- the
- * `BITPACK_MEMBER_` macros above).  The first two families of macros atop
+ * the `BITPACK_MEMBER_` macros above).  The first two families of macros atop
  * proxies help with these cases.
  *
  * * The family of \ref bitpacks_macros_proxyop_qualify is built around the
