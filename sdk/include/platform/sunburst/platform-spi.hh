@@ -323,6 +323,32 @@ namespace SonataSpi
 		}
 
 		/**
+		 * Like blocking_read, but does not store the result anywhere.  Useful
+		 * on rare occasions to deal with dummy cycles or in-protocol bytes one
+		 * does not care about.
+		 */
+		void blocking_discard(uint16_t len) volatile
+		{
+			Debug::Assert(len <= StartByteCountMask,
+			              "You can't discard more than 0x7ff bytes at a time.");
+			len &= StartByteCountMask;
+			wait_idle();
+			if (len)
+			{
+				control = ControlReceiveEnable;
+				start   = len;
+
+				for (uint32_t i = 0; i < len; ++i)
+				{
+					while ((status & StatusRxFifoLevel) == 0)
+					{
+					}
+					static_cast<void>(static_cast<uint8_t>(receiveFifo));
+				}
+			}
+		}
+
+		/**
 		 * Asserts/de-asserts a given chip select.
 		 *
 		 * Note, SPI chip selects are active low signals, so the register bit is
