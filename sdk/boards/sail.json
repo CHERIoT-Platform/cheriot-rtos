@@ -38,7 +38,6 @@
     "timer_hz" : 2000,
     "tickrate_hz" : 10,
     "revoker" : "software",
-    "stack_high_water_mark" : true,
     "run_command" : "cheriot_sim",
     "simulation": true
 }

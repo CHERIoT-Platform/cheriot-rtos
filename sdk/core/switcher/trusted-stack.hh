@@ -7,6 +7,7 @@
 #include <cheri.hh>
 #include <stddef.h>
 #include <stdint.h>
+#include <type_traits>
 
 struct TrustedStackFrame
 {
@@ -18,12 +19,23 @@ struct TrustedStackFrame
 	 * given to the callee.
 	 */
 	void *csp;
+
 	/**
 	 * The callee's export table.  This is stored here so that we can find the
 	 * compartment's error handler, if we need to invoke the error handler
 	 * during this call.
 	 */
 	void *calleeExportTable;
+
+	/**
+	 * Callee's per-thread platform-specific state, used to implement
+	 * switcher_invocation_cpu_features_set.
+	 *
+	 * Copied into callee from caller's frame on cross-call, mutated in callee
+	 * as desired, restored from caller's frame on cross-return.
+	 */
+	uint16_t cpuFeatures;
+
 	/**
 	 * Value indicating the number of times that this compartment invocation
 	 * has faulted.  This is incremented whenever we hit a fault in the
@@ -32,6 +44,8 @@ struct TrustedStackFrame
 	 * will forcibly unwind the stack.
 	 */
 	uint16_t errorHandlerCount;
+
+	uint16_t pad[2];
 };
 
 /**
@@ -63,23 +77,31 @@ struct TrustedStackGeneric
 	void  *hazardPointers;
 	size_t mstatus;
 	size_t mcause;
-#ifdef CONFIG_MSHWM
+
 	uint32_t mshwm;
 	uint32_t mshwmb;
-#endif
+
+	/**
+	 * Byte offset into the frames[] array of the first inactive frame, which
+	 * might be "one past the end".  This will always be of the form
+	 *
+	 *   offsetof(TrustedStackGenric, frames) + k * sizeof(TrustedStackFrame)
+	 *
+	 * for some non-negative integer k, but it's fewer cycles in the switcher to
+	 * have it in this format than as k.
+	 */
 	uint16_t frameoffset;
+
 	/**
 	 * The ID of the current thread.  Never modified during execution.
 	 */
 	uint16_t threadID;
-	// Padding up to multiple of 16-bytes.
-	uint8_t padding[
-#ifdef CONFIG_MSHWM
-	  12
-#else
-	  4
-#endif
-	];
+
+	/**
+	 * Pad back up to alignof(void *)
+	 */
+	uint32_t pad;
+
 	/**
 	 * The trusted stack.  There is always one frame, describing the entry
 	 * point.  If this is popped then we have run off the stack and the thread
@@ -88,6 +110,8 @@ struct TrustedStackGeneric
 	TrustedStackFrame frames[NFrames + 1];
 };
 using TrustedStack = TrustedStackGeneric<0>;
+
+static_assert(std::has_unique_object_representations_v<TrustedStack>);
 
 #define STATIC_ASSERT_TRUSTED_STACK_REGISTER_OFFSET(field, regname)            \
 	static_assert(offsetof(TrustedStack, field) ==                             \

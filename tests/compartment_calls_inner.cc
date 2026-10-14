@@ -114,3 +114,8 @@ int test_incorrect_export_table(__cheri_callback void (*fn)(),
 
 	return 0;
 }
+
+int test_switcher_cpu_features_inner(__cheri_callback int (*fn)())
+{
+	return fn();
+}
