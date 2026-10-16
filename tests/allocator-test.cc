@@ -907,12 +907,15 @@ namespace
 			int     claimed = heap_claim_ephemeral(&t, ptr, ptr2);
 			TEST(claimed == 0, "Heap claim failed: {}", claimed);
 			state = 1;
-			while (state.load() == 1)
-			{
-				// This is not a cross-compartment call and so
-				// won't drop the ephemeral claims.
-				yield();
-			}
+
+			// This is not a cross-compartment call and so won't drop the
+			// ephemeral claims.  Allow for indefinite wait since the main
+			// thread might sleep in the allocator to let the revoker run.
+			int waitResult =
+			  thread_spin_wait<true, 0>([=]() { return state.load() != 1; });
+
+			TEST(waitResult == 1, "Bad return from thread_spin_wait");
+
 			debug_log("Releasing hazard pointers");
 		});
 		// Allow the async function to run and establish hazards
@@ -1181,12 +1184,12 @@ namespace
 			           -EINVAL,
 			           "heap_claim_ephemeral succeeded on sealed capability");
 			state = 1;
-			while (state.load() == 1)
-			{
-				// This is not a cross-compartment call and so
-				// won't drop the ephemeral claims.
-				yield();
-			}
+
+			// This is not a cross-compartment call and so won't drop the
+			// ephemeral claims.  Allow for indefinite wait since the main
+			// thread might sleep in the allocator to let the revoker run.
+			thread_spin_wait<true, 0>([=]() { return state.load() != 1; });
+
 			debug_log("Releasing hazard pointers");
 		});
 		// Allow the async function to run and establish hazard
@@ -1296,10 +1299,11 @@ namespace
 
 			// Signal for mainline to free objects and wait for that to happen
 			state = 1;
-			while (state.load() == 1)
-			{
-				yield();
-			}
+
+			// This is not a cross-compartment call and so won't drop the
+			// ephemeral claims.  Allow for indefinite wait since the main
+			// thread might sleep in the allocator to let the revoker run.
+			thread_spin_wait<true, 0>([=]() { return state.load() != 1; });
 
 			TEST_SUCCESS(token_obj_destroy(SECOND_HEAP, sealingCapability, s));
 
