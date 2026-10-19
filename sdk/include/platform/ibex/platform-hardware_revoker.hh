@@ -67,7 +67,7 @@ namespace Ibex
 		/**
 		 * Get a reference to the revoker device.
 		 */
-		__always_inline volatile RevokerInterface &revoker_device()
+		__always_inline static volatile RevokerInterface &revoker_device()
 		{
 			return *MMIO_CAPABILITY(RevokerInterface, revoker);
 		}
@@ -137,7 +137,7 @@ namespace Ibex
 		 * Returns the revocation epoch.  This is the number of revocations
 		 * that have started.
 		 */
-		uint32_t system_epoch_get()
+		static uint32_t system_epoch_get()
 		{
 			return revoker_device().epoch;
 		}
@@ -150,7 +150,7 @@ namespace Ibex
 		 * revocation is not in progress.
 		 */
 		template<bool AllowPartial = false>
-		uint32_t has_revocation_finished_for_epoch(uint32_t epoch)
+		static uint32_t has_revocation_finished_for_epoch(uint32_t epoch)
 		{
 			auto current = system_epoch_get();
 			// We want to know if current is greater than epoch, but current
@@ -177,7 +177,7 @@ namespace Ibex
 		/**
 		 * Start a revocation sweep.
 		 */
-		void system_bg_revoker_kick()
+		static void system_bg_revoker_kick()
 		{
 			if (system_epoch_get() & 1)
 			{
@@ -193,38 +193,32 @@ namespace Ibex
 		 */
 		bool wait_for_completion(TimeoutArgument timeout, uint32_t epoch)
 		{
-			uint32_t interruptValue;
-			do
-			{
-				// Read the current interrupt futex word.  We want to retry if
-				// an interrupt happens after this point.
-				interruptValue = *interruptFutex;
-				// Make sure that the compiler doesn't reorder the read of the
-				// futex word with respect to the read of the revocation epoch.
-				__c11_atomic_signal_fence(__ATOMIC_SEQ_CST);
-				// If the requested epoch has finished, return success.
-				if (has_revocation_finished_for_epoch(epoch))
-				{
-					return true;
-				}
-				// Request the interrupt
-				revoker_device().interruptRequested = 1;
-				// There is a possible race: if the revocation pass finished
-				// before we requested the interrupt, we won't get the
-				// interrupt.  Check again before we wait.
-				if (has_revocation_finished_for_epoch(epoch))
-				{
-					return true;
-				}
-				// Make sure that the revoker is running.
-				system_bg_revoker_kick();
-				// If the epoch hasn't finished, wait for an interrupt to fire
-				// and retry.
-			} while (
-			  futex_timed_wait(timeout, interruptFutex, interruptValue) == 0);
-			// Futex wait failed.  This could be a timeout or an invalid
-			// timeout parameter, we fail either way.
-			return false;
+			/*
+			 * revocation usually takes long enough that spinning or
+			 * yield()-ing is unlikely to be worth our while
+			 */
+			int result = futex_await_poll_spin<0, 0>(
+			  timeout,
+			  interruptFutex,
+			  []() {
+				  // Request the interrupt
+				  HardwareRevoker::revoker_device().interruptRequested = 1;
+			  },
+			  [epoch]() {
+				  // If the requested epoch has finished, stop waiting and
+				  // return
+				  if (HardwareRevoker::has_revocation_finished_for_epoch(epoch))
+				  {
+					  return 1;
+				  }
+
+				  // Make sure that the revoker is running.
+				  HardwareRevoker::system_bg_revoker_kick();
+
+				  return 0;
+			  });
+
+			return result > 0;
 		}
 
 		/**
