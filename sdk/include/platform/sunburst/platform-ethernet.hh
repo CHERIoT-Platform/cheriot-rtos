@@ -37,7 +37,7 @@ class Ksz8851Ethernet
 	/**
 	 * Maxmium size of a single Ethernet frame.
 	 */
-	static constexpr uint16_t MaxFrameSize = 1500;
+	static constexpr uint16_t MaxFrameSize = 1520;
 
 	/**
 	 * Helper for conditional debug logs and assertions.
