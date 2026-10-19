@@ -592,6 +592,9 @@ class BITPACK_DECL_ANNOTATION Bitpack
 			/// Expose the qualified reference type we hold to the Storage
 			using RefType = RefTypeParam;
 
+			/// Expose the type of the bitpack into which we are a Field::Proxy
+			using ContainingBitpack = DerivedBitpack;
+
 			/**
 			 * Construct a proxy given a reference to the storage word.
 			 *
@@ -1331,6 +1334,45 @@ struct BitpackDerived : B
 /// A specialization of BITPACK_OPERATE_ENUM_TYPE using `.with` as the operator
 #define BITPACK_WITH_ENUM_TYPE(b, T, v)                                        \
 	BITPACK_OPERATE_ENUM_TYPE(b, T, .with, v)
+
+/// @}
+
+/**
+ * \defgroup bitpacks_macros_field_metadata Field metadata helpers
+ *
+ * @{
+ */
+
+/**
+ * Given a Proxy to a Field in a given Bitpack, return that Field's mask as an
+ * instance of that Bitpack.  That is, return a Bitpack containing exactly all
+ * of and only that Field's constituent bits asserted.
+ */
+#define BITPACK_FIELD_MASK(proxy)                                              \
+	(static_cast<decltype(proxy)::ContainingBitpack>(                          \
+	  decltype(proxy)::Field::FieldMask))
+
+/// A fusion of BITPACK_MEMBER_DECLTYPE and BITPACK_FIELD_MASK
+#define BITPACK_FIELD_MASK_DECLTYPE(b, T)                                      \
+	BITPACK_FIELD_MASK(BITPACK_MEMBER_DECLTYPE(b, T))
+
+/// A fusion of BITPACK_MEMBER_DEPENDENT and BITPACK_FIELD_MASK
+#define BITPACK_FIELD_MASK_DEPENDENT(b, T)                                     \
+	BITPACK_FIELD_MASK(BITPACK_MEMBER_DEPENDENT(b, T))
+
+/**
+ * Given a Proxy to a Field in a given Bitpack, return the 0-based index of that
+ * Field's constituent bits.  This is mostly of interest to assembler.
+ */
+#define BITPACK_FIELD_SHIFT(proxy) (decltype(proxy)::Field::Info.minIndex)
+
+/// A fusion of BITPACK_MEMBER_DECLTYPE and BITPACK_FIELD_SHIFT
+#define BITPACK_FIELD_SHIFT_DECLTYPE(b, T)                                     \
+	BITPACK_FIELD_SHIFT(BITPACK_MEMBER_DECLTYPE(b, T))
+
+/// A fusion of BITPACK_MEMBER_DEPENDENT and BITPACK_FIELD_SHIFT
+#define BITPACK_FIELD_SHIFT_DEPENDENT(b, T)                                    \
+	BITPACK_FIELD_SHIFT(BITPACK_MEMBER_DEPENDENT(b, T))
 
 /// @}
 
