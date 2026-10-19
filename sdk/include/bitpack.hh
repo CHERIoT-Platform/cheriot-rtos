@@ -471,6 +471,21 @@ class BITPACK_DECL_ANNOTATION Bitpack
 		bool isConst = false;
 
 		bool operator==(const FieldInfo &) const = default;
+
+		/// Return the field width, in bits.
+		[[nodiscard]] constexpr size_t width() const
+		{
+			return maxIndex - minIndex + 1;
+		}
+
+		/**
+		 * Return the maximum value this field can hold, if it is interpreted as
+		 * holding an unsigned number.
+		 */
+		[[nodiscard]] constexpr Storage maximum_as_unsigned() const
+		{
+			return (static_cast<Storage>(1U) << width()) - 1;
+		}
 	};
 
 	/**
