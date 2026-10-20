@@ -92,9 +92,6 @@ Some properties define base parts of hardware support.
 The `revoker` property is either absent (no temporal safety support), `"software"` (revocation is implemented via a software sweep) or `"hardware"` (there is a hardware revoker).
 We expect this to be `"hardware"` on all real implementations, the software revoker exists primarily for the Sail model and the no temporal safety mode only for benchmarking the overhead of revocation.
 
-If the `stack_high_water_mark` property is set to true, then we assume the CPU provides CSRs for tracking stack usage.
-This property is primarily present for benchmarking as all of our targets currently implement this feature.
-
 Clock configuration
 -------------------
 
