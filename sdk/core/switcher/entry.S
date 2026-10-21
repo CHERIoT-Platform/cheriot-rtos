@@ -306,9 +306,12 @@ __Z26compartment_switcher_entryz:
 	 * it is a stack pointer, by virtue of being local and bearing SL) and that
 	 * its top and base are at least 16-byte aligned.
 	 *
-	 * TODO for formal verification: it should be the case that after these
-	 * tests and the size checks below, no instruction in the switcher
-	 * authorized by the capability now in sp can fault.
+	 * TODO for formal verification: given the check for SL permission here and
+	 * our linker script, and our loader's behavior, it ought to be impossible
+	 * for a caller-owned secret written exclusively through sp as of
+	 * compartment invocation to leak to any other part of the system.  In
+	 * particular, the caller cannot have made sp point into global, pre-shared,
+	 * heap, or other memory regions visible to multiple threads.
 	 */
 //.Lswitch_csp_check:
 	cgetperm           t2, csp
@@ -332,7 +335,12 @@ __Z26compartment_switcher_entryz:
 	 * caller (via the exception path; see .Lhandle_error_in_switcher).
 	 * Specifically, the first spill here is to the lowest address and so
 	 * guaranteed to raise a bounds fault if any of the stores here would access
-	 * below the base (lowest address) of the stack capability.
+	 * below the base (lowest address) of the stack capability.  This behavior
+	 * is unique to this first instruction; any other fault in this cross-call
+	 * path will induce a forcible unwind of the calling compartment back to its
+	 * caller, if any, or to thread death otherwise (again, via the exception
+	 * path and `.Lhandle_error_in_switcher`).  Such faults are impossible in
+	 * normal operation, and so the switcher treats them as an attack.
 	 *
 	 * Certain other kinds of less plausibly accidental malice (for example, an
 	 * untagged or sealed or SD-permission-less capability in sp, or a csp that
@@ -341,16 +349,29 @@ __Z26compartment_switcher_entryz:
 	 * unwind the caller, but it's acceptable, in the sense that no
 	 * would-be-callee can be harmed, to just return an error instead.
 	 *
-	 * By virtue of having checked stack permissions above, we have ruled out
-	 * certain risks for the caller and its thread, as well: its csp cannot
-	 * point to shared memory, for example, so there is no risk of accidental
-	 * state leak.  sp cannot lack MC or SL permissions, and so there is no
-	 * possibility of faulting due to a tagged (or tagged and local) cap in one
-	 * of the callee-saved registers.
+	 * The above checks and this first store are, however, not sufficient to
+	 * guarantee that we will not trap within this block of spills (and, so,
+	 * forcibly unwind the thread out of the caller comparment).  Of note, while
+	 * the CHERIoT v1 capability encoding cannot represent (tag) a capability
+	 * with its address out of bounds by virtue of being below its base, and it
+	 * does not promise to be able to represent a capability with its address
+	 * further than "one past the end" out of bounds above its top, there are in
+	 * fact some such representable forms.  If sp holds such a capability, it is
+	 * possible that this first (again lowest) store will be to an address that
+	 * is brought back to being within bounds while a subsequent store will not.
 	 *
-	 * TODO: For formal verification: if the first spill here does not trap, it
-	 * should be impossible for any of the others to trap, given the above
-	 * checks and the checks implicitly passed by a successful store.
+	 * TODO: For formal verification: if none of these spills trap, it should be
+	 * impossible for any of the other sp accesses (which should be just the
+	 * stack zeroing) between here and the transition to the callee to trap.
+	 * Moreover, if we make it to .Lswitch_callee_save_restore with sp as passed
+	 * to the callee, none of those loads should trap, and the capabilities they
+	 * write back to registers should be exactly those taken from registers here
+	 * (unless they point to memory revoked in the interim).  That is, if these
+	 * stores succeed, the check for LoadGlobal and LoadMutable permissions
+	 * above should imply that the reloads from registers are not mutated under
+	 * such auspices; revocation remains a valid cause of mutation.  Moreover,
+	 * under the same assumptions, the sp-authorized stores done in
+	 * `.Lswitch_callee_stack_zero` should not trap.
 	 *
 	 * At entry and at present, the register file is safe to expose to the
 	 * caller (while tp and t2 have been clobbered, they hold neither secrets
@@ -445,6 +466,40 @@ __Z26compartment_switcher_entryz:
 	 *  - s0 for the current untrusted stack base address (the lowest address of
 	 *    the register spill we created at .Lswitch_entry_first_spill)
 	 *  - s1 for the length of the stack suffix to which the callee is entitled
+	 *
+	 * TODO for formal verification: prove that this separates the memory
+	 * pointed to by sp into two regions:
+	 *
+	 *   * from its top down to the address after the pushes done up at
+	 *     `.Lswitch_entry_first_spill` (and perhaps a bit of padding due to the
+	 *     `csetboundsrounddown` here).  This region is owned by the caller, and
+	 *     the switcher must provide confidentiality and integrity of the data
+	 *     therein by ensuring that the callee does not have access to it (other
+	 *     than via any aliasing pointers that the caller has passed to the
+	 *     callee as arguments).
+	 *
+	 *   * from the base up to that same split point, which is to be owned by
+	 *     the callee.  Here, the switcher must provide confidentiality in both
+	 *     directions: it must destroy all caller-sourced data currently in this
+	 *     region before invoking the callee, and it must (on the return path,
+	 *     down in `.Lswitch_callee_stack_zero`) destroy any callee-sourced data
+	 *     in this region before returning to the caller.
+	 *
+	 *     Integrity of data in this region with respect to the caller is
+	 *     subtle.  On the one hand, the caller is not running and so cannot
+	 *     write to this region.  On the other, the caller (or any of its
+	 *     transitive callers) may have created aliasing pointers that overlap
+	 *     this region (and which may also overlap the above region) and passed
+	 *     those as arguments to the callee.  While we should be able to
+	 *     demonstrate that the switcher does not create such aliases (at least,
+	 *     not in a way visible to the callee or caller), the switcher does not
+	 *     attempt to defend the callee against the existence of any such.
+	 *     Rather, such defenses are left to be within the callee.
+	 *
+	 *   For both these regions, confidentiality and integrity with respect to
+	 *   other threads in the system should be a consequence of initial system
+	 *   construction and the check for StoreLocal (SL) permission done up in
+	 *   `.Lswich_csp_check`.
 	 */
 //.Lswitch_stack_chop:
 	cgetaddr           s0, csp
@@ -791,11 +846,14 @@ switcher_after_compartment_call:
 	 * path, and pop the frame for the compartment that gave us a malicious
 	 * csp.
 	 */
+//.Lswitch_callee_save_restore:
 	clc                cs0, SPILL_SLOT_cs0(csp)
 	clc                cs1, SPILL_SLOT_cs1(csp)
 	clc                cra, SPILL_SLOT_pcc(csp)
 	clc                cgp, SPILL_SLOT_cgp(csp)
 	cincoffset         csp, csp, SPILL_SLOT_SIZE
+
+//.Lswitch_callee_stack_zero:
 #ifdef CONFIG_MSHWM
 	/*
 	 * Read the stack high water mark, which is 16-byte aligned.  We will use
