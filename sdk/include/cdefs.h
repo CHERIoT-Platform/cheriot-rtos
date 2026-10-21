@@ -69,10 +69,11 @@ using _Bool = bool;
 #endif
 #define __cheri_no_subobject_bounds __attribute__((cheri_no_subobject_bounds))
 
-// When running clang-tidy, we use the same compile flags for everything and so
-// will get errors about things being defined in the wrong compartment, so
-// define away the compartment name and pretend everything is local for now.
-#if defined(CLANG_TIDY) || defined(__CHERIOT_BAREMETAL__)
+// When running clang-tidy or compiling for bare-metal, it is valid to compile
+// without a compartment name flag, so we define the annotations away if that
+// is the case.
+#if !defined(__CHERI_COMPARTMENT__) && !defined(__CHERIOT_COMPARTMENT__) &&    \
+  (defined(CLANG_TIDY) || defined(__CHERIOT_BAREMETAL__))
 #	define __cheri_compartment(x)
 #	define __cheriot_compartment(x)
 #else
