@@ -24,7 +24,7 @@
 #	include <cdefs.h>
 #	include <stddef.h>
 
-static inline __always_inline ptraddr_t cheri_address_get(void *x)
+static inline __always_inline ptraddr_t cheri_address_get(auto *x)
 {
 	return __builtin_cheri_address_get(x);
 }
@@ -39,62 +39,62 @@ static inline __always_inline auto cheri_address_increment(auto *x, ptrdiff_t y)
 	return __builtin_cheri_address_increment(x, y);
 }
 
-static inline __always_inline ptraddr_t cheri_base_get(void *x)
+static inline __always_inline ptraddr_t cheri_base_get(auto x)
 {
 	return __builtin_cheri_base_get(x);
 }
 
-static inline __always_inline ptraddr_t cheri_top_get(void *x)
+static inline __always_inline ptraddr_t cheri_top_get(auto x)
 {
 	return __builtin_cheri_top_get(x);
 }
 
-static inline __always_inline ptraddr_t cheri_length_get(void *x)
+static inline __always_inline ptraddr_t cheri_length_get(auto x)
 {
 	return __builtin_cheri_length_get(x);
 }
 
-static inline __always_inline auto cheri_tag_clear(void *x)
+static inline __always_inline auto cheri_tag_clear(auto x)
 {
 	return __builtin_cheri_tag_clear(x);
 }
 
-static inline __always_inline auto cheri_tag_get(void *x)
+static inline __always_inline auto cheri_tag_get(auto x)
 {
 	return __builtin_cheri_tag_get(x);
 }
 
-static inline __always_inline bool cheri_is_valid(void *x)
+static inline __always_inline bool cheri_is_valid(auto x)
 {
 	return cheri_tag_get(x);
 }
 
-static inline __always_inline bool cheri_is_invalid(void *x)
+static inline __always_inline bool cheri_is_invalid(auto x)
 {
 	return !cheri_tag_get(x);
 }
 
-static inline __always_inline bool cheri_is_equal_exact(void *x, void *y)
+static inline __always_inline bool cheri_is_equal_exact(auto x, auto y)
 {
 	return __builtin_cheri_equal_exact(x, y);
 }
 
-static inline __always_inline bool cheri_is_subset(void *x, void *y)
+static inline __always_inline bool cheri_is_subset(auto x, auto y)
 {
 	return __builtin_cheri_subset_test(x, y);
 }
 
-static inline __always_inline auto cheri_permissions_get(void *x)
+static inline __always_inline auto cheri_permissions_get(auto x)
 {
 	return __builtin_cheri_perms_get(x);
 }
 
-static inline __always_inline auto cheri_permissions_and(void *x, unsigned y)
+static inline __always_inline auto cheri_permissions_and(auto x, unsigned y)
 {
 	return __builtin_cheri_perms_and(x, y);
 }
 
-static inline __always_inline auto cheri_type_get(void *x)
+static inline __always_inline auto cheri_type_get(auto x)
 {
 	return __builtin_cheri_type_get(x);
 }
@@ -119,7 +119,7 @@ static inline __always_inline auto cheri_bounds_set_exact(auto *a, size_t b)
 	return __builtin_cheri_bounds_set_exact(a, b);
 }
 
-static inline __always_inline auto cheri_subset_test(void *a, void *b)
+static inline __always_inline auto cheri_subset_test(auto a, auto b)
 {
 	return __builtin_cheri_subset_test(a, b);
 }

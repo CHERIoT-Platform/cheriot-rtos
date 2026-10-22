@@ -217,6 +217,9 @@ test("bitpacks")
 test("time")
 	add_deps("time")
 
+test("cancellation")
+  add_deps("cancellation_token")
+
 includes(path.join(sdkdir, "lib"))
 
 rule("cheriot.tests")
