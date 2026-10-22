@@ -89,3 +89,112 @@ __always_inline static int futex_wait(const volatile uint32_t *address,
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   futex_wake(const volatile uint32_t *address, uint32_t count);
+
+/**
+ * Packaged common design pattern for awaiting an event signaled by a futex.
+ * Repeatedly invokes `checkCallback(argument)` until it returns nonzero or
+ * `futex_timed_wait(tiemout, futex, ...)` returns nonzero; this function
+ * returns the first such nonzero value.
+ *
+ * This function calls `yield()` between the first `maximumYields` invocations
+ * of `checkCallback(argument)`, allowing the system to run other threads at the
+ * same priority while waiting for this event.  After that, this function will
+ * call `enableCallback(argument)` and then subsequent invocations of
+ * `checkCallback(argument)` returning zero will be followed by
+ * `fuxex_timed_wait(timeout, futex, ...)`, with a futex value having been read
+ * prior to the invocation of `checkCallback(argument)` in order to avoid missed
+ * wakeups if `checkCallback` and/or `futex_wait` run concurrently with a
+ * futex notifier.
+ *
+ * The `enableCallback` is expected to ensure that the given `futex` will
+ * change at least when `checkCallback(argument)`'s return value would
+ * (meaningfully) change.  This is especially useful when the futex is
+ * specifically an interrupt futex, and, in this case,
+ * `enableCallback(argument)` should configure the source hardware to deliver
+ * the correct events.
+ */
+[[nodiscard]]
+int __cheriot_libcall futex_await_poll(TimeoutArgument          timeout,
+                                       uint16_t                 maximumYields,
+                                       const volatile uint32_t *futex,
+                                       void (*enableCallback)(void *),
+                                       int (*checkCallback)(void *),
+                                       void *argument);
+
+/**
+ * An always-inline wrapper around `futex_await_poll` which optionally
+ * busy-spins some number of times.  Rarely preferred over `futex_await_poll`,
+ * since futexes often depend on other threads making progress, this may still
+ * be useful in the case that interrupt futexes are used to signal events that
+ * often happen nearly immediately after the call but have a long tail of delays
+ * where sleeping is desirable.
+ */
+[[nodiscard]]
+static int __always_inline futex_await_poll_spin(TimeoutArgument timeout,
+                                                 uint16_t        maximumSpins,
+                                                 uint16_t        maximumYields,
+                                                 const volatile uint32_t *futex,
+                                                 void (*enableCallback)(void *),
+                                                 int (*checkCallback)(void *),
+                                                 void *argument)
+{
+	int res;
+
+	for (uint16_t attempt = 0; attempt < maximumSpins; attempt++)
+	{
+		if ((res = checkCallback(argument)) != 0)
+		{
+			return res;
+		}
+	}
+
+	return futex_await_poll(
+	  timeout, maximumYields, futex, enableCallback, checkCallback, argument);
+}
+
+#ifdef __cplusplus
+
+#	include <type_traits>
+
+/**
+ * A C++ wrapper around the C-compatible `futex_await_poll_spin`.  This takes
+ * the maximum counts of spins and yields as template parameters and C++
+ * callables for the `enableCallback` and `checkCallback`s.  Neither of these
+ * callables take arguments; `enable` must have `void` return type and `check`
+ * must have `int`.  These callables must remain live across the function call
+ * (and will be in the typical case where they are on the caller's stack).
+ */
+template<uint16_t MaximumSpins  = 0,
+         uint16_t MaximumYields = 0,
+         typename Enable,
+         typename Check>
+    requires std::is_invocable_r_v<void, Enable> &&
+	         std::is_invocable_r_v<int, Check>
+[[nodiscard]]
+static int __always_inline futex_await_poll_spin(TimeoutArgument timeout,
+                                                 const volatile uint32_t *futex,
+                                                 Enable &&enable,
+                                                 Check  &&check)
+{
+	struct CArgument
+	{
+		Enable *enable;
+		Check  *check;
+	} cArgument{&enable, &check};
+
+	return futex_await_poll_spin(
+	  timeout,
+	  MaximumSpins,
+	  MaximumYields,
+	  futex,
+	  [](void *voidedArguments) {
+		  auto arguments = static_cast<CArgument *>(voidedArguments);
+		  (*static_cast<Enable *>(arguments->enable))();
+	  },
+	  [](void *voidedArguments) -> int {
+		  auto arguments = static_cast<CArgument *>(voidedArguments);
+		  return (*static_cast<Check *>(arguments->check))();
+	  },
+	  &cArgument);
+}
+#endif
