@@ -907,12 +907,20 @@ namespace
 			int     claimed = heap_claim_ephemeral(&t, ptr, ptr2);
 			TEST(claimed == 0, "Heap claim failed: {}", claimed);
 			state = 1;
-			while (state.load() == 1)
-			{
-				// This is not a cross-compartment call and so
-				// won't drop the ephemeral claims.
-				yield();
-			}
+
+			/*
+			 * This is not a cross-compartment call and so won't drop the
+			 * ephemeral claims.  Use the underlying C-compatible call here;
+			 * we'll use the C++ wrapper below.
+			 */
+			int res = thread_await_poll(
+			  TimeoutNoWait,
+			  std::numeric_limits<uint16_t>::max(),
+			  [](void *) -> int { return state.load() != 1; },
+			  nullptr);
+			TEST(res == static_cast<int>(true),
+			     "Bad return from thread_await_poll");
+
 			debug_log("Releasing hazard pointers");
 		});
 		// Allow the async function to run and establish hazards
@@ -1181,12 +1189,18 @@ namespace
 			           -EINVAL,
 			           "heap_claim_ephemeral succeeded on sealed capability");
 			state = 1;
-			while (state.load() == 1)
-			{
-				// This is not a cross-compartment call and so
-				// won't drop the ephemeral claims.
-				yield();
-			}
+
+			/*
+			 * This is not a cross-compartment call and so won't drop the
+			 * ephemeral claims.  Use the C++ wrapper here, with 0 spins before
+			 * we start yield()-ing.
+			 */
+			int res =
+			  thread_await_poll<0, std::numeric_limits<uint16_t>::max()>(
+			    TimeoutNoWait, []() { return state.load() != 1; });
+			TEST(res == static_cast<int>(true),
+			     "Bad return from thread_await_poll");
+
 			debug_log("Releasing hazard pointers");
 		});
 		// Allow the async function to run and establish hazard
@@ -1296,10 +1310,11 @@ namespace
 
 			// Signal for mainline to free objects and wait for that to happen
 			state = 1;
-			while (state.load() == 1)
-			{
-				yield();
-			}
+			int res =
+			  thread_await_poll<0, std::numeric_limits<uint16_t>::max()>(
+			    TimeoutNoWait, []() { return state.load() != 1; });
+			TEST(res == static_cast<int>(true),
+			     "Bad return from thread_await_poll");
 
 			TEST_SUCCESS(token_obj_destroy(SECOND_HEAP, sealingCapability, s));
 
