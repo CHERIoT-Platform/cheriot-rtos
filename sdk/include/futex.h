@@ -89,3 +89,85 @@ __always_inline static int futex_wait(const volatile uint32_t *address,
  */
 [[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
   futex_wake(const volatile uint32_t *address, uint32_t count);
+
+/**
+ * Packaged common design pattern for awaiting an event signaled by a futex.
+ * Repeatedly invokes `checkCallback(argument)` until it returns nonzero or
+ * `futex_timed_wait(tiemout, futex, ...)` returns nonzero; this function
+ * returns the first such nonzero value.
+ *
+ * This function calls `yield()` between the first `maximumYields` invocations
+ * of `checkCallback(argument)`, allowing the system to run other threads at the
+ * same priority while waiting for this event.  After that, this function will
+ * call `enableCallback(argument)` and then subsequent invocations of
+ * `checkCallback(argument)` returning zero will be followed by
+ * `fuxex_timed_wait(timeout, futex, ...)`, with a futex value having been read
+ * prior to the invocation of `checkCallback(argument)`.
+ *
+ * The `enableCallback` is expected to ensure that the given `futex` will
+ * increment at least when `checkCallback(argument)`'s return value would
+ * (meaningfully) change.  This is especially useful when the futex is
+ * specifically an interrupt futex, and, in this case,
+ * `enableCallback(argument)` should configure the source hardware to deliver
+ * the correct events.
+ */
+[[cheriot::interrupt_state(disabled)]]
+int __cheriot_libcall futex_await_poll(TimeoutArgument          timeout,
+                                       uint16_t                 maximumYields,
+                                       const volatile uint32_t *futex,
+                                       void (*enableCallback)(void *),
+                                       int (*checkCallback)(void *),
+                                       void *argument);
+
+#ifdef __cplusplus
+
+#	include <concepts>
+#	include <type_traits>
+
+/**
+ * A wrapper around `futex_await_poll` which optionally busy-spins some number
+ * of times before calling.  The check condition is given as a C++ lambda rather
+ * than separate function pointer and `void *` arguments.
+ */
+
+template<uint16_t MaximumSpins  = 0,
+         uint16_t MaximumYields = 0,
+         typename Enable,
+         typename Check>
+    requires std::is_invocable_r_v<void, Enable> &&
+	         std::is_invocable_v<Check> &&
+	         std::convertible_to<std::invoke_result_t<Check>, int>
+__always_inline int futex_await_poll(TimeoutArgument          timeout,
+                                     const volatile uint32_t *futex,
+                                     Enable                 &&enable,
+                                     Check                  &&check)
+{
+	for (uint16_t attempt = 0; attempt < MaximumSpins; attempt++)
+	{
+		if (int res = static_cast<int>(check()); res != 0)
+		{
+			return res;
+		}
+	}
+
+	struct FunctionPointers
+	{
+		Enable *enable;
+		Check  *check;
+	} functionPointers = {&enable, &check};
+
+	return futex_await_poll(
+	  timeout,
+	  MaximumYields,
+	  futex,
+	  [](void *voidFunctionPointers) -> void {
+		  (*(static_cast<FunctionPointers *>(voidFunctionPointers))->enable)();
+	  },
+	  [](void *voidFunctionPointers) -> int {
+		  return (
+		    *(static_cast<FunctionPointers *>(voidFunctionPointers))->check)();
+	  },
+	  &functionPointers);
+}
+
+#endif
