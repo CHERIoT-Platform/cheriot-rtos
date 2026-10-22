@@ -907,12 +907,22 @@ namespace
 			int     claimed = heap_claim_ephemeral(&t, ptr, ptr2);
 			TEST(claimed == 0, "Heap claim failed: {}", claimed);
 			state = 1;
-			while (state.load() == 1)
-			{
-				// This is not a cross-compartment call and so
-				// won't drop the ephemeral claims.
-				yield();
-			}
+
+			/*
+			 * This is not a cross-compartment call and so won't drop the
+			 * ephemeral claims: `thread_await_poll` is a library call and the
+			 * use of `TimeoutNoWait` ensures it won't attempt to enter the
+			 * scheduler of its own volition, and our callback doesn't try to
+			 * make cross-calls.
+			 */
+			int res = thread_await_poll(
+			  TimeoutNoWait,
+			  std::numeric_limits<uint16_t>::max(),
+			  [](void *) -> int { return state.load() != 1; },
+			  nullptr);
+			TEST(res == static_cast<int>(true),
+			     "Bad return from thread_await_poll");
+
 			debug_log("Releasing hazard pointers");
 		});
 		// Allow the async function to run and establish hazards
@@ -1181,12 +1191,23 @@ namespace
 			           -EINVAL,
 			           "heap_claim_ephemeral succeeded on sealed capability");
 			state = 1;
-			while (state.load() == 1)
-			{
-				// This is not a cross-compartment call and so
-				// won't drop the ephemeral claims.
-				yield();
-			}
+
+			/*
+			 * As with `thread_await_poll` above, this is not a
+			 * cross-compartment call and so won't drop the ephemeral claims.
+			 *
+			 * This time, use the C wrapper that might spin, but ask it not to,
+			 * since there's no point.
+			 */
+			int res = thread_await_poll_spin(
+			  TimeoutNoWait,
+			  0,
+			  std::numeric_limits<uint16_t>::max(),
+			  [](void *) -> int { return state.load() != 1; },
+			  nullptr);
+			TEST(res == static_cast<int>(true),
+			     "Bad return from thread_await_poll_spin");
+
 			debug_log("Releasing hazard pointers");
 		});
 		// Allow the async function to run and establish hazard
@@ -1294,12 +1315,20 @@ namespace
 			int claimed = heap_claim_ephemeral(&t, p1, nullptr);
 			TEST_EQUAL(claimed, 0, "Heap claim failed");
 
-			// Signal for mainline to free objects and wait for that to happen
+			/*
+			 * Signal for mainline to free objects and wait for that to happen
+			 *
+			 * As with `thread_await_poll` above, this is not a
+			 * cross-compartment call and so won't drop the ephemeral claims.
+			 *
+			 * This time, use the C++ wrapper.
+			 */
 			state = 1;
-			while (state.load() == 1)
-			{
-				yield();
-			}
+			int res =
+			  thread_await_poll_spin<0, std::numeric_limits<uint16_t>::max()>(
+			    TimeoutNoWait, []() -> int { return state.load() != 1; });
+			TEST(res == static_cast<int>(true),
+			     "Bad return from thread_await_poll_spin");
 
 			TEST_SUCCESS(token_obj_destroy(SECOND_HEAP, sealingCapability, s));
 
