@@ -9,18 +9,42 @@ set_toolchains("cheriot-clang")
 option("board")
     set_default("sail")
 
+rule("caesar.checks")
+    after_load(function (target)
+        -- Examples of creating audits:
+        -- "query" is the rego query
+        -- "module" is the path to an optional rego module
+        -- Either can be a string or a table of strings to specify multiple queries and/or modules.
+        local audit = {
+            query='data.caesar.valid',
+            module="caesar.rego"
+        }
+        -- An example of an audit query with multiple rego modules and multiple queries:
+        -- local audit = {
+        --     query={'data.caesar.valid', 'data.compartment.mmio_allow_list("uart2", {"uart_man"})'},
+        --     module={"caesar.rego", "brutus.rego"}
+        -- }
+        target:set("cheriot.audit", {audit})
+    end)
+
 compartment("caesar")
     -- This compartment uses C++ thread-safe static initialisation and so
     -- depends on the C++ runtime.
     add_files("caesar_cypher.cc")
+target_end()
 
 compartment("entry")
     add_files("entry.cc")
+target_end()
 
 compartment("producer")
     add_files("producer.cc")
+    add_rules("caesar.checks", {private = false})
+target_end()
+
 compartment("consumer")
     add_files("consumer.cc")
+target_end()
 
 -- Firmware image for the example.
 firmware("audit")
@@ -39,3 +63,4 @@ firmware("audit")
             }
         }, {expand = false})
     end)
+target_end()
