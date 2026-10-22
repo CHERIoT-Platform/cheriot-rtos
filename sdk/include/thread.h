@@ -207,9 +207,51 @@ static inline void **invocation_state_slot(size_t index __if_cxx(= 1))
 	  sizeof(void *));
 }
 
+/**
+ * Packaged common design pattern for repeatedly invoking a `callback(argument)`
+ * until it returns nonzero, in which case this value will be returned, or the
+ * given `timeout` lapses, in which case the return value will be `-ETIMEDOUT`.
+ * Between the first `maximumYields` such invocations, this function invokes
+ * `yield()`, giving the system an opportunity to run other threads of equal
+ * priority.  After that, it switches to sleeping for one tick between calls.
+ */
+[[nodiscard]]
+int __cheriot_libcall thread_await_poll(TimeoutArgument timeout,
+                                        uint16_t        maximumYields,
+                                        int (*callback)(void *),
+                                        void *argument);
+
+/**
+ * An always-inline wrapper around `thread_await_poll` which optionally
+ * busy-spins some number of times.  Useful when the awaited condition is
+ * expected to become true in less time than it takes to perform a single
+ * `yield()`.
+ */
+[[nodiscard]]
+static int __always_inline thread_await_poll_spin(TimeoutArgument timeout,
+                                                  uint16_t        maximumSpins,
+                                                  uint16_t        maximumYields,
+                                                  int (*callback)(void *),
+                                                  void *argument)
+{
+	int res;
+
+	for (uint16_t attempt = 0; attempt < maximumSpins; attempt++)
+	{
+		if ((res = callback(argument)) != 0)
+		{
+			return res;
+		}
+	}
+
+	return thread_await_poll(timeout, maximumYields, callback, argument);
+}
+
 __END_DECLS
 
 #ifdef __cplusplus
+
+#	include <type_traits>
 
 /**
  * Return a typed reference to a Compartment-Invocation-Local Storage slot.
@@ -223,6 +265,28 @@ __always_inline T *&invocation_state()
 {
 	static_assert((Index == 0) || (Index == 1), "Bad invocation state slot");
 	return *reinterpret_cast<T **>(invocation_state_slot(Index));
+}
+
+/**
+ * A C++ wrapper around the C-compatible `thread_await_poll_spin`.  This takes
+ * the maximum counts of spins and yields as template parameters and a C++
+ * callable that takes no arguments and returns an `int` rather than the
+ * separate function pointer and argument of the C version.  This callable must
+ * remain live across the function call (as it will be in the typical case where
+ * it is on the caller's stack).
+ */
+template<uint16_t MaximumSpins = 0, uint16_t MaximumYields = 0, typename Check>
+    requires std::is_invocable_r_v<int, Check>
+[[nodiscard]]
+static int __always_inline thread_await_poll_spin(TimeoutArgument timeout,
+                                                  Check         &&check)
+{
+	return thread_await_poll_spin(
+	  timeout,
+	  MaximumSpins,
+	  MaximumYields,
+	  [](void *voidedCheck) { return (*static_cast<Check *>(voidedCheck))(); },
+	  &check);
 }
 
 #endif
