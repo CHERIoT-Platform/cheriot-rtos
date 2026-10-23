@@ -204,8 +204,7 @@
  * within derived classes, code using `Bitpack`-s often needs to use qualified
  * names or wrap values in type constructors (in addition to qualifying the
  * field type with the bitpack's type when constructing the field proxy as in
- the
- * `BITPACK_MEMBER_` macros above).  The first two families of macros atop
+ * the `BITPACK_MEMBER_` macros above).  The first two families of macros atop
  * proxies help with these cases.
  *
  * * The family of \ref bitpacks_macros_proxyop_qualify is built around the
@@ -472,6 +471,21 @@ class BITPACK_DECL_ANNOTATION Bitpack
 		bool isConst = false;
 
 		bool operator==(const FieldInfo &) const = default;
+
+		/// Return the field width, in bits.
+		[[nodiscard]] constexpr size_t width() const
+		{
+			return maxIndex - minIndex + 1;
+		}
+
+		/**
+		 * Return the maximum value this field can hold, if it is interpreted as
+		 * holding an unsigned number.
+		 */
+		[[nodiscard]] constexpr Storage maximum_as_unsigned() const
+		{
+			return (static_cast<Storage>(1U) << width()) - 1;
+		}
 	};
 
 	/**
@@ -577,6 +591,9 @@ class BITPACK_DECL_ANNOTATION Bitpack
 
 			/// Expose the qualified reference type we hold to the Storage
 			using RefType = RefTypeParam;
+
+			/// Expose the type of the bitpack into which we are a Field::Proxy
+			using ContainingBitpack = DerivedBitpack;
 
 			/**
 			 * Construct a proxy given a reference to the storage word.
@@ -985,7 +1002,8 @@ struct BitpackDerived : B
  * See `BITPACK_MEMBER_ADD_ENUM`, which this uses, for more details.
  */
 #define BITPACK_MEMBER_ADD_ENUM_BOOL(Type, FalseVal, TrueVal, BitIndex, ...)   \
-	BITPACK_MEMBER_ADD_ENUM(Type, bool, BitIndex, BitIndex, __VA_ARGS__)       \
+	BITPACK_MEMBER_ADD_ENUM(                                                   \
+	  Type, bool, BitIndex, BitIndex __VA_OPT__(, __VA_ARGS__))                \
 	{                                                                          \
 		FalseVal = false, TrueVal = true,                                      \
 	}
@@ -995,14 +1013,16 @@ struct BitpackDerived : B
  * and "Asserted" (1) at the given bit index.
  */
 #define BITPACK_MEMBER_ADD_ENUM_BOOL_CLEARED_ASSERTED(Type, BitIndex, ...)     \
-	BITPACK_MEMBER_ADD_ENUM_BOOL(Type, Cleared, Asserted, BitIndex, __VA_ARGS__)
+	BITPACK_MEMBER_ADD_ENUM_BOOL(                                              \
+	  Type, Cleared, Asserted, BitIndex __VA_OPT__(, __VA_ARGS__))
 
 /**
  * Define a new boolean scoped enumeration with values named "Disabled" (0)
  * and "Enabled" (1) at the given bit index.
  */
 #define BITPACK_MEMBER_ADD_ENUM_BOOL_DISABLED_ENABLED(Type, BitIndex, ...)     \
-	BITPACK_MEMBER_ADD_ENUM_BOOL(Type, Disabled, Enabled, BitIndex, __VA_ARGS__)
+	BITPACK_MEMBER_ADD_ENUM_BOOL(                                              \
+	  Type, Disabled, Enabled, BitIndex __VA_OPT__(, __VA_ARGS__))
 
 /**
  * Encapsulate the gyrations required to define a `Numeric`-typed field and its
@@ -1035,7 +1055,8 @@ struct BitpackDerived : B
  * See `BITPACK_MEMBER_ADD_NUMERIC`, which this uses, for more details.
  */
 #define BITPACK_MEMBER_ADD_BOOL(Type, BitIndex, ...)                           \
-	BITPACK_MEMBER_ADD_NUMERIC(Type, bool, BitIndex, BitIndex, __VA_ARGS__)
+	BITPACK_MEMBER_ADD_NUMERIC(                                                \
+	  Type, bool, BitIndex, BitIndex __VA_OPT__(, __VA_ARGS__))
 
 /// @}
 
@@ -1313,6 +1334,45 @@ struct BitpackDerived : B
 /// A specialization of BITPACK_OPERATE_ENUM_TYPE using `.with` as the operator
 #define BITPACK_WITH_ENUM_TYPE(b, T, v)                                        \
 	BITPACK_OPERATE_ENUM_TYPE(b, T, .with, v)
+
+/// @}
+
+/**
+ * \defgroup bitpacks_macros_field_metadata Field metadata helpers
+ *
+ * @{
+ */
+
+/**
+ * Given a Proxy to a Field in a given Bitpack, return that Field's mask as an
+ * instance of that Bitpack.  That is, return a Bitpack containing exactly all
+ * of and only that Field's constituent bits asserted.
+ */
+#define BITPACK_FIELD_MASK(proxy)                                              \
+	(static_cast<decltype(proxy)::ContainingBitpack>(                          \
+	  decltype(proxy)::Field::FieldMask))
+
+/// A fusion of BITPACK_MEMBER_DECLTYPE and BITPACK_FIELD_MASK
+#define BITPACK_FIELD_MASK_DECLTYPE(b, T)                                      \
+	BITPACK_FIELD_MASK(BITPACK_MEMBER_DECLTYPE(b, T))
+
+/// A fusion of BITPACK_MEMBER_DEPENDENT and BITPACK_FIELD_MASK
+#define BITPACK_FIELD_MASK_DEPENDENT(b, T)                                     \
+	BITPACK_FIELD_MASK(BITPACK_MEMBER_DEPENDENT(b, T))
+
+/**
+ * Given a Proxy to a Field in a given Bitpack, return the 0-based index of that
+ * Field's constituent bits.  This is mostly of interest to assembler.
+ */
+#define BITPACK_FIELD_SHIFT(proxy) (decltype(proxy)::Field::Info.minIndex)
+
+/// A fusion of BITPACK_MEMBER_DECLTYPE and BITPACK_FIELD_SHIFT
+#define BITPACK_FIELD_SHIFT_DECLTYPE(b, T)                                     \
+	BITPACK_FIELD_SHIFT(BITPACK_MEMBER_DECLTYPE(b, T))
+
+/// A fusion of BITPACK_MEMBER_DEPENDENT and BITPACK_FIELD_SHIFT
+#define BITPACK_FIELD_SHIFT_DEPENDENT(b, T)                                    \
+	BITPACK_FIELD_SHIFT(BITPACK_MEMBER_DEPENDENT(b, T))
 
 /// @}
 

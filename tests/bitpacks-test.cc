@@ -115,6 +115,18 @@ static_assert(offsetof(Foo, control) == 0);
 static_assert(offsetof(Foo, more) == 4);
 static_assert(sizeof(Foo) == 8);
 
+static_assert(BITPACK_FIELD_MASK_DECLTYPE(Foo::control, Scalar).raw() ==
+              0x7F00);
+static_assert(BITPACK_FIELD_SHIFT_DECLTYPE(Foo::control, Scalar2) == 15);
+
+static_assert([](auto v) {
+	return BITPACK_FIELD_MASK_DEPENDENT(v, Scalar).raw();
+}(Foo::Control{}) == 0x7F00);
+
+static_assert(decltype(Foo::More{}.r1())::Field::Info.maximum_as_unsigned() ==
+              0xFF);
+static_assert(decltype(Foo::More::ReusedT{}.f2())::Field::Info.width() == 2);
+
 template<typename F>
 static constexpr bool CanAssignFieldV =
   std::is_assignable_v<F &, typename F::Field::Type &>;
