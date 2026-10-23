@@ -201,6 +201,22 @@ static inline void **invocation_state_slot(size_t index __if_cxx(= 1))
 	  sizeof(void *));
 }
 
+/**
+ * Packaged common design pattern for repeatedly invoking a `callback(argument)`
+ * until it returns nonzero, in which case this value will be returned, or the
+ * given `timeout` lapses, in which case the return value will be `-ETIMEDOUT`.
+ * Between the first `maximumYields` such invocation, this function invokes
+ * `yield()`, giving the system an opportunity to run other threads of equal
+ * priority.  After that, it switches to interdigitating such invocations with
+ * single-tick `thread_sleep`-s.
+ */
+
+[[cheriot::interrupt_state(disabled)]]
+int __cheriot_libcall thread_await_poll(TimeoutArgument timeout,
+                                        uint16_t        maximumYields,
+                                        int (*callback)(void *),
+                                        void *argument);
+
 __END_DECLS
 
 #ifdef __cplusplus
@@ -217,6 +233,35 @@ __always_inline T *&invocation_state()
 {
 	static_assert((Index == 0) || (Index == 1), "Bad invocation state slot");
 	return *reinterpret_cast<T **>(invocation_state_slot(Index));
+}
+
+/**
+ * A wrapper around `thread_poll_wait` which optionally busy-spins some number
+ * of times before `yield()`-ing and takes a C++ lambda rather than separate
+ * function pointer and `void *` arguments.
+ */
+template<uint16_t MaximumSpins = 0, uint16_t MaximumYields = 0, typename Check>
+    requires std::is_invocable_v<Check> &&
+	         std::convertible_to<std::invoke_result_t<Check>, int>
+int thread_await_poll(TimeoutArgument timeout, Check &&check)
+{
+	int res;
+
+	for (uint16_t attempt = 0; attempt < MaximumSpins; attempt++)
+	{
+		if ((res = static_cast<int>(check())) != 0)
+		{
+			return res;
+		}
+	}
+
+	return thread_await_poll(
+	  timeout,
+	  MaximumYields,
+	  [](void *voidedCheck) -> int {
+		  return (*static_cast<Check *>(voidedCheck))();
+	  },
+	  &check);
 }
 
 #endif
