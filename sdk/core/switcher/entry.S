@@ -5,6 +5,7 @@
 #include "trusted-stack-assembly.h"
 #include "misc-assembly.h"
 #include <errno.h>
+#include <cheri-builtins.h>
 
 .include "assembly-helpers.s"
 
@@ -1787,6 +1788,21 @@ exception_entry_asm:
 	 * scheduler's event handler.
 	 */
 	csrw               mtval, MCAUSE_THREAD_EXIT
+
+	/**
+	 * Set the thread's MEPCC (i.e. the PCC if the thread is resumed) to the
+	 * idle loop.  This ensures that any malicious scheduler that tries to run
+	 * this thread will simply get an additional idle thread, not a thread that
+	 * might be used to attack the rest of the system in any way.
+	 */
+0:
+	auipcc             csp, %cheriot_compartment_hi(.Lexited_thread)
+	cincoffset         csp, csp, %cheriot_compartment_lo_i(0b)
+	csetbounds         csp, csp, 8
+	li                 a0, CHERI_PERM_EXECUTE | CHERI_PERM_LOAD | CHERI_PERM_GLOBAL
+	candperm           csp, csp, a0
+	cspecialrw         cnull, mepcc, csp
+
 	/*
 	 * The thread exit code expects the TrustedStack pointer to be in csp and
 	 * the thread's stack pointer to be in mtdc.  After thread exit, we don't
@@ -1794,6 +1810,50 @@ exception_entry_asm:
 	 */
 	zeroOne            sp
 	cspecialrw         csp, mtdc, csp
+
+	/*
+	 * We may have reached here (specifically, from
+	 * `.Lcommon_defer_irqs_and_thread_exit` and in turn from
+	 * `switcher_after_compartment_call`) without having gone through an
+	 * architectural exception.  As a consequence, the TrustedStack spill area
+	 * is potentially full of interesting things (from as far back in time as
+	 * the last exception), and we'd like to expunge those.
+	 *
+	 * While a malicious scheduler reactivating an exited thread is primarily
+	 * mitigated by the above rewriting of `mepcc`, which ensures that none of
+	 * these values are meaningfully available to software thereafter, this is
+	 * some defense in depth and may simplify formal analysis.
+	 *
+	 * In fact, the TrustedStack::frameoffset invariants mean that we cannot
+	 * have gotten here any other way (`.Lhandle_error_not_switcher` does not
+	 * jump here).
+	 */
+	csc                cnull, TrustedStack_offset_cra(csp)
+	csc                cnull, TrustedStack_offset_csp(csp)
+	csc                cnull, TrustedStack_offset_cgp(csp)
+	csc                cnull, TrustedStack_offset_ctp(csp)
+	csc                cnull, TrustedStack_offset_ct0(csp)  // 5
+	csc                cnull, TrustedStack_offset_ct1(csp)
+	csc                cnull, TrustedStack_offset_ct2(csp)
+	csc                cnull, TrustedStack_offset_cs0(csp)
+	csc                cnull, TrustedStack_offset_cs1(csp)
+	csc                cnull, TrustedStack_offset_ca0(csp)  // 10
+	csc                cnull, TrustedStack_offset_ca1(csp)
+	csc                cnull, TrustedStack_offset_ca2(csp)
+	csc                cnull, TrustedStack_offset_ca3(csp)
+	csc                cnull, TrustedStack_offset_ca4(csp)
+	csc                cnull, TrustedStack_offset_ca5(csp)  // 15
+
+	/*
+	 * Zero out the thread's hazard pointers.
+	 *
+	 * This is done for us already in the paths that reach us via
+	 * `switcher_after_compartment_call`, but it can't hurt to do twice.
+	 * (Nominally, we could reach here from `.Lhandle_error_not_switcher`, but
+	 * again, not in practice, assuming invariants hold.)
+	 */
+	clear_hazard_slots /* trusted stack = */ csp, /* scratch = */ cs0
+
 	// LIVE OUT: mtdc, sp
 	j                  .Lexception_exiting_threads_rejoin
 
@@ -1870,6 +1930,23 @@ exception_entry_asm:
 	j                  .Lexception_reentered
 
 .size exception_entry_asm, . - exception_entry_asm
+
+/**
+ * The thread body for an idle thread.  Threads that have exited will have
+ * their PCC set to this (with bounds precisely applied to exactly this
+ * sequence).  This allows a malicious scheduler to use an exited thread as an
+ * additional idle thread but does not provide it with any abilities that it
+ * did not have already.
+ */
+.Lexited_thread:
+	// The following two instructions don't have compressed variants, make sure
+	// that any future versions don't shrink this and make the applied bounds
+	// too big.
+.option push
+.option norvc
+	wfi
+	j .Lexited_thread
+.option pop
 
 /*******************************************************************************
  * Switcher-exported library functions.
@@ -2085,6 +2162,8 @@ __Z39switcher_handler_invocation_count_resetv:
 	// Atlas update: a1: dead (to be zeroed)
 	li                 a1, 0
 	cret
+
+
 
 // The linker expects export tables to start with space for cgp and pcc, then
 // the compartment error handler.  We should eventually remove that requirement
