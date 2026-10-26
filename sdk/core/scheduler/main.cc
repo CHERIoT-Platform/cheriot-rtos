@@ -488,7 +488,8 @@ __cheriot_minimum_stack(0xa0) int __cheri_compartment("scheduler")
 	// Debug::log("Thread {} sleeping for {} ticks",
 	//  Thread::current_get()->id_get(), timeout->remaining);
 	Thread *current = Thread::current_get();
-	current->suspend(timeout, nullptr, true, !(flags & ThreadSleepNoEarlyWake));
+	current->suspend(
+	  timeout, nullptr, true, (flags & ThreadSleepAllowEarlyWake));
 	return 0;
 }
 
