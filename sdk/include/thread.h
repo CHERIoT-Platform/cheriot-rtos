@@ -30,12 +30,18 @@ typedef struct
 enum ThreadSleepFlags : uint32_t
 {
 	/**
+	 * Sleep for up to the specified timeout, and do not wake early if there are
+	 * no other runnable threads.  This allows a thread to sleep for a specified
+	 * amount of time.
+	 */
+	ThreadSleepNoEarlyWake = 0 << 0,
+	/**
 	 * Sleep for up to the specified timeout, but wake early if there are no
 	 * other runnable threads.  This allows a high-priority thread to yield for
 	 * a fixed number of ticks for lower-priority threads to run, but does not
 	 * prevent it from resuming early.
 	 */
-	ThreadSleepNoEarlyWake = 1 << 0,
+	ThreadSleepAllowEarlyWake = 1 << 0,
 };
 
 /**
