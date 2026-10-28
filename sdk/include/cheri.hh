@@ -908,6 +908,17 @@ namespace CHERI
 		}
 
 		/**
+		 * Returns a copy of this capability with the global permission
+		 * removed.  Global is the only permission that can be removed from
+		 * sealed capabilities and so this is provided as a separate method
+		 * from the generic permission-removal APIs.
+		 */
+		[[nodiscard]] Capability without_global()
+		{
+			return {cheri_without_global(ptr)};
+		}
+
+		/**
 		 * Pointer subtraction.
 		 */
 		Capability operator-(ptrdiff_t diff)
