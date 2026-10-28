@@ -252,8 +252,8 @@ toolchain("cheriot-clang", function ()
 		local default_rc_cargo_flags = {
 			"-Ctarget-cpu=" .. cpu,
 			-- We also set the opt-level here, because we set the default optimisation level to "smallest", which means `s` for Rust.
-			-- For now, however, we're mostly using `z`.
-			"-C opt-level=z"
+			-- For now, however, we're mostly using `3`. We will start using `z` after sorting out some issues it causes.
+			"-C opt-level=3"
 		}
 		self:add("rccargoflags", { default_rc_cargo_flags })
 
@@ -261,8 +261,8 @@ toolchain("cheriot-clang", function ()
 		local default_rc_flags = table.join(default_rc_cargo_flags, {
 			"--target=" .. rust_target,
 			-- We also set the opt-level here, because we set the default optimisation level to "smallest", which means `s` for Rust.
-			-- For now, however, we're mostly using `z`.
-			"-C opt-level=z"
+			-- For now, however, we're mostly using `3`. We will start using `z` after sorting out some issues it causes.
+			"-C opt-level=3"
 		})
 		self:add("rcflags", { default_rc_flags })
 	end)
