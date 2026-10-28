@@ -23,6 +23,7 @@
 #ifdef __cplusplus
 #	include <cdefs.h>
 #	include <stddef.h>
+#	include <type_traits>
 
 static inline __always_inline ptraddr_t cheri_address_get(void *x)
 {
@@ -135,6 +136,13 @@ static inline __always_inline auto cheri_round_representable_length(size_t len)
 	return __builtin_cheri_round_representable_length(len);
 }
 
+static inline __always_inline auto cheri_without_global(auto pointer)
+{
+	// Remove and reapply __sealed_capability if necessary
+	return reinterpret_cast<decltype(pointer)>(cheri_permissions_and(
+	  reinterpret_cast<std::remove_reference_t<decltype(*pointer)> *>(pointer),
+	  ~CHERI_PERM_GLOBAL));
+}
 #else
 #	ifndef __ASSEMBLER__
 
@@ -229,6 +237,9 @@ static inline __always_inline auto cheri_round_representable_length(size_t len)
 			__builtin_cheri_representable_alignment_mask(len)
 #		define cheri_round_representable_length(len)                          \
 			__builtin_cheri_round_representable_length(len)
+#		define cheri_without_global(pointer)                                  \
+			((__typeof__(pointer))(cheri_permissions_and(                      \
+			  (__typeof__(*pointer) *)(pointer), ~CHERI_PERM_GLOBAL)))
 
 #	endif // __ASSEMBLER__
 
