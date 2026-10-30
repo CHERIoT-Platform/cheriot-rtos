@@ -137,7 +137,7 @@
     "timer_hz" : 40000000,
     "tickrate_hz" : 100,
     "revoker" : "hardware",
-    "run_command" : "${sdk}/../scripts/run-sonata-1.0.sh",
+    "run_command" : "${sdk}/scripts/run-sonata-1.0.sh",
     "simulation": false,
     "interrupts": [
         {

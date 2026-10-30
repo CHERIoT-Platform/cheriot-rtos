@@ -9,7 +9,7 @@
     {
       "op": "replace",
       "path": "/run_command",
-      "value": "${sdk}/../scripts/run-sonata-sim.sh"
+      "value": "${sdk}/scripts/run-sonata-sim.sh"
     }
   ]
 }
