@@ -1,7 +1,7 @@
 #!/bin/sh
 
 SCRIPT_DIRECTORY="$(dirname "$(realpath "$0")")"
-. ${SCRIPT_DIRECTORY}/includes/helper_find_llvm_install.sh
+. ${SCRIPT_DIRECTORY}/../sdk/scripts/includes/helper_find_llvm_install.sh
 
 OBJDUMP=$(find_llvm_tool_required llvm-objdump)
 
