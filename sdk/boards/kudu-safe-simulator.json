@@ -45,5 +45,5 @@
     "tickrate_hz" : 10,
     "revoker" : "software",
     "simulation": true,
-    "run_command" : "${sdk}/../scripts/msft-safe-run-sim.sh kudu"
+    "run_command" : "${sdk}/scripts/msft-safe-run-sim.sh kudu"
 }

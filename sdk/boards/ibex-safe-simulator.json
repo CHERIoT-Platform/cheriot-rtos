@@ -49,6 +49,6 @@
     "tickrate_hz" : 10,
     "revoker" : "hardware",
     "simulation": true,
-    "run_command" : "${sdk}/../scripts/msft-safe-run-sim.sh ibex",
+    "run_command" : "${sdk}/scripts/msft-safe-run-sim.sh ibex",
     "cpu": "cheriot-ibex"
 }
