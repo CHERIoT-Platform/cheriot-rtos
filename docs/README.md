@@ -17,20 +17,14 @@ The [Getting Started Guide](user/GettingStarted.md) covers how to set up various
 Most of the remaining documentation predates the book and will describe the same functionality.
 Some was written as a mixture of design and user documentation and so may provide more detail on the underlying implementation than the book.
 
+This is part of the [process for adding new features](contributor/NewFeature.md).
+
 User-facing documentation is linked from the [Doxygen-generated API documentation](https://rtos.api-docs.cheriot.org), which is published automatically on each commit.
 
 Design documents
 ================
 
 New features in CHERIoT RTOS should come with an accompanying design document.
-The ideal flow for contributing new features is:
-
-1. Raise an issue with a high-level description of the problem.
-2. Reach consensus that the feature is desirable.
-3. Create a PR with a design document.
-4. Reach consensus on the design and merge the PR.
-5. Create a PR that implements the design, along with any updates to the design document that are necessary based on learnings from the implementation.
-6. Merge the new feature.
 
 Prior to the open-source release, core features were implemented with a similar flow but where the design was done on a whiteboard and the committed documentation included both the user-facing and design documents interleaved.
 
