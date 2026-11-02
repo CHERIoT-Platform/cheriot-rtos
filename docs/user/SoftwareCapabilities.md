@@ -25,7 +25,7 @@ CHERI capabilities to software-defined capabilities
 
 CHERI provides a hardware mechanism for building software-defined capabilities: sealing.
 The sealing mechanism allows a pointer (a CHERI capability) to be made immutable and unusable until it is unsealed using an authorising capability.
-The CHERIoT ISA has a limited set of space for sealing types and so these are virtualised with the allocator's [token](../sdk/include/token.h) APIs.
+The CHERIoT ISA has a limited set of space for sealing types and so these are virtualised with the allocator's [token](../../sdk/include/token.h) APIs.
 These APIs combine allocation and sealing, returning both sealed and unsealed capabilities to an object.
 The unsealed capability can be used directly, the sealed capability can be passed to other code and unsealed only by calling the allocator's `token_unseal` function with the capability used to allocate the object.
 
@@ -45,7 +45,7 @@ The scheduler also uses this mechanism for capabilities that allow interaction w
 Objects created in this way are allocated outside of any compartment's global region and are accessed only via capabilities provided by the loader.
 These capabilities use the allocator's token mechanism and so can be unsealed only with the relevant authorising capability
 
-For more detail on how to use the static sealing mechanism, see [`compartment-macros.h`](../sdk/include/compartment-macros.h).
+For more detail on how to use the static sealing mechanism, see [`compartment-macros.h`](../../sdk/include/compartment-macros.h).
 
 ### Exporting a sealing type
 

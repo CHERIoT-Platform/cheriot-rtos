@@ -1,13 +1,13 @@
 Debugging
 =========
 
-CHERIoT does not currently have support for interactive debugging.
-For now, the debugging options are logging, assertions and tracing.
+CHERIoT supports interactive debugging via LLDB, or via the MPact simulator's built-in debugger.
+In addition, it provides a rich facility for logging, assertions and tracing.
 
 Debug logging
 -------------
 
-The SDK supports logging in C++ using [debug.hh](../sdk/include/debug.hh).
+The SDK supports logging in C++ using [debug.hh](../../sdk/include/debug.hh).
 To use this you should include something like the following in your code:
 
 ```C++
@@ -19,7 +19,7 @@ using Debug = ConditionalDebug<DebugFoo, "Foo">;
 Here `DEBUG_FOO` is a compile time macro that should be set to `true` or `false` to enable or disable debug output in the `Foo` module.
 `"Foo"` is a prefix that will be prepended to debug messages.
 
-The SDK's [xmake file](../sdk/xmake.lua) provides support for defining debug macros of the form `DEBUG_FOO`.
+The SDK's [xmake file](../../sdk/xmake.lua) provides support for defining debug macros of the form `DEBUG_FOO`.
 To use it call `debugOption("foo")` in your `xmake.lua` and add `add_rules("cherimcu.component-debug")` to your target definitions.
 You can then specify `--debug-foo=true` when running `xmake config` to build with debugging enabled.
 
@@ -39,7 +39,7 @@ Foo: The value of anInt is 0x2a. aString is CHERIoT.
 
 Note that `{}` in the template string is replaced by the formatted value of the variable passed in.
 The formatter supports some common types such as integers and strings.
-By default, it will attempt to use [magic_enum.hpp](../sdk/include/magic_enum/magic_enum.hpp) to pretty-print enumerations.
+By default, it will attempt to use [magic_enum.hpp](../../sdk/include/magic_enum/magic_enum.hpp) to pretty-print enumerations.
 Pretty-printing enumerations can significantly increase firmware size and so can be disabled by defining `CHERIOT_AVOID_CAPRELOCS`, which will then fall back to printing their integer values.
 Pointers are displayed as capabilities using the following format:
 

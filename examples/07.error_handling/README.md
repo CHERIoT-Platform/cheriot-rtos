@@ -1,7 +1,7 @@
 Handling errors in compartments
 ===============================
 
-The [more secure compartmentalised hello world](../3.hello_safe_compartment) example demonstrated how to program defensively in compartments.
+The [more secure compartmentalised hello world](../03.hello_safe_compartment) example demonstrated how to program defensively in compartments.
 Sometimes, it's much simpler to just go ahead and assume that everything is fine and recover when it goes wrong.
 The [UART compartment](uart.cc) in this example follows this philosophy.
 The entry point is now very simple, with only two lines:
@@ -25,7 +25,7 @@ extern "C" ErrorRecoveryBehaviour
 compartment_error_handler(ErrorState *frame, size_t mcause, size_t mtval);
 ```
 
-This is explained in more detail in [the error handling document](../../docs/ErrorHandling.md).
+This is explained in more detail in [the error handling document](../../docs/user/ErrorHandling.md).
 This compartment implements this, reports the fault to the UART for debugging, releases the lock, and unwinds to the calling compartment.
 Note that, since this compartment is writing to the UART, this will result in interleaved output.
 If you are using a board with a separate debugging UART then this can be avoided but the simulator has a single (output-only) UART.

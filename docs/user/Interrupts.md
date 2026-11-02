@@ -19,7 +19,7 @@ Threads waking waiters are expected to modify the futex word and then call `fute
 This ensures that either the modification happens before the wait, in which case the comparison fails and the `futex_wait` call returns immediately, or after in which case it is fine to ignore this `futex_wake` because it is not related to the current value.
 
 This primitive can be used to implement locks that yield and avoid busy waiting on acquisition.
-The [`locks.hh`](../sdk/include/locks.hh) file contains a flag lock and a ticket lock that use a futex, for example.
+The [`locks.hh`](../../sdk/include/locks.hh) file contains a flag lock and a ticket lock that use a futex, for example.
 
 Futexes for interrupts
 ----------------------
@@ -34,7 +34,7 @@ This mechanism allows multiple threads to wait for the same interrupt and perfor
 The `interrupt_futex_get` requests the futex for a particular interrupt.
 This returns a read-only capability that can be read directly to get the number of times that an interrupt has fired and can be used for `futex_wait`.
 
-Note that, because interrupt futexes are just normal futexes, they can also be used with the [multiwaiter](../sdk/include/multiwater.h) API, for example to wait for an interrupt or a message from another thread, whichever happens first.
+Note that, because interrupt futexes are just normal futexes, they can also be used with the [multiwaiter](../../sdk/include/multiwaiter.h) API, for example to wait for an interrupt or a message from another thread, whichever happens first.
 
 Acknowledging interrupts
 ------------------------

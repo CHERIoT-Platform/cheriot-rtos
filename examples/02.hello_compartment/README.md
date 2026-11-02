@@ -1,7 +1,7 @@
 Compartmentalised hello world
 =============================
 
-The [hello world example](../1.hello_world) used a single compartment, which had direct access to the UART device.
+The [hello world example](../01.hello_world) used a single compartment, which had direct access to the UART device.
 In general, it is bad practice to grant direct access to devices to most compartments and so in this example we'll start moving the UART access to a separate compartment.
 
 *Note:* The `debug.hh` interfaces use direct access to the UART, but only in debug builds.

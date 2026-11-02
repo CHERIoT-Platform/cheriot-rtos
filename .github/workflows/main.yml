@@ -186,6 +186,27 @@ jobs:
     - name: Run clang-format and clang-tidy
       run: ./scripts/run_clang_tidy_format.sh /cheriot-tools/bin
 
+  check-links:
+    name: Check cross-references in links
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Check broken links
+      # Check everything except the third-party submodules (but do check them
+      # out so that references *to* them are not false positives.  Doxygen
+      # creates `files.html` and `pages.html`, so pretend that they exist: they
+      # are referenced in the Doxygen front-page Markdown file and that
+      # shouldn't cause CI to break.  Ideally we'd exclude them only for that
+      # file, but that can be a later PR.
+      uses: lycheeverse/lychee-action@v2
+      with:
+        args: --exclude-path sdk/third_party --exclude files.html --exclude pages.html .
+        fail: true
+
+
   all-checks:
     needs:
       - run-tests
@@ -194,6 +215,7 @@ jobs:
       - test-bigdata
       - sonata-sram-hello
       - check-format
+      - check-links
     # Use a GH Action "object filter" to project the .results of each needs-ed
     # job, yielding a list of outcomes.  We can then use `jq` to filter that
     # list for results other than "success" and check that that is the empty

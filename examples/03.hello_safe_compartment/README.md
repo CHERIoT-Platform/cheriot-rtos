@@ -1,7 +1,7 @@
 A more secure compartmentalised hello world
 ===========================================
 
-The [simple compartmentalised hello world example](../2.hello_compartment), we separated out control of the UART into an isolated compartment.
+The [simple compartmentalised hello world example](../02.hello_compartment), we separated out control of the UART into an isolated compartment.
 This prevented access to the UART device from other and ensured that output was not interleaved.
 
 So, given that we've already compartmentalised it, what more security can we add?

@@ -55,10 +55,10 @@ The `-V` flag disables instruction-level tracing so that you can see the UART ou
 Running the examples
 --------------------
 
-There are several examples in the [`examples/`](../examples/) directory of the repository.
+There are several examples in the [`examples/`](../../examples/) directory of the repository.
 These show how to use individual features of the platform.
 Each of these is built and run in exactly the same way as the test suite.
-For more detailed instructions [see the examples documentation](../examples/README.md).
+For more detailed instructions [see the examples documentation](../../examples/README.md).
 
 Generating `compile_commands.json`
 ----------------------------------

@@ -26,5 +26,5 @@ Sending integers from one thread to another is not particularly interesting but 
 
 In general, the scheduler should be trusted for availability but not for confidentiality or integrity.
 When you use the scheduler's message queue, it is able to see any data that you put into the queue.
-You can use the techniques from the [sealing example](../5.sealing) to ensure that only the receiver can see the data, which means that you trust the scheduler only for availability (it can drop messages, but it can't tamper with them or leak them).
-The thread pool (see the [thread pool tests](`../../tests/thread_pool-test.cc`)) uses sealing to ensure that neither the scheduler nor the thread-pool compartment can see the contents of lambdas that are dispatched to execute asynchronously.
+You can use the techniques from the [sealing example](../05.sealing) to ensure that only the receiver can see the data, which means that you trust the scheduler only for availability (it can drop messages, but it can't tamper with them or leak them).
+The thread pool (see the [thread pool tests](../../tests/thread_pool-test.cc)) uses sealing to ensure that neither the scheduler nor the thread-pool compartment can see the contents of lambdas that are dispatched to execute asynchronously.

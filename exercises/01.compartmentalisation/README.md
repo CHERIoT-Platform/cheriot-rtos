@@ -25,7 +25,7 @@ Running the exercise
 --------------------
 
 First we need to configure the `xmake` build to run on the Ibex simulator and build with the CHERIoT toolchain.
-If you are using the [dev container](../../docs/GettingStarted.md) you should run:
+If you are using the [dev container](../../docs/user/GettingStarted.md) you should run:
 
 ```
 xmake config --sdk=/cheriot-tools/

@@ -34,7 +34,7 @@ C++ templates give us type-safe logging and, in combination with `constexpr` giv
 When compiling code for a compartment, you must pass the `-cheri-compartment={compartment name}` flag to the compiler.
 Beyond that, you just need the flags to specify the target and ABI: `-target riscv32-unknown-cheriotrtos -mcpu=cheriot -mabi=cheriot -mxcheri-rvc -mrelax -fshort-wchar`.
 
-When linking a compartment, you must use the [compartment linker script](../sdk/compartment.ldscript), which specifies how to lay out the code and data for a compartment.
+When linking a compartment, you must use the [compartment linker script](../../sdk/compartment.ldscript), which specifies how to lay out the code and data for a compartment.
 The resulting compartment can then be linked into a firmware image.
 
 ## How big is the TCB?
