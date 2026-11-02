@@ -49,7 +49,7 @@ For cross-compartment calls, `enabled` is the default and `inherit` is not permi
 The compiler may not inline functions at call sites that would change the interrupt state and will always call them via a sentry capability set up by the loader.
 This makes it possible to statically reason about interrupt state in lexical scopes.
 
-The [`cheri.hh`](../sdk/include/cheri.hh) file contains a helper for C++ code to run a lambda with interrupts disabled.
+The [`cheri.hh`](../../sdk/include/cheri.hh) file contains a helper for C++ code to run a lambda with interrupts disabled.
 
 ## Importing MMIO access
 

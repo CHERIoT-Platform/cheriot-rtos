@@ -9,7 +9,7 @@ To allow software to be portable across these and other implementations, we use 
 This is a JSON document that contains a single object describing the board.
 The parser supports a small superset of JSON, in particular it permits hex numbers as well as decimal, which is particularly useful for memory addresses.
 
-The [`boards`](../sdk/boards) directory contains some existing examples.
+The [`boards`](../../sdk/boards) directory contains some existing examples.
 
 Memory layout
 -------------
@@ -98,7 +98,7 @@ Clock configuration
 The clock rate is configured by two properties.
 The `timer_hz` field is the number of timer increments per second, typically the clock speed of the chip (the RISC-V timer is defined in terms of cycles).
 The `tickrate_hz` specifies how many scheduler ticks should happen per second.
-See the [timeout documentation](Timeouts.md) for more discussion about ticks.
+See the [the CHERIoT Programmers' Guide chapter about time](https://cheriot.org/book/time.html) for more discussion about ticks.
 
 Conditional compilation
 -----------------------

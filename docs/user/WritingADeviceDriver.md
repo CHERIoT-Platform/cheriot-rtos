@@ -100,7 +100,7 @@ For the ethernet device that we've been using as an example, you would typically
 DECLARE_AND_DEFINE_INTERRUPT_CAPABILITY(ethernetInterruptCapability, Ethernet, true, true);
 ```
 
-If you wish to share this between multiple compilation units, you can use the separate `DECLARE_` and `DEFINE_` forms (see [`interrupt.h`](../sdk/include/interrupt.h)) but the combined form is normally most convenient.
+If you wish to share this between multiple compilation units, you can use the separate `DECLARE_` and `DEFINE_` forms (see [`interrupt.h`](../../sdk/include/interrupt.h)) but the combined form is normally most convenient.
 This macro takes four arguments:
 
  1. The name that we're going to use to refer to this capability.
@@ -152,7 +152,7 @@ do
 } while (futex_wait(ethernetFutex, last) == 0);
 ```
 
-If you want to wait for multiple event sources, you can use the [multiwaiter](../sdk/include/multiwaiter.h) API.
+If you want to wait for multiple event sources, you can use the [multiwaiter](../../sdk/include/multiwaiter.h) API.
 This allows sleeping on multiple kinds of event source so you can, for example, have a single thread that blocks waiting for a message to send from another thread or a message to receive from the device.
 
 ### Acknowledging interrupts

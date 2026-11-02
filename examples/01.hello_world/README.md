@@ -24,7 +24,7 @@ Note that the definition of this function uses a macro to indicate the compartme
 This macro is normally used on function definitions, rather than declarations, and allows the compiler to either export the function when it is defined or insert cross-compartment calls when it is used when compiling code for another compartment.
 
 We also include the SDK header `fail-simulator-on-error.h`. This defines a
-simple [compartment error handler](../docs/ErrorHandling.md) that reports any
+simple [compartment error handler](../../docs/user/ErrorHandling.md) that reports any
 unexpected errors and ends the simulation with exit code 1 (FAILURE). This is
 necessary because the default behaviour would silently exit the thread,
 potentially hiding errors.

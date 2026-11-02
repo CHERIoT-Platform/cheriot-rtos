@@ -6,7 +6,7 @@ These work in tandem.
 The `wall_clock` compartment manages clock sources and exposes a shared-memory object that allows mapping from the monotonic clock (which is expected to be readable from any compartment by reading an MMIO region or CSR) to a wall-clock time.
 The `clock_helpers` library provides POSIX-compatible accessors for reading clocks.
 
-The design for this is in [`docs/Clocks.md`](../../../docs/Clocks.md).
+The design for this is in [`docs/Clocks.md`](../../../docs/design/Clocks.md).
 
 Adding a clock source
 ---------------------

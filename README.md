@@ -4,7 +4,7 @@ CHERIoT RTOS
 This repository contains the core RTOS for the [CHERIoT platform](https://aka.ms/cheriot-tech-report).
 
 To use this, you will also need to install some dependencies.
-The [getting started guide](docs/GettingStarted.md) describes in detail how to build these:
+The [getting started guide](docs/user/GettingStarted.md) describes in detail how to build these:
 
  - A [version of LLVM with CHERIoT support](https://github.com/CHERIoT-Platform/llvm-project/tree/cheriot)
  - An implementation of the ISA (e.g. [CHERIoT-Ibex](https://github.com/Microsoft/cheriot-ibex) or the emulator generated from [the formal model](https://github.com/Microsoft/cheriot-sail))
@@ -16,12 +16,12 @@ This repository contains symbolic links.
 **IMPORTANT**: If you wish to clone this repository on *Windows*, make sure that you have enabled Developer Mode and run `git config --global core.symlinks true`.
 You must do this *before* cloning the repository.
 
-The [getting started guide](docs/GettingStarted.md) describes how to install these and how to build the test suite and examples in this repository.
+The [getting started guide](docs/user/GettingStarted.md) describes how to install these and how to build the test suite and examples in this repository.
 
-The RTOS is privilege separated into a small number of core components as described in the [architecture document](docs/architecture.md).
-The C/C++ extensions used by the compartmentalisation model are described in the [language extensions document](docs/LanguageExtensions.md).
+The RTOS is privilege separated into a small number of core components as described in the [architecture document](docs/user/architecture.md).
+The C/C++ extensions used by the compartmentalisation model are described in the [language extensions document](docs/user/LanguageExtensions.md).
 
-If you have questions, please see the [frequently asked questions](docs/faq.md) document or raise an issue.
+If you have questions, please see the [frequently asked questions](docs/user/faq.md) document or raise an issue.
 
 
 Building firmware images
