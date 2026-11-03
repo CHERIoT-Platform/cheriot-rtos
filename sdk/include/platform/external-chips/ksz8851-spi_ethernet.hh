@@ -571,13 +571,19 @@ namespace Ksz8851
 		 */
 		void register_write(RegisterOffset reg, uint16_t val) const
 		{
-			// See register_read for command format.
+			/*
+			 * See register_read for command format, making up bytes[0] and [1].
+			 * bytes[2] and [3] are then the register's value. least significant
+			 * byte first.
+			 */
 			uint8_t addr       = static_cast<uint8_t>(reg);
 			uint8_t byteEnable = (addr & 0x2) == 0 ? 0b0011 : 0b1100;
-			uint8_t bytes[2];
+			uint8_t bytes[4];
 			bytes[0] = (static_cast<uint8_t>(SpiCommand::WriteRegister) << 6) |
 			           (byteEnable << 2) | (addr >> 6);
 			bytes[1] = (addr << 2) & 0b11110000;
+			bytes[2] = val & 0xFF;
+			bytes[3] = (val >> 8) & 0xFF;
 
 			TimeoutArgument timeout{TimeoutWaitForever};
 			int             spiResult;
@@ -585,16 +591,10 @@ namespace Ksz8851
 			spiResult = provider.spi_transfer_start(timeout);
 			Debug::Assert(spiResult == 0, "Failed to begin SPI transfer");
 
-			spiResult =
-			  provider.template spi_transmit<SPIBufferLife::MustCopy,
-			                                 SPITransferMore::Continue>(
-			    timeout, bytes, sizeof(bytes));
-			Debug::Assert(spiResult == 0, "Failed to send register write");
-
 			spiResult = provider.template spi_transmit<SPIBufferLife::MustCopy,
 			                                           SPITransferMore::End>(
-			  timeout, reinterpret_cast<uint8_t *>(&val), sizeof(val));
-			Debug::Assert(spiResult == 0, "Failed to send register value");
+			  timeout, bytes, sizeof(bytes));
+			Debug::Assert(spiResult == 0, "Failed to send register write");
 		}
 
 		/**
@@ -923,9 +923,16 @@ namespace Ksz8851
 				    timeout, &cmd, 1);
 				Debug::Assert(spiResult == 0, "Failed to send command header");
 
-				// Initial words are ReceiveFrameHeaderStatus and
-				// ReceiveFrameHeaderByteCount which we have already know the
-				// value.
+				/*
+				 * Initial bytes are:
+				 * - 0-3: dummy bytes (the datasheet does not make it clear that
+				 *        SPI is considered a 32-bit DMA access, but it works.)
+				 * - 4,5: ReceiveFrameHeaderStatus
+				 * - 6,7: ReceiveFrameHeaderByteCount
+				 *
+				 * We have already read the reported registers' values, above,
+				 * so can just discard them.
+				 */
 				spiResult = provider.spi_receive_discard(timeout, 8);
 				Debug::Assert(spiResult == 0, "Failed to drop reply header");
 
@@ -1017,18 +1024,24 @@ namespace Ksz8851
 			spiResult = provider.spi_transfer_start(timeout);
 			Debug::Assert(spiResult == 0, "Failed to begin SPI transfer");
 
-			uint8_t cmd = static_cast<uint8_t>(SpiCommand::WriteDma) << 6;
-			spiResult =
-			  provider.template spi_transmit<SPIBufferLife::MustCopy,
-			                                 SPITransferMore::Continue>(
-			    timeout, &cmd, 1);
-			Debug::Assert(spiResult == 0, "Failed to send command header");
+			/*
+			 * bytes[0] is the "TXQ FIFO Write" opcode.  bytes[1] through [4]
+			 * are the "Transmit Queue Frame Format", which consists of a 2-byte
+			 * "Control Word" (holding an IRQ request flag and a frame ID, which
+			 * we don't use) and then a 2-byte byte count, least significant
+			 * byte first, with a maximum value of 2000.
+			 */
+			uint8_t bytes[5];
+			bytes[0] = static_cast<uint8_t>(SpiCommand::WriteDma) << 6;
+			bytes[1] = 0;
+			bytes[2] = 0;
+			bytes[3] = length & 0xFF;
+			bytes[4] = (length >> 8) & 0xFF;
 
-			uint32_t header = static_cast<uint32_t>(length) << 16;
 			spiResult =
 			  provider.template spi_transmit<SPIBufferLife::MustCopy,
 			                                 SPITransferMore::Continue>(
-			    timeout, reinterpret_cast<uint8_t *>(&header), sizeof(header));
+			    timeout, bytes, sizeof(bytes));
 			Debug::Assert(spiResult == 0, "Failed to send packet header");
 
 			spiResult = provider.template spi_transmit<SPIBufferLife::MayRetain,
