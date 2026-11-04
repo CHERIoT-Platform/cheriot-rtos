@@ -7,6 +7,7 @@ Each directory can be included directly in xmake to add the entire library, some
 This collection currently includes:
 
  - [atomic](atomic/) provides atomic support functions.
+ - [cancellation_token](cancellation_token/) contains support for cancellation tokens.
  - [compartment_helpers](compartment_helpers/) contains helpers for checking / ensuring that pointers are valid.
  - [clock](clock/) provides support for wall-clock time.
  - [crt](crt/) provides C runtime functions that the compiler may emit.
