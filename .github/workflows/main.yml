@@ -47,7 +47,7 @@ jobs:
     - name: Build tests
       run: |
         cd tests
-        xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ --test-rust=y ${{ matrix.build-flags }}
+        xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ --cxflags="-Werror" --asflags="-Werror" --test-rust=y ${{ matrix.build-flags }}
         xmake
     - name: Run tests
       run: |
@@ -73,7 +73,7 @@ jobs:
     - name: Build tests
       run: |
         cd tests
-        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=y --print-floats=y ${{ matrix.testset-flags }}
+        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --cxflags="-Werror" --asflags="-Werror" --debug-loader=n --debug-scheduler=n --debug-allocator=none -m release --stack-usage-check-allocator=y --stack-usage-check-scheduler=y  --print-doubles=y --print-floats=y ${{ matrix.testset-flags }}
         xmake
     - name: Run tests
       run: |
@@ -111,7 +111,7 @@ jobs:
         for example_dir in $PWD/examples/*/; do
           cd $example_dir
           echo Building $example_dir
-          xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
+          xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ --cxflags="-Werror" --asflags="-Werror" ${{ matrix.build-flags }}
           xmake
         done
     - name: Run examples
@@ -128,7 +128,7 @@ jobs:
         for example_dir in $PWD/benchmarks/*/; do
           cd $example_dir
           echo Building $example_dir
-          xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ ${{ matrix.build-flags }}
+          xmake f --board=${{ matrix.board }} --sdk=/cheriot-tools/ --cxflags="-Werror" --asflags="-Werror" ${{ matrix.build-flags }}
           xmake
         done
 
@@ -147,7 +147,7 @@ jobs:
       run: |
         set -e
         cd $PWD/tests
-        xmake f --board=sail --sdk=/cheriot-tools/ --most-tests=n --test-bigdata=y
+        xmake f --board=sail --sdk=/cheriot-tools/ --cxflags="-Werror" --asflags="-Werror" --most-tests=n --test-bigdata=y
         xmake
         xmake run
 
@@ -166,7 +166,7 @@ jobs:
       run: |
         set -e
         cd $PWD/examples/03.hello_safe_compartment/
-        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --board-mixins=sonata-1.x-sram-mixin --allocator=false
+        xmake f --board=sonata-simulator --sdk=/cheriot-tools/ --cxflags="-Werror" --asflags="-Werror" --board-mixins=sonata-1.x-sram-mixin --allocator=false
         xmake
         env SONATA_SIMULATOR_BOOT_STUB=/cheriot-tools/elf/sonata_simulator_sram_boot_stub xmake run
 
