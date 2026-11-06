@@ -20,4 +20,5 @@
 	IbexCSR_Cpuctrlsts_DataIndependentTiming
 
 /// Default to I$ on (if supported) and "data independent timing" off.
+#undef SWITCHER_CPU_FEATURE_DEFAULT
 #define SWITCHER_CPU_FEATURE_DEFAULT IbexCSR_Cpuctrlsts_IcacheEnable
