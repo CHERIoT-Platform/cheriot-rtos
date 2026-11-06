@@ -65,7 +65,7 @@ __cheri_libcall uint16_t switcher_handler_invocation_count_reset(void);
  * compartment).  This state is inherited from the caller, may be modified
  * arbitrarily (within platform constraints), and will be restored when the
  * callee returns.  The exact meaning of these bits is platform-specific, to be
- * provided by platform-switcher_cpu_features.hh.  However, these C preprocessor
+ * provided by platform-switcher_cpu_features.h.  However, these C preprocessor
  * macro names are reserved for generic, cross-platform use:
  *
  * * `SWITCHER_CPU_FEATURE_CACHE_INSTRUCTION_ENABLED` -- a value which may be
