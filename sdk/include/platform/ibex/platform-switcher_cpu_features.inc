@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "platform-switcher_cpu_features.hh"
+#include "platform-switcher_cpu_features.h"
 
 /// A mask of all bits that can be set in cpuFeatures
 #	define SWITCHER_CPU_FEATURE_PLATFORM_MASK                                 \

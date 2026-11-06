@@ -11,7 +11,7 @@
 
 #if defined(IBEX) && defined(MICROSOFT_CHERIOT_SAFE)
 #	include <platform-rdcycle.h>
-#	include <platform-switcher_cpu_features.hh>
+#	include <platform-switcher_cpu_features.h>
 #endif
 
 using namespace CHERI;
