@@ -1463,10 +1463,98 @@ class MState
 		}
 
 		/*
-		 * Shadow bits have been painted. From now on user caps to this chunk
-		 * will not come to exist in registers due to load barrier.  Any that
-		 * are already there will be addressed (either zeroed or reloaded and,
-		 * so, tag-cleared) when we return from this compartment.
+		 * Shadow bits have been painted. To first approximation, from now on
+		 * user caps to this chunk will not come to exist in registers due to
+		 * load barrier.  Any that are already there will be addressed (either
+		 * zeroed or reloaded and, so, tag-cleared) when we return from this
+		 * compartment.
+		 *
+		 * ### The First Disturbance
+		 *
+		 * In slightly more detail, none of our C++ code between here and return
+		 * from the allocator compartment is going to write any would-be-revoked
+		 * caps to this chunk to memory or use them to access memory.  But just
+		 * because these values are linguistically dead, we might still have
+		 * such a thing in the registers (it's tricky to make assurances of the
+		 * registers from C++ beyond those required by the ABI) and that thing
+		 * might get spilled to the stack.  Separately, if we get preempted,
+		 * that might get spilled to our thread's trusted stack's register spill
+		 * area.
+		 *
+		 * Excitingly, those spills might happen while the revoker is probing
+		 * the spilled-to address, so it might well be the case that we write
+		 * a tagged capability whose base indicates that it should be revoked
+		 * to a location being revoked, and possibly that the revoker would be
+		 * attempting to clear (in fact, we could be writing back an identical
+		 * copy).  That's fine, if initially (and locally) alarming.
+		 *
+		 * ### The Second Disturbance
+		 *
+		 * In this gap between painting and return we also find that the story
+		 * we tell to non-TCB software is in fact an oversimplification and it
+		 * is, in fact, possible for a capability to this freed object to
+		 * persist in memory and in registers even after the freed object has
+		 * lingered in quarantine for sufficiently long to be de-quarantined!
+		 * Fortunately, such lingering copies are visible only to the allocator
+		 * software and switcher, but for anyone attempting to do formal
+		 * verification of the system, this is a challenge.
+		 *
+		 * In principle, Events Beyond Our Control may have caused the revoker
+		 * to engage after this read of the `epoch` value and before we get to
+		 * `mspace_qtbin_deqn()` all without us ever getting preempted.[^really]
+		 * In such a scenario, all of these may be true simultaneously:
+		 *
+		 *  - We still have, in our CPU registers, a copy of a capability to the
+		 *    object that was once `chunk` that neither the load filter nor the
+		 *    revoker have been able to scrutinize,
+		 *
+		 *  - The revoker has made blindingly fast progress relative to the CPU
+		 *    core and this `mspace_qtbin_deqn()` call may remove `chunk`
+		 *    from quarantine, zeroing its revocation bits in the process.
+		 *
+		 *  - The compiler may have generated code for dequarantining that does
+		 *    not touch the register holding the aforementioned unexamined
+		 *    capability.
+		 *
+		 * If we are now preempted or spill that capability to the stack, we
+		 * will have written to memory a capability that we should not be
+		 * allowed to have: a revocation pass has started and ended since the
+		 * memory to which it points was quarantined, and yet.  Moreover, we
+		 * could read this capability back into the indefinite future, because
+		 * the revocation bitmap bits have been cleared.  This is, however
+		 * alarming it may seem, fine, if admittedly unexpected:
+		 *
+		 *  - The allocator is the thing defining object lifetimes, and it holds
+		 *    a capability to the whole heap.  It (and it alone, of the TCB)
+		 *    could have rederived this forbidden capability anyway.
+		 *
+		 *  - The allocator isn't going to return such an accidentally-surviving
+		 *    capability; in fact it is, from a C++ perspective, dead.
+		 *
+		 *  - Spills to the stack are private to this compartment invocation
+		 *    (the specific instance of this thread in this compartment) and are
+		 *    going to be erased before we return to the calling compartment.
+		 *
+		 *  - Spills to the trusted stack's register spill area are private to
+		 *    this thread and, moreover, are dead by the time we're back on core
+		 *    (that is, we will never read those values again; all subsequent
+		 *    loads from the spill area will be of values that will have already
+		 *    been overwritten by entry to the trap handler).
+		 *
+		 * However, all this remains a big mess for formal verification of the
+		 * RTOS at the ISA level.
+		 *
+		 * [^really]:  It is not immediately possible to see how the revoker
+		 * might engage like this, but a few plausible scenarios exist:
+		 *
+		 *   - Kicking the revoker might take a long time, so this activation
+		 *     was in fact requested by a previous object's having been freed.
+		 *
+		 *   - The revoker can activates itself without software intervention.
+		 *
+		 *   - The order of the calls to `mpsace_bg_revoker_kick()` and
+		 *     `mspace_qtbin_deqn()` below, which is a historical happenstance,
+		 *     might be swapped, so that the kick happens first.
 		 */
 		auto epoch = revoker.system_epoch_get();
 
