@@ -414,6 +414,12 @@ __Z26compartment_switcher_entryz:
 	 * Make sure the caller's CSP has the expected permissions (including that
 	 * it is a stack pointer, by virtue of being local and bearing SL) and that
 	 * its top and base are at least 16-byte aligned.
+     *
+     * Also make sure that the caller's CSP base matches the primordial
+     * CSP base, which is the stack high-water mark base. This check prevents
+     * a caller from sneaking a stack object allocated at low addresses of the
+     * stack outside of its CSP bounds: a callee's write to that object could
+     * move MSHWM below the caller's CSP base.
 	 *
 	 * TODO for formal verification: given the check for SL permission here and
 	 * our linker script, and our loader's behavior, it ought to be impossible
@@ -427,6 +433,8 @@ __Z26compartment_switcher_entryz:
 	li                 tp, COMPARTMENT_STACK_PERMISSIONS
 	bne                tp, t2, .Lcommon_force_unwind
 	cgetbase           t2, csp
+	csrr               tp, CSR_MSHWMB
+	bne                tp, t2, .Lcommon_force_unwind
 	or                 t2, t2, sp
 	andi               t2, t2, 0xf
 	bnez               t2, .Lcommon_force_unwind
