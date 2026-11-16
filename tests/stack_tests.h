@@ -20,6 +20,8 @@ __cheri_compartment("stack_integrity_thread") int test_stack_invalid_on_call(
   __cheri_callback int (*fn)());
 __cheri_compartment("stack_integrity_thread") int test_stack_global_on_call(
   __cheri_callback int (*fn)());
+__cheri_compartment("stack_integrity_thread") int test_stack_base_on_call(
+  __cheri_callback int (*fn)());
 
 /**
  * Sets what we expect to happen for this test.  Is a fault expected to invoke

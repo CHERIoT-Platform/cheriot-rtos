@@ -202,5 +202,11 @@ int test_stack()
 	           -ECOMPARTMENTFAIL,
 	           "stack_global_on_call failed");
 
+	debug_log("invalid stack base on cross compartment call");
+	expect_handler(false);
+	TEST_EQUAL(test_stack_base_on_call(callback),
+	           -ECOMPARTMENTFAIL,
+	           "stack_base_on_call failed");
+
 	return 0;
 }
