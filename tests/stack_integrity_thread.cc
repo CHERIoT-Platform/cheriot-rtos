@@ -195,6 +195,27 @@ int test_stack_global_on_call(__cheri_callback int (*fn)())
 	return -EINVAL;
 }
 
+int test_stack_base_on_call(__cheri_callback int (*fn)())
+{
+	CALL_CHERI_CALLBACK(
+	  fn,
+	  "move            zero, %1\n"
+	  // the `move zero, %1` is a no-op, just to have an operand
+	  "cgetaddr        t0, csp\n" // keep the current sp
+	  "cgetbase        a0, csp\n"
+	  "cgetlen         a1, csp\n"
+	  "addi            a0, a0, 16\n"  // move base and keep 16-byte alignment
+	  "addi            a1, a1, -16\n" // keep the top where it was
+	  "csetaddr        csp, csp, a0\n"
+	  "csetbounds      csp, csp, a1\n"
+	  "csetaddr        csp, csp, t0\n",
+	  0);
+
+	*threadStackTestFailed = true;
+	TEST(false, "Should be unreachable");
+	return -EINVAL;
+}
+
 int self_recursion(__cheri_callback int (*fn)())
 {
 	(*fn)();
