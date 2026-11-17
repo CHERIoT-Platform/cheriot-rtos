@@ -1239,6 +1239,22 @@ namespace
 			*location = cap;
 		}
 	}
+
+	/**
+	 * Validate that a privileged-compartment range matches the range emitted by
+	 * the final linker script.  Keep this out of line because this check is
+	 * repeated for every privileged range and the loader is size constrained.
+	 */
+	template<size_t Shift>
+	__noinline void
+	validate_privileged_range(const ImgHdr::ShiftedAddressRange<Shift> &range,
+	                          ptraddr_t expectedStart,
+	                          ptraddr_t expectedEnd)
+	{
+		Debug::Invariant((range.start() == expectedStart) &&
+		                   (range.end() == expectedEnd),
+		                 "Privileged range does not match its linked extent");
+	}
 } // namespace
 
 // The parameters are passed by the boot assembly sequence.
@@ -1279,94 +1295,62 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	                 "Invalid magic field in header: {}",
 	                 imgHdr.magic);
 
-	// Do some sanity checking on the headers.
-	auto validatePrivilegedRange = [](const auto &range,
-	                                  ptraddr_t   expectedStart,
-	                                  ptraddr_t   expectedEnd,
-	                                  const char *compartment,
-	                                  const char *kind) {
-		Debug::Invariant(
-		  (range.start() == expectedStart) &&
-		    (range.size() == (expectedEnd - expectedStart)),
-		  "{} {} range ({} + {}) does not match linked extent ({} + {})",
-		  compartment,
-		  kind,
-		  range.start(),
-		  range.size(),
-		  expectedStart,
-		  expectedEnd - expectedStart);
-	};
-	auto validatePrivilegedCompartment = [&](const auto &header,
-	                                         const char *name,
-	                                         ptraddr_t   codeStart,
-	                                         ptraddr_t   codeEnd,
-	                                         ptraddr_t   dataStart,
-	                                         ptraddr_t   dataEnd,
-	                                         ptraddr_t   importStart,
-	                                         ptraddr_t   importEnd,
-	                                         ptraddr_t   exportStart,
-	                                         ptraddr_t   exportEnd,
-	                                         ptraddr_t   sealedStart,
-	                                         ptraddr_t   sealedEnd) {
-		validatePrivilegedRange(header.code, codeStart, codeEnd, name, "code");
-		validatePrivilegedRange(header.data, dataStart, dataEnd, name, "data");
-		validatePrivilegedRange(
-		  header.importTable, importStart, importEnd, name, "import table");
-		validatePrivilegedRange(
-		  header.exportTable, exportStart, exportEnd, name, "export table");
-		validatePrivilegedRange(
-		  header.sealedObjects, sealedStart, sealedEnd, name, "sealed objects");
-	};
-	validatePrivilegedCompartment(imgHdr.scheduler(),
-	                              "Scheduler",
-	                              LA_ABS(.scheduler_start),
-	                              LA_ABS(.scheduler_end),
-	                              LA_ABS(.scheduler_globals),
-	                              LA_ABS(.scheduler_globals_end),
-	                              LA_ABS(.scheduler_import_start),
-	                              LA_ABS(.scheduler_import_end),
-	                              LA_ABS(.scheduler_export_table),
-	                              LA_ABS(.scheduler_export_table_end),
-	                              0,
-	                              0);
-	validatePrivilegedCompartment(imgHdr.allocator(),
-	                              "Allocator",
-	                              LA_ABS(.allocator_start),
-	                              LA_ABS(.allocator_end),
-	                              LA_ABS(.allocator_globals),
-	                              LA_ABS(.allocator_globals_end),
-	                              LA_ABS(.allocator_import_start),
-	                              LA_ABS(.allocator_import_end),
-	                              LA_ABS(.allocator_export_table),
-	                              LA_ABS(.allocator_export_table_end),
-	                              LA_ABS(.allocator_sealed_objects),
-	                              LA_ABS(.allocator_sealed_objects_end));
-	validatePrivilegedCompartment(imgHdr.token_library(),
-	                              "Token library",
-	                              LA_ABS(.token_library_start),
-	                              LA_ABS(.token_library_end),
-	                              0,
-	                              0,
-	                              LA_ABS(.token_library_import_start),
-	                              LA_ABS(.token_library_import_end),
-	                              LA_ABS(.token_library_export_table),
-	                              LA_ABS(.token_library_export_table_end),
-	                              0,
-	                              0);
+	// Privileged ranges are consumed before ordinary compartments are checked.
+	// Bind each one to the extent that the final linker script materialised.
+	validate_privileged_range(imgHdr.scheduler().code,
+	                          LA_ABS(.scheduler_start),
+	                          LA_ABS(.scheduler_end));
+	validate_privileged_range(imgHdr.scheduler().data,
+	                          LA_ABS(.scheduler_globals),
+	                          LA_ABS(.scheduler_globals_end));
+	validate_privileged_range(imgHdr.scheduler().importTable,
+	                          LA_ABS(.scheduler_import_start),
+	                          LA_ABS(.scheduler_import_end));
+	validate_privileged_range(imgHdr.scheduler().exportTable,
+	                          LA_ABS(.scheduler_export_table),
+	                          LA_ABS(.scheduler_export_table_end));
+	validate_privileged_range(imgHdr.scheduler().sealedObjects, 0, 0);
+
+	validate_privileged_range(imgHdr.allocator().code,
+	                          LA_ABS(.allocator_start),
+	                          LA_ABS(.allocator_end));
+	validate_privileged_range(imgHdr.allocator().data,
+	                          LA_ABS(.allocator_globals),
+	                          LA_ABS(.allocator_globals_end));
+	validate_privileged_range(imgHdr.allocator().importTable,
+	                          LA_ABS(.allocator_import_start),
+	                          LA_ABS(.allocator_import_end));
+	validate_privileged_range(imgHdr.allocator().exportTable,
+	                          LA_ABS(.allocator_export_table),
+	                          LA_ABS(.allocator_export_table_end));
+	validate_privileged_range(imgHdr.allocator().sealedObjects,
+	                          LA_ABS(.allocator_sealed_objects),
+	                          LA_ABS(.allocator_sealed_objects_end));
+
+	validate_privileged_range(imgHdr.token_library().code,
+	                          LA_ABS(.token_library_start),
+	                          LA_ABS(.token_library_end));
+	validate_privileged_range(imgHdr.token_library().data, 0, 0);
+	validate_privileged_range(imgHdr.token_library().importTable,
+	                          LA_ABS(.token_library_import_start),
+	                          LA_ABS(.token_library_import_end));
+	validate_privileged_range(imgHdr.token_library().exportTable,
+	                          LA_ABS(.token_library_export_table),
+	                          LA_ABS(.token_library_export_table_end));
+	validate_privileged_range(imgHdr.token_library().sealedObjects, 0, 0);
 #ifdef SOFTWARE_REVOKER
-	validatePrivilegedCompartment(
-	  imgHdr.privilegedCompartments.software_revoker(),
-	  "Software revoker",
-	  LA_ABS(.software_revoker_start),
-	  LA_ABS(.software_revoker_end),
-	  LA_ABS(.software_revoker_globals),
-	  LA_ABS(.software_revoker_globals_end),
-	  0,
-	  0,
-	  LA_ABS(.software_revoker_export_table),
-	  LA_ABS(.software_revoker_export_table_end),
-	  0,
-	  0);
+	auto &softwareRevoker = imgHdr.privilegedCompartments.software_revoker();
+	validate_privileged_range(softwareRevoker.code,
+	                          LA_ABS(.software_revoker_start),
+	                          LA_ABS(.software_revoker_end));
+	validate_privileged_range(softwareRevoker.data,
+	                          LA_ABS(.software_revoker_globals),
+	                          LA_ABS(.software_revoker_globals_end));
+	validate_privileged_range(softwareRevoker.importTable, 0, 0);
+	validate_privileged_range(softwareRevoker.exportTable,
+	                          LA_ABS(.software_revoker_export_table),
+	                          LA_ABS(.software_revoker_export_table_end));
+	validate_privileged_range(softwareRevoker.sealedObjects, 0, 0);
 #endif
 
 	ptraddr_t lastCodeEnd = LA_ABS(__compart_pccs);
