@@ -9,7 +9,7 @@ uart_access_valid {
 # For simulation platforms, we allow the scheduler to access the UART as well
 uart_access_valid {
 	data.compartment.mmio_allow_list("uart", {"debug", "scheduler"})
-	data.board.simulation
+	data.board.simulation == true
 }
 
 
