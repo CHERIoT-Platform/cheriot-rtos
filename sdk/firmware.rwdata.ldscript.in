@@ -204,7 +204,14 @@ __cap_relocs_end = .;
 	# Address of the start and end of the global initialiser table
 	LONG(.initialiser_start);
 	SHORT(.initialiser_end - .initialiser_start);
+    __ordinary_compartment_headers_start = .;
     @compartment_headers@
+    __ordinary_compartment_headers_end = .;
+    ASSERT(
+      (__ordinary_compartment_headers_end -
+       __ordinary_compartment_headers_start) ==
+        ((@library_count@ + @compartment_count@) * 34),
+      "Library and compartment counts do not match the materialised headers");
 }
 
 # Thread configuration.  This follows the compartment headers but is in a
@@ -217,7 +224,13 @@ __cap_relocs_end = .;
     __thread_count = .;
     SHORT(@thread_count@);
     # The thread structures
+    __thread_config_records_start = .;
     @thread_headers@
+    __thread_config_records_end = .;
+    ASSERT(
+      (__thread_config_records_end - __thread_config_records_start) ==
+        (@thread_count@ * 18),
+      "Thread count does not match the materialised thread records");
     __compart_headers_end = .;
 }
 __compart_headers_size = __compart_headers_end - __compart_headers;

@@ -729,6 +729,9 @@ namespace loader
 				  static_cast<uint16_t>(data.smallSize - initialisedDataSize)};
 			}
 		};
+		static_assert(sizeof(CompartmentHeader) == 34,
+		              "Keep the compartment-header extent check in the linker "
+		              "script in sync");
 
 		/**
 		 * Array of compartments.
@@ -790,6 +793,9 @@ namespace loader
 			 */
 			ShiftedAddressRange<0> trustedStack;
 		};
+		static_assert(
+		  sizeof(ThreadConfig) == 18,
+		  "Keep the thread-record extent check in the linker script in sync");
 
 		/**
 		 * Structure describing the threads in this image.
