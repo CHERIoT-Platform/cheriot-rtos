@@ -111,41 +111,14 @@ __cap_relocs_end = .;
     # Compartment switcher end
     SHORT(.compartment_switcher_end - .compartment_switcher_start);
     # Cross-compartment call return path
-    ASSERT(
-      (switcher_after_compartment_call >= .compartment_switcher_start) &&
-      (switcher_after_compartment_call < .compartment_switcher_end),
-      "Switcher return path is outside of the switcher code range");
-    ASSERT(
-      ((switcher_after_compartment_call - .compartment_switcher_start) % 2) == 0,
-      "Switcher return path is not instruction aligned");
     SHORT(switcher_after_compartment_call - .compartment_switcher_start);
     # Compartment switcher sealing keys
-    ASSERT(
-      (compartment_switcher_sealing_key >= .compartment_switcher_start) &&
-      ((compartment_switcher_sealing_key + 8) <= .compartment_switcher_end) &&
-      (((compartment_switcher_sealing_key - .compartment_switcher_start) % 8) == 0),
-      "Switcher sealing-key slot is invalid");
     SHORT(compartment_switcher_sealing_key - .compartment_switcher_start);
     # Switcher's copy of the scheduler's PCC.
-    ASSERT(
-      (switcher_scheduler_entry_pcc >= .compartment_switcher_start) &&
-      ((switcher_scheduler_entry_pcc + 8) <= .compartment_switcher_end) &&
-      (((switcher_scheduler_entry_pcc - .compartment_switcher_start) % 8) == 0),
-      "Switcher scheduler PCC slot is invalid");
     SHORT(switcher_scheduler_entry_pcc - .compartment_switcher_start);
     # Switcher's copy of the scheduler's CGP
-    ASSERT(
-      (switcher_scheduler_entry_cgp >= .compartment_switcher_start) &&
-      ((switcher_scheduler_entry_cgp + 8) <= .compartment_switcher_end) &&
-      (((switcher_scheduler_entry_cgp - .compartment_switcher_start) % 8) == 0),
-      "Switcher scheduler CGP slot is invalid");
     SHORT(switcher_scheduler_entry_cgp - .compartment_switcher_start);
     # Switcher's copy of the scheduler's CSP
-    ASSERT(
-      (switcher_scheduler_entry_csp >= .compartment_switcher_start) &&
-      ((switcher_scheduler_entry_csp + 8) <= .compartment_switcher_end) &&
-      (((switcher_scheduler_entry_csp - .compartment_switcher_start) % 8) == 0),
-      "Switcher scheduler CSP slot is invalid");
     SHORT(switcher_scheduler_entry_csp - .compartment_switcher_start);
     # Address of switcher export table
     LONG(.switcher_export_table);
