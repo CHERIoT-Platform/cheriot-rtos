@@ -32,6 +32,24 @@ SECTIONS
 		*(.bss .bss.*);
 		*(.sbss .sbss.*);
 	}
+	# The software revoker is a specialised testing component and does not have
+	# an import table or static sealed-object metadata.  Reject extensions that
+	# request either feature instead of leaving orphan sections that the loader
+	# cannot populate.
+	.unsupported_compartment_imports :
+	{
+		*(.compartment_imports .compartment_imports.*);
+	}
+	ASSERT(
+	  SIZEOF(.unsupported_compartment_imports) == 0,
+	  "The software revoker does not support imports")
+	.unsupported_sealed_objects :
+	{
+		*(.sealed_objects .sealed_objects.*);
+	}
+	ASSERT(
+	  SIZEOF(.unsupported_sealed_objects) == 0,
+	  "The software revoker does not support static sealed objects")
 	# Throw some stuff away that we don't need.
 	/DISCARD/ :
 	{
