@@ -2,24 +2,24 @@ local json = import("core.base.json", { anonymous = true })
 
 -- Helper to find a board file given either the name of a board file or a path.
 local function board_file_for_name(boardfile, searchDir)
-	-- The directory containing the board file.
-	local boarddir = path.directory(boardfile);
-	-- If this isn't a path, look in searchDir
-	if not os.isfile(boardfile) then
-		boarddir = searchDir
-		local fullBoardPath = path.join(boarddir, boardfile)
+	assert(searchDir and path.is_absolute(searchDir),
+	  ("Bad search dir in board processing: %q"):format(searchDir))
+
+	-- If this isn't an absolute path, look relative to searchDir
+	if not path.is_absolute(boardfile) then
+		local fullBoardPath = path.join(searchDir, boardfile)
 		if not os.isfile(fullBoardPath) then
-			fullBoardPath = path.join(boarddir, boardfile .. '.json')
+			fullBoardPath = path.join(searchDir, boardfile .. '.json')
 		end
 		if not os.isfile(fullBoardPath) then
-			fullBoardPath = path.join(boarddir, boardfile .. '.patch')
+			fullBoardPath = path.join(searchDir, boardfile .. '.patch')
 		end
 		if not os.isfile(fullBoardPath) then
 			return nil
 		end
 		boardfile = fullBoardPath
 	end
-	return boarddir, boardfile
+	return path.normalize(path.directory(boardfile)), boardfile
 end
 
 -- If a string value is a number, return it as number, otherwise return it
@@ -236,9 +236,22 @@ local function normalize_extent(jsonpath, extent)
 end
 
 function main(boardPathSubstitutes, boardName, boardMixins)
+	local initialSearchDir
+
+	if path.is_absolute(boardName) then
+		-- Absolute path: searches run from there
+		initialSearchDir = path.directory(boardName)
+	elseif boardName:match("^%.%.?/") then
+		-- Does it look like an explicit relative path, starting with './' or
+		-- '../'?  If so. use the project directory as the initial search path
+		initialSearchDir = boardPathSubstitutes.project
+	else
+		initialSearchDir = boardPathSubstitutes.sdkboards
+	end
+
 	local boarddir, boardfile = board_file_for_name(
 		boardName:gsub("${(%w)}", boardPathSubstitutes),
-		boardPathSubstitutes.sdkboards)
+		initialSearchDir)
 	if not boarddir then
 		raise("unable to find board file " .. boardName .. ".  Try specifying a full path")
 	end

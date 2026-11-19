@@ -46,6 +46,7 @@ option("board", function ()
 		end
 
 		local project_config = import("core.project.config", { anonymous = true })
+
 		local board_parsing = import("board-parsing",
 			{ anonymous = true
 			, rootdir = path.join(os.scriptdir(), "xmake")
