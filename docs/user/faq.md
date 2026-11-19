@@ -37,7 +37,7 @@ Beyond that, you just need the flags to specify the target and ABI: `-target ris
 When linking a compartment, you must use the [compartment linker script](../../sdk/compartment.ldscript), which specifies how to lay out the code and data for a compartment.
 The resulting compartment can then be linked into a firmware image.
 
-## How big is the TCB?
+## How big is the Trusted Computing Base (TCB)?
 
 The loader runs with the root capabilities.
 Between them, the loader is able to read, write, or execute all of the memory and MMIO space and is able to seal capabilities with any object type.
