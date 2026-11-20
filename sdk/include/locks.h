@@ -133,6 +133,69 @@ struct OnceState
 	  state __if_cxx(= OnceStateMachineStates::OnceStateNotRun);
 };
 
+/**
+ * State for reader-writer locks.  This should be initialised to zero.
+ *
+ * A reader-writer lock can be held by multiple readers at a time, but writers
+ * hold the lock exclusively: if a writer holds the lock, no other readers or
+ * writers can hold it.  Reader-writer locks, in general, have a lot of
+ * tradeoffs:
+ *
+ *  - Do they support timeouts?
+ *  - Do they guarantee ordering (and fairness) between readers and writers?
+ *  - Do they provide priority inheritance?
+ *  - How efficient are they on the fast path?
+ *
+ * This implementation provides timeouts (necessary for even soft realtime
+ * systems), makes best-effort guarantees about ordering, and does *not*
+ * provide priority inheritance. It is intended to be efficient on the fast
+ * paths (no cross-compartment calls are required to acquire a lock if doing so
+ * would not block and are required to release a lock only if there are pending
+ * waiters).
+ *
+ * Providing priority inheritance is very complicated for reader-writer locks.
+ * With a simple mutex, waiters can boost the priority of the one thread that
+ * holds the lock, with constant space.  With a reader-writer lock, having a
+ * writer boost each active reader in turn (or all together) would require that
+ * the scheduler track the state of all holders of the lock.  This requires a
+ * dynamic amount of state, because the number of readers can be large, and
+ * would also require the fast path to either involve the scheduler, or to
+ * register some state that the scheduler could inspect (which, on CHERIoT,
+ * would require a heap allocation, because you cannot create a linked list of
+ * on-stack things, or some pre-shared per-thread state such as the hazard list
+ * used for ephemeral claims).
+ *
+ * Timeouts and guaranteed ordering are in tension, for similar
+ * state-space-related reasons.  Without timeouts, the last reader with pending
+ * writers can wake a writer and be certain that the writer will then acquire
+ * and release the lock, allowing readers behind it to make progress.
+ * Unfortunately, with timeouts, the last thread dropping a reader lock, or a
+ * thread dropping the write lock, may race another thread timing out and so
+ * fail to hand off responsibility for updating the state machine.
+ *
+ * This design optimises for the case where timeouts are a backup (they are not
+ * expected to be triggered).  The most common case (intended to be fastest) is
+ * that the lock is uncontended (no writer holding or waiting for the lock when
+ * you try to acquire a read lock, no readers when you try to acquire a write
+ * lock).  The second most common case is that readers and writers are all able
+ * to acquire the lock within their timeout.  This requires calls to the
+ * scheduler but should minimise spurious wakes and ensure that:
+ *
+ *  - Readers cannot acquire the lock if a writer is pending.
+ *  - Writers waiting behind other writers allow readers to run before them.
+ *
+ * In the presence of timeouts, both readers and writers that are blocked will
+ * be spuriously woken and forced to reacquire the lock.  This may allow
+ * pending readers to acquire the lock before writers.
+ */
+struct ReadWriteLockState
+{
+	/// The current state of the lock, must be initialised to zero.
+	_Atomic(uint32_t) state;
+	/// A counter used to wake writers.  Should be initialised to zero.
+	_Atomic(uint32_t) writerNotify;
+};
+
 __BEGIN_DECLS
 
 /**
@@ -373,4 +436,37 @@ __always_inline static inline int run_once(struct OnceState *state,
 	return run_once_slow_path(state, callback);
 }
 
+/**
+ * Acquire a read-write lock in writer mode.
+ *
+ * Returns 0 on success, or an error
+ * result (negative `errno` number) from a futex wait on failure.
+ */
+int __cheriot_libcall
+read_write_lock_acquire_as_writer(Timeout                   *t,
+                                  struct ReadWriteLockState *rwlockState);
+
+/**
+ * Acquire a read-write lock in reader mode.  Returns 0 on success, or an error
+ * result (negative `errno` number) from a futex wait on failure.
+ */
+int __cheriot_libcall
+read_write_lock_acquire_as_reader(Timeout                   *t,
+                                  struct ReadWriteLockState *rwlockState);
+
+/**
+ * Release a read-write lock in writer mode.  Returns 0 on success.  Returns
+ * `-EINVAL` if the lock is not held in writer mode. Future versions may return
+ * other negative values as errors.
+ */
+int __cheriot_libcall
+read_write_lock_release_as_writer(struct ReadWriteLockState *rwlockState);
+
+/**
+ * Release a read-write lock in reader mode.  Returns 0 on success.  Returns
+ * `-EINVAL` if the lock is not held in writer mode. Future versions may return
+ * other negative values as errors.
+ */
+int __cheriot_libcall
+read_write_lock_release_as_reader(struct ReadWriteLockState *rwlockState);
 __END_DECLS
