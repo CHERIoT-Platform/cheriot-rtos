@@ -105,9 +105,11 @@ Conditional compilation
 
 The `defines` property specifies any pre-defined macros that should be set when building for this board.
 The `driver_includes` property contains an array (in priority order) of include directories that should be added for this target.
-Each of the paths in `driver_includes` is, by default, relative to the location of the board file (which allows the board file and drivers to be distributed together).
+Each of the paths in `driver_includes` is, by default, relative to the location of the top-level board file given to `xmake config`'s `--board` option.
+This facilitates common cases of board files and drivers being distributed together.
 Optionally, it may include the string `${sdk}`, which will be replaced by the full path of the SDK directory.
 For example, `"${sdk}/include/platform/generic-riscv"` will expand to the generic RISC-V directory in the SDK.
+Similarly, the strings `${boardBase}` and `${project}` expand as described below.
 
 The driver headers use `#include_next` to include more generic files and so it is important to list the directories containing your overrides first.
 
@@ -168,3 +170,7 @@ Board patch base file names, board mixin names, and paths within board files are
 
 The first three of these are also applicable to the argument given to the `--board` option.
 `${boardBase}` is not available during the initial descent through board patches, but it is available to mixin paths and paths within board descriptions.
+
+As a special case, the `--board` parameter presumes that look like bare file names (such as "sail") are to be interpereted relative to `${sdkboards}`.
+Overtly relative paths (those which _begin with_ `./` or `../`) passed to `--board` are interpreted relative to `${project}`.
+In all other contexts, names that are not absolute paths are uniformly taken to be relative to the file containing that name.
