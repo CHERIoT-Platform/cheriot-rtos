@@ -1346,8 +1346,7 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	// the switcher later.
 	//
 	// Despite being exposed as a normal export, we still build the sentry by
-	// hand and, at the moment, ignore its IRQ disposition flags in favor of
-	// hardcoding the value here.
+	// hand and ensure that it enables interrupts.
 	Debug::log("Setting compartment switcher");
 	auto switcherEntry =
 	  build<ExportEntry>(imgHdr.switcher.exportTable.start() + 20,
@@ -1355,7 +1354,7 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	switcherPCC.address() = switcherPCC.base() + switcherEntry->functionStart;
 	Debug::log("Setting compartment switcher address: {}",
 	           switcherPCC.address());
-	switcherPCC = seal_entry(switcherPCC, InterruptStatus::Disabled);
+	switcherPCC = seal_entry(switcherPCC, InterruptStatus::Enabled);
 
 	auto setSealingKey =
 	  [](const auto   &compartment,
@@ -1399,6 +1398,11 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	              1,
 	              sizeof(void *),
 	              PermissionSet{Permission::Global, Permission::Unseal});
+	setSealingKey(imgHdr.switcher,
+	              SentryDisabling,
+	              1,
+	              sizeof(void *) * 2,
+	              PermissionSet{Permission::Seal});
 
 	/*
 	 * The token library unseals both static and dynamic objects, sometimes
