@@ -208,7 +208,7 @@
 	// Initialise the stack high-water mark registers
 	cgetbase		a1, csp
 	csrw			CSR_MSHWMB, a1
-	csrw			CSR_MSHWM, sp
+	csrw			CSR_MSHWM, a1
 	/*
 	 * Set up dummy hazard-pointer space in this trusted stack frame.
 	 * The switcher wants to zero this on call and return, so make sure that it
