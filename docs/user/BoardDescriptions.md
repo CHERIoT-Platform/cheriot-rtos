@@ -95,8 +95,17 @@ We expect this to be `"hardware"` on all real implementations, the software revo
 Clock configuration
 -------------------
 
-The clock rate is configured by two properties.
-The `timer_hz` field is the number of timer increments per second, typically the clock speed of the chip (the RISC-V timer is defined in terms of cycles).
+The `timer_hz` field is the number of RISC-V machine timer (`mtime`) increments per second.
+This will be provided to software as a pre-defined preprocessor macro named `CPU_TIMER_HZ`.
+In simple cores, this may be the clock frequency of the chip.
+
+In practice, embedded systems often have myriad clocks and clock domains.
+The `clock_defaults` property holds a map from clock names to default frequencies (in Hz) for those clocks.
+These will be provided to software as pre-defined preprocessor macros `CHERIOT_CLOCK_${NAME}_HZ_DEFAULT`, with `${NAME}` being the upper-cased key in the board map.
+It is recommended that these be set to the typical values of the named clocks.
+The name `core` is understood by parts of the RTOS and should be set to the default rate at which the RISC-V machine _cycle_ counter (`mcycle`) increments.
+If not otherwise specified, this `core` clocks default rate (and its `CHERIOT_CLOCK_CORE_HZ_DEFAULT` macro) will be set equal to `timer_hz`.
+
 The `tickrate_hz` specifies how many scheduler ticks should happen per second.
 See the [the CHERIoT Programmers' Guide chapter about time](https://cheriot.org/book/time.html) for more discussion about ticks.
 

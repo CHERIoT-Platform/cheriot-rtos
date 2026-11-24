@@ -880,6 +880,17 @@ rule("cheriot.board.targets.conf")
 		add_defines_each_dependency("CPU_TIMER_HZ=" .. math.floor(board.timer_hz))
 		add_defines_each_dependency("TICK_RATE_HZ=" .. math.floor(board.tickrate_hz))
 
+		-- More generally, the boards may define a number of clocks.  Turn those
+		-- into defines and push them around, too.
+		local clock_defaults = table.join({}, board.clock_defaults)
+		clock_defaults.core = clock_defaults.core or board.timer_hz
+		local clock_defaults_defines = {}
+		for k,v in pairs(clock_defaults) do
+			table.insert(clock_defaults_defines,
+			  ("CHERIOT_CLOCK_%s_HZ_DEFAULT=%d"):format(k:upper(), v))
+		end
+		add_defines_each_dependency(clock_defaults_defines)
+
 		if board.simulation then
 			add_defines_each_dependency("SIMULATION")
 		end

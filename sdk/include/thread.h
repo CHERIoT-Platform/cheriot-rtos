@@ -121,6 +121,9 @@ __cheri_compartment("scheduler") uint16_t thread_count();
  * not a yield.  If the thread is preempted then the wait will be longer than
  * requested.
  *
+ * This function assumes that the core is being clocked with a frequency of
+ * CHERIOT_CLOCK_CORE_HZ_DEFAULT Hz.
+ *
  * Returns the number of microseconds that the thread actually waited, with an
  * error margin of the number of instructions used to compute the wait time and
  * execute the function epilogue.
@@ -131,9 +134,10 @@ static inline uint64_t thread_microsecond_spin(uint32_t microseconds)
 	// In simulation builds, pretend that the right amount of time has elapsed.
 	return microseconds;
 #else
-	static const uint32_t CyclesPerMicrosecond = CPU_TIMER_HZ / 1'000'000;
+	static const uint32_t CyclesPerMicrosecond =
+	  CHERIOT_CLOCK_CORE_HZ_DEFAULT / 1'000'000;
 	__if_cxx(
-	  static_assert(CyclesPerMicrosecond > 0, "CPU_TIMER_HZ is too low"););
+	  static_assert(CyclesPerMicrosecond > 0, "Core clock is too slow"););
 	uint64_t start = rdcycle64();
 	// Convert the microseconds to a number of cycles.  This does the multiply
 	// first so that we don't end up with zero as a result of the division.
@@ -153,6 +157,9 @@ static inline uint64_t thread_microsecond_spin(uint32_t microseconds)
  * that are longer than a scheduler tick and then spin for the remainder of the
  * time.
  *
+ * This function assumes that the core is being clocked with a frequency of
+ * CHERIOT_CLOCK_CORE_HZ_DEFAULT Hz.
+ *
  * Returns the number of milliseconds that the thread actually waited.
  */
 static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
@@ -164,10 +171,12 @@ static inline uint64_t thread_millisecond_wait(uint32_t milliseconds)
 	(void)thread_sleep(&t, 0);
 	return milliseconds;
 #else
-	static const uint32_t CyclesPerMillisecond = CPU_TIMER_HZ / 1'000;
-	static const uint32_t CyclesPerTick        = CPU_TIMER_HZ / TICK_RATE_HZ;
+	static const uint32_t CyclesPerMillisecond =
+	  CHERIOT_CLOCK_CORE_HZ_DEFAULT / 1'000;
+	static const uint32_t CyclesPerTick =
+	  CHERIOT_CLOCK_CORE_HZ_DEFAULT / TICK_RATE_HZ;
 	__if_cxx(
-	  static_assert(CyclesPerMillisecond > 0, "CPU_TIMER_HZ is too low"););
+	  static_assert(CyclesPerMillisecond > 0, "Core clock is too slow"););
 	uint32_t cycles  = milliseconds * CyclesPerMillisecond;
 	uint64_t start   = rdcycle64();
 	uint64_t end     = start + cycles;
