@@ -36,10 +36,10 @@
             "edge_triggered": true
         }
     ],
-    "defines" : [
-        "IBEX",
-        "MICROSOFT_CHERIOT_SAFE"
-    ],
+    "preprocessor_defines" : {
+        "IBEX": 1,
+        "MICROSOFT_CHERIOT_SAFE": 1
+    },
     "driver_includes" : [
         "${sdk}/include/platform/ibex",
         "${sdk}/include/platform/microsoft_cheriot_safe",

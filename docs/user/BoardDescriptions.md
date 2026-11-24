@@ -103,7 +103,9 @@ See the [the CHERIoT Programmers' Guide chapter about time](https://cheriot.org/
 Conditional compilation
 -----------------------
 
-The `defines` property specifies any pre-defined macros that should be set when building for this board.
+The `preprocessor_defines` property is a map that specifies pre-defined macros by name and value.
+The values in this map must either be integers or strings; any desired quoting must be included in the board file.
+
 The `driver_includes` property contains an array (in priority order) of include directories that should be added for this target.
 Each of the paths in `driver_includes` is, by default, relative to the location of the top-level board file (either `.json` or `.patch) given to `xmake config`'s `--board` option.
 This facilitates common cases of board files and drivers being distributed together.

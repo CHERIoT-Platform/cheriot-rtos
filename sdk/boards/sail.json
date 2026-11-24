@@ -27,10 +27,10 @@
             "priority": 2
         }
     ],
-    "defines" : [
-        "SAIL",
-        "RISCV_HTIF"
-    ],
+    "preprocessor_defines" : {
+        "SAIL": 1,
+        "RISCV_HTIF": 1
+    },
     "driver_includes" : [
         "${sdk}/include/platform/sail",
         "${sdk}/include/platform/generic-riscv"

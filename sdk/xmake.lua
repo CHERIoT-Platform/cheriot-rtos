@@ -327,6 +327,42 @@ local function maybe_writefile(xmake_io, xmake_try, path, contents)
 	} }
 end
 
+-- Our board files, for historical reasons, allow C preprocessor macros to be
+-- given either in a array of strings (which may contain "=" if they are to be
+-- interpreted as "key=value") or as a table of key/value pairs which we turn
+-- into "key=value" pairs.  This function commons up the dance of constructing
+-- the full list to be passed to xmake's `target:add("defines")` API.
+--
+-- xmake_raise should be the os.raise() function as seen by xmake's script
+-- environment, which is not readily available to the top-level interpreter.
+--
+-- defines_array should be a conventional Lua array; defines_table should have
+-- string keys that are valid C preprocessor tokens.  Either argument may be
+-- nil and, if so, will be treated as an empty table.  The result is always a
+-- conventional array, even if it is an empty one.
+local function defines_from_list_and_table(xmake_raise, defines_array, defines_table)
+	local result = table.join({}, defines_array)
+	for k,v in pairs(defines_table or {}) do
+		if type(v) == 'number' and math.tointeger(v) then
+			table.insert(result, ("%s=%d"):format(k,v))
+		elseif type(v) == 'string' then
+			table.insert(result, ("%s=%s"):format(k,v))
+		else
+			xmake_raise(
+			  ("Trying to render %s value %q for key %s in preprocessor define")
+			  :format(type(v), v, k))
+		end
+	end
+	return result
+end
+
+-- A specialized form of defines_from_list_and_table for per-component defines.
+local function rtos_defines_for_component(xmake_raise, board, component)
+	return defines_from_list_and_table(xmake_raise,
+		board.rtos_defines and board.rtos_defines[component],
+		board.rtos_preprocessor_defines and board.rtos_preprocessor_defines[component])
+end
+
 -- Common rules for most CHERIoT builds
 rule("cheriot.toolchain", function ()
 	on_load(function (target)
@@ -508,7 +544,7 @@ target("cheriot.allocator")
 		if board.revoker and board.revoker ~= "software" then
 			target:add("deps", "cheriot.board.interrupts")
 		end
-		target:add("defines", board.rtos_defines and board.rtos_defines.allocator)
+		target:add("defines", rtos_defines_for_component(raise, board, "allocator"))
 	end)
 
 -- Add the allocator to the firmware image if enabled.
@@ -827,6 +863,7 @@ rule("cheriot.board.targets.conf")
 
 		-- Add defines to all dependencies.
 		local add_defines_each_dependency = function (defines)
+			if type(defines) == 'table' and #defines == 0 then return end
 			visit_all_dependencies(function (target)
 				target:add('defines', defines)
 			end)
@@ -867,10 +904,22 @@ rule("cheriot.board.targets.conf")
 			end
 		end
 
-		-- If this board defines any macros, add them to all targets
-		if board.defines then
-			add_defines_each_dependency(board.defines)
+		-- Add any board global C preprocessor macros to all targets
+		local function defines_deprecation(key, replacement)
+			if board[key] then
+				print(table.concat({
+					"WARNING: board key ",
+					key,
+					" is deprecated; use ",
+					replacement,
+					" and provide a dictionary of defines and their values,",
+					" rather than an array of strings"}))
+			end
 		end
+		defines_deprecation("defines", "preprocessor_defines")
+		defines_deprecation("rtos_defines", "rtos_preprocessor_defines")
+		add_defines_each_dependency(
+		  defines_from_list_and_table(raise, board.defines, board.preprocessor_defines))
 
 		-- If this board defines any cxflags, add them to all targets
 		if board.cxflags then
@@ -1493,7 +1542,7 @@ rule("cheriot.loader.base")
 	after_load(function (target)
 		local board_target = target:dep("cheriot.board")
 		local board = board_target:get("cheriot.board_info")
-		target:add("defines", board.rtos_defines and board.rtos_defines.loader)
+		target:add("defines", rtos_defines_for_component(raise, board, "loader"))
 	end)
 
 -- Build the loader.
@@ -1528,7 +1577,7 @@ function firmware(name)
 		end)
 		after_load(function (target)
 			local board = target:dep("cheriot.board"):get("cheriot.board_info")
-			target:add("defines", board.rtos_defines and board.rtos_defines.scheduler)
+			target:add("defines", rtos_defines_for_component(raise, board, "scheduler"))
 
 			if board.interrupts then
 				-- Define the macro that's used to initialise the scheduler's interrupt configuration.
