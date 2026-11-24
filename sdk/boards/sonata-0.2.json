@@ -66,15 +66,15 @@
             "priority": 3
         }
     ],
-    "defines" : [
-        "IBEX",
-        "SONATA=200",
-        "SUNBURST",
-        "DEFAULT_UART_BAUD_RATE=115200",
-        "ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM=1",
-        "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM=1",
-        "CHERIOT_NO_SAIL_83"
-    ],
+    "preprocessor_defines" : {
+        "IBEX": 1,
+        "SONATA": 200,
+        "SUNBURST": 1,
+        "DEFAULT_UART_BAUD_RATE": 115200,
+        "ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM": 1,
+        "ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM": 1,
+        "CHERIOT_NO_SAIL_83": 1
+    },
     "driver_includes" : [
         "${sdk}/include/platform/sunburst/v0.2",
         "${sdk}/include/platform/sunburst",

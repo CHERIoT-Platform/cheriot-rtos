@@ -32,10 +32,10 @@
             "edge_triggered": true
         }
     ],
-    "defines" : [
-        "MICROSOFT_CHERIOT_SAFE",
-        "RDCYCLE_OVERRIDE_CSR=mcycle"
-    ],
+    "preprocessor_defines" : {
+        "MICROSOFT_CHERIOT_SAFE": 1,
+        "RDCYCLE_OVERRIDE_CSR": "mcycle"
+    },
     "driver_includes" : [
         "${sdk}/include/platform/kudu",
         "${sdk}/include/platform/microsoft_cheriot_safe",
