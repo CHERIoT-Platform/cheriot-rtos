@@ -1279,6 +1279,17 @@ extern "C" void loader_entry_point(SchedulerEntryInfo &ret,
 	                 "Invalid magic field in header: {}",
 	                 imgHdr.magic);
 
+	const ptraddr_t SwitcherStart       = LA_ABS(.compartment_switcher_start);
+	const uint16_t  SwitcherReturnEntry = imgHdr.switcher.crossCallReturnEntry;
+	Debug::Invariant(
+	  (imgHdr.switcher.code.start() == SwitcherStart) &&
+	    (imgHdr.switcher.code.end() == LA_ABS(.compartment_switcher_end)) &&
+	    (SwitcherReturnEntry ==
+		 (LA_ABS(switcher_after_compartment_call) - SwitcherStart)) &&
+	    ((SwitcherReturnEntry % 2) == 0) &&
+	    (SwitcherReturnEntry < imgHdr.switcher.code.size()),
+	  "Switcher return metadata does not match its linked target");
+
 	// Do some sanity checking on the headers.
 	ptraddr_t lastCodeEnd = LA_ABS(__compart_pccs);
 	ptraddr_t lastDataEnd = LA_ABS(__compart_cgps);
