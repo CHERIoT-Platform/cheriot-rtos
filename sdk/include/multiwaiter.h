@@ -42,10 +42,34 @@
 #include <timeout.h>
 
 /**
+ * Legacy structure describing a change to the set of managed event sources for
+ * an event waiter.
+ */
+struct EventWaiterSource
+{
+	/**
+	 * A pointer to the event source.  This is the futex that is monitored for
+	 * the multiwaiter.
+	 */
+	const void *eventSource;
+
+	/**
+	 * Event value.  This field is modified during the wait
+	 * call.
+	 *
+	 * This indicates the value to compare the futex word against.  If they
+	 * mismatch, the event fires immediately.
+	 *
+	 * On return, this is set to 1 if the futex is signaled, 0 otherwise.
+	 */
+	uint32_t value;
+};
+
+/**
  * Structure describing a change to the set of managed event sources for an
  * event waiter.
  */
-struct EventWaiterSource
+struct EventWaiterSource2
 {
 	/**
 	 * A pointer to the event source.  This is the futex that is monitored for
@@ -58,11 +82,22 @@ struct EventWaiterSource
 	 *
 	 * This indicates the value to compare the futex word against.  If they
 	 * mismatch, the event fires immediately.
-	 *
-	 * On return, this is set to 1 if the futex is signaled, 0 otherwise.
 	 */
 	uint32_t value;
+	/**
+	 * Flag indicating whether the event has fired.  This should be initialised
+	 * to false.
+	 */
+	bool hasFired;
 };
+
+// The two event-source representations should be layout compatible.
+static_assert(sizeof(struct EventWaiterSource) ==
+              sizeof(struct EventWaiterSource2));
+static_assert(offsetof(struct EventWaiterSource, eventSource) ==
+              offsetof(struct EventWaiterSource2, eventSource));
+static_assert(offsetof(struct EventWaiterSource, value) ==
+              offsetof(struct EventWaiterSource2, value));
 
 /**
  * Structure used for the MultiWaiter inside the scheduler.
@@ -128,8 +163,51 @@ typedef CHERI_SEALED(struct MultiWaiterInternal *) MultiWaiter;
  *  - If the timeout is reached without any events being triggered then this
  *    returns `-ETIMEDOUT`.
  */
-[[cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+[[clang::overloadable,
+  cheriot::interrupt_state(disabled),
+  deprecated("The overload that uses EventWaiterSource2 should be preferred in "
+             "new code")]] int __cheri_compartment("scheduler")
   multiwaiter_wait(TimeoutArgument           timeout,
                    MultiWaiter               waiter,
                    struct EventWaiterSource *events,
                    size_t                    newEventsCount);
+
+/**
+ * Wait for events.  The first argument is the multiwaiter to wait on.  Events
+ * are added by providing an array of `newEventsCount` elements as the
+ * `newEvents` argument.  The value of `newEventsCount` may not exceed the value
+ * of `maxItems` passed to `multiwaiter_create` when `waiter` was created.
+ *
+ * Each entry in `newEvents` contains a pointer to a futex word, the
+ * expected value of that futex word, and a flag that will be written on return
+ * if the futex value has changed (which should be initialised to false).  The
+ * futex values may be modified by another thread while the caller is preparing
+ * the events array.  If this happens then the multiwaiter will return
+ * immediately.  If not, then the multiwaiter will block until either one of
+ * the futexes is signalled with `futex_wake` or until the timeout (specified
+ * in `timeout`) expires.
+ *
+ * On successful return, the `hasFired` field for each element in `newEvents`
+ * will be set to zero or one.  A value of true indicates that the futex
+ * identified by the corresponding `eventSource` field was signalled, or had
+ * changed before the initial check.  A value of false indicates that this
+ * futex was not signalled, but does not imply that the event did not happen
+ * immediately after return.  More than one waited futex may marked as fired,
+ * if more than one event has occurred during the call.
+ *
+ * The fields other than `hasFired` will not be modified by this call and so
+ * can be reused.
+ *
+ * Return values:
+ *
+ *  - On success, this function returns `0`.
+ *  - If the arguments are invalid, this function returns `-EINVAL`.
+ *  - If the timeout is reached without any events being triggered then this
+ *    returns `-ETIMEDOUT`.
+ */
+[[clang::overloadable,
+  cheriot::interrupt_state(disabled)]] int __cheri_compartment("scheduler")
+  multiwaiter_wait(TimeoutArgument            timeout,
+                   MultiWaiter                waiter,
+                   struct EventWaiterSource2 *events,
+                   size_t                     newEventsCount);

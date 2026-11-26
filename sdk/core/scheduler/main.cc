@@ -688,69 +688,101 @@ __cheriot_minimum_stack(0x90) int multiwaiter_delete(
 	return deallocate<MultiWaiterInternal>(heapCapability, mw);
 }
 
+namespace
+{
+	union EventWaiterSourceValues
+	{
+		EventWaiterSource  *v1;
+		EventWaiterSource2 *v2;
+		EventWaiterSourceValues(EventWaiterSource *v1) : v1(v1) {}
+		EventWaiterSourceValues(EventWaiterSource2 *v2) : v2(v2) {}
+	};
+	int multiwaiter_wait_internal(TimeoutArgument         timeout,
+	                              MultiWaiter             waiter,
+	                              EventWaiterSourceValues events,
+	                              size_t                  newEventsCount,
+	                              bool                    isV2)
+	{
+		return typed_op<
+		  MultiWaiterInternal>(waiter, [&](MultiWaiterInternal &mw) {
+			if (newEventsCount > mw.capacity())
+			{
+				Debug::log("Too many events");
+				return -EINVAL;
+			}
+			// We don't need to worry about overflow here because we have
+			// ensured newEventsCount is very small.
+			if (!check_pointer<PermissionSet{Permission::Load,
+			                                 Permission::Store,
+			                                 Permission::LoadStoreCapability}>(
+			      events.v1, newEventsCount * sizeof(EventWaiterSource)))
+			{
+				Debug::log("Invalid new events pointer: {}", events.v1);
+				return -EINVAL;
+			}
+			if (!timeout.is_valid())
+			{
+				return -EINVAL;
+			}
+			if (mw.size() > 0)
+			{
+				Debug::log("Attempting wait on busy multiwaiter");
+				return -EBUSY;
+			}
+			switch (mw.set_events(events.v1, newEventsCount))
+			{
+				case MultiWaiterInternal::EventOperationResult::Error:
+					Debug::log("Adding events returned error");
+					return -EINVAL;
+				case MultiWaiterInternal::EventOperationResult::Sleep:
+					Debug::log("Sleeping for {} ticks", timeout);
+					if (timeout.may_block())
+					{
+						mw.wait(timeout);
+						// If we yielded then it's possible for either of the
+						// pointers that we were passed to have been freed out
+						// from under us.
+						if (!Capability{&mw}.is_valid() ||
+						    !Capability{events.v1}.is_valid())
+						{
+							return -EINVAL;
+						}
+					}
+					[[fallthrough]];
+				case MultiWaiterInternal::EventOperationResult::Wake:
+					// If we didn't find any events, then we timed out.  We may
+					// still have timed out but received some events in between
+					// being rescheduled and being run, but don't count that as
+					// a timeout because it's not helpful to the user.
+					if (!(isV2 ? mw.get_results(events.v2, newEventsCount)
+					           : mw.get_results(events.v1, newEventsCount)))
+					{
+						return -ETIMEDOUT;
+					}
+			}
+			return 0;
+		});
+	}
+} // namespace
+
 __cheriot_minimum_stack(0xc0) int multiwaiter_wait(TimeoutArgument    timeout,
                                                    MultiWaiter        waiter,
                                                    EventWaiterSource *events,
                                                    size_t newEventsCount)
 {
 	STACK_CHECK(0xc0);
-	return typed_op<MultiWaiterInternal>(waiter, [&](MultiWaiterInternal &mw) {
-		if (newEventsCount > mw.capacity())
-		{
-			Debug::log("Too many events");
-			return -EINVAL;
-		}
-		// We don't need to worry about overflow here because we have ensured
-		// newEventsCount is very small.
-		if (!check_pointer<PermissionSet{Permission::Load,
-		                                 Permission::Store,
-		                                 Permission::LoadStoreCapability}>(
-		      events, newEventsCount * sizeof(EventWaiterSource)))
-		{
-			Debug::log("Invalid new events pointer: {}", events);
-			return -EINVAL;
-		}
-		if (!timeout.is_valid())
-		{
-			return -EINVAL;
-		}
-		if (mw.size() > 0)
-		{
-			Debug::log("Attempting wait on busy multiwaiter");
-			return -EBUSY;
-		}
-		switch (mw.set_events(events, newEventsCount))
-		{
-			case MultiWaiterInternal::EventOperationResult::Error:
-				Debug::log("Adding events returned error");
-				return -EINVAL;
-			case MultiWaiterInternal::EventOperationResult::Sleep:
-				Debug::log("Sleeping for {} ticks", timeout);
-				if (timeout.may_block())
-				{
-					mw.wait(timeout);
-					// If we yielded then it's possible for either of the
-					// pointers that we were passed to have been freed out from
-					// under us.
-					if (!Capability{&mw}.is_valid() ||
-					    !Capability{events}.is_valid())
-					{
-						return -EINVAL;
-					}
-				}
-				[[fallthrough]];
-			case MultiWaiterInternal::EventOperationResult::Wake:
-				// If we didn't find any events, then we timed out.  We may
-				// still have timed out but received some events in between
-				// being rescheduled and being run, but don't count that as a
-				// timeout because it's not helpful to the user.
-				if (!mw.get_results(events, newEventsCount))
-				{
-					return -ETIMEDOUT;
-				}
-		}
-		return 0;
-	});
+	return multiwaiter_wait_internal(
+	  timeout, waiter, events, newEventsCount, false);
+}
+
+__cheriot_minimum_stack(0xc0) int multiwaiter_wait(TimeoutArgument     timeout,
+                                                   MultiWaiter         waiter,
+                                                   EventWaiterSource2 *events,
+                                                   size_t newEventsCount)
+{
+	STACK_CHECK(0xc0);
+	return multiwaiter_wait_internal(
+	  timeout, waiter, events, newEventsCount, true);
 }
 
 #endif // SCHEDULER_MULTIWAITER

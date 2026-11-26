@@ -745,21 +745,23 @@ int queue_items_remaining(struct MessageQueue *handle, size_t *items)
 	return 0;
 }
 
-void multiwaiter_queue_send_init(struct EventWaiterSource *source,
-                                 struct MessageQueue      *handle)
+void multiwaiter_queue_send_init(struct EventWaiterSource2 *source,
+                                 struct MessageQueue       *handle)
 {
 	uint32_t producer   = counter_load(&handle->producer);
 	uint32_t consumer   = counter_load(&handle->consumer);
 	source->eventSource = &handle->consumer;
 	source->value =
 	  is_full(handle->queueSize, producer, consumer) ? consumer : -1;
+	source->hasFired = false;
 }
 
-void multiwaiter_queue_receive_init(struct EventWaiterSource *source,
-                                    struct MessageQueue      *handle)
+void multiwaiter_queue_receive_init(struct EventWaiterSource2 *source,
+                                    struct MessageQueue       *handle)
 {
 	uint32_t producer   = counter_load(&handle->producer);
 	uint32_t consumer   = counter_load(&handle->consumer);
 	source->eventSource = &handle->producer;
 	source->value       = is_empty(producer, consumer) ? producer : -1;
+	source->hasFired = false;
 }
