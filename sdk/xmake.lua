@@ -1456,7 +1456,7 @@ rule("cheriot.component-debug")
 		local name = target:get("cheriot.debug-name") or target:name()
 		local value = get_config("debug-"..name)
 		if type(value) == "nil" then
-			error ("No debug configuration for %q; missing xmake debugOption()?"):format(name)
+			raise (("No debug configuration for %q; missing or incorrect xmake debugOption()?"):format(name))
 		elseif type(value) == "boolean" then
 			value = tostring(value)
 		else
