@@ -315,18 +315,18 @@ int __cheri_compartment("message_queue")
  * ready to receive.  Note that this is inherently racy because another consumer
  * may drain the queue before this consumer wakes up.
  */
-void __cheri_libcall
-multiwaiter_queue_receive_init(struct EventWaiterSource *source,
-                               struct MessageQueue      *handle);
+[[clang::overloadable]] void __cheri_libcall
+multiwaiter_queue_receive_init(struct EventWaiterSource2 *source,
+                               struct MessageQueue       *handle);
 
 /**
  * Initialise an event waiter source so that it will wait for the queue to be
  * ready to send.  Note that this is inherently racy because another producer
  * may fill the queue before this consumer wakes up.
  */
-void __cheri_libcall
-multiwaiter_queue_send_init(struct EventWaiterSource *source,
-                            struct MessageQueue      *handle);
+[[clang::overloadable]] void __cheri_libcall
+multiwaiter_queue_send_init(struct EventWaiterSource2 *source,
+                            struct MessageQueue       *handle);
 
 /**
  * Initialise an event waiter source as in `multiwaiter_queue_receive_init`,
@@ -336,8 +336,8 @@ multiwaiter_queue_send_init(struct EventWaiterSource *source,
  * Returns 0 on success, `-EINVAL` on invalid arguments.  May return
  * `-ECOMPARTMENTFAIL` if the queue is deallocated in the middle of this call.
  */
-int __cheri_compartment("message_queue")
-  multiwaiter_queue_receive_init_sealed(struct EventWaiterSource *source,
+[[clang::overloadable]] int __cheri_compartment("message_queue")
+  multiwaiter_queue_receive_init_sealed(struct EventWaiterSource2 *source,
                                         CHERI_SEALED(struct MessageQueue *)
                                           handle);
 
@@ -349,8 +349,8 @@ int __cheri_compartment("message_queue")
  * Returns 0 on success, `-EINVAL` on invalid arguments.  May return
  * `-ECOMPARTMENTFAIL` if the queue is deallocated in the middle of this call.
  */
-int __cheri_compartment("message_queue")
-  multiwaiter_queue_send_init_sealed(struct EventWaiterSource *source,
+[[clang::overloadable]] int __cheri_compartment("message_queue")
+  multiwaiter_queue_send_init_sealed(struct EventWaiterSource2 *source,
                                      CHERI_SEALED(struct MessageQueue *)
                                        handle);
 
@@ -415,6 +415,41 @@ queue_send_handle_create_sealed(TimeoutArgument     timeout,
 {
 	*outHandle = queue_permissions_and(handle, MessageQueuePermitSend);
 	return 0;
+}
+
+[[clang::overloadable,
+  deprecated("Please use EventWaiterSource2 in new code")]] static inline void
+multiwaiter_queue_receive_init(struct EventWaiterSource *source,
+                               struct MessageQueue      *handle)
+{
+	multiwaiter_queue_receive_init((struct EventWaiterSource2 *)source, handle);
+}
+
+[[clang::overloadable,
+  deprecated("Please use EventWaiterSource2 in new code")]] static inline void
+multiwaiter_queue_send_init(struct EventWaiterSource *source,
+                            struct MessageQueue      *handle)
+{
+	multiwaiter_queue_send_init((struct EventWaiterSource2 *)source, handle);
+}
+
+[[clang::overloadable,
+  deprecated("Please use EventWaiterSource2 in new code")]] static inline int 
+multiwaiter_queue_receive_init_sealed(struct EventWaiterSource *source,
+                                      CHERI_SEALED(struct MessageQueue *)
+                                        handle)
+{
+	return multiwaiter_queue_receive_init_sealed((struct EventWaiterSource2 *)source,
+	                                      handle);
+}
+
+[[clang::overloadable,
+  deprecated("Please use EventWaiterSource2 in new code")]] static inline int 
+multiwaiter_queue_send_init_sealed(struct EventWaiterSource *source,
+                                   CHERI_SEALED(struct MessageQueue *) handle)
+{
+	return multiwaiter_queue_send_init_sealed((struct EventWaiterSource2 *)source,
+	                                   handle);
 }
 
 __END_DECLS

@@ -32,32 +32,25 @@ namespace
 		 */
 		uint32_t eventValue = 0;
 		/**
-		 * Event-type-specific flags.
-		 */
-		unsigned flags : 6 = 0;
-		/**
 		 * Value indicating the events that have occurred.  The zero value is
 		 * reserved to indicate that this event has not been triggered,
 		 * subclasses are responsible for defining interpretations of others.
 		 */
-		unsigned readyEvents : 24 = 0;
+		bool readyEvents = false;
 		/**
 		 * Set some of the bits in the readyEvents field.  Any bits set in
 		 * `value` will be set, in addition to any that are already set.
 		 */
-		void set_ready(unsigned value)
+		void set_ready()
 		{
-			Debug::Invariant((value & 0xFF000000) == 0,
-			                 "{} is out of range for a delivered event",
-			                 value);
-			readyEvents |= value;
+			readyEvents = true;
 		}
 		/**
 		 * Returns true if this event has fired, false otherwise.
 		 */
 		bool has_fired()
 		{
-			return readyEvents != 0;
+			return !readyEvents;
 		}
 
 		/**
@@ -69,11 +62,10 @@ namespace
 			eventSource = reinterpret_cast<const void *>(
 			  static_cast<uintptr_t>(Capability{address}.address()));
 			eventValue  = value;
-			flags       = 0;
-			readyEvents = 0;
+			readyEvents = false;
 			if (*address != value)
 			{
-				set_ready(1);
+				set_ready();
 				return true;
 			}
 			return false;
@@ -90,7 +82,7 @@ namespace
 			{
 				return false;
 			}
-			set_ready(1);
+			set_ready();
 			return true;
 		}
 	};
@@ -283,6 +275,27 @@ class MultiWaiterInternal : public Handle</*IsDynamic*/ true>
 		usedLength = 0;
 		return found;
 	}
+
+	/**
+	 * Function to handle the end of a multi-wait operation.  This collects
+	 * all of the results from each of the events and propagates them to
+	 * the query list.  The caller is responsible for ensuring that
+	 * `newEvents` is valid.
+	 */
+	bool get_results(EventWaiterSource2 *newEvents, size_t count)
+	{
+		// Collect all events that have fired.
+		Debug::Assert(count <= Length, "Invalid length {} > {}", count, Length);
+		bool found = false;
+		for (size_t i = 0; i < count; i++)
+		{
+			newEvents[i].hasFired = events[i].readyEvents;
+			found |= (events[i].readyEvents != 0);
+		}
+		usedLength = 0;
+		return found;
+	}
+
 
 	/**
 	 * Helper that should be called whenever an event of type `T` is ready.

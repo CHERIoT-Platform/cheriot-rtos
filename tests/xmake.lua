@@ -21,6 +21,9 @@ rule("cheriot.test.ibuilddir")
     on_load(function (target)
         import("core.project.config")
         target:add("cxflags", config.builddir and "-I$(builddir)" or "-I$(buildir)")
+        -- Make sure that tests compile with no errors except the ones from
+        -- testing deprecated things.
+        target:add("cxflags", {"-Wno-deprecated-declarations", "-Werror"})
     end)
 target()
     add_rules("cheriot.test.ibuilddir")

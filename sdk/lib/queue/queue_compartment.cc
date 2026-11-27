@@ -156,7 +156,7 @@ int queue_receive_multiple_sealed(TimeoutArgument timeout,
 	  });
 }
 
-int multiwaiter_queue_receive_init_sealed(struct EventWaiterSource *source,
+int multiwaiter_queue_receive_init_sealed(struct EventWaiterSource2 *source,
                                           CHERI_SEALED(MessageQueue *) handle)
 {
 	return with_unsealed(
@@ -166,7 +166,7 @@ int multiwaiter_queue_receive_init_sealed(struct EventWaiterSource *source,
 	  });
 }
 
-int multiwaiter_queue_send_init_sealed(struct EventWaiterSource *source,
+int multiwaiter_queue_send_init_sealed(struct EventWaiterSource2 *source,
                                        CHERI_SEALED(MessageQueue *) handle)
 {
 	return with_unsealed(
